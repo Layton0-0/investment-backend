@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>투자 전략 관리</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        
+        .search-box {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .search-box form {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .search-box input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        
+        .search-box button {
+            padding: 12px 30px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .search-box button:hover {
+            background: #5568d3;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .nav-links a {
+            padding: 10px 20px;
+            background: white;
+            color: #667eea;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .nav-links a:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #c33;
+        }
+        
+        .strategies-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .strategy-card {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .strategy-card h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .status-badge {
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+        
+        .status-badge.active {
+            background: #28a745;
+            color: white;
+        }
+        
+        .status-badge.stopped {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .status-badge.paused {
+            background: #ffc107;
+            color: #856404;
+        }
+        
+        .strategy-info {
+            display: grid;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        
+        .info-item label {
+            color: #666;
+            font-weight: 600;
+        }
+        
+        .info-item .value {
+            color: #333;
+            font-weight: bold;
+        }
+        
+        .strategy-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .btn-activate {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-activate:hover {
+            background: #218838;
+        }
+        
+        .btn-stop {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-stop:hover {
+            background: #c82333;
+        }
+        
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+            background: white;
+            border-radius: 10px;
+        }
+        
+        .performance-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        
+        .stat-item {
+            text-align: center;
+        }
+        
+        .stat-item .label {
+            font-size: 0.85em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .stat-item .value {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .stat-item .value.positive {
+            color: #28a745;
+        }
+        
+        .stat-item .value.negative {
+            color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 투자 전략 관리</h1>
+            <p>단기/중기/장기 전략 현황 및 제어</p>
+        </div>
+        
+        <div class="nav-links">
+            <a th:href="@{/(accountNo=${accountNo})}">대시보드</a>
+            <a th:href="@{/strategies(accountNo=${accountNo})}" style="background: #667eea; color: white;">전략 관리</a>
+        </div>
+        
+        <div class="search-box">
+            <form method="get" action="/strategies">
+                <input type="text" name="accountNo" th:value="${accountNo}" placeholder="계좌번호를 입력하세요">
+                <button type="submit">조회</button>
+            </form>
+        </div>
+        
+        <div th:if="${error}" class="error">
+            <strong>오류:</strong> <span th:text="${error}"></span>
+        </div>
+        
+        <div th:if="${accountNo != null and !accountNo.isEmpty()}">
+            <div class="strategies-grid">
+                <!-- 단기 전략 -->
+                <div class="strategy-card">
+                    <h2>
+                        <span>⚡ 단기 전략</span>
+                        <span class="status-badge" 
+                              th:classappend="${shortTerm != null and shortTerm.status == T(com.investment.strategy.domain.StrategyStatus).ACTIVE} ? 'active' : 
+                                             (${shortTerm != null and shortTerm.status == T(com.investment.strategy.domain.StrategyStatus).STOPPED} ? 'stopped' : 'paused')"
+                              th:text="${shortTerm != null ? shortTerm.status : '미설정'}"></span>
+                    </h2>
+                    
+                    <div th:if="${shortTerm != null}">
+                        <div class="strategy-info">
+                            <div class="info-item">
+                                <label>최대 투자금액</label>
+                                <span class="value" th:text="${#numbers.formatDecimal(shortTerm.maxInvestmentAmount, 0, 'COMMA', 0, 'POINT')} + ' USD'"></span>
+                            </div>
+                            <div class="info-item">
+                                <label>최소 투자금액</label>
+                                <span class="value" th:text="${#numbers.formatDecimal(shortTerm.minInvestmentAmount, 0, 'COMMA', 0, 'POINT')} + ' USD'"></span>
+                            </div>
+                            <div class="info-item">
+                                <label>리스크 레벨</label>
+                                <span class="value" th:text="${shortTerm.riskLevel != null ? #numbers.formatDecimal(shortTerm.riskLevel, 2, 'COMMA', 2, 'POINT') : 'N/A'}"></span>
+                            </div>
+                            <div class="info-item">
+                                <label>신뢰도 임계값</label>
+                                <span class="value" th:text="${shortTerm.confidenceThreshold != null ? #numbers.formatDecimal(shortTerm.confidenceThreshold, 2, 'COMMA', 2, 'POINT') : 'N/A'}"></span>
+                            </div>
+                            <div class="info-item" th:if="${shortTerm.lastExecutedAt != null}">
+                                <label>마지막 실행</label>
+                                <span class="value" th:text="${#temporals.format(shortTerm.lastExecutedAt, 'yyyy-MM-dd HH:mm')}"></span>
+                            </div>
+                        </div>
+                        
+                        <div class="performance-stats">
+                            <div class="stat-item">
+                                <div class="label">총 실행</div>
+                                <div class="value" th:text="${shortTerm.totalExecutions != null ? shortTerm.totalExecutions : 0}"></div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="label">성공률</div>
+                                <div class="value" th:classappend="${shortTerm.successRate != null and shortTerm.successRate >= 50} ? 'positive' : 'negative'"
+                                     th:text="${shortTerm.successRate != null ? (#numbers.formatDecimal(shortTerm.successRate, 2, 'COMMA', 2, 'POINT') + '%') : 'N/A'}"></div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="label">손익</div>
+                                <div class="value" th:classappend="${shortTerm.totalProfitLoss != null and shortTerm.totalProfitLoss >= 0} ? 'positive' : 'negative'"
+                                     th:text="${shortTerm.totalProfitLoss != null ? (#numbers.formatDecimal(shortTerm.totalProfitLoss, 0, 'COMMA', 0, 'POINT') + ' USD') : '0 USD'}"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="strategy-actions">
+                            <form method="post" th:action="@{/strategies/activate}" style="flex: 1;">
+                                <input type="hidden" name="accountNo" th:value="${accountNo}">
+                                <input type="hidden" name="strategyType" value="SHORT_TERM">
+                                <button type="submit" class="btn btn-activate" 
+                                        th:disabled="${shortTerm.status == T(com.investment.strategy.domain.StrategyStatus).ACTIVE}">시작</button>
+                            </form>
+                            <form method="post" th:action="@{/strategies/stop}" style="flex: 1;">
+                                <input type="hidden" name="accountNo" th:value="${accountNo}">
+                                <input type="hidden" name="strategyType" value="SHORT_TERM">
+                                <button type="submit" class="btn btn-stop"
+                                        th:disabled="${shortTerm.status == T(com.investment.strategy.domain.StrategyStatus).STOPPED}">중지</button>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <div th:if="${shortTerm == null}" class="empty-state">
+                        <p>단기 전략이 설정되지 않았습니다.</p>
+                    </div>
+                </div>
+                
+                <!-- 중기 전략 -->
+                <div class="strategy-card">
+                    <h2>
+                        <span>📈 중기 전략</span>
+                        <span class="status-badge" 
+                              th:classappend="${mediumTerm != null and mediumTerm.status == T(com.investment.strategy.domain.StrategyStatus).ACTIVE} ? 'active' : 
+                                             (${mediumTerm != null and mediumTerm.status == T(com.investment.strategy.domain.StrategyStatus).STOPPED} ? 'stopped' : 'paused')"
+                              th:text="${mediumTerm != null ? mediumTerm.status : '미설정'}"></span>
+                    </h2>
+                    
+                    <div th:if="${mediumTerm != null}">
+                        <div class="strategy-info">
+                            <div class="info-item">
+                                <label>최대 투자금액</label>
+                                <span class="value" th:text="${#numbers.formatDecimal(mediumTerm.maxInvestmentAmount, 0, 'COMMA', 0, 'POINT')} + ' USD'"></span>
+                            </div>
+                            <div class="info-item">
+                                <label>최소 투자금액</label>
+                                <span class="value" th:text="${#numbers.formatDecimal(mediumTerm.minInvestmentAmount, 0, 'COMMA', 0, 'POINT')} + ' USD'"></span>
+                            </div>
+                            <div class="info-item">
+                                <label>리스크 레벨</label>
+                                <span class="value" th:text="${mediumTerm.riskLevel != null ? #numbers.formatDecimal(mediumTerm.riskLevel, 2, 'COMMA', 2, 'POINT') : 'N/A'}"></span>
+                            </div>
+                            <div class="info-item">
+                                <label>신뢰도 임계값</label>
+                                <span class="value" th:text="${mediumTerm.confidenceThreshold != null ? #numbers.formatDecimal(mediumTerm.confidenceThreshold, 2, 'COMMA', 2, 'POINT') : 'N/A'}"></span>
+                            </div>
+                            <div class="info-item" th:if="${mediumTerm.lastExecutedAt != null}">
+                                <label>마지막 실행</label>
+                                <span class="value" th:text="${#temporals.format(mediumTerm.lastExecutedAt, 'yyyy-MM-dd HH:mm')}"></span>
+                            </div>
+                        </div>
+                        
+                        <div class="performance-stats">
+                            <div class="stat-item">
+                                <div class="label">총 실행</div>
+                                <div class="value" th:text="${mediumTerm.totalExecutions != null ? mediumTerm.totalExecutions : 0}"></div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="label">성공률</div>
+                                <div class="value" th:classappend="${mediumTerm.successRate != null and mediumTerm.successRate >= 50} ? 'positive' : 'negative'"
+                                     th:text="${mediumTerm.successRate != null ? (#numbers.formatDecimal(mediumTerm.successRate, 2, 'COMMA', 2, 'POINT') + '%') : 'N/A'}"></div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="label">손익</div>
+                                <div class="value" th:classappend="${mediumTerm.totalProfitLoss != null and mediumTerm.totalProfitLoss >= 0} ? 'positive' : 'negative'"
+                                     th:text="${mediumTerm.totalProfitLoss != null ? (#numbers.formatDecimal(mediumTerm.totalProfitLoss, 0, 'COMMA', 0, 'POINT') + ' USD') : '0 USD'}"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="strategy-actions">
+                            <form method="post" th:action="@{/strategies/activate}" style="flex: 1;">
+                                <input type="hidden" name="accountNo" th:value="${accountNo}">
+                                <input type="hidden" name="strategyType" value="MEDIUM_TERM">
+                                <button type="submit" class="btn btn-activate" 
+                                        th:disabled="${mediumTerm.status == T(com.investment.strategy.domain.StrategyStatus).ACTIVE}">시작</button>
+                            </form>
+                            <form method="post" th:action="@{/strategies/stop}" style="flex: 1;">
+                                <input type="hidden" name="accountNo" th:value="${accountNo}">
+                                <input type="hidden" name="strategyType" value="MEDIUM_TERM">
+                                <button type="submit" class="btn btn-stop"
+                                        th:disabled="${mediumTerm.status == T(com.investment.strategy.domain.StrategyStatus).STOPPED}">중지</button>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <div th:if="${mediumTerm == null}" class="empty-state">
+                        <p>중기 전략이 설정되지 않았습니다.</p>
+                    </div>
+                </div>
+                
+                <!-- 장기 전략 -->
+                <div class="strategy-card">
+                    <h2>
+                        <span>🚀 장기 전략</span>
+                        <span class="status-badge" 
+                              th:classappend="${longTerm != null and longTerm.status == T(com.investment.strategy.domain.StrategyStatus).ACTIVE} ? 'active' : 
+                                             (${longTerm != null and longTerm.status == T(com.investment.strategy.domain.StrategyStatus).STOPPED} ? 'stopped' : 'paused')"
+                              th:text="${longTerm != null ? longTerm.status : '미설정'}"></span>
+                    </h2>
+                    
+                    <div th:if="${longTerm != null}">
+                        <div class="strategy-info">
+                            <div class="info-item">
+                                <label>최대 투자금액</label>
+                                <span class="value" th:text="${#numbers.formatDecimal(longTerm.maxInvestmentAmount, 0, 'COMMA', 0, 'POINT')} + ' USD'"></span>
+                            </div>
+                            <div class="info-item">
+                                <label>최소 투자금액</label>
+                                <span class="value" th:text="${#numbers.formatDecimal(longTerm.minInvestmentAmount, 0, 'COMMA', 0, 'POINT')} + ' USD'"></span>
+                            </div>
+                            <div class="info-item">
+                                <label>리스크 레벨</label>
+                                <span class="value" th:text="${longTerm.riskLevel != null ? #numbers.formatDecimal(longTerm.riskLevel, 2, 'COMMA', 2, 'POINT') : 'N/A'}"></span>
+                            </div>
+                            <div class="info-item">
+                                <label>신뢰도 임계값</label>
+                                <span class="value" th:text="${longTerm.confidenceThreshold != null ? #numbers.formatDecimal(longTerm.confidenceThreshold, 2, 'COMMA', 2, 'POINT') : 'N/A'}"></span>
+                            </div>
+                            <div class="info-item" th:if="${longTerm.lastExecutedAt != null}">
+                                <label>마지막 실행</label>
+                                <span class="value" th:text="${#temporals.format(longTerm.lastExecutedAt, 'yyyy-MM-dd HH:mm')}"></span>
+                            </div>
+                        </div>
+                        
+                        <div class="performance-stats">
+                            <div class="stat-item">
+                                <div class="label">총 실행</div>
+                                <div class="value" th:text="${longTerm.totalExecutions != null ? longTerm.totalExecutions : 0}"></div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="label">성공률</div>
+                                <div class="value" th:classappend="${longTerm.successRate != null and longTerm.successRate >= 50} ? 'positive' : 'negative'"
+                                     th:text="${longTerm.successRate != null ? (#numbers.formatDecimal(longTerm.successRate, 2, 'COMMA', 2, 'POINT') + '%') : 'N/A'}"></div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="label">손익</div>
+                                <div class="value" th:classappend="${longTerm.totalProfitLoss != null and longTerm.totalProfitLoss >= 0} ? 'positive' : 'negative'"
+                                     th:text="${longTerm.totalProfitLoss != null ? (#numbers.formatDecimal(longTerm.totalProfitLoss, 0, 'COMMA', 0, 'POINT') + ' USD') : '0 USD'}"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="strategy-actions">
+                            <form method="post" th:action="@{/strategies/activate}" style="flex: 1;">
+                                <input type="hidden" name="accountNo" th:value="${accountNo}">
+                                <input type="hidden" name="strategyType" value="LONG_TERM">
+                                <button type="submit" class="btn btn-activate" 
+                                        th:disabled="${longTerm.status == T(com.investment.strategy.domain.StrategyStatus).ACTIVE}">시작</button>
+                            </form>
+                            <form method="post" th:action="@{/strategies/stop}" style="flex: 1;">
+                                <input type="hidden" name="accountNo" th:value="${accountNo}">
+                                <input type="hidden" name="strategyType" value="LONG_TERM">
+                                <button type="submit" class="btn btn-stop"
+                                        th:disabled="${longTerm.status == T(com.investment.strategy.domain.StrategyStatus).STOPPED}">중지</button>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <div th:if="${longTerm == null}" class="empty-state">
+                        <p>장기 전략이 설정되지 않았습니다.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div th:if="${accountNo == null or accountNo.isEmpty()}">
+            <div class="empty-state">
+                <h2>계좌번호를 입력하여 조회하세요</h2>
+                <p>위의 검색창에 계좌번호를 입력하고 조회 버튼을 클릭하세요.</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
