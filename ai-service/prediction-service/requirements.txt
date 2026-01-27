@@ -1,0 +1,23 @@
+# FastAPI 및 서버
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# 데이터 처리
+numpy==1.24.3
+pandas==2.1.3
+
+# 머신러닝 (CPU 버전)
+torch==2.1.0
+scikit-learn==1.3.2
+
+# 유틸리티
+python-dateutil==2.8.2
+pytz==2023.3
+
+# HTTP 클라이언트
+httpx==0.25.1
+
+# 로깅
+python-json-logger==2.0.7

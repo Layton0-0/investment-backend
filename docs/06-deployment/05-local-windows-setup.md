@@ -1,0 +1,517 @@
+# Windows 로컬 개발 환경 구축 가이드
+
+## 개요
+
+서버 배포 전 로컬 Windows PC에서 전체 시스템을 구축하고 테스트하기 위한 가이드입니다.
+
+## 사전 확인 (이미 설치된 항목 확인)
+
+### 1. Java 17 확인
+
+```powershell
+# Java 버전 확인
+java -version
+
+# Java 17 이상이 설치되어 있어야 함
+# 예: openjdk version "17.0.x"
+```
+
+### 2. Gradle 확인
+
+```powershell
+# Gradle 버전 확인
+gradle -v
+
+# Gradle 8.x 이상이 설치되어 있어야 함
+# 또는 프로젝트의 gradle wrapper 사용: .\gradlew.bat -v
+```
+
+### 3. Git 확인
+
+```powershell
+# Git 버전 확인
+git --version
+```
+
+## 필수 설치 항목
+
+### 1. MariaDB 11.8.5+ 설치
+
+#### 방법 1: 공식 설치 프로그램 (권장)
+
+1. **다운로드**
+   - https://mariadb.org/download/
+   - Windows용 MSI 설치 프로그램 다운로드
+   - 버전: 11.8.5 이상
+
+2. **설치**
+   ```powershell
+   # 설치 프로그램 실행 후 다음 설정:
+   # - Root 비밀번호: root (또는 원하는 비밀번호)
+   # - 포트: 3306 (기본값)
+   # - 서비스로 실행: 예
+   ```
+
+3. **데이터베이스 및 사용자 생성**
+   ```powershell
+   # MariaDB에 접속 (설치 시 설정한 root 비밀번호 사용)
+   mysql -u root -p
+   ```
+
+   ```sql
+   -- 데이터베이스 생성
+   CREATE DATABASE investment CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+   
+   -- 사용자 생성
+   CREATE USER 'investment'@'localhost' IDENTIFIED BY 'password';
+   
+   -- 권한 부여
+   GRANT ALL PRIVILEGES ON investment.* TO 'investment'@'localhost';
+   FLUSH PRIVILEGES;
+   
+   -- 확인
+   SHOW DATABASES;
+   EXIT;
+   ```
+
+4. **연결 테스트**
+   ```powershell
+   # 명령줄에서 연결 테스트
+   mysql -u investment -p -h localhost investment
+   # 비밀번호: password
+   ```
+
+#### 방법 2: Docker 사용 (선택)
+
+```powershell
+# Docker Desktop이 설치되어 있다면
+docker run -d `
+  --name mariadb `
+  -p 3306:3306 `
+  -e MYSQL_ROOT_PASSWORD=root `
+  -e MYSQL_DATABASE=investment `
+  -e MYSQL_USER=investment `
+  -e MYSQL_PASSWORD=password `
+  mariadb:11.8.5
+```
+
+### 2. Redis 설치
+
+#### 방법 1: WSL2 + Redis (권장)
+
+1. **WSL2 설치 확인**
+   ```powershell
+   # WSL2 설치 여부 확인
+   wsl --version
+   
+   # WSL2가 없으면 설치
+   wsl --install
+   # 재부팅 필요
+   ```
+
+2. **WSL2에서 Redis 설치**
+   ```bash
+   # WSL2 Ubuntu 터미널에서 실행
+   sudo apt update
+   sudo apt install -y redis-server
+   
+   # Redis 설정
+   sudo nano /etc/redis/redis.conf
+   # maxmemory 2gb
+   # maxmemory-policy allkeys-lru
+   
+   # Redis 서비스 시작
+   sudo service redis-server start
+   sudo service redis-server enable
+   
+   # 연결 테스트
+   redis-cli ping
+   # 응답: PONG
+   ```
+
+3. **Windows에서 Redis 접속**
+   - WSL2의 Redis는 `localhost:6379`로 접속 가능
+
+#### 방법 2: Memurai (Windows 네이티브 Redis)
+
+1. **다운로드**
+   - https://www.memurai.com/get-memurai
+   - Windows용 Redis 호환 서버
+
+2. **설치**
+   - 설치 프로그램 실행
+   - 기본 설정으로 설치 (포트 6379)
+
+3. **서비스 시작**
+   ```powershell
+   # Windows 서비스로 자동 시작됨
+   # 수동 시작/중지
+   net start Memurai
+   net stop Memurai
+   ```
+
+#### 방법 3: Docker 사용 (선택)
+
+```powershell
+docker run -d `
+  --name redis `
+  -p 6379:6379 `
+  redis:7-alpine
+```
+
+### 3. Python 3.11+ 설치
+
+1. **다운로드**
+   - https://www.python.org/downloads/
+   - Python 3.11 이상 다운로드 (예: 3.11.9, 3.12.x)
+
+2. **설치**
+   ```powershell
+   # 설치 프로그램 실행 시:
+   # ✅ "Add Python to PATH" 체크 필수!
+   # ✅ "Install for all users" 선택 (선택사항)
+   ```
+
+3. **설치 확인**
+   ```powershell
+   # Python 버전 확인
+   python --version
+   # 예: Python 3.11.9
+   
+   # pip 확인
+   pip --version
+   ```
+
+4. **가상환경 생성 및 패키지 설치**
+   ```powershell
+   # 프로젝트 루트로 이동
+   cd d:\works\pjt\investment-choi
+   
+   # AI 서비스 디렉토리로 이동
+   cd ai-service\prediction-service
+   
+   # 가상환경 생성
+   python -m venv venv
+   
+   # 가상환경 활성화
+   .\venv\Scripts\Activate.ps1
+   # 만약 실행 정책 오류가 나면:
+   # Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+   
+   # 패키지 설치
+   pip install --upgrade pip
+   pip install -r requirements.txt
+   
+   # PyTorch CPU 버전 설치 (requirements.txt에 포함되어 있지만 확인)
+   pip install torch --index-url https://download.pytorch.org/whl/cpu
+   ```
+
+5. **설치 확인**
+   ```powershell
+   # FastAPI 설치 확인
+   python -c "import fastapi; print(fastapi.__version__)"
+   
+   # PyTorch 설치 확인
+   python -c "import torch; print(torch.__version__)"
+   ```
+
+### 4. Docker Desktop (선택, 권장)
+
+MariaDB와 Redis를 Docker로 실행하려는 경우:
+
+1. **다운로드**
+   - https://www.docker.com/products/docker-desktop/
+   - Docker Desktop for Windows
+
+2. **설치**
+   - 설치 프로그램 실행
+   - WSL2 백엔드 사용 (권장)
+
+3. **확인**
+   ```powershell
+   docker --version
+   docker-compose --version
+   ```
+
+## 설치 스크립트 (PowerShell)
+
+전체 설치를 자동화하는 스크립트:
+
+```powershell
+# install-local-env.ps1
+# 관리자 권한으로 실행 권장
+
+Write-Host "=== Investment Choi 로컬 환경 구축 ===" -ForegroundColor Green
+
+# 1. Java 확인
+Write-Host "`n[1/5] Java 확인 중..." -ForegroundColor Yellow
+$javaVersion = java -version 2>&1 | Select-String "version"
+if ($javaVersion) {
+    Write-Host "✅ Java 설치됨: $javaVersion" -ForegroundColor Green
+} else {
+    Write-Host "❌ Java가 설치되지 않았습니다." -ForegroundColor Red
+    Write-Host "   Java 17 이상을 설치해주세요: https://adoptium.net/" -ForegroundColor Yellow
+    exit 1
+}
+
+# 2. Gradle 확인
+Write-Host "`n[2/5] Gradle 확인 중..." -ForegroundColor Yellow
+$gradleVersion = .\gradlew.bat -v 2>&1 | Select-String "Gradle"
+if ($gradleVersion) {
+    Write-Host "✅ Gradle Wrapper 사용 가능" -ForegroundColor Green
+} else {
+    Write-Host "⚠️  Gradle Wrapper를 찾을 수 없습니다." -ForegroundColor Yellow
+}
+
+# 3. MariaDB 확인
+Write-Host "`n[3/5] MariaDB 확인 중..." -ForegroundColor Yellow
+try {
+    $mariadb = Get-Service -Name "MariaDB*" -ErrorAction SilentlyContinue
+    if ($mariadb) {
+        Write-Host "✅ MariaDB 서비스 발견: $($mariadb.Name)" -ForegroundColor Green
+    } else {
+        Write-Host "❌ MariaDB가 설치되지 않았습니다." -ForegroundColor Red
+        Write-Host "   설치 가이드를 참고하세요." -ForegroundColor Yellow
+    }
+} catch {
+    Write-Host "❌ MariaDB 확인 실패" -ForegroundColor Red
+}
+
+# 4. Redis 확인
+Write-Host "`n[4/5] Redis 확인 중..." -ForegroundColor Yellow
+try {
+    $redis = redis-cli ping 2>&1
+    if ($redis -eq "PONG") {
+        Write-Host "✅ Redis 실행 중" -ForegroundColor Green
+    } else {
+        Write-Host "❌ Redis가 실행되지 않았습니다." -ForegroundColor Red
+        Write-Host "   WSL2 또는 Memurai를 설치하세요." -ForegroundColor Yellow
+    }
+} catch {
+    Write-Host "❌ Redis 확인 실패 (redis-cli가 없습니다)" -ForegroundColor Red
+}
+
+# 5. Python 확인
+Write-Host "`n[5/5] Python 확인 중..." -ForegroundColor Yellow
+try {
+    $pythonVersion = python --version 2>&1
+    if ($pythonVersion -match "Python 3\.(1[1-9]|[2-9][0-9])") {
+        Write-Host "✅ $pythonVersion 설치됨" -ForegroundColor Green
+        
+        # 가상환경 확인
+        if (Test-Path "ai-service\prediction-service\venv") {
+            Write-Host "✅ Python 가상환경 존재" -ForegroundColor Green
+        } else {
+            Write-Host "⚠️  Python 가상환경이 없습니다. 생성 중..." -ForegroundColor Yellow
+            Set-Location "ai-service\prediction-service"
+            python -m venv venv
+            .\venv\Scripts\Activate.ps1
+            pip install --upgrade pip
+            pip install -r requirements.txt
+            Set-Location ..\..
+            Write-Host "✅ 가상환경 생성 및 패키지 설치 완료" -ForegroundColor Green
+        }
+    } else {
+        Write-Host "❌ Python 3.11 이상이 필요합니다." -ForegroundColor Red
+        Write-Host "   현재: $pythonVersion" -ForegroundColor Yellow
+    }
+} catch {
+    Write-Host "❌ Python이 설치되지 않았습니다." -ForegroundColor Red
+    Write-Host "   Python 3.11 이상을 설치해주세요: https://www.python.org/downloads/" -ForegroundColor Yellow
+}
+
+Write-Host "`n=== 확인 완료 ===" -ForegroundColor Green
+Write-Host "다음 단계:" -ForegroundColor Cyan
+Write-Host "1. MariaDB 데이터베이스 및 사용자 생성" -ForegroundColor White
+Write-Host "2. Redis 서비스 시작" -ForegroundColor White
+Write-Host "3. Spring Boot 애플리케이션 실행: .\gradlew.bat bootRun" -ForegroundColor White
+Write-Host "4. AI 서비스 실행: cd ai-service\prediction-service && .\venv\Scripts\Activate.ps1 && uvicorn app.main:app --reload" -ForegroundColor White
+```
+
+## 빠른 시작 가이드
+
+### 1. 환경 변수 설정 (선택)
+
+```powershell
+# PowerShell 프로필에 추가 (영구 설정)
+# $PROFILE 파일 편집
+notepad $PROFILE
+
+# 다음 내용 추가:
+$env:SPRING_DATASOURCE_URL = "jdbc:mariadb://localhost:3306/investment?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Seoul"
+$env:SPRING_DATASOURCE_USERNAME = "investment"
+$env:SPRING_DATASOURCE_PASSWORD = "password"
+$env:REDIS_HOST = "localhost"
+$env:REDIS_PORT = "6379"
+```
+
+또는 프로젝트 루트에 `.env` 파일 생성 (Spring Boot는 자동으로 읽지 않으므로 별도 설정 필요)
+
+### 2. 데이터베이스 스키마 생성
+
+```powershell
+# Spring Boot 애플리케이션 실행 시 자동으로 스키마 생성됨
+# 또는 수동으로 SQL 스크립트 실행
+mysql -u investment -p investment < docs/05-database/schema.sql
+```
+
+### 3. Spring Boot 애플리케이션 실행
+
+```powershell
+# 프로젝트 루트에서
+.\gradlew.bat bootRun
+
+# 또는 빌드 후 실행
+.\gradlew.bat build
+java -jar build\libs\investment-choi-2.0.0.jar
+```
+
+### 4. AI 서비스 실행
+
+```powershell
+# 새 PowerShell 창에서
+cd ai-service\prediction-service
+
+# 가상환경 활성화
+.\venv\Scripts\Activate.ps1
+
+# FastAPI 서버 실행
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# 또는 Python으로 직접 실행
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### 5. 서비스 확인
+
+```powershell
+# Spring Boot 확인
+curl http://localhost:8080/actuator/health
+
+# AI 서비스 확인
+curl http://localhost:8000/
+
+# Swagger UI 확인
+# 브라우저에서: http://localhost:8080/swagger-ui.html
+```
+
+## Docker Compose 사용 (선택)
+
+모든 서비스를 Docker로 실행하려면:
+
+```yaml
+# docker-compose.yml (프로젝트 루트에 생성)
+version: '3.8'
+
+services:
+  mariadb:
+    image: mariadb:11.8.5
+    container_name: investment-mariadb
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: investment
+      MYSQL_USER: investment
+      MYSQL_PASSWORD: password
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: investment-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 2gb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mariadb_data:
+```
+
+```powershell
+# Docker Compose 실행
+docker-compose up -d
+
+# 로그 확인
+docker-compose logs -f
+
+# 중지
+docker-compose down
+```
+
+## 트러블슈팅
+
+### MariaDB 연결 실패
+
+```powershell
+# 서비스 상태 확인
+Get-Service -Name "MariaDB*"
+
+# 서비스 시작
+Start-Service -Name "MariaDB*"
+
+# 방화벽 확인
+netsh advfirewall firewall show rule name="MariaDB"
+```
+
+### Redis 연결 실패
+
+```powershell
+# WSL2에서 Redis 상태 확인
+wsl -e bash -c "sudo service redis-server status"
+
+# WSL2에서 Redis 시작
+wsl -e bash -c "sudo service redis-server start"
+
+# Memurai 사용 시
+Get-Service -Name "Memurai*"
+Start-Service -Name "Memurai*"
+```
+
+### Python 가상환경 활성화 오류
+
+```powershell
+# PowerShell 실행 정책 변경
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# 또는 cmd 사용
+cd ai-service\prediction-service
+venv\Scripts\activate.bat
+```
+
+### 포트 충돌
+
+```powershell
+# 포트 사용 확인
+netstat -ano | findstr :3306  # MariaDB
+netstat -ano | findstr :6379  # Redis
+netstat -ano | findstr :8080  # Spring Boot
+netstat -ano | findstr :8000  # FastAPI
+
+# 프로세스 종료
+taskkill /PID <PID> /F
+```
+
+## 다음 단계
+
+1. ✅ 모든 서비스가 정상 실행되는지 확인
+2. ✅ Spring Boot 애플리케이션과 AI 서비스 통신 테스트
+3. ✅ 데이터베이스 연결 및 Redis 캐싱 테스트
+4. ✅ API 엔드포인트 테스트 (Swagger UI 사용)
+5. ✅ 통합 테스트 실행
+
+## 참고 문서
+
+- [시스템 아키텍처](../02-architecture/01-system-architecture.md)
+- [필수 기술 스펙](../02-architecture/10-essential-tech-spec.md)
+- [최소 비용 구성](./04-minimal-cost-setup.md)

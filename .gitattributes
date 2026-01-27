@@ -1,0 +1,28 @@
+# Git 인코딩 설정
+# 모든 텍스트 파일을 UTF-8로 처리
+
+# Java 소스 파일
+*.java text eol=lf charset=utf-8
+
+# 설정 파일
+*.properties text eol=lf charset=utf-8
+*.yml text eol=lf charset=utf-8
+*.yaml text eol=lf charset=utf-8
+
+# 문서 파일
+*.md text eol=lf charset=utf-8
+*.txt text eol=lf charset=utf-8
+
+# 기타 텍스트 파일
+*.gradle text eol=lf charset=utf-8
+*.xml text eol=lf charset=utf-8
+*.json text eol=lf charset=utf-8
+
+# 바이너리 파일
+*.class binary
+*.jar binary
+*.war binary
+*.ear binary
+*.zip binary
+*.tar binary
+*.gz binary
