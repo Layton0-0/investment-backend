@@ -5,8 +5,6 @@ import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
-import javax.validation.constraints.NotBlank;
-
 /**
  * 시장 데이터 API 설정 Properties
  */
@@ -17,7 +15,7 @@ import javax.validation.constraints.NotBlank;
 public class MarketDataProperties {
     
     /**
-     * 사용할 제공자 (finnhub, itick, kiwoom 등)
+     * 데이터 제공자 (finnhub, itick, kiwoom, korea-investment 등)
      */
     private String provider = "finnhub";
     
@@ -27,7 +25,7 @@ public class MarketDataProperties {
     private String apiKey;
     
     /**
-     * Base URL (REST API 기반 제공자에서 사용)
+     * Base URL (REST API 서버 주소 등)
      */
     private String baseUrl;
     
@@ -47,7 +45,12 @@ public class MarketDataProperties {
     private KiwoomProperties kiwoom = new KiwoomProperties();
     
     /**
-     * 키움증권 API 전용 설정
+     * 한국투자증권 API 설정
+     */
+    private KoreaInvestmentProperties koreaInvestment = new KoreaInvestmentProperties();
+    
+    /**
+     * 키움증권 API 설정
      */
     @Getter
     @Setter
@@ -65,15 +68,15 @@ public class MarketDataProperties {
         /**
          * 서버 타입 (모의투자: "1", 실거래: "0")
          */
-        private String serverType = "1"; // 기본값: 모의투자
+        private String serverType = "1"; // 기본: 모의투자
         
         /**
-         * API 연결 호스트 (로컬에서 실행되는 경우)
+         * API 서버 주소 (별도 서버 구축 시)
          */
         private String host = "localhost";
         
         /**
-         * API 연결 포트
+         * API 서버 포트
          */
         private int port = 5000;
         
@@ -81,5 +84,32 @@ public class MarketDataProperties {
          * 자동 로그인 여부
          */
         private boolean autoLogin = false;
+    }
+    
+    /**
+     * 한국투자증권 API 설정
+     */
+    @Getter
+    @Setter
+    public static class KoreaInvestmentProperties {
+        /**
+         * App Key (한국투자증권 API 키)
+         */
+        private String appKey;
+        
+        /**
+         * App Secret (한국투자증권 API 시크릿)
+         */
+        private String appSecret;
+        
+        /**
+         * 서버 타입 (모의투자: "1", 실거래: "0")
+         */
+        private String serverType = "1"; // 기본: 모의투자
+        
+        /**
+         * Access Token 캐시 사용 여부
+         */
+        private boolean useTokenCache = true;
     }
 }

@@ -33,6 +33,26 @@ spring:
     mode: HTML
     encoding: UTF-8
     cache: false
+  
+  # Redis 설정
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+  
+  # 캐싱 설정
+  cache:
+    type: redis
+    redis:
+      time-to-live: 600000  # 10분
+      cache-null-values: false
 
 server:
   port: 8080
@@ -59,10 +79,14 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: when-authorized
+  prometheus:
+    metrics:
+      export:
+        enabled: true
 
 investment:
   market-data:
@@ -79,7 +103,60 @@ investment:
       host: ${KIWOOM_HOST:localhost}
       port: ${KIWOOM_PORT:5000}
       auto-login: ${KIWOOM_AUTO_LOGIN:false}
+    # 한국투자증권 API 설정 (provider가 korea-investment일 때 사용)
+    korea-investment:
+      app-key: ${KOREA_INVESTMENT_APP_KEY:}
+      app-secret: ${KOREA_INVESTMENT_APP_SECRET:}
+      server-type: ${KOREA_INVESTMENT_SERVER_TYPE:1}  # 1: 모의투자, 0: 실거래
+      use-token-cache: ${KOREA_INVESTMENT_USE_TOKEN_CACHE:true}
   trading:
     max-investment-amount: ${MAX_INVESTMENT_AMOUNT:1000000}
     min-investment-amount: ${MIN_INVESTMENT_AMOUNT:10000}
     default-currency: USD
+  # AI 서비스 설정
+  ai:
+    prediction-service:
+      url: ${AI_PREDICTION_SERVICE_URL:http://localhost:8000}
+      timeout: ${AI_PREDICTION_SERVICE_TIMEOUT:5000}
+      retry-max-attempts: ${AI_PREDICTION_SERVICE_RETRY_MAX_ATTEMPTS:3}
+      enabled: ${AI_PREDICTION_SERVICE_ENABLED:true}
+    strategy-optimizer:
+      url: ${AI_STRATEGY_OPTIMIZER_URL:http://localhost:8001}
+      timeout: ${AI_STRATEGY_OPTIMIZER_TIMEOUT:10000}
+      enabled: ${AI_STRATEGY_OPTIMIZER_ENABLED:false}
+    nlp-service:
+      url: ${AI_NLP_SERVICE_URL:http://localhost:8002}
+      timeout: ${AI_NLP_SERVICE_TIMEOUT:5000}
+      enabled: ${AI_NLP_SERVICE_ENABLED:false}
+
+# Resilience4j Circuit Breaker 설정
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        failureRateThreshold: 50
+        minimumNumberOfCalls: 10
+        slidingWindowSize: 100
+        waitDurationInOpenState: 60s
+        permittedNumberOfCallsInHalfOpenState: 5
+        slidingWindowType: COUNT_BASED
+    instances:
+      aiPredictionService:
+        baseConfig: default
+        failureRateThreshold: 60
+        waitDurationInOpenState: 30s
+      marketDataService:
+        baseConfig: default
+        failureRateThreshold: 50
+        waitDurationInOpenState: 60s
+  timelimiter:
+    configs:
+      default:
+        timeoutDuration: 5s
+    instances:
+      aiPredictionService:
+        baseConfig: default
+        timeoutDuration: 3s
+      marketDataService:
+        baseConfig: default
+        timeoutDuration: 5s

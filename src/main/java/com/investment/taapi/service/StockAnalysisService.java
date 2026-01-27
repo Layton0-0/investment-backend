@@ -1,10 +1,12 @@
 package com.investment.taapi.service;
 
+import com.investment.config.CacheConfig;
 import com.investment.marketdata.client.IndicatorResponse;
 import com.investment.marketdata.client.MarketDataClient;
 import com.investment.taapi.dto.StockAnalysisDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
@@ -28,6 +30,7 @@ public class StockAnalysisService {
      * @param interval 시간 간격 (1h, 1d 등)
      * @return 분석 결과
      */
+    @Cacheable(value = CacheConfig.CACHE_MARKET_DATA, key = "'stock_analysis_' + #symbol + '_' + #interval")
     public Mono<StockAnalysisDto> analyzeStock(String symbol, String interval) {
         log.debug("주식 분석 시작: symbol={}, interval={}, provider={}", 
                 symbol, interval, marketDataClient.getProviderName());

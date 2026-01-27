@@ -110,18 +110,23 @@ Model Update Event → Kafka → [Prediction Service, Strategy Optimizer]
 - **MLflow**: 모델 관리 및 배포
 
 ### 3.3 데이터 처리
-- **Kafka**: 실시간 이벤트 스트리밍
-- **Apache Airflow**: 데이터 파이프라인 오케스트레이션
-- **TimescaleDB**: 시계열 데이터 최적화
-- **Redis**: 캐싱 및 실시간 데이터 저장
-- **Vector DB**: Pinecone 또는 Weaviate (시맨틱 검색)
+- **Redis**: 캐싱 및 실시간 데이터 저장 (필수)
+- **Kafka**: 실시간 이벤트 스트리밍 (선택적, 확장 시)
+- **Apache Airflow**: 데이터 파이프라인 오케스트레이션 (선택적, 확장 시)
+- **TimescaleDB**: 시계열 데이터 최적화 (선택적, MariaDB로 대체 가능)
+- **Vector DB**: Pinecone 또는 Weaviate (선택적, 확장 시)
+
+**비용 최적화**: 초기에는 Redis만 사용하고, Kafka/Airflow/Vector DB는 수익 발생 후 추가
 
 ### 3.4 Frontend
-- **Next.js 14+**: React 기반 SSR/SSG
-- **TypeScript**: 타입 안정성
-- **Tailwind CSS**: 유틸리티 기반 스타일링
-- **Recharts/D3.js**: 고급 차트 및 시각화
-- **WebSocket**: 실시간 데이터 업데이트
+- **초기**: Thymeleaf (가벼운 HTML, 비용 최소화)
+- **향후 확장**: Next.js 14+ (React 기반 SSR/SSG)
+- **TypeScript**: 타입 안정성 (향후)
+- **Tailwind CSS**: 유틸리티 기반 스타일링 (향후)
+- **Recharts/D3.js**: 고급 차트 및 시각화 (선택적)
+- **WebSocket**: 실시간 데이터 업데이트 (선택적)
+
+**비용 최적화**: 초기에는 Thymeleaf로 시작하여 유지비를 최소화하고, 수익 발생 시 Next.js로 전환
 
 ### 3.5 인프라
 - **Docker**: 컨테이너화

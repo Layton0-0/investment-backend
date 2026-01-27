@@ -4,10 +4,12 @@ import com.investment.account.dto.AccountBalanceDto;
 import com.investment.account.dto.AccountPositionDto;
 import com.investment.common.exception.DomainException;
 import com.investment.common.exception.ErrorCode;
+import com.investment.config.CacheConfig;
 import com.investment.domain.entity.Portfolio;
 import com.investment.domain.repository.PortfolioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +31,7 @@ public class AccountService {
      * 계좌 잔고 조회
      */
     @Transactional(readOnly = true)
+    @Cacheable(value = CacheConfig.CACHE_ACCOUNT, key = "'balance_' + #accountNo")
     public AccountBalanceDto getAccountBalance(String accountNo) {
         log.debug("계좌 잔고 조회: accountNo={}", accountNo);
         
@@ -59,6 +62,7 @@ public class AccountService {
      * 보유 종목 조회
      */
     @Transactional(readOnly = true)
+    @Cacheable(value = CacheConfig.CACHE_ACCOUNT, key = "'positions_' + #accountNo")
     public List<AccountPositionDto> getPositions(String accountNo) {
         log.debug("보유 종목 조회: accountNo={}", accountNo);
         
