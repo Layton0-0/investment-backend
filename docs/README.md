@@ -46,5 +46,4 @@
 ## 참고 자료
 
 - [프로젝트 README](../README.md)
-- [키움증권 API 가이드](../KIWOOM_API_GUIDE.md)
-- [시장 데이터 리팩토링 가이드](../MARKET_DATA_REFACTORING.md)
+- [한국투자증권 API 가이드](../KOREA_INVESTMENT_API_GUIDE.md)

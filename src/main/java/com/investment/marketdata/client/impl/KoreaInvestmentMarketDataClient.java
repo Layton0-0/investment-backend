@@ -1,15 +1,23 @@
 package com.investment.marketdata.client.impl;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.investment.common.security.EncryptionUtil;
+import com.investment.domain.entity.BrokerType;
+import com.investment.domain.entity.UserApiKey;
+import com.investment.domain.repository.UserApiKeyRepository;
 import com.investment.marketdata.client.IndicatorResponse;
 import com.investment.marketdata.client.MarketDataClient;
 import com.investment.marketdata.config.MarketDataProperties;
-import com.investment.marketdata.util.KiwoomCodeConverter;
+import com.investment.marketdata.service.KoreaInvestmentTokenService;
+import com.investment.marketdata.util.StockCodeConverter;
+import io.github.resilience4j.ratelimiter.RateLimiter;
+import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -43,15 +51,43 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
     
     private final MarketDataProperties properties;
     private final WebClient webClient;
-    private final ObjectMapper objectMapper;
+    private final RateLimiterRegistry rateLimiterRegistry;
+    private final KoreaInvestmentTokenService tokenService;
+    private final UserApiKeyRepository userApiKeyRepository;
+    private final EncryptionUtil encryptionUtil;
     
     // 한국투자증권 API Base URL
     private static final String BASE_URL_REAL = "https://openapi.koreainvestment.com:9443"; // 실거래
     private static final String BASE_URL_VIRTUAL = "https://openapivts.koreainvestment.com:29443"; // 모의투자
     
-    // Access Token 캐시
-    private String accessToken;
-    private long tokenExpiresAt;
+    // Rate Limiter 인스턴스 이름
+    private static final String RATE_LIMITER_API_VIRTUAL = "koreaInvestmentApi";
+    private static final String RATE_LIMITER_API_REAL = "koreaInvestmentApiReal";
+    
+    /**
+     * 현재 사용자 ID 가져오기
+     */
+    private String getCurrentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null) {
+            throw new IllegalStateException("인증되지 않은 사용자입니다");
+        }
+        return authentication.getName();
+    }
+    
+    /**
+     * API 호출용 Rate Limiter 가져오기
+     * 서버 타입(실전투자/모의투자)에 따라 적절한 Rate Limiter 반환
+     */
+    private RateLimiter getApiRateLimiter(String serverType) {
+        if ("0".equals(serverType)) {
+            // 실전투자: 1초당 20건
+            return rateLimiterRegistry.rateLimiter(RATE_LIMITER_API_REAL);
+        } else {
+            // 모의투자: 1초당 2건
+            return rateLimiterRegistry.rateLimiter(RATE_LIMITER_API_VIRTUAL);
+        }
+    }
     
     @Override
     public Mono<IndicatorResponse> getIndicator(String indicator, String symbol, String interval) {
@@ -63,14 +99,20 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
             return Mono.just(createMockIndicatorResponse(indicator, symbol));
         }
         
+        // 현재 사용자 ID 가져오기
+        String userId = getCurrentUserId();
+        
         // Access Token 확인 및 갱신
-        return ensureAccessToken()
-                .flatMap(token -> {
+        return ensureAccessToken(userId)
+                .flatMap(tokenInfo -> {
+                    String token = tokenInfo.get("token");
+                    String serverType = tokenInfo.get("serverType");
+                    
                     // 종목 코드 변환 (6자리 종목코드)
-                    String stockCode = KiwoomCodeConverter.toKiwoomCode(symbol);
+                    String stockCode = StockCodeConverter.toStockCode(symbol);
                     
                     // 차트 데이터 조회 (한국투자증권 API는 차트 데이터를 제공하고, 클라이언트에서 지표 계산)
-                    return getChartData(stockCode, interval, token)
+                    return getChartData(stockCode, interval, token, userId, serverType)
                             .map(chartData -> calculateIndicator(chartData, indicator))
                             .onErrorResume(error -> {
                                 log.error("한국투자증권 API 호출 실패: indicator={}, symbol={}", indicator, symbol, error);
@@ -88,13 +130,19 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
         log.debug("한국투자증권 Bulk API 호출: symbol={}, interval={}, indicators={}", symbol, interval, indicators);
         
         // 종목 코드 변환
-        String stockCode = KiwoomCodeConverter.toKiwoomCode(symbol);
+        String stockCode = StockCodeConverter.toStockCode(symbol);
+        
+        // 현재 사용자 ID 가져오기
+        String userId = getCurrentUserId();
         
         // Access Token 확인 및 갱신
-        return ensureAccessToken()
-                .flatMap(token -> {
+        return ensureAccessToken(userId)
+                .flatMap(tokenInfo -> {
+                    String token = tokenInfo.get("token");
+                    String serverType = tokenInfo.get("serverType");
+                    
                     // 차트 데이터를 한 번만 조회
-                    return getChartData(stockCode, interval, token)
+                    return getChartData(stockCode, interval, token, userId, serverType)
                             .map(chartData -> {
                                 // 모든 지표를 계산
                                 Map<String, IndicatorResponse> resultMap = new HashMap<>();
@@ -125,88 +173,73 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
     
     /**
      * Access Token 확인 및 갱신
+     * DB에서 사용자별 토큰을 조회하고, 만료되었으면 자동으로 재발급합니다.
      */
-    private Mono<String> ensureAccessToken() {
-        // 토큰이 유효한 경우
-        if (accessToken != null && System.currentTimeMillis() < tokenExpiresAt) {
-            return Mono.just(accessToken);
+    private Mono<Map<String, String>> ensureAccessToken(String userId) {
+        try {
+            // DB에서 토큰 조회
+            String accessToken = tokenService.getAccessToken(userId);
+            
+            // 사용자 API 키 정보 조회 (서버 타입 확인용)
+            List<UserApiKey> userApiKeys = userApiKeyRepository.findByUserId(userId);
+            if (userApiKeys.isEmpty()) {
+                throw new IllegalStateException("사용자 API 키를 찾을 수 없습니다: userId=" + userId);
+            }
+            UserApiKey userApiKey = userApiKeys.get(0);
+            
+            Map<String, String> tokenInfo = new HashMap<>();
+            tokenInfo.put("token", accessToken);
+            tokenInfo.put("serverType", userApiKey.getServerType());
+            
+            return Mono.just(tokenInfo);
+        } catch (RuntimeException e) {
+            // 토큰이 없거나 만료된 경우 재발급 시도
+            log.warn("토큰 조회 실패, 재발급 시도: userId={}, error={}", userId, e.getMessage());
+            
+            return Mono.fromCallable(() -> {
+                List<UserApiKey> userApiKeys = userApiKeyRepository.findByUserId(userId);
+                if (userApiKeys.isEmpty()) {
+                    throw new IllegalStateException("사용자 API 키를 찾을 수 없습니다: userId=" + userId);
+                }
+                UserApiKey userApiKey = userApiKeys.get(0);
+                
+                // 한국투자증권인 경우에만 토큰 발급
+                if (userApiKey.getBrokerType() == BrokerType.KOREA_INVESTMENT) {
+                    tokenService.issueTokenForUser(userApiKey);
+                    String accessToken = tokenService.getAccessToken(userId);
+                    
+                    Map<String, String> tokenInfo = new HashMap<>();
+                    tokenInfo.put("token", accessToken);
+                    tokenInfo.put("serverType", userApiKey.getServerType());
+                    return tokenInfo;
+                } else {
+                    throw new IllegalStateException("한국투자증권이 아닌 증권사입니다: " + userApiKey.getBrokerType());
+                }
+            });
         }
-        
-        // 토큰 발급
-        return issueAccessToken()
-                .doOnNext(token -> {
-                    accessToken = token;
-                    // 토큰 만료 시간 설정 (일반적으로 24시간, 여기서는 23시간으로 설정)
-                    tokenExpiresAt = System.currentTimeMillis() + (23 * 60 * 60 * 1000);
-                });
     }
     
-    /**
-     * Access Token 발급
-     * 한국투자증권 API는 OAuth 2.0 기반 인증을 사용합니다.
-     */
-    private Mono<String> issueAccessToken() {
-        MarketDataProperties.KoreaInvestmentProperties kiProps = properties.getKoreaInvestment();
-        
-        if (kiProps == null || kiProps.getAppKey() == null || kiProps.getAppSecret() == null) {
-            log.error("한국투자증권 API 키가 설정되지 않았습니다.");
-            return Mono.error(new IllegalStateException("API 키가 설정되지 않았습니다"));
-        }
-        
-        String baseUrl = getBaseUrl();
-        String grantType = "client_credentials";
-        
-        // OAuth 2.0 토큰 발급 엔드포인트
-        URI uri = UriComponentsBuilder.fromHttpUrl(baseUrl)
-                .path("/oauth2/tokenP")
-                .queryParam("grant_type", grantType)
-                .queryParam("appkey", kiProps.getAppKey())
-                .queryParam("appsecret", kiProps.getAppSecret())
-                .build()
-                .toUri();
-        
-        log.debug("한국투자증권 Access Token 발급 요청");
-        
-        return webClient.post()
-                .uri(uri)
-                .contentType(MediaType.APPLICATION_JSON)
-                .retrieve()
-                .bodyToMono(Map.class)
-                .timeout(Duration.ofMillis(properties.getTimeout()))
-                .retryWhen(Retry.backoff(2, Duration.ofSeconds(1))
-                        .filter(throwable -> {
-                            if (throwable instanceof org.springframework.web.reactive.function.client.WebClientResponseException) {
-                                org.springframework.web.reactive.function.client.WebClientResponseException ex = 
-                                        (org.springframework.web.reactive.function.client.WebClientResponseException) throwable;
-                                return ex.getStatusCode().is5xxServerError();
-                            }
-                            return false;
-                        }))
-                .map(response -> {
-                    @SuppressWarnings("unchecked")
-                    String token = (String) ((Map<String, Object>) response).get("access_token");
-                    if (token == null) {
-                        throw new IllegalStateException("Access Token을 받을 수 없습니다: " + response);
-                    }
-                    log.debug("한국투자증권 Access Token 발급 성공");
-                    return token;
-                })
-                .onErrorMap(error -> {
-                    log.error("한국투자증권 Access Token 발급 실패", error);
-                    return new IllegalStateException("Access Token 발급 실패", error);
-                });
-    }
     
     /**
      * 차트 데이터 조회
      * 한국투자증권 API의 주식 차트 조회 API를 사용합니다.
+     * Rate Limiter 적용: 실전투자 1초당 20건, 모의투자 1초당 2건
      */
-    private Mono<List<Map<String, Object>>> getChartData(String stockCode, String interval, String accessToken) {
-        MarketDataProperties.KoreaInvestmentProperties kiProps = properties.getKoreaInvestment();
-        String baseUrl = getBaseUrl();
+    private Mono<List<Map<String, Object>>> getChartData(String stockCode, String interval, 
+                                                          String accessToken, String userId, String serverType) {
+        // 사용자 API 키 정보 조회
+        List<UserApiKey> userApiKeys = userApiKeyRepository.findByUserId(userId);
+        if (userApiKeys.isEmpty()) {
+            return Mono.error(new IllegalStateException("사용자 API 키를 찾을 수 없습니다: userId=" + userId));
+        }
+        UserApiKey userApiKey = userApiKeys.get(0);
         
-        // 종목 코드에서 시장 구분 추출
-        String marketType = KiwoomCodeConverter.getMarketType(stockCode);
+        // API 키 복호화
+        String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
+        String appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
+        
+        String baseUrl = getBaseUrl(serverType);
+        
         String trId = "FHKST03010100"; // 주식현재가 일봉차트 조회 TR ID
         
         // 날짜 설정 (최근 200일)
@@ -225,8 +258,8 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("authorization", "Bearer " + accessToken);
-        headers.set("appkey", kiProps.getAppKey());
-        headers.set("appsecret", kiProps.getAppSecret());
+        headers.set("appkey", appKey);
+        headers.set("appsecret", appSecret);
         headers.set("tr_id", trId);
         
         // 요청 바디
@@ -239,39 +272,54 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
         
         log.debug("한국투자증권 차트 데이터 조회: stockCode={}, interval={}", stockCode, interval);
         
-        final String finalToken = accessToken; // effectively final로 만들기
+        // Rate Limiter 적용 (실전투자: 1초당 20건, 모의투자: 1초당 2건)
+        RateLimiter rateLimiter = getApiRateLimiter(serverType);
         
-        return webClient.post()
-                .uri(uri)
-                .headers(h -> h.addAll(headers))
-                .bodyValue(requestBody)
-                .retrieve()
-                .bodyToMono(Map.class)
-                .timeout(Duration.ofMillis(properties.getTimeout()))
-                .retryWhen(Retry.backoff(2, Duration.ofSeconds(1))
-                        .filter(throwable -> {
-                            if (throwable instanceof org.springframework.web.reactive.function.client.WebClientResponseException) {
-                                org.springframework.web.reactive.function.client.WebClientResponseException ex = 
-                                        (org.springframework.web.reactive.function.client.WebClientResponseException) throwable;
+        return Mono.fromCallable(() -> {
+                    // Rate Limiter가 허용할 때까지 대기
+                    rateLimiter.acquirePermission();
+                    return null;
+                })
+                .flatMap(ignored -> webClient.post()
+                        .uri(uri)
+                        .headers(h -> h.addAll(headers))
+                        .bodyValue(requestBody)
+                        .retrieve()
+                        .bodyToMono(Map.class)
+                        .timeout(Duration.ofMillis(properties.getTimeout()))
+                        .retryWhen(Retry.backoff(2, Duration.ofSeconds(1))
+                                .filter(throwable -> {
+                                    if (throwable instanceof org.springframework.web.reactive.function.client.WebClientResponseException) {
+                                        org.springframework.web.reactive.function.client.WebClientResponseException ex = 
+                                                (org.springframework.web.reactive.function.client.WebClientResponseException) throwable;
                                 // 401 에러는 토큰 갱신 후 재시도
                                 if (ex.getStatusCode().value() == 401) {
-                                    KoreaInvestmentMarketDataClient.this.accessToken = null; // 토큰 무효화
+                                    log.warn("401 에러 발생, 토큰 재발급 시도: userId={}", userId);
+                                    // 토큰 재발급
+                                    try {
+                                        List<UserApiKey> apiKeys = userApiKeyRepository.findByUserId(userId);
+                                        if (!apiKeys.isEmpty()) {
+                                            tokenService.issueTokenForUser(apiKeys.get(0));
+                                        }
+                                    } catch (Exception e) {
+                                        log.error("토큰 재발급 실패: userId={}", userId, e);
+                                    }
                                     return true;
                                 }
-                                return ex.getStatusCode().is5xxServerError();
+                                        return ex.getStatusCode().is5xxServerError();
+                                    }
+                                    return false;
+                                }))
+                        .map(response -> {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> output = (Map<String, Object>) ((Map<String, Object>) response).get("output2");
+                            if (output == null) {
+                                throw new IllegalStateException("차트 데이터를 받을 수 없습니다: " + response);
                             }
-                            return false;
+                            @SuppressWarnings("unchecked")
+                            List<Map<String, Object>> chartData = (List<Map<String, Object>>) output.get("output2");
+                            return chartData != null ? chartData : List.<Map<String, Object>>of();
                         }))
-                .map(response -> {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> output = (Map<String, Object>) ((Map<String, Object>) response).get("output2");
-                    if (output == null) {
-                        throw new IllegalStateException("차트 데이터를 받을 수 없습니다: " + response);
-                    }
-                    @SuppressWarnings("unchecked")
-                    List<Map<String, Object>> chartData = (List<Map<String, Object>>) output.get("output2");
-                    return chartData != null ? chartData : List.<Map<String, Object>>of();
-                })
                 .onErrorMap(error -> {
                     log.error("한국투자증권 차트 데이터 조회 실패: stockCode={}", stockCode, error);
                     return new IllegalStateException("차트 데이터 조회 실패", error);
@@ -515,9 +563,8 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
     /**
      * Base URL 가져오기 (실거래/모의투자)
      */
-    private String getBaseUrl() {
-        MarketDataProperties.KoreaInvestmentProperties kiProps = properties.getKoreaInvestment();
-        if (kiProps != null && "1".equals(kiProps.getServerType())) {
+    private String getBaseUrl(String serverType) {
+        if ("1".equals(serverType)) {
             return BASE_URL_VIRTUAL; // 모의투자
         }
         return BASE_URL_REAL; // 실거래

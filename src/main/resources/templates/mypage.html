@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>마이페이지 - Investment Choi</title>
+    <link rel="stylesheet" th:href="@{/css/common.css}">
+</head>
+<body class="page-background">
+    <div class="container">
+        <div class="header">
+            <h1>마이페이지</h1>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span id="usernameDisplay" style="color: #191F28; font-size: 15px; font-weight: 600;"></span>
+                <button onclick="logout()" class="danger">로그아웃</button>
+            </div>
+        </div>
+        
+        <div class="nav">
+            <a href="/dashboard">대시보드</a>
+            <a href="/mypage">마이페이지</a>
+        </div>
+        
+        <!-- 사용자 정보 조회 -->
+        <div class="card">
+            <h2>사용자 정보</h2>
+            <div id="userInfo">
+                <div class="info-row">
+                    <span class="info-label">사용자 ID</span>
+                    <span class="info-value" id="displayUsername"></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">사용증권명</span>
+                    <span class="info-value" id="displayBrokerType"></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">서버 타입</span>
+                    <span class="info-value" id="displayServerType"></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">API Key</span>
+                    <span class="info-value masked-value" id="displayAppKey"></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">API Secret</span>
+                    <span class="info-value masked-value" id="displayAppSecret"></span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 정보 수정 -->
+        <div class="card">
+            <h2>정보 수정</h2>
+            <div class="security-note">
+                ⚠️ 보안 안내: API Key와 Secret을 변경할 경우, 변경된 값만 입력하세요. 변경하지 않을 항목은 비워두세요.
+            </div>
+            
+            <form id="updateForm">
+                <div class="form-group">
+                    <label for="password">비밀번호 변경</label>
+                    <input type="password" id="password" name="password" autocomplete="new-password" 
+                           minlength="8" maxlength="100" placeholder="변경하지 않으려면 비워두세요">
+                    <div class="info-text">8자 이상 입력해주세요</div>
+                    <div class="error-message" id="passwordError"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="brokerType">사용증권명</label>
+                    <select id="brokerType" name="brokerType">
+                        <option value="">변경하지 않음</option>
+                        <option value="KOREA_INVESTMENT">한국투자증권</option>
+                        <option value="KIWOOM">키움증권</option>
+                        <option value="NH_INVESTMENT">NH투자증권</option>
+                        <option value="SAMSUNG">삼성증권</option>
+                        <option value="DAISHIN">대신증권</option>
+                        <option value="MIRAE_ASSET">미래에셋증권</option>
+                        <option value="KB_SECURITIES">KB증권</option>
+                        <option value="SHINHAN">신한투자증권</option>
+                        <option value="HANA">하나증권</option>
+                        <option value="OTHER">기타</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="appKey">API Key 변경</label>
+                    <input type="password" id="appKey" name="appKey" autocomplete="off" 
+                           placeholder="변경하지 않으려면 비워두세요">
+                    <div class="info-text">민감 정보이므로 화면에 표시되지 않습니다</div>
+                    <div class="error-message" id="appKeyError"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="appSecret">API Secret 변경</label>
+                    <input type="password" id="appSecret" name="appSecret" autocomplete="off" 
+                           placeholder="변경하지 않으려면 비워두세요">
+                    <div class="info-text">민감 정보이므로 화면에 표시되지 않습니다</div>
+                    <div class="error-message" id="appSecretError"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="serverType">서버 타입</label>
+                    <select id="serverType" name="serverType">
+                        <option value="">변경하지 않음</option>
+                        <option value="1">모의투자</option>
+                        <option value="0">실거래</option>
+                    </select>
+                </div>
+                
+                <div class="error-message" id="generalError"></div>
+                <div class="success-message" id="successMessage"></div>
+                
+                <button type="submit" id="updateButton">정보 수정</button>
+            </form>
+        </div>
+    </div>
+    
+    <script th:src="@{/js/validation.js}"></script>
+    <script>
+        // 페이지 로드 시 사용자 정보 조회
+        async function loadUserInfo() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/login';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/v1/auth/mypage', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.status === 401) {
+                    localStorage.removeItem('token');
+                    window.location.href = '/login';
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                // 사용자 정보 표시
+                document.getElementById('usernameDisplay').textContent = data.username;
+                document.getElementById('displayUsername').textContent = data.username;
+                document.getElementById('displayBrokerType').textContent = data.brokerTypeName;
+                document.getElementById('displayServerType').textContent = data.serverTypeName;
+                document.getElementById('displayAppKey').textContent = data.appKeyMasked;
+                document.getElementById('displayAppSecret').textContent = data.appSecretMasked;
+                
+                // 현재 값으로 select 설정
+                document.getElementById('brokerType').value = data.brokerType || '';
+                document.getElementById('serverType').value = data.serverType || '';
+            } catch (error) {
+                console.error('사용자 정보 조회 실패:', error);
+            }
+        }
+        
+        // 실시간 유효성 검사 설정 (선택적 필드)
+        setupRealTimeValidation('password', (pwd) => validatePassword(pwd, false), 'passwordError');
+        setupRealTimeValidation('appKey', (key) => validateAppKey(key, false), 'appKeyError');
+        setupRealTimeValidation('appSecret', (secret) => validateAppSecret(secret, false), 'appSecretError');
+        
+        // 정보 수정
+        const updateForm = document.getElementById('updateForm');
+        const updateButton = document.getElementById('updateButton');
+        const generalError = document.getElementById('generalError');
+        const successMessage = document.getElementById('successMessage');
+        
+        updateForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // 에러 메시지 초기화
+            clearAllErrors();
+            successMessage.classList.remove('show');
+            
+            const formData = {};
+            const password = document.getElementById('password').value;
+            const brokerType = document.getElementById('brokerType').value;
+            const appKey = document.getElementById('appKey').value;
+            const appSecret = document.getElementById('appSecret').value;
+            const serverType = document.getElementById('serverType').value;
+            
+            // 유효성 검사 (입력된 값만 검사)
+            let isValid = true;
+            
+            if (password) {
+                const passwordValidation = validatePassword(password, false);
+                if (!passwordValidation.valid) {
+                    showFieldError('password', 'passwordError', passwordValidation.message);
+                    isValid = false;
+                }
+            }
+            
+            if (appKey) {
+                const appKeyValidation = validateAppKey(appKey, false);
+                if (!appKeyValidation.valid) {
+                    showFieldError('appKey', 'appKeyError', appKeyValidation.message);
+                    isValid = false;
+                }
+            }
+            
+            if (appSecret) {
+                const appSecretValidation = validateAppSecret(appSecret, false);
+                if (!appSecretValidation.valid) {
+                    showFieldError('appSecret', 'appSecretError', appSecretValidation.message);
+                    isValid = false;
+                }
+            }
+            
+            if (serverType) {
+                const serverTypeValidation = validateServerType(serverType, false);
+                if (!serverTypeValidation.valid) {
+                    generalError.textContent = serverTypeValidation.message;
+                    generalError.classList.add('show');
+                    isValid = false;
+                }
+            }
+            
+            if (!isValid) {
+                return;
+            }
+            
+            // 변경할 정보가 있는지 확인
+            if (password) formData.password = password;
+            if (brokerType) formData.brokerType = brokerType;
+            if (appKey) formData.appKey = appKey;
+            if (appSecret) formData.appSecret = appSecret;
+            if (serverType) formData.serverType = serverType;
+            
+            if (Object.keys(formData).length === 0) {
+                generalError.textContent = '변경할 정보를 입력해주세요.';
+                generalError.classList.add('show');
+                return;
+            }
+            
+            updateButton.disabled = true;
+            updateButton.textContent = '수정 중...';
+            
+            const token = localStorage.getItem('token');
+            
+            try {
+                const response = await fetch('/api/v1/auth/mypage', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    successMessage.textContent = '정보가 성공적으로 수정되었습니다.';
+                    successMessage.classList.add('show');
+                    
+                    // 폼 초기화
+                    updateForm.reset();
+                    
+                    // 사용자 정보 다시 로드
+                    setTimeout(() => {
+                        loadUserInfo();
+                    }, 1000);
+                } else {
+                    generalError.textContent = data.message || '정보 수정에 실패했습니다.';
+                    generalError.classList.add('show');
+                }
+                
+                updateButton.disabled = false;
+                updateButton.textContent = '정보 수정';
+            } catch (error) {
+                generalError.textContent = '정보 수정 중 오류가 발생했습니다.';
+                generalError.classList.add('show');
+                updateButton.disabled = false;
+                updateButton.textContent = '정보 수정';
+            }
+        });
+        
+        // 로그아웃
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('userId');
+            localStorage.removeItem('username');
+            window.location.href = '/login';
+        }
+        
+        // 페이지 로드 시 실행
+        loadUserInfo();
+    </script>
+</body>
+</html>

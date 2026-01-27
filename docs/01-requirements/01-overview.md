@@ -4,7 +4,7 @@
 Investment Choi - 주식 투자 수익 분석 및 자동 매매 시스템
 
 ## 프로젝트 목적
-키움증권 Open API 및 시장 데이터 API를 활용하여 주식 투자 수익 분석 및 자동 매매를 수행하는 시스템을 구축합니다.
+한국투자증권 Open API를 활용하여 주식 투자 수익 분석 및 자동 매매를 수행하는 시스템을 구축합니다.
 
 ## 주요 목표
 1. **자동화된 투자 분석**: AI 기반 종목 분석 및 투자 추천
@@ -40,7 +40,7 @@ Investment Choi - 주식 투자 수익 분석 및 자동 매매 시스템
 - **Frontend**: Thymeleaf
 - **Database**: MariaDB 11.8.5
 - **Build Tool**: Gradle
-- **API**: 키움증권 Open API, Finnhub API, iTick API
+- **API**: 한국투자증권 Open API
 
 ## 프로젝트 일정
 - **시작일**: 2026년 1월

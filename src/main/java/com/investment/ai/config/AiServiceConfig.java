@@ -5,7 +5,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.reactive.function.client.WebClient;
 
 /**
- * AI ?�비???�라?�언???�정
+ * AI 서비스 클라이언트 설정
  */
 @Configuration
 public class AiServiceConfig {

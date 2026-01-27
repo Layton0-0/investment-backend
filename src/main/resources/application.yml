@@ -89,21 +89,16 @@ management:
         enabled: true
 
 investment:
+  # 보안 설정
+  security:
+    encryption-key: ${INVESTMENT_ENCRYPTION_KEY:}  # AES-256 키 (Base64 인코딩)
+    jwt-secret: ${INVESTMENT_JWT_SECRET:default-secret-key-change-in-production-minimum-256-bits}
+    jwt-expiration: ${INVESTMENT_JWT_EXPIRATION:86400000}  # 24시간 (밀리초)
   market-data:
-    provider: ${MARKET_DATA_PROVIDER:finnhub}
-    api-key: ${MARKET_DATA_API_KEY:}
-    base-url: ${MARKET_DATA_BASE_URL:https://finnhub.io/api/v1}
+    provider: ${MARKET_DATA_PROVIDER:korea-investment}
     timeout: ${MARKET_DATA_TIMEOUT:30000}
     use-mock-data: ${MARKET_DATA_USE_MOCK_DATA:false}
-    # 키움증권 API 설정 (provider가 kiwoom일 때 사용)
-    kiwoom:
-      account-no: ${KIWOOM_ACCOUNT_NO:}
-      password: ${KIWOOM_PASSWORD:}
-      server-type: ${KIWOOM_SERVER_TYPE:1}  # 1: 모의투자, 0: 실거래
-      host: ${KIWOOM_HOST:localhost}
-      port: ${KIWOOM_PORT:5000}
-      auto-login: ${KIWOOM_AUTO_LOGIN:false}
-    # 한국투자증권 API 설정 (provider가 korea-investment일 때 사용)
+    # 한국투자증권 API 설정 (이제 사용자별로 DB에서 관리)
     korea-investment:
       app-key: ${KOREA_INVESTMENT_APP_KEY:}
       app-secret: ${KOREA_INVESTMENT_APP_SECRET:}
@@ -160,3 +155,32 @@ resilience4j:
       marketDataService:
         baseConfig: default
         timeoutDuration: 5s
+  ratelimiter:
+    configs:
+      default:
+        limitForPeriod: 10
+        limitRefreshPeriod: 1s
+        timeoutDuration: 0
+      # 한국투자증권 API Rate Limit 설정
+      koreaInvestmentReal:
+        # 실전투자: 1초당 20건 (안전 마진을 위해 18건으로 설정)
+        limitForPeriod: 18
+        limitRefreshPeriod: 1s
+        timeoutDuration: 5s
+      koreaInvestmentVirtual:
+        # 모의투자: 1초당 2건 (안전 마진을 위해 1건으로 설정)
+        limitForPeriod: 1
+        limitRefreshPeriod: 1s
+        timeoutDuration: 5s
+      koreaInvestmentToken:
+        # 토큰 발급: 1초당 1건
+        limitForPeriod: 1
+        limitRefreshPeriod: 1s
+        timeoutDuration: 5s
+    instances:
+      koreaInvestmentApi:
+        baseConfig: koreaInvestmentVirtual  # 기본값: 모의투자
+      koreaInvestmentApiReal:
+        baseConfig: koreaInvestmentReal  # 실전투자용
+      koreaInvestmentToken:
+        baseConfig: koreaInvestmentToken

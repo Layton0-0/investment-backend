@@ -1,6 +1,6 @@
 # Investment Choi - 주식 투자 수익 분석 및 자동 매매 시스템
 
-키움증권 Open API를 활용한 주식 투자 수익 분석 및 자동 매매 시스템입니다.
+한국투자증권 Open API를 활용한 주식 투자 수익 분석 및 자동 매매 시스템입니다.
 
 ## 기술 스택
 
@@ -8,11 +8,11 @@
 - **Frontend**: Thymeleaf
 - **Database**: MariaDB
 - **Build Tool**: Gradle
-- **API**: 키움증권 Open API
+- **API**: 한국투자증권 Open API
 
 ## 주요 기능
 
-1. **계좌 조회**: 키움증권 계좌 잔고 및 보유 종목 조회
+1. **계좌 조회**: 계좌 잔고 및 보유 종목 조회
 2. **주문 관리**: 주식 매수/매도 주문 실행 및 조회
 3. **AI 분석**: 종목 분석 및 투자 추천
 4. **자동 매매**: AI 분석 결과를 바탕으로 한 자동 매매 결정
@@ -29,7 +29,7 @@ src/main/java/com/investment/
 ├── analysis/                # AI 분석 관련
 ├── strategy/                # 거래 전략 관련
 ├── setting/                 # 설정 관련
-├── kiwoom/                  # 키움증권 API 연동
+├── marketdata/              # 시장 데이터 API 연동
 ├── domain/                  # 도메인 엔티티 및 리포지토리
 └── common/                  # 공통 (예외 처리 등)
 ```
@@ -42,14 +42,12 @@ src/main/java/com/investment/
 
 ```yaml
 investment:
-  kiwoom:
-    api:
-      enabled: false  # 키움증권 API 활성화 여부
-      host: localhost
-      port: 5000
-    account:
-      account-no: ${KIWOOM_ACCOUNT_NO:}
-      password: ${KIWOOM_PASSWORD:}
+  market-data:
+    provider: korea-investment
+    korea-investment:
+      app-key: ${KOREA_INVESTMENT_APP_KEY:}
+      app-secret: ${KOREA_INVESTMENT_APP_SECRET:}
+      server-type: ${KOREA_INVESTMENT_SERVER_TYPE:1}  # 1: 모의투자, 0: 실거래
   trading:
     max-investment-amount: ${MAX_INVESTMENT_AMOUNT:1000000}
     min-investment-amount: ${MIN_INVESTMENT_AMOUNT:10000}
@@ -60,9 +58,10 @@ investment:
 
 - `DB_USERNAME`: 데이터베이스 사용자명
 - `DB_PASSWORD`: 데이터베이스 비밀번호
-- `KIWOOM_API_ENABLED`: 키움증권 API 활성화 여부
-- `KIWOOM_ACCOUNT_NO`: 키움증권 계좌번호
-- `KIWOOM_PASSWORD`: 키움증권 비밀번호
+- `KOREA_INVESTMENT_APP_KEY`: 한국투자증권 API App Key
+- `KOREA_INVESTMENT_APP_SECRET`: 한국투자증권 API App Secret
+- `KOREA_INVESTMENT_SERVER_TYPE`: 서버 타입 (1: 모의투자, 0: 실거래)
+- `MARKET_DATA_USE_MOCK_DATA`: 모의 데이터 사용 여부 (개발/테스트용)
 - `MAX_INVESTMENT_AMOUNT`: 최대 투자금액
 - `MIN_INVESTMENT_AMOUNT`: 최소 투자금액
 
@@ -119,16 +118,15 @@ java -jar build/libs/investment-choi-1.0.0.jar
 
 - `GET /` - 대시보드 (계좌번호를 쿼리 파라미터로 전달)
 
-## 키움증권 Open API 연동
+## 한국투자증권 Open API 연동
 
-키움증권 Open API는 OCX 방식으로 제공됩니다. 실제 연동을 위해서는:
+한국투자증권 Open API는 REST API 방식으로 제공됩니다.
 
-1. 키움증권 Open API SDK 설치
-2. `KiwoomApiService` 클래스의 TODO 주석 부분 구현
-3. 주요 API:
-   - `CommConnect`: 로그인
-   - `SendOrder`: 주문 전송
-   - `SetInputValue` / `CommRqData`: 데이터 조회
+1. 한국투자증권 Open API 포털에서 App Key와 App Secret 발급
+2. 환경 변수에 API 키 설정
+3. 모의투자 서버로 테스트 후 실거래 서버 사용
+
+자세한 내용은 [한국투자증권 API 가이드](./KOREA_INVESTMENT_API_GUIDE.md)를 참고하세요.
 
 ## 데이터베이스 스키마
 
@@ -168,9 +166,10 @@ java -jar build/libs/investment-choi-1.0.0.jar
 
 ## 보안 주의사항
 
-- 키움증권 계좌번호 및 비밀번호는 환경 변수로 관리
+- 한국투자증권 API 키 및 시크릿은 환경 변수로 관리
 - 프로덕션 환경에서는 HTTPS 사용 필수
 - API 키 및 인증 정보는 절대 코드에 하드코딩하지 않음
+- 개발/테스트 시 모의투자 서버 사용 권장
 
 ## 라이선스
 

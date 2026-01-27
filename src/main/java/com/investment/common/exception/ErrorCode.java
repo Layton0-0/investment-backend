@@ -22,10 +22,10 @@ public final class ErrorCode {
     public static final String INVALID_ORDER_AMOUNT = "INVALID_ORDER_AMOUNT";
     public static final String EXCEEDS_MAX_INVESTMENT = "EXCEEDS_MAX_INVESTMENT";
     
-    // 키움 API 관련
-    public static final String KIWOOM_API_ERROR = "KIWOOM_API_ERROR";
-    public static final String KIWOOM_API_TIMEOUT = "KIWOOM_API_TIMEOUT";
-    public static final String KIWOOM_API_CONNECTION_FAILED = "KIWOOM_API_CONNECTION_FAILED";
+    // 시장 데이터 API 관련
+    public static final String MARKET_DATA_API_ERROR = "MARKET_DATA_API_ERROR";
+    public static final String MARKET_DATA_API_TIMEOUT = "MARKET_DATA_API_TIMEOUT";
+    public static final String MARKET_DATA_API_CONNECTION_FAILED = "MARKET_DATA_API_CONNECTION_FAILED";
     
     // 설정 관련
     public static final String SETTING_NOT_FOUND = "SETTING_NOT_FOUND";
@@ -33,6 +33,16 @@ public final class ErrorCode {
     
     // 포트폴리오 관련
     public static final String PORTFOLIO_NOT_FOUND = "PORTFOLIO_NOT_FOUND";
+    
+    // 인증 관련
+    public static final String USER_NOT_FOUND = "USER_NOT_FOUND";
+    public static final String DUPLICATE_USERNAME = "DUPLICATE_USERNAME";
+    public static final String INVALID_PASSWORD = "INVALID_PASSWORD";
+    public static final String INVALID_BROKER_TYPE = "INVALID_BROKER_TYPE";
+    public static final String API_KEY_NOT_FOUND = "API_KEY_NOT_FOUND";
+    public static final String UNAUTHORIZED = "UNAUTHORIZED";
+    public static final String TOKEN_ISSUANCE_FAILED = "TOKEN_ISSUANCE_FAILED";
+    public static final String INVALID_API_CREDENTIALS = "INVALID_API_CREDENTIALS";
     
     private ErrorCode() {
         // 상수 클래스

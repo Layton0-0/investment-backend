@@ -148,7 +148,7 @@ sudo apt update && sudo apt install -y \
 # 5. AI 서비스 배포 (선택적)
 ```
 
-상세 가이드: [최소 비용 구성 가이드](./docs/06-deployment/04-minimal-cost-setup.md)
+상세 가이드: [최소 비용 구성 가이드](./04-minimal-cost-setup.md)
 
 ## 모니터링 (무료)
 
@@ -199,6 +199,6 @@ sudo apt update && sudo apt install -y \
 
 ## 참고 문서
 
-- [비용 최적화 아키텍처](./docs/02-architecture/09-cost-optimized-architecture.md)
-- [최소 비용 구성 가이드](./docs/06-deployment/04-minimal-cost-setup.md)
-- [서버 스펙](./docs/06-deployment/03-server-specification.md)
+- [비용 최적화 아키텍처](../02-architecture/09-cost-optimized-architecture.md)
+- [최소 비용 구성 가이드](./04-minimal-cost-setup.md)
+- [서버 스펙](./03-server-specification.md)

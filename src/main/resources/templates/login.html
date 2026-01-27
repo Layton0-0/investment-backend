@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>로그인 - Investment Choi</title>
+    <link rel="stylesheet" th:href="@{/css/common.css}">
+</head>
+<body class="auth-background">
+    <div class="auth-container login-container">
+        <h1>Investment Choi</h1>
+        <p class="subtitle">AI 기반 고수익 자동투자 시스템</p>
+        
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">사용자 ID</label>
+                <input type="text" id="username" name="username" required autocomplete="username" placeholder="사용자 ID를 입력하세요">
+                <div class="error-message" id="usernameError"></div>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">비밀번호</label>
+                <input type="password" id="password" name="password" required autocomplete="current-password" placeholder="비밀번호를 입력하세요">
+                <div class="error-message" id="passwordError"></div>
+            </div>
+            
+            <div class="error-message" id="generalError"></div>
+            
+            <button type="submit" class="full-width" id="loginButton">로그인</button>
+        </form>
+        
+        <div class="link-text">
+            계정이 없으신가요? <a href="/register">회원가입</a>
+        </div>
+    </div>
+    
+    <script th:src="@{/js/validation.js}"></script>
+    <script>
+        const loginForm = document.getElementById('loginForm');
+        const loginButton = document.getElementById('loginButton');
+        const generalError = document.getElementById('generalError');
+        
+        // 실시간 유효성 검사 설정
+        setupRealTimeValidation('username', validateUsername, 'usernameError');
+        setupRealTimeValidation('password', (pwd) => validatePassword(pwd, true), 'passwordError');
+        
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // 에러 메시지 초기화
+            clearAllErrors();
+            
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            
+            // 유효성 검사
+            let isValid = true;
+            
+            const usernameValidation = validateUsername(username);
+            if (!usernameValidation.valid) {
+                showFieldError('username', 'usernameError', usernameValidation.message);
+                isValid = false;
+            }
+            
+            const passwordValidation = validatePassword(password, true);
+            if (!passwordValidation.valid) {
+                showFieldError('password', 'passwordError', passwordValidation.message);
+                isValid = false;
+            }
+            
+            if (!isValid) {
+                return;
+            }
+            
+            loginButton.disabled = true;
+            loginButton.textContent = '로그인 중...';
+            
+            try {
+                const response = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // JWT 토큰을 localStorage에 저장
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('userId', data.userId);
+                    localStorage.setItem('username', data.username);
+                    
+                    // 대시보드로 리다이렉트
+                    window.location.href = '/dashboard';
+                } else {
+                    generalError.textContent = data.message || '로그인에 실패했습니다.';
+                    generalError.classList.add('show');
+                    loginButton.disabled = false;
+                    loginButton.textContent = '로그인';
+                }
+            } catch (error) {
+                generalError.textContent = '로그인 중 오류가 발생했습니다.';
+                generalError.classList.add('show');
+                loginButton.disabled = false;
+                loginButton.textContent = '로그인';
+            }
+        });
+    </script>
+</body>
+</html>

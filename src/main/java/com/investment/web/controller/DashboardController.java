@@ -26,8 +26,19 @@ public class DashboardController {
     private final OrderService orderService;
     private final TradingSettingService tradingSettingService;
     
+    /**
+     * 루트 경로는 로그인 페이지로 리다이렉트
+     */
     @GetMapping("/")
-    public String index(@RequestParam(required = false, defaultValue = "") String accountNo, 
+    public String index() {
+        return "redirect:/login";
+    }
+    
+    /**
+     * 대시보드 페이지
+     */
+    @GetMapping("/dashboard")
+    public String dashboard(@RequestParam(required = false, defaultValue = "") String accountNo, 
                        Model model) {
         if (accountNo != null && !accountNo.trim().isEmpty()) {
             try {

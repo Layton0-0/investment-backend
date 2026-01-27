@@ -6,15 +6,15 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 키움증권 종목 코드 변환 유틸리티
+ * 국내 주식 종목 코드 변환 유틸리티
  * 
- * 키움증권은 6자리 숫자 종목코드를 사용합니다.
+ * 한국투자증권 API는 6자리 숫자 종목코드를 사용합니다.
  * - 코스피: 000000~099999
  * - 코스닥: 100000~999999
  * - ETF: 100000~999999
  */
 @Slf4j
-public class KiwoomCodeConverter {
+public class StockCodeConverter {
     
     /**
      * 주요 종목 코드 매핑 (종목명 -> 6자리 코드)
@@ -58,12 +58,12 @@ public class KiwoomCodeConverter {
     }
     
     /**
-     * 종목명 또는 코드를 키움증권 6자리 코드로 변환
+     * 종목명 또는 코드를 6자리 종목코드로 변환
      * 
      * @param input 종목명 또는 종목코드
-     * @return 키움증권 6자리 종목코드
+     * @return 6자리 종목코드
      */
-    public static String toKiwoomCode(String input) {
+    public static String toStockCode(String input) {
         if (input == null || input.trim().isEmpty()) {
             return input;
         }
@@ -87,9 +87,9 @@ public class KiwoomCodeConverter {
     }
     
     /**
-     * 키움증권 6자리 코드를 종목명으로 변환
+     * 6자리 종목코드를 종목명으로 변환
      * 
-     * @param code 키움증권 6자리 종목코드
+     * @param code 6자리 종목코드
      * @return 종목명
      */
     public static String toStockName(String code) {
@@ -112,12 +112,12 @@ public class KiwoomCodeConverter {
     }
     
     /**
-     * 종목 코드가 유효한 키움증권 코드인지 확인
+     * 종목 코드가 유효한 6자리 코드인지 확인
      * 
      * @param code 종목 코드
      * @return 유효 여부
      */
-    public static boolean isValidKiwoomCode(String code) {
+    public static boolean isValidStockCode(String code) {
         if (code == null || code.trim().isEmpty()) {
             return false;
         }
@@ -128,11 +128,11 @@ public class KiwoomCodeConverter {
     /**
      * 시장 구분 (코스피/코스닥) 확인
      * 
-     * @param code 키움증권 6자리 종목코드
+     * @param code 6자리 종목코드
      * @return "KOSPI" 또는 "KOSDAQ" 또는 "UNKNOWN"
      */
     public static String getMarketType(String code) {
-        if (!isValidKiwoomCode(code)) {
+        if (!isValidStockCode(code)) {
             return "UNKNOWN";
         }
         
@@ -158,5 +158,21 @@ public class KiwoomCodeConverter {
      */
     public static Map<String, String> getAllMappings() {
         return new HashMap<>(STOCK_CODE_TO_NAME);
+    }
+    
+    /**
+     * @deprecated 이 메서드는 하위 호환성을 위해 유지됩니다. {@link #toStockCode(String)}를 사용하세요.
+     */
+    @Deprecated
+    public static String toKiwoomCode(String input) {
+        return toStockCode(input);
+    }
+    
+    /**
+     * @deprecated 이 메서드는 하위 호환성을 위해 유지됩니다. {@link #isValidStockCode(String)}를 사용하세요.
+     */
+    @Deprecated
+    public static boolean isValidKiwoomCode(String code) {
+        return isValidStockCode(code);
     }
 }

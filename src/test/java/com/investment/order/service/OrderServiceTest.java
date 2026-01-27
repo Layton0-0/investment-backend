@@ -49,10 +49,10 @@ class OrderServiceTest {
         
         orderRequest = OrderRequestDto.builder()
                 .accountNo("1234567890")
-                .symbol("SPY")
+                .symbol("005930") // 삼성전자
                 .orderType(OrderRequestDto.OrderType.BUY)
                 .quantity(10)
-                .price(new BigDecimal("400.00"))
+                .price(new BigDecimal("70000.00"))
                 .build();
     }
     
@@ -128,10 +128,10 @@ class OrderServiceTest {
         // given
         Order order = Order.builder()
                 .accountNo("1234567890")
-                .symbol("SPY")
+                .symbol("005930") // 삼성전자
                 .orderType(Order.OrderType.BUY)
                 .quantity(10)
-                .price(new BigDecimal("400.00"))
+                .price(new BigDecimal("70000.00"))
                 .status(Order.OrderStatus.EXECUTED)
                 .build();
         
@@ -155,7 +155,7 @@ class OrderServiceTest {
         // then
         assertNotNull(response);
         assertEquals(orderId, response.getOrderId());
-        assertEquals("SPY", response.getSymbol());
+        assertEquals("005930", response.getSymbol());
     }
     
     @Test

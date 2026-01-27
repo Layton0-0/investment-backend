@@ -1,0 +1,410 @@
+/* 공통 리셋 스타일 */
+* { 
+    margin: 0; 
+    padding: 0; 
+    box-sizing: border-box; 
+}
+
+/* 공통 폰트 및 기본 스타일 - 토스 스타일 */
+body { 
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Pretendard', Roboto, 'Noto Sans KR', sans-serif;
+    color: #191F28;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* 공통 컨테이너 스타일 */
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+/* 인증 컨테이너 - 토스 스타일 */
+.auth-container {
+    background: #FFFFFF;
+    padding: 48px 40px;
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    width: 100%;
+}
+
+.login-container {
+    max-width: 400px;
+}
+
+.register-container {
+    max-width: 500px;
+}
+
+/* 공통 헤더 스타일 - 토스 스타일 */
+h1 {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #191F28;
+    text-align: center;
+    letter-spacing: -0.5px;
+}
+
+h2 {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 24px;
+    color: #191F28;
+    border-bottom: none;
+    padding-bottom: 0;
+    letter-spacing: -0.3px;
+}
+
+.subtitle {
+    text-align: center;
+    color: #8B95A1;
+    margin-bottom: 40px;
+    font-size: 15px;
+    font-weight: 400;
+    line-height: 1.5;
+}
+
+/* 공통 폼 스타일 - 토스 스타일 */
+.form-group {
+    margin-bottom: 24px;
+}
+
+label {
+    display: block;
+    margin-bottom: 8px;
+    color: #191F28;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+}
+
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="number"],
+select,
+textarea {
+    width: 100%;
+    padding: 14px 16px;
+    border: 1px solid #E5E8EB;
+    border-radius: 12px;
+    font-size: 15px;
+    transition: all 0.2s ease;
+    font-family: inherit;
+    background: #FFFFFF;
+    color: #191F28;
+    line-height: 1.5;
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="email"]:focus,
+input[type="number"]:focus,
+select:focus,
+textarea:focus {
+    outline: none;
+    border-color: #3182F6;
+    box-shadow: 0 0 0 3px rgba(49, 130, 246, 0.1);
+}
+
+input[type="text"]:hover,
+input[type="password"]:hover,
+input[type="email"]:hover,
+input[type="number"]:hover,
+select:hover,
+textarea:hover {
+    border-color: #D1D6DB;
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: #8B95A1;
+    opacity: 1;
+}
+
+input[type="text"].error,
+input[type="password"].error,
+input[type="email"].error,
+input[type="number"].error,
+select.error,
+textarea.error {
+    border-color: #F04452;
+    background-color: #FFF5F5;
+}
+
+input[type="text"].error:focus,
+input[type="password"].error:focus,
+input[type="email"].error:focus,
+input[type="number"].error:focus,
+select.error:focus,
+textarea.error:focus {
+    box-shadow: 0 0 0 3px rgba(240, 68, 82, 0.1);
+}
+
+input[type="text"].valid,
+input[type="password"].valid,
+input[type="email"].valid,
+input[type="number"].valid,
+select.valid,
+textarea.valid {
+    border-color: #20D26D;
+}
+
+/* 공통 버튼 스타일 - 토스 스타일 */
+button {
+    padding: 14px 24px;
+    background: #3182F6;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+    letter-spacing: -0.2px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+button:hover {
+    background: #1B64DA;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+}
+
+button:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+button:disabled {
+    background: #E5E8EB;
+    color: #8B95A1;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+button.full-width {
+    width: 100%;
+    margin-top: 8px;
+}
+
+button.danger {
+    background: #F04452;
+}
+
+button.danger:hover {
+    background: #DC2626;
+}
+
+/* 공통 메시지 스타일 - 토스 스타일 */
+.error-message {
+    color: #F04452;
+    font-size: 13px;
+    margin-top: 6px;
+    display: none;
+    font-weight: 400;
+    line-height: 1.4;
+}
+
+.error-message.show {
+    display: block;
+}
+
+.success-message {
+    color: #20D26D;
+    font-size: 14px;
+    margin-top: 12px;
+    display: none;
+    font-weight: 500;
+    line-height: 1.5;
+}
+
+.success-message.show {
+    display: block;
+}
+
+.info-text {
+    font-size: 13px;
+    color: #8B95A1;
+    margin-top: 6px;
+    line-height: 1.4;
+    font-weight: 400;
+}
+
+.security-note {
+    background: #FFF9E6;
+    border: 1px solid #FEE500;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 24px;
+    font-size: 13px;
+    color: #8B6F00;
+    line-height: 1.5;
+    font-weight: 400;
+}
+
+/* 공통 링크 스타일 - 토스 스타일 */
+.link-text {
+    text-align: center;
+    margin-top: 24px;
+    font-size: 14px;
+    color: #8B95A1;
+    line-height: 1.5;
+}
+
+.link-text a {
+    color: #3182F6;
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.2s ease;
+}
+
+.link-text a:hover {
+    color: #1B64DA;
+    text-decoration: none;
+}
+
+/* 공통 카드 스타일 - 토스 스타일 */
+.card {
+    background: #FFFFFF;
+    padding: 24px;
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    margin-bottom: 16px;
+    border: 1px solid #F2F4F6;
+}
+
+/* 공통 헤더 스타일 */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 32px;
+}
+
+.header h1 {
+    text-align: left;
+    margin-bottom: 0;
+}
+
+/* 공통 네비게이션 스타일 - 토스 스타일 */
+.nav {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+
+.nav a {
+    padding: 10px 16px;
+    background: #FFFFFF;
+    color: #3182F6;
+    text-decoration: none;
+    border-radius: 10px;
+    border: 1px solid #E5E8EB;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    letter-spacing: -0.2px;
+}
+
+.nav a:hover {
+    background: #F8F9FA;
+    border-color: #3182F6;
+    color: #3182F6;
+    transform: translateY(-1px);
+}
+
+/* 공통 정보 행 스타일 - 토스 스타일 */
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 0;
+    border-bottom: 1px solid #F2F4F6;
+}
+
+.info-row:last-child {
+    border-bottom: none;
+}
+
+.info-label {
+    font-weight: 600;
+    color: #8B95A1;
+    width: 150px;
+    font-size: 14px;
+    letter-spacing: -0.2px;
+}
+
+.info-value {
+    flex: 1;
+    color: #191F28;
+    word-break: break-all;
+    font-size: 15px;
+    font-weight: 500;
+    text-align: right;
+}
+
+.masked-value {
+    font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
+    color: #8B95A1;
+    font-size: 14px;
+}
+
+/* 배경 - 토스 스타일 */
+.auth-background {
+    background: #F5F7FA;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+/* 일반 배경 - 토스 스타일 */
+.page-background {
+    background: #F5F7FA;
+    min-height: 100vh;
+    padding: 24px;
+}
+
+/* 추가 토스 스타일 요소 */
+.select-wrapper {
+    position: relative;
+}
+
+select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 6L11 1' stroke='%238B95A1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 16px center;
+    padding-right: 40px;
+}
+
+/* 포커스 상태 개선 */
+*:focus-visible {
+    outline: 2px solid #3182F6;
+    outline-offset: 2px;
+}
+
+/* 스크롤바 스타일링 (웹킷 브라우저) */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #F5F7FA;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #D1D6DB;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #8B95A1;
+}

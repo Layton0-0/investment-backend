@@ -112,7 +112,7 @@ investment-choi/
 #### 1.3 Circuit Breaker 패턴 적용
 - [ ] Resilience4j 설정
 - [ ] 외부 API 호출에 Circuit Breaker 적용
-  - 시장 데이터 API (Finnhub, iTick)
+  - 시장 데이터 API (한국투자증권)
   - AI 예측 서비스
 - [ ] Fallback 전략 구현
 

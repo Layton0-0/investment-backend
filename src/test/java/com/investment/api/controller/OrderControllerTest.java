@@ -36,20 +36,20 @@ class OrderControllerTest {
         // given
         OrderRequestDto request = OrderRequestDto.builder()
                 .accountNo("1234567890")
-                .symbol("SPY")
+                .symbol("005930") // 삼성전자
                 .orderType(OrderRequestDto.OrderType.BUY)
                 .quantity(10)
-                .price(new BigDecimal("400.00"))
+                .price(new BigDecimal("70000.00"))
                 .build();
         
         String orderId = java.util.UUID.randomUUID().toString();
         OrderResponseDto response = OrderResponseDto.builder()
                 .orderId(orderId)
                 .accountNo("1234567890")
-                .symbol("SPY")
+                .symbol("005930")
                 .orderType(OrderRequestDto.OrderType.BUY)
                 .quantity(10)
-                .price(new BigDecimal("400.00"))
+                .price(new BigDecimal("70000.00"))
                 .status(OrderResponseDto.OrderStatus.PENDING)
                 .orderTime(LocalDateTime.now())
                 .build();
@@ -62,7 +62,7 @@ class OrderControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.orderId").value(orderId))
-                .andExpect(jsonPath("$.symbol").value("SPY"))
+                .andExpect(jsonPath("$.symbol").value("005930"))
                 .andExpect(jsonPath("$.orderType").value("BUY"));
     }
     
@@ -73,10 +73,10 @@ class OrderControllerTest {
         OrderResponseDto response = OrderResponseDto.builder()
                 .orderId(orderId)
                 .accountNo("1234567890")
-                .symbol("SPY")
+                .symbol("005930") // 삼성전자
                 .orderType(OrderRequestDto.OrderType.BUY)
                 .quantity(10)
-                .price(new BigDecimal("400.00"))
+                .price(new BigDecimal("70000.00"))
                 .status(OrderResponseDto.OrderStatus.EXECUTED)
                 .orderTime(LocalDateTime.now())
                 .build();

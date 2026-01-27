@@ -17,8 +17,7 @@
 
 ### 2.1 전략 패턴 (Strategy Pattern)
 - **MarketDataClient**: 시장 데이터 제공자 전략
-  - `FinnhubMarketDataClient`: Finnhub API 전략
-  - `KiwoomMarketDataClient`: 키움증권 API 전략
+  - `KoreaInvestmentMarketDataClient`: 한국투자증권 API 전략
 - **TradingStrategyService**: 거래 전략 패턴
   - `ShortTermTradingStrategyService`: 단기 전략
   - `MediumTermTradingStrategyService`: 중기 전략 (향후)

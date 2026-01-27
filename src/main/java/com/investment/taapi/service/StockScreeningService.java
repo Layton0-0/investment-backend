@@ -24,11 +24,14 @@ public class StockScreeningService {
     
     private final StockAnalysisService stockAnalysisService;
     
-    // 분석할 종목 목록 (Finnhub 무료 플랜 제한에 맞춰 5개로 축소)
-    // 무료 플랜: 분당 60회 API 호출 제한
-    // 5개 종목 × 3개 지표 = 15회 호출 (제한 내)
+    // 분석할 종목 목록 (국내 주식 종목 코드)
+    // 한국투자증권 API는 국내 주식(코스피/코스닥) 데이터를 제공
     private static final List<String> WATCH_LIST = List.of(
-            "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA"
+            "005930", // 삼성전자
+            "000660", // SK하이닉스
+            "035420", // NAVER
+            "035720", // 카카오
+            "051910"  // LG화학
     );
     
     /**
@@ -39,10 +42,9 @@ public class StockScreeningService {
      * @return 분석된 종목 목록 (점수 순으로 정렬)
      */
     public Mono<List<StockAnalysisDto>> screenStocks(String interval, int limit) {
-        log.info("주식 스크리닝 시작: 종목 수={}, limit={} (Finnhub 무료 플랜 제한 준수)", WATCH_LIST.size(), limit);
+        log.info("주식 스크리닝 시작: 종목 수={}, limit={}", WATCH_LIST.size(), limit);
         
-        // 무료 플랜 Rate limit 준수를 위해 순차 처리 (concatMap 사용)
-        // 각 종목마다 3개 지표 × 1초 지연 = 최소 3초 소요
+        // 한국투자증권 API Rate limit 준수를 위해 순차 처리 (concatMap 사용)
         return Flux.fromIterable(WATCH_LIST)
                 .concatMap(symbol -> stockAnalysisService.analyzeStock(symbol, interval)
                         .map(analysis -> {
@@ -65,9 +67,9 @@ public class StockScreeningService {
                             .limit(limit)
                             .collect(Collectors.toList());
                     
-                    // 모든 종목 분석이 실패한 경우 (예: 무료 플랜에서 Stocks 미지원)
+                    // 모든 종목 분석이 실패한 경우
                     if (filtered.isEmpty() && !analyses.isEmpty()) {
-                        log.warn("모든 종목 분석이 실패했습니다. API 구독 제한 또는 에러 가능성이 있습니다.");
+                        log.warn("모든 종목 분석이 실패했습니다. API 키 설정 또는 네트워크 오류 가능성이 있습니다.");
                     }
                     
                     return filtered;

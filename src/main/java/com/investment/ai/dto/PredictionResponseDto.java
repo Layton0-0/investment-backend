@@ -10,79 +10,79 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * AI ?�측 ?�답 DTO
+ * AI 예측 응답 DTO
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class PredictionResponseDto {
-    
+
     /**
-     * 종목 코드
+     * 종목 심볼
      */
     private String symbol;
-    
+
     /**
-     * ?�재 가�?
+     * 현재 가격
      */
     private BigDecimal currentPrice;
-    
+
     /**
-     * ?�측 가�?
+     * 예측 가격
      */
     private BigDecimal predictedPrice;
-    
+
     /**
-     * ?�측 가�?범위 (?�한)
+     * 예측 가격 범위 (하한)
      */
     private BigDecimal predictedPriceLower;
-    
+
     /**
-     * ?�측 가�?범위 (?�한)
+     * 예측 가격 범위 (상한)
      */
     private BigDecimal predictedPriceUpper;
-    
+
     /**
-     * ?�상 ?�익�?(%)
+     * 예상 수익률 (%)
      */
     private BigDecimal expectedReturn;
-    
+
     /**
-     * ?�측 ?�뢰??(0.0 ~ 1.0)
+     * 예측 신뢰도 (0.0 ~ 1.0)
      */
     private BigDecimal confidence;
-    
+
     /**
-     * ?�상 변?�성 (Volatility)
+     * 예상 변동성 (Volatility)
      */
     private BigDecimal volatility;
-    
+
     /**
-     * ?�측 방향 (UP, DOWN, NEUTRAL)
+     * 예측 방향 (UP, DOWN, NEUTRAL)
      */
     private String direction;
-    
+
     /**
-     * ?�용??모델 ?�??
+     * 사용된 모델 타입
      */
     private String modelType;
-    
+
     /**
-     * ?�측 ?�각
+     * 예측 시점
      */
     private LocalDateTime predictedAt;
-    
+
     /**
-     * ?�측 기간 (�?
+     * 예측 기간 (분)
      */
     private Integer predictionMinutes;
-    
+
     /**
-     * 추�? 메�??�이??
+     * 추가 메타데이터
      */
     private PredictionMetadata metadata;
-    
+
     @Data
     @Builder
     @NoArgsConstructor
@@ -92,23 +92,23 @@ public class PredictionResponseDto {
          * 모델 버전
          */
         private String modelVersion;
-        
+
         /**
-         * ?�측???�용???�처 목록
+         * 예측에 사용된 특성 목록
          */
         private List<String> features;
-        
+
         /**
-         * 모델�??�측 결과 (?�상블인 경우)
+         * 모델별 예측 결과 (앙상블 가중치)
          */
         private List<ModelPrediction> modelPredictions;
-        
+
         /**
-         * ?�측 근거 ?�명
+         * 예측 근거 설명
          */
         private String reasoning;
     }
-    
+
     @Data
     @Builder
     @NoArgsConstructor

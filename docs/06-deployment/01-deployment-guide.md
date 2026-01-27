@@ -161,16 +161,15 @@ SPRING_DATASOURCE_USERNAME=investment
 SPRING_DATASOURCE_PASSWORD=password
 
 # 시장 데이터 API
-MARKET_DATA_PROVIDER=finnhub
-MARKET_DATA_API_KEY=your_api_key
+MARKET_DATA_PROVIDER=korea-investment
+KOREA_INVESTMENT_APP_KEY=your_app_key
+KOREA_INVESTMENT_APP_SECRET=your_app_secret
+KOREA_INVESTMENT_SERVER_TYPE=1  # 1: 모의투자, 0: 실거래
+MARKET_DATA_USE_MOCK_DATA=false  # 개발/테스트 시 true
 ```
 
 ### 6.2 선택적 환경 변수
 ```bash
-# 키움증권 API
-KIWOOM_ACCOUNT_NO=your_account_no
-KIWOOM_PASSWORD=your_password
-KIWOOM_SERVER_TYPE=1  # 1: 모의투자, 0: 실거래
 
 # 거래 설정
 MAX_INVESTMENT_AMOUNT=1000000

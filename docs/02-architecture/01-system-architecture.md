@@ -33,12 +33,12 @@
                             │
         ┌───────────────────┼───────────────────┐
         ▼                   ▼                   ▼
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│  MariaDB     │  │  키움증권 API │  │  시장 데이터  │
-│  (데이터베이스)│  │  (OCX/COM)   │  │  API (REST)  │
-│              │  │              │  │  - Finnhub   │
-│              │  │              │  │  - iTick     │
-└──────────────┘  └──────────────┘  └──────────────┘
+┌──────────────┐  ┌──────────────────────────────┐
+│  MariaDB     │  │  한국투자증권 Open API        │
+│  (데이터베이스)│  │  (REST API)                   │
+│              │  │  - 시장 데이터 조회             │
+│              │  │  - 기술적 지표 계산            │
+└──────────────┘  └──────────────────────────────┘
 ```
 
 ## 2. 레이어 아키텍처
@@ -153,8 +153,7 @@ com.investment
 
 ### 3.4 인프라 레이어
 - **MarketDataClient**: 시장 데이터 조회 인터페이스
-  - **FinnhubMarketDataClient**: Finnhub API 구현체
-  - **KiwoomMarketDataClient**: 키움증권 API 구현체
+  - **KoreaInvestmentMarketDataClient**: 한국투자증권 API 구현체
 - **Database**: JPA/Hibernate를 통한 MariaDB 접근
 
 ## 4. 데이터 흐름
@@ -191,8 +190,7 @@ AnalysisController
 AnalysisService
     │
     ├──► MarketDataClient (시장 데이터 조회)
-    │    ├──► FinnhubMarketDataClient
-    │    └──► KiwoomMarketDataClient
+    │    └──► KoreaInvestmentMarketDataClient
     ├──► StockAnalysisService (기술적 분석)
     └──► AnalysisResponseDto 생성
     │
@@ -233,15 +231,14 @@ TradingPortfolioService
 
 ## 5. 외부 시스템 연동
 
-### 5.1 키움증권 Open API
-- **연동 방식**: COM/ActiveX (Windows 전용)
-- **구현 상태**: 기본 구조만 구현, 실제 COM 호출은 미구현
-- **대안**: REST API 래퍼 서버 구축 권장
-
-### 5.2 시장 데이터 API
-- **Finnhub API**: REST API 기반, 실시간 시장 데이터 제공
-- **iTick API**: REST API 기반, Kline 데이터 제공
-- **키움증권 API**: COM 기반, 국내 주식 시장 데이터 제공
+### 5.1 한국투자증권 Open API
+- **연동 방식**: REST API
+- **인증 방식**: OAuth 2.0 (App Key, App Secret)
+- **구현 상태**: 완전 구현
+  - OAuth 2.0 인증 및 자동 토큰 갱신
+  - 차트 데이터 조회
+  - 기술적 지표 계산 (RSI, MACD, EMA, Bollinger Bands, ATR, VWAP)
+- **서버 타입**: 모의투자/실거래 선택 가능
 
 ### 5.3 데이터베이스
 - **MariaDB**: 관계형 데이터베이스

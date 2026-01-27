@@ -15,28 +15,28 @@ import java.time.Duration;
 import java.util.List;
 
 /**
- * Python FastAPI 기반 AI ?�측 ?�비???�라?�언??
+ * Python FastAPI 기반 AI 예측 서비스를 제공하는 클라이언트
  * 
- * ?��? Python FastAPI ?�비?��? ?�신?�여 AI ?�측???�행?�니??
+ * 이 클라이언트는 Python FastAPI 서버와 통신하여 AI 예측 기능을 제공합니다.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class FastApiPredictionClient implements AiPredictionClient {
-    
+
     private final WebClient.Builder webClientBuilder;
-    
+
     @Value("${investment.ai.prediction-service.url:http://localhost:8000}")
     private String predictionServiceUrl;
-    
+
     @Value("${investment.ai.prediction-service.timeout:5000}")
     private int timeoutMs;
-    
+
     @Value("${investment.ai.prediction-service.retry-max-attempts:3}")
     private int maxRetryAttempts;
-    
+
     private WebClient webClient;
-    
+
     private WebClient getWebClient() {
         if (webClient == null) {
             webClient = webClientBuilder
@@ -45,12 +45,12 @@ public class FastApiPredictionClient implements AiPredictionClient {
         }
         return webClient;
     }
-    
+
     @Override
     public Mono<PredictionResponseDto> predictPrice(PredictionRequestDto request) {
-        log.debug("AI ?�측 ?�청: symbol={}, predictionMinutes={}, modelType={}", 
+        log.debug("AI 예측 요청: symbol={}, predictionMinutes={}, modelType={}",
                 request.getSymbol(), request.getPredictionMinutes(), request.getModelType());
-        
+
         return getWebClient()
                 .post()
                 .uri("/api/v1/predict")
@@ -60,24 +60,24 @@ public class FastApiPredictionClient implements AiPredictionClient {
                 .timeout(Duration.ofMillis(timeoutMs))
                 .retryWhen(Retry.backoff(maxRetryAttempts, Duration.ofMillis(100))
                         .filter(throwable -> {
-                            // ?�시??가?�한 ?�외�??�터�?
+                            // 네트워크 오류만 재시도
                             return !(throwable instanceof IllegalArgumentException);
                         })
-                        .doBeforeRetry(retrySignal -> 
-                                log.warn("AI ?�측 ?�비???�시?? attempt={}, symbol={}", 
-                                        retrySignal.totalRetries() + 1, request.getSymbol())))
-                .doOnError(error -> 
-                        log.error("AI ?�측 ?�패: symbol={}, error={}", 
-                                request.getSymbol(), error.getMessage()))
-                .doOnSuccess(response -> 
-                        log.debug("AI ?�측 ?�공: symbol={}, predictedPrice={}, confidence={}", 
-                                response.getSymbol(), response.getPredictedPrice(), response.getConfidence()));
+                        .doBeforeRetry(retrySignal -> log.warn(
+                                "AI 예측 서비스 재시도: attempt={}, symbol={}",
+                                retrySignal.totalRetries() + 1, request.getSymbol())))
+                .doOnError(error -> log.error("AI 예측 실패: symbol={}, error={}",
+                        request.getSymbol(), error.getMessage()))
+                .doOnSuccess(response -> log.debug(
+                        "AI 예측 성공: symbol={}, predictedPrice={}, confidence={}",
+                        response.getSymbol(), response.getPredictedPrice(),
+                        response.getConfidence()));
     }
-    
+
     @Override
     public Mono<List<PredictionResponseDto>> predictBatch(List<PredictionRequestDto> requests) {
-        log.debug("AI 배치 ?�측 ?�청: count={}", requests.size());
-        
+        log.debug("AI 배치 예측 요청: count={}", requests.size());
+
         return getWebClient()
                 .post()
                 .uri("/api/v1/predict/batch")
@@ -87,15 +87,12 @@ public class FastApiPredictionClient implements AiPredictionClient {
                 .collectList()
                 .timeout(Duration.ofMillis(timeoutMs * requests.size()))
                 .retryWhen(Retry.backoff(maxRetryAttempts, Duration.ofMillis(100))
-                        .doBeforeRetry(retrySignal -> 
-                                log.warn("AI 배치 ?�측 ?�시?? attempt={}", 
-                                        retrySignal.totalRetries() + 1)))
-                .doOnError(error -> 
-                        log.error("AI 배치 ?�측 ?�패: error={}", error.getMessage()))
-                .doOnSuccess(responses -> 
-                        log.debug("AI 배치 ?�측 ?�공: count={}", responses.size()));
+                        .doBeforeRetry(retrySignal -> log.warn("AI 배치 예측 재시도: attempt={}",
+                                retrySignal.totalRetries() + 1)))
+                .doOnError(error -> log.error("AI 배치 예측 실패: error={}", error.getMessage()))
+                .doOnSuccess(responses -> log.debug("AI 배치 예측 성공: count={}", responses.size()));
     }
-    
+
     @Override
     public Mono<Boolean> isModelReady() {
         return getWebClient()
@@ -106,11 +103,12 @@ public class FastApiPredictionClient implements AiPredictionClient {
                 .map("ok"::equalsIgnoreCase)
                 .timeout(Duration.ofMillis(1000))
                 .onErrorReturn(false)
-                .doOnError(error -> log.warn("AI ?�비???�태 ?�인 ?�패: {}", error.getMessage()));
+                .doOnError(error -> log.warn("AI 서비스 헬스 체크 실패: {}", error.getMessage()));
     }
-    
+
     @Override
     public String getProviderName() {
         return "fastapi-prediction";
     }
+
 }

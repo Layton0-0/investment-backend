@@ -1,12 +1,10 @@
 package com.investment.taapi.service;
 
-import com.investment.config.CacheConfig;
 import com.investment.marketdata.client.IndicatorResponse;
 import com.investment.marketdata.client.MarketDataClient;
 import com.investment.taapi.dto.StockAnalysisDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
@@ -29,16 +27,18 @@ public class StockAnalysisService {
      * @param symbol 종목 코드 (예: AAPL, TSLA)
      * @param interval 시간 간격 (1h, 1d 등)
      * @return 분석 결과
+     * 
+     * 주의: Spring Cache의 @Cacheable은 Mono 타입을 직접 지원하지 않으므로,
+     * Reactor의 cache()를 사용하거나 수동 캐싱을 사용해야 합니다.
+     * 현재는 에러 발생 시 기본값을 반환하여 null이 반환되지 않도록 보장합니다.
      */
-    @Cacheable(value = CacheConfig.CACHE_MARKET_DATA, key = "'stock_analysis_' + #symbol + '_' + #interval")
     public Mono<StockAnalysisDto> analyzeStock(String symbol, String interval) {
         log.debug("주식 분석 시작: symbol={}, interval={}, provider={}", 
                 symbol, interval, marketDataClient.getProviderName());
         
         // Bulk API로 여러 지표를 한 번에 조회
-        // Finnhub 무료 플랜 제한에 맞춰 필수 지표만 조회 (rsi, macd, ema)
-        // vwap: Finnhub가 직접 제공하지 않음
-        // bbands, atr: 무료 플랜 제한을 고려하여 제외
+        // 한국투자증권 API는 차트 데이터를 제공하고 클라이언트에서 지표 계산
+        // 필수 지표 조회 (rsi, macd, ema)
         return marketDataClient.getBulkIndicators(symbol, interval,
                 "rsi", "macd", "ema")
                 .map(indicators -> {
@@ -74,7 +74,7 @@ public class StockAnalysisService {
                         analysis.setEma60(emaResponse.getValues()[1]);
                         analysis.setEma120(emaResponse.getValues()[2]);
                     } else if (emaResponse != null && emaResponse.getValue() != null) {
-                        // 단일 EMA 값이 있는 경우 (iTick 등)
+                        // 단일 EMA 값이 있는 경우
                         analysis.setEma20(emaResponse.getValue());
                     }
                     
@@ -99,26 +99,19 @@ public class StockAnalysisService {
                     
                     return analysis;
                 })
-                .onErrorReturn(createDefaultAnalysis(symbol));
+                .onErrorResume(error -> {
+                    log.warn("주식 분석 실패, 기본값 반환: symbol={}, error={}", symbol, error.getMessage());
+                    // null이 아닌 기본값을 반환하여 캐시 오류 방지
+                    return Mono.just(createDefaultAnalysis(symbol));
+                });
     }
     
     /**
-     * 종목명 조회 (간단한 매핑)
+     * 종목명 조회 (StockCodeConverter 활용)
      */
     private String getStockName(String symbol) {
-        Map<String, String> nameMap = Map.of(
-                "AAPL", "Apple Inc.",
-                "TSLA", "Tesla Inc.",
-                "NVDA", "NVIDIA Corporation",
-                "MSFT", "Microsoft Corporation",
-                "AMD", "Advanced Micro Devices",
-                "GOOGL", "Alphabet Inc.",
-                "AMZN", "Amazon.com Inc.",
-                "META", "Meta Platforms Inc.",
-                "SPY", "SPDR S&P 500 ETF",
-                "QQQ", "Invesco QQQ Trust"
-        );
-        return nameMap.getOrDefault(symbol, symbol);
+        // StockCodeConverter를 사용하여 종목명 변환
+        return com.investment.marketdata.util.StockCodeConverter.toStockName(symbol);
     }
     
     /**
