@@ -220,3 +220,9 @@ Investment Choi 시스템의 핵심 도메인은 **투자 거래**입니다. 주
 - `OrderExecutedEvent`: 주문 체결 이벤트
 - `StrategyExecutedEvent`: 전략 실행 이벤트
 - `PortfolioUpdatedEvent`: 포트폴리오 업데이트 이벤트
+
+## 문서 변경 이력
+
+| 버전 | 일자 | 작성자 | 변경 내용 |
+|------|------|--------|----------|
+| 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 |

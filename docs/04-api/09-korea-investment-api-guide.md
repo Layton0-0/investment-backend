@@ -87,12 +87,110 @@ String symbol = "삼성전자"; // 자동으로 "005930"으로 변환
 1. **Access Token 발급**
    - OAuth 2.0 `client_credentials` 방식
    - 엔드포인트: `/oauth2/tokenP`
+   - **요청 형식**: JSON (POST)
+   - **Content-Type**: `application/json`
+   - **요청 바디**:
+     ```json
+     {
+       "grant_type": "client_credentials",
+       "appkey": "YOUR_APP_KEY",
+       "appsecret": "YOUR_APP_SECRET"
+     }
+     ```
    - 토큰 유효기간: 24시간
    - 자동 갱신 지원
 
 2. **API 호출**
-   - 헤더에 `authorization: Bearer {access_token}` 포함
-   - `appkey`, `appsecret`, `tr_id` 헤더 포함
+   - **필수 헤더**:
+     - `authorization: Bearer {access_token}` - 발급받은 Access Token
+     - `appkey: {app_key}` - App Key (Required='Y')
+     - `appsecret: {app_secret}` - App Secret (Required='Y')
+     - `tr_id: {tr_id}` - 거래 ID (API별로 다름)
+     - `Content-Type: application/json`
+   - **중요**: 한국투자증권 API 문서에서 Required='Y'로 표시된 파라미터는 모든 API 호출 시 반드시 포함해야 합니다. `appkey`와 `appsecret`은 필수 헤더입니다.
+
+## 공통 필수 파라미터
+
+한국투자증권 Open API를 호출할 때 모든 API에서 공통으로 사용되는 필수 파라미터가 있습니다.
+
+### 공통 필수 헤더
+
+모든 API 호출 시 다음 헤더는 **반드시** 포함되어야 합니다:
+
+| 헤더명 | 타입 | 필수 여부 | 설명 |
+|--------|------|-----------|------|
+| `authorization` | String | Required | OAuth 2.0 Access Token (형식: `Bearer {access_token}`) |
+| `appkey` | String | Required='Y' | 발급받은 App Key |
+| `appsecret` | String | Required='Y' | 발급받은 App Secret |
+| `tr_id` | String | Required | 거래 ID (API별로 고유한 값, 실거래/모의투자에 따라 다름) |
+| `Content-Type` | String | Required | `application/json` |
+
+**참고**: 
+- `appkey`와 `appsecret`은 한국투자증권 API 문서에서 Required='Y'로 명시된 필수 파라미터입니다.
+- `tr_id`는 각 API마다 고유한 값이며, 실거래와 모의투자 서버에서 다른 값을 사용합니다.
+- 모든 요청은 JSON 형식으로 전송해야 하므로 `Content-Type`은 `application/json`으로 설정합니다.
+
+### 공통 requestBody 파라미터
+
+#### 계좌 관련 API 공통 파라미터
+
+계좌 관련 API(주식잔고조회, 매수가능조회, 매도가능수량조회, 주문체결조회 등)는 다음 공통 파라미터를 포함합니다:
+
+| 파라미터명 | 타입 | 필수 여부 | 기본값 | 설명 |
+|-----------|------|-----------|-------|------|
+| `CANO` | String | Required | - | 계좌번호 (8자리 또는 10자리) |
+| `ACNT_PRDT_CD` | String | Required | `"01"` | 계좌상품코드 (`"01"`: 주식) |
+
+**사용 예시**:
+```java
+// 공통 파라미터
+Map<String, String> requestBody = new HashMap<>();
+requestBody.put("CANO", "12345678");  // 계좌번호
+requestBody.put("ACNT_PRDT_CD", "01"); // 계좌상품코드 (주식)
+
+// API별 고유 파라미터 추가
+requestBody.put("INQR_DVSN", "02"); // 조회구분 (주식잔고조회용)
+requestBody.put("PDNO", "005930"); // 종목코드 (매수가능조회용)
+```
+
+#### 시세 관련 API 공통 파라미터
+
+시세 관련 API(차트 조회, 현재가 조회 등)는 계좌번호가 필요 없으며, API별로 고유한 파라미터를 사용합니다.
+
+**차트 조회 API 예시**:
+```java
+Map<String, String> requestBody = new HashMap<>();
+requestBody.put("FID_COND_MRKT_DIV_CODE", "J"); // 시장구분코드 (J: 주식, ETF, ETN)
+requestBody.put("FID_INPUT_ISCD", "005930"); // 종목코드
+requestBody.put("FID_INPUT_DATE_1", "20250101"); // 시작일자
+requestBody.put("FID_INPUT_DATE_2", "20250131"); // 종료일자
+requestBody.put("FID_PERIOD_DIV_CODE", "D"); // 기간분할코드 (D: 일봉, W: 주봉, M: 월봉)
+```
+
+### 공통 파라미터 사용 가이드
+
+본 시스템에서는 공통 파라미터 생성을 위한 유틸리티 클래스 `KoreaInvestmentRequestBuilder`를 제공합니다:
+
+```java
+// 공통 헤더 생성
+HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
+    accessToken, appKey, appSecret, trId);
+
+// 계좌 관련 API 공통 requestBody 생성
+Map<String, String> requestBody = KoreaInvestmentRequestBuilder.createAccountRequestBody(
+    accountNo, 
+    Map.of(
+        "INQR_DVSN", "02",  // API별 고유 파라미터
+        "AFHR_FLPR_YN", "N"
+    )
+);
+```
+
+**장점**:
+- 코드 중복 제거: 공통 로직을 한 곳에서 관리
+- 유지보수성 향상: 공통 파라미터 변경 시 한 곳만 수정
+- 일관성 보장: 모든 API 호출이 동일한 방식으로 처리
+- 확장성: 새로운 API 추가 시 공통 유틸리티 재사용 가능
 
 ## 차트 데이터 조회
 
@@ -101,6 +199,23 @@ String symbol = "삼성전자"; // 자동으로 "005930"으로 변환
 - **TR ID**: `FHKST03010100` (주식현재가 일봉차트 조회)
 - **엔드포인트**: `/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice`
 - **지원 기간**: 일봉, 주봉, 월봉
+- **필수 파라미터**: `FID_COND_MRKT_DIV_CODE`, `FID_INPUT_ISCD`, `FID_INPUT_DATE_1`, `FID_INPUT_DATE_2`, `FID_PERIOD_DIV_CODE`, `FID_ORG_ADJ_PRC` (0: 수정주가, 1: 원주가)
+
+### 응답 구조
+
+한국투자증권 API 응답은 다음과 같은 구조를 가집니다:
+
+```json
+{
+  "rt_cd": "0",        // 응답 코드 ("0": 성공, 그 외: 실패)
+  "msg_cd": "MCA00000", // 메시지 코드
+  "msg1": "정상처리",   // 메시지
+  "output": {},        // 출력 데이터 (API별로 다름)
+  "output2": []         // 출력 데이터 배열 (차트 데이터 등)
+}
+```
+
+**에러 처리**: `rt_cd`가 "0"이 아니면 에러로 처리하며, `msg1`에 에러 메시지가 포함됩니다.
 
 ## 구현된 기능
 
@@ -111,6 +226,7 @@ String symbol = "삼성전자"; // 자동으로 "005930"으로 변환
 - ✅ 종목 코드 변환 (StockCodeConverter 활용)
 - ✅ 모의 데이터 지원 (개발/테스트용)
 - ✅ 실거래/모의투자 서버 선택
+- ✅ 계좌 관련 API (주식잔고조회, 매수가능조회, 매도가능수량조회, 주문체결조회, 투자계좌자산현황조회, 기간별손익조회)
 
 ### 기술적 지표 계산
 
@@ -271,15 +387,119 @@ Java 17을 사용하는 경우 기본적으로 TLS 1.2 이상을 지원하므로
 -Djdk.tls.client.protocols=TLSv1.2,TLSv1.3
 ```
 
+## Hashkey 생성 (향후 확장)
+
+일부 API(주문 등)는 요청 바디의 무결성을 검증하기 위해 Hashkey가 필요할 수 있습니다.
+
+- **유틸리티 클래스**: `KoreaInvestmentHashkeyUtil`
+- **생성 방법**: 요청 바디를 JSON 문자열로 변환한 후, appsecret을 키로 사용하여 HMAC SHA256으로 생성
+- **사용 예시**:
+  ```java
+  @Autowired
+  private KoreaInvestmentHashkeyUtil hashkeyUtil;
+  
+  String hashkey = hashkeyUtil.generateHashkey(requestBody, appSecret);
+  headers.set("hashkey", hashkey);
+  ```
+
+**참고**: 현재 사용하는 차트 조회 API에는 Hashkey가 필요하지 않지만, 향후 주문 API 등에서 사용할 수 있도록 유틸리티가 제공됩니다.
+
+## 계좌 관련 API
+
+### 구현된 계좌 API
+
+한국투자증권 Open API를 사용하여 계좌 관련 정보를 조회할 수 있습니다.
+
+#### 1. 주식잔고조회
+- **TR ID**: `TTTC8434R` (실거래) / `VTTC8434R` (모의투자)
+- **엔드포인트**: `/uapi/domestic-stock/v1/trading/inquire-balance`
+- **기능**: 계좌 잔고 정보 및 보유 종목 목록 조회
+- **사용 클래스**: `KoreaInvestmentAccountClient.inquireBalance()`
+
+#### 2. 매수가능조회
+- **TR ID**: `TTTC8908R` (실거래) / `VTTC8908R` (모의투자)
+- **엔드포인트**: `/uapi/domestic-stock/v1/trading/inquire-psbl-order`
+- **기능**: 종목별 매수 가능 금액 및 수량 조회
+- **사용 클래스**: `KoreaInvestmentAccountClient.inquireBuyableAmount()`
+- **필수 파라미터**: `CANO`, `ACNT_PRDT_CD`, `PDNO`, `ORD_UNPR`, `ORD_DVSN`, `CMA_EVLU_AMT_ICLD_YN`, `OVRS_ICLD_YN`
+
+#### 3. 매도가능수량조회
+- **TR ID**: `TTTC8901R` (실거래) / `VTTC8901R` (모의투자)
+- **엔드포인트**: `/uapi/domestic-stock/v1/trading/inquire-psbl-order2`
+- **기능**: 종목별 매도 가능 수량 조회
+- **사용 클래스**: `KoreaInvestmentAccountClient.inquireSellableQuantity()`
+
+#### 4. 주식일별주문체결조회
+- **TR ID**: `TTTC0081R` (실거래, 3개월 이내) / `VTTC0081R` (모의투자, 3개월 이내)
+- **TR ID (3개월 이전)**: `CTSC9215R` (실거래) / `VTSC9215R` (모의투자)
+- **엔드포인트**: `/uapi/domestic-stock/v1/trading/inquire-daily-ccld`
+- **기능**: 일별 주문 체결 내역 조회
+- **사용 클래스**: `KoreaInvestmentAccountClient.inquireOrderHistory()`
+- **필수 파라미터**: `CANO`, `ACNT_PRDT_CD`, `INQR_STRT_DT`, `INQR_END_DT`, `SLL_BUY_DVSN_CD`, `CCLD_DVSN`, `INQR_DVSN`, `INQR_DVSN_3`, `EXCG_ID_DVSN_CD` (선택)
+
+#### 5. 투자계좌자산현황조회
+- **TR ID**: `TTTC8436R` (실거래) / `VTTC8436R` (모의투자)
+- **엔드포인트**: `/uapi/domestic-stock/v1/trading/inquire-assets`
+- **기능**: 계좌 자산 현황 종합 조회
+- **사용 클래스**: `KoreaInvestmentAccountClient.inquireAssets()`
+
+#### 6. 기간별손익일별합산조회
+- **TR ID**: `TTTC8708R` (실거래) / `VTTC8708R` (모의투자)
+- **엔드포인트**: `/uapi/domestic-stock/v1/trading/inquire-period-profit-loss`
+- **기능**: 기간별 일별 손익 합산 조회
+- **사용 클래스**: `KoreaInvestmentAccountClient.inquirePeriodProfitLoss()`
+
+### 계좌 API 사용 예시
+
+```java
+@Autowired
+private KoreaInvestmentAccountClient accountClient;
+
+// 주식잔고조회
+BalanceAndPositionsResult result = accountClient.inquireBalance(userId, accountNo);
+AccountBalanceDto balance = result.getBalance();
+List<AccountPositionDto> positions = result.getPositions();
+
+// 매수가능조회
+BuyableAmountDto buyable = accountClient.inquireBuyableAmount(userId, accountNo, "005930", new BigDecimal("75000"));
+
+// 매도가능수량조회
+SellableQuantityDto sellable = accountClient.inquireSellableQuantity(userId, accountNo, "005930");
+
+// 주문체결조회
+List<OrderHistoryDto> orderHistory = accountClient.inquireOrderHistory(
+    userId, accountNo, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31));
+
+// 투자계좌자산현황조회
+AccountAssetDto assets = accountClient.inquireAssets(userId, accountNo);
+
+// 기간별손익조회
+ProfitLossDto profitLoss = accountClient.inquirePeriodProfitLoss(
+    userId, accountNo, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31));
+```
+
+### 계좌 API 특징
+
+- **Rate Limiting**: 모든 계좌 API는 자동으로 Rate Limiter가 적용됩니다.
+  - 실전투자: 초당 20건
+  - 모의투자: 초당 2건
+- **에러 처리**: API 실패 시 DB 폴백 전략을 사용합니다.
+- **캐싱**: 계좌 잔고 및 보유 종목은 1분 TTL로 캐싱됩니다.
+- **인증**: 모든 API 호출은 사용자별 Access Token을 사용합니다.
+
 ## 주의사항
 
-1. **API 키 발급**: 한국투자증권 홈페이지에서 App Key와 App Secret을 발급받아야 합니다.
-2. **Rate Limit 준수**: 시스템에서 자동으로 Rate Limiter를 적용하지만, 대량 호출 시 주의가 필요합니다.
-3. **모의투자 권장**: 개발/테스트 시 모의투자 서버 사용을 권장합니다.
-4. **토큰 관리**: Access Token은 자동으로 캐시되며, 만료 시 자동 갱신됩니다.
-5. **계좌 단위 제한**: 유량 제한은 계좌(앱키) 단위로 적용되므로, 여러 계좌를 사용하는 경우 각각 별도 제한이 적용됩니다.
-6. **TLS 버전**: 2025.12.12(금) 이후 TLS 1.2 이상 필수 (현재 Java 17 사용으로 자동 준수)
-7. **WebSocket 정책 준수**: 웹소켓 사용 시 반드시 이용 순서, 연결/종료 간격, 구독 등록 간격을 준수해야 합니다. 미준수 시 자동 차단될 수 있습니다.
+1. **토큰 발급 API 요청 형식**: `/oauth2/tokenP` 엔드포인트는 **JSON 형식**으로 POST 요청해야 합니다. Form 데이터로 보내면 오류가 발생합니다.
+2. **API 키 발급**: 한국투자증권 홈페이지에서 App Key와 App Secret을 발급받아야 합니다.
+3. **헤더 구성**: 한국투자증권 API 문서에서 Required='Y'로 표시된 파라미터(`appkey`, `appsecret`)는 모든 API 호출 시 필수 헤더에 포함해야 합니다.
+4. **응답 처리**: `rt_cd`가 "0"이 아니면 에러로 처리하며, `msg1` 필드를 확인해야 합니다.
+5. **Rate Limit 준수**: 시스템에서 자동으로 Rate Limiter를 적용하지만, 대량 호출 시 주의가 필요합니다.
+6. **모의투자 권장**: 개발/테스트 시 모의투자 서버 사용을 권장합니다.
+7. **토큰 관리**: Access Token은 자동으로 캐시되며, 만료 시 자동 갱신됩니다.
+8. **계좌 단위 제한**: 유량 제한은 계좌(앱키) 단위로 적용되므로, 여러 계좌를 사용하는 경우 각각 별도 제한이 적용됩니다.
+9. **TLS 버전**: 2025.12.12(금) 이후 TLS 1.2 이상 필수 (현재 Java 17 사용으로 자동 준수)
+10. **WebSocket 정책 준수**: 웹소켓 사용 시 반드시 이용 순서, 연결/종료 간격, 구독 등록 간격을 준수해야 합니다. 미준수 시 자동 차단될 수 있습니다.
+11. **계좌 API 폴백**: 계좌 API 호출 실패 시 자동으로 DB 폴백을 사용하여 기존 데이터를 반환합니다.
 
 ## 테스트
 
@@ -296,8 +516,103 @@ export KOREA_INVESTMENT_APP_SECRET=your_app_secret
 export KOREA_INVESTMENT_SERVER_TYPE=1  # 모의투자
 ```
 
+## MCP를 활용한 개발
+
+### 한국투자 코딩도우미 MCP 소개
+
+한국투자증권이 제공하는 **KIS Code Assistant MCP**를 활용하면 자연어로 한국투자증권 API를 검색하고, 예제 코드를 자동으로 생성받을 수 있습니다.
+
+### MCP 사용 방법
+
+1. **MCP 설치**: Cursor에서 [KIS Code Assistant MCP](https://smithery.ai/server/@KISOpenAPI/kis-code-assistant-mcp) 설치
+2. **자연어 질문**: "한국투자증권 주식 현재가 조회 API 코드 보여줘" 같은 질문
+3. **예제 코드 확인**: MCP가 제공한 Python 예제 코드 확인
+4. **Java 프로젝트 통합**: 제공된 정보를 바탕으로 Java 코드 작성
+
+### MCP 활용 예시
+
+#### 예시 1: API 검색
+```
+질문: "한국투자증권 주식 매수 주문 API 코드 보여줘"
+응답: 
+- API 엔드포인트: /uapi/domestic-stock/v1/trading/order-cash
+- TR ID: TTTC0012U (매수, 실거래) / VTTC0012U (매수, 모의투자), TTTC0011U (매도, 실거래) / VTTC0011U (매도, 모의투자)
+- 필수 파라미터: CANO, ACNT_PRDT_CD, PDNO, ORD_DVSN, ORD_QTY, ORD_UNPR, EXCG_ID_DVSN_CD
+- Hashkey 필요 여부: 예
+```
+
+#### 예시 2: Java 코드 통합
+MCP가 제공한 정보를 바탕으로 기존 Java 프로젝트 구조에 맞게 구현:
+
+```java
+// MCP가 제공한 정보 활용
+public Mono<OrderResponse> placeBuyOrder(String userId, String accountNo, 
+                                         String symbol, int quantity, BigDecimal price) {
+    // 1. 사용자 API 키 조회 (DB에서 암호화된 키)
+    UserApiKey userApiKey = userApiKeyRepository
+        .findByUserIdAndBrokerType(userId, BrokerType.KOREA_INVESTMENT)
+        .orElseThrow();
+    
+    // 2. 토큰 조회
+    String accessToken = tokenService.getAccessToken(userId);
+    
+    // 3. 공통 헤더 생성
+    HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
+        accessToken, 
+        encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted()),
+        encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted()),
+        "TTTC0012U"  // MCP가 제공한 TR ID (매수 주문)
+    );
+    
+    // 4. 요청 바디 생성 (MCP가 제공한 파라미터 활용)
+    Map<String, String> requestBody = KoreaInvestmentRequestBuilder
+        .createAccountRequestBody(accountNo, Map.of(
+            "PDNO", symbol,
+            "ORD_DVSN", "00",  // 지정가
+            "ORD_QTY", String.valueOf(quantity),
+            "ORD_UNPR", price.toString(),
+            "EXCG_ID_DVSN_CD", "KRX"  // 거래소ID구분코드
+        ));
+    
+    // 5. Hashkey 생성 (MCP가 Hashkey 필요하다고 알려줌)
+    String hashkey = hashkeyUtil.generateHashkey(requestBody, 
+        encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted()));
+    headers.set("hashkey", hashkey);
+    
+    // 6. API 호출
+    return webClient.post()
+        .uri("/uapi/domestic-stock/v1/trading/order-cash")
+        .headers(h -> h.addAll(headers))
+        .bodyValue(requestBody)
+        .retrieve()
+        .bodyToMono(OrderResponse.class);
+}
+```
+
+### MCP 활용 시 주의사항
+
+1. **TR ID 확인**: 실거래와 모의투자에서 다른 TR ID 사용
+   - 매수 주문: 실거래 `TTTC0012U`, 모의투자 `VTTC0012U`
+   - 매도 주문: 실거래 `TTTC0011U`, 모의투자 `VTTC0011U`
+
+2. **Hashkey 필요 여부**: 주문 API는 Hashkey가 필요할 수 있음
+   - MCP 응답에서 확인
+   - `KoreaInvestmentHashkeyUtil` 활용
+
+3. **필수 파라미터**: MCP가 제공한 필수 파라미터(Required='Y') 모두 포함
+
+4. **기존 구조 활용**: MCP가 제공한 정보를 바탕으로 기존 Java 프로젝트 구조에 맞게 통합
+   - `KoreaInvestmentRequestBuilder`: 공통 헤더/바디 생성
+   - `KoreaInvestmentTokenService`: 토큰 관리
+   - Rate Limiter: API 호출 제한
+
+### 자세한 가이드
+
+MCP 통합에 대한 자세한 내용은 [MCP 통합 가이드](../08-setup-guides/06-mcp-integration-guide.md)를 참고하세요.
+
 ## 참고 자료
 
 - 한국투자증권 Open API 포털: https://apiportal.koreainvestment.com/
 - API 개발가이드
 - REST API 명세서
+- [MCP 통합 가이드](../08-setup-guides/06-mcp-integration-guide.md)

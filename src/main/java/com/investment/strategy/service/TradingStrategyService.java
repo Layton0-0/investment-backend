@@ -79,12 +79,21 @@ public class TradingStrategyService {
         }
         
         // 2. 기술적 분석 수행
-        StockAnalysisDto technicalAnalysis = stockAnalysisService.analyzeStock(symbol, "1d")
-                .onErrorResume(error -> {
-                    log.warn("기술적 분석 실패: symbol={}, error={}", symbol, error.getMessage());
-                    return Mono.empty();
-                })
-                .block();
+        // 주의: @Transactional 내에서 block() 사용은 데드락 위험이 있으나,
+        // 이 메서드는 동기적으로 결과를 반환해야 하므로 불가피함
+        // 향후 비동기 처리로 개선 필요
+        StockAnalysisDto technicalAnalysis;
+        try {
+            technicalAnalysis = stockAnalysisService.analyzeStock(symbol, "1d")
+                    .onErrorResume(error -> {
+                        log.warn("기술적 분석 실패: symbol={}, error={}", symbol, error.getMessage());
+                        return Mono.empty();
+                    })
+                    .block();
+        } catch (Exception e) {
+            log.error("기술적 분석 중 오류 발생: symbol={}", symbol, e);
+            return null;
+        }
         
         if (technicalAnalysis == null) {
             log.warn("기술적 분석 결과가 없습니다: symbol={}", symbol);

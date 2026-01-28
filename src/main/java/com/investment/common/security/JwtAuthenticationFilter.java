@@ -49,7 +49,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(authentication);
                 
-                log.debug("JWT 인증 성공: userId={}, username={}", userId, username);
+                log.debug("JWT 인증 성공: userId={}, username={}", 
+                        LogMaskingUtil.maskUserId(userId), 
+                        LogMaskingUtil.maskUsername(username));
             }
         } catch (Exception e) {
             log.error("JWT 인증 필터 오류", e);
@@ -59,14 +61,30 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
     
     /**
-     * 요청 헤더에서 JWT 토큰 추출
-     * Authorization: Bearer <token> 형식
+     * 요청에서 JWT 토큰 추출
+     * 1. Authorization 헤더: Bearer <token> 형식 (API 요청용)
+     * 2. 쿠키: token (웹 페이지 요청용)
      */
     private String extractToken(HttpServletRequest request) {
+        // 1. Authorization 헤더에서 토큰 추출 (API 요청용)
         String bearerToken = request.getHeader("Authorization");
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
             return bearerToken.substring(7);
         }
+        
+        // 2. 쿠키에서 토큰 추출 (웹 페이지 요청용)
+        jakarta.servlet.http.Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (jakarta.servlet.http.Cookie cookie : cookies) {
+                if ("token".equals(cookie.getName())) {
+                    String token = cookie.getValue();
+                    if (StringUtils.hasText(token)) {
+                        return token;
+                    }
+                }
+            }
+        }
+        
         return null;
     }
 }

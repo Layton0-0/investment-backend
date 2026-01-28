@@ -51,3 +51,9 @@ Investment Choi - 주식 투자 수익 분석 및 자동 매매 시스템
 - [요구사항 상세](./02-functional-requirements.md)
 - [비기능 요구사항](./03-non-functional-requirements.md)
 - [아키텍처 설계](../02-architecture/01-system-architecture.md)
+
+## 문서 변경 이력
+
+| 버전 | 일자 | 작성자 | 변경 내용 |
+|------|------|--------|----------|
+| 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 |

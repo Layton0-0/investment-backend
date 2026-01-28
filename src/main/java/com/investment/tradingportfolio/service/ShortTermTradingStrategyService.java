@@ -119,9 +119,17 @@ public class ShortTermTradingStrategyService {
         
         try {
             // 시장 데이터 API를 사용하여 종목 스크리닝 (상위 5개)
-            List<StockAnalysisDto> screenedStocks = stockScreeningService
-                    .screenStocks("1h", 5)
-                    .block(); // 동기 처리 (실제 운영에서는 비동기 처리 권장)
+            // 주의: block() 사용은 비동기 처리 이점을 상실하나, 동기적으로 결과를 반환해야 하므로 불가피함
+            // 향후 비동기 처리로 개선 필요
+            List<StockAnalysisDto> screenedStocks;
+            try {
+                screenedStocks = stockScreeningService
+                        .screenStocks("1h", 5)
+                        .block();
+            } catch (Exception e) {
+                log.error("종목 스크리닝 중 오류 발생", e);
+                return createMockStocks();
+            }
             
             if (screenedStocks == null || screenedStocks.isEmpty()) {
                 log.warn("스크리닝된 종목이 없습니다. 모의 데이터를 사용합니다.");

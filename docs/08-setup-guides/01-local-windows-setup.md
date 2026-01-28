@@ -514,4 +514,10 @@ taskkill /PID <PID> /F
 
 - [시스템 아키텍처](../02-architecture/01-system-architecture.md)
 - [필수 기술 스펙](../02-architecture/10-essential-tech-spec.md)
-- [최소 비용 구성](./04-minimal-cost-setup.md)
+- [최소 비용 구성](../06-deployment/04-minimal-cost-setup.md)
+
+## 문서 변경 이력
+
+| 버전 | 일자 | 작성자 | 변경 내용 |
+|------|------|--------|----------|
+| 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 - setup-guides 폴더로 이동 |

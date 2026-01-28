@@ -18,4 +18,7 @@ public interface PortfolioRepository extends JpaRepository<Portfolio, String> {
     
     @Query("SELECT SUM(p.currentPrice * p.quantity) FROM Portfolio p WHERE p.accountNo = :accountNo")
     java.math.BigDecimal getTotalPortfolioValue(@Param("accountNo") String accountNo);
+    
+    @Query("SELECT DISTINCT p.accountNo FROM Portfolio p ORDER BY p.accountNo")
+    List<String> findDistinctAccountNos();
 }

@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -160,7 +161,7 @@ public class StrategyManagementService {
         BigDecimal successRate = null;
         if (strategy.getTotalExecutions() != null && strategy.getTotalExecutions() > 0) {
             successRate = BigDecimal.valueOf(strategy.getSuccessCount())
-                    .divide(BigDecimal.valueOf(strategy.getTotalExecutions()), 4, BigDecimal.ROUND_HALF_UP)
+                    .divide(BigDecimal.valueOf(strategy.getTotalExecutions()), 4, RoundingMode.HALF_UP)
                     .multiply(BigDecimal.valueOf(100));
         }
         

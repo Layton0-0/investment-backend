@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -88,7 +89,11 @@ public class StrategyService {
             
             // TODO: 현재가 조회 필요
             BigDecimal currentPrice = analysis.getCurrentPrice();
-            Integer quantity = investmentAmount.divide(currentPrice, 0, BigDecimal.ROUND_DOWN).intValue();
+            if (currentPrice == null || currentPrice.compareTo(BigDecimal.ZERO) <= 0) {
+                log.warn("현재가가 유효하지 않습니다: symbol={}, currentPrice={}", symbol, currentPrice);
+                return null;
+            }
+            Integer quantity = investmentAmount.divide(currentPrice, 0, RoundingMode.DOWN).intValue();
             
             if (quantity > 0) {
                 return OrderRequestDto.builder()

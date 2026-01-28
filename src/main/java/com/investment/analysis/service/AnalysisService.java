@@ -61,14 +61,22 @@ public class AnalysisService {
         
         try {
             // 1. 기술적 분석 수행
-            var technicalAnalysis = stockAnalysisService.analyzeStock(
-                    request.getSymbol(), "1d").block();
+            // 주의: @Cacheable 메서드 내에서 block() 사용은 비동기 처리 이점을 상실하나,
+            // 동기적으로 결과를 반환해야 하므로 불가피함
+            com.investment.taapi.dto.StockAnalysisDto technicalAnalysis = null;
+            try {
+                technicalAnalysis = stockAnalysisService.analyzeStock(
+                        request.getSymbol(), "1d").block();
+            } catch (Exception e) {
+                log.error("기술적 분석 중 오류 발생: symbol={}", request.getSymbol(), e);
+                throw new RuntimeException("기술적 분석 실패: " + e.getMessage(), e);
+            }
             
             // 2. AI 예측 수행 (활성화된 경우)
             PredictionResponseDto aiPrediction = null;
             if (aiServiceEnabled) {
                 try {
-                    var predictionRequest = PredictionRequestDto.builder()
+                    PredictionRequestDto predictionRequest = PredictionRequestDto.builder()
                             .symbol(request.getSymbol())
                             .predictionMinutes(request.getPeriodDays() * 24 * 60)
                             .lookbackDays(request.getPeriodDays())

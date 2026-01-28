@@ -142,3 +142,9 @@
 
 - 대시보드 파일: `src/main/resources/templates/dashboard.html`
 - 컨트롤러: `src/main/java/com/investment/web/controller/DashboardController.java`
+
+## 문서 변경 이력
+
+| 버전 | 일자 | 작성자 | 변경 내용 |
+|------|------|--------|----------|
+| 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 - 과거 설계 문서로 분류 |

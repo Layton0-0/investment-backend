@@ -132,3 +132,9 @@ MCP 서버가 MariaDB에 접속할 때 사용하는 설정:
 - `DB_USER=local_maria`
 - `DB_PASSWORD=local_maria_pass`
 - `MCP_READ_ONLY=true` (읽기 전용 모드)
+
+## 문서 변경 이력
+
+| 버전 | 일자 | 작성자 | 변경 내용 |
+|------|------|--------|----------|
+| 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 - setup-guides 폴더로 이동 |

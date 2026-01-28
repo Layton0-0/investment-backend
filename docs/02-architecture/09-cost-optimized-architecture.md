@@ -447,3 +447,9 @@ volumes:
 - [원본 아키텍처](./03-ai-redesign.md)
 - [서버 스펙](../06-deployment/03-server-specification.md)
 - [성능 분석](./06-performance-impact-analysis.md)
+
+## 문서 변경 이력
+
+| 버전 | 일자 | 작성자 | 변경 내용 |
+|------|------|--------|----------|
+| 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 - 참고용 문서로 분류 |

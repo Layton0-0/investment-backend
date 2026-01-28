@@ -93,7 +93,7 @@ investment:
   security:
     encryption-key: ${INVESTMENT_ENCRYPTION_KEY:}  # AES-256 키 (Base64 인코딩)
     jwt-secret: ${INVESTMENT_JWT_SECRET:default-secret-key-change-in-production-minimum-256-bits}
-    jwt-expiration: ${INVESTMENT_JWT_EXPIRATION:86400000}  # 24시간 (밀리초)
+    jwt-expiration: ${INVESTMENT_JWT_EXPIRATION:3600000}  # 1시간 (밀리초)
   market-data:
     provider: ${MARKET_DATA_PROVIDER:korea-investment}
     timeout: ${MARKET_DATA_TIMEOUT:30000}

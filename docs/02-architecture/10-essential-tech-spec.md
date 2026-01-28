@@ -288,3 +288,9 @@ docker run -d -p 8000:8000 ai-prediction-service:latest
 - [구현 계획](./04-implementation-plan.md)
 - [최소 비용 구성](../06-deployment/04-minimal-cost-setup.md)
 - [서버 스펙](../06-deployment/03-server-specification.md)
+
+## 문서 변경 이력
+
+| 버전 | 일자 | 작성자 | 변경 내용 |
+|------|------|--------|----------|
+| 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 |

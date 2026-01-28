@@ -1,0 +1,141 @@
+---
+alwaysApply: true
+---
+
+1. General Security Principles
+
+Always follow Zero Trust principles. Never assume internal systems, networks, or users are trusted.
+
+Apply least privilege to all users, services, APIs, and system components.
+
+Security must be considered by default, not as an afterthought.
+
+2. Authentication & Authorization
+
+Enforce strong authentication (JWT with short TTL, OAuth2, or equivalent secure mechanisms).
+
+Never hardcode credentials, API keys, tokens, or secrets in source code.
+
+All authorization checks must be server-side, never rely on client-side validation.
+
+Role-based access control (RBAC) or attribute-based access control (ABAC) must be explicitly enforced.
+
+Sensitive operations must require re-authentication or elevated authorization.
+
+3. Secrets & Configuration Management
+
+Store all secrets in secure vaults or environment variables (e.g., Vault, AWS Secrets Manager).
+
+Never log secrets, tokens, passwords, private keys, or sensitive headers.
+
+Configuration must be separated by environment (dev, staging, production).
+
+Production secrets must never be shared across environments.
+
+4. Data Protection & Encryption
+
+Encrypt all sensitive data in transit (TLS 1.2+) and at rest.
+
+Personally Identifiable Information (PII) and financial data must be masked or encrypted.
+
+Never expose internal IDs, database keys, or system metadata to clients.
+
+Avoid storing unnecessary sensitive data; minimize data retention.
+
+5. API & Input Validation
+
+Validate all inputs strictly (whitelisting preferred over blacklisting).
+
+Protect APIs against:
+
+SQL Injection
+
+XSS
+
+CSRF
+
+Command Injection
+
+Path Traversal
+
+Apply rate limiting and throttling to all public APIs.
+
+Reject unexpected parameters explicitly.
+
+6. Logging & Monitoring
+
+Log security-relevant events (authentication failures, permission violations, abnormal behavior).
+
+Logs must be immutable, centralized, and access-controlled.
+
+Never log sensitive user data, credentials, or financial information.
+
+Implement alerting for suspicious activities and repeated failures.
+
+7. Error Handling & Information Exposure
+
+Error messages must never expose stack traces, system internals, or database details.
+
+Return generic error responses to clients; log detailed errors internally.
+
+Disable debug mode in production environments.
+
+8. Dependency & Supply Chain Security
+
+Use only trusted and actively maintained dependencies.
+
+Regularly scan dependencies for known vulnerabilities (SCA).
+
+Lock dependency versions and avoid uncontrolled upgrades.
+
+Remove unused libraries and components.
+
+9. Secure Coding Practices
+
+Follow secure coding standards (OWASP Top 10, CWE).
+
+Avoid insecure deserialization and reflection-based execution.
+
+Use prepared statements or ORM to prevent SQL injection.
+
+Do not implement custom cryptography.
+
+10. Infrastructure & Deployment Security
+
+Infrastructure must be treated as code and reviewed.
+
+Containers and images must be minimal and regularly updated.
+
+Never expose internal admin tools or management ports publicly.
+
+Enforce network segmentation and firewall rules.
+
+11. CI/CD & Source Control
+
+All code must pass security checks before merging.
+
+Secrets must never be committed to source control.
+
+Enable branch protection and mandatory code reviews.
+
+CI/CD pipelines must use restricted credentials.
+
+12. Incident Response & Audit Readiness
+
+Code must support audit logging and traceability.
+
+All critical actions must be attributable to a user or service identity.
+
+Systems must support rapid credential rotation and access revocation.
+
+13. Prohibited Actions (Strictly Forbidden)
+
+Hardcoding secrets or credentials
+
+Disabling security checks for convenience
+
+Logging sensitive or financial data
+
+Bypassing authentication or authorization logic
+
+Using outdated or vulnerable cryptographic algorithms

@@ -58,11 +58,23 @@
             </div>
             
             <div class="form-group">
+                <label for="accountNo">계좌번호</label>
+                <input type="text" id="accountNo" name="accountNo" required autocomplete="off" 
+                       pattern="^\d{8}-\d{2}$" placeholder="12345678-12" maxlength="11">
+                <div class="info-text">형식: 숫자8자리-숫자2자리 (예: 12345678-12)</div>
+                <div class="error-message" id="accountNoError"></div>
+            </div>
+            
+            <div class="form-group">
                 <label for="serverType">서버 타입</label>
-                <select id="serverType" name="serverType" required>
-                    <option value="1">모의투자</option>
-                    <option value="0">실거래</option>
-                </select>
+                <div class="toggle-switch">
+                    <input type="checkbox" id="serverType" name="serverType" value="1" checked>
+                    <label for="serverType" class="toggle-label">
+                        <span class="toggle-text-left">모의투자</span>
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-text-right">실거래</span>
+                    </label>
+                </div>
                 <div class="info-text">모의투자로 시작하는 것을 권장합니다</div>
             </div>
             
@@ -87,6 +99,7 @@
         setupRealTimeValidation('password', (pwd) => validatePassword(pwd, true), 'passwordError');
         setupRealTimeValidation('appKey', (key) => validateAppKey(key, true), 'appKeyError');
         setupRealTimeValidation('appSecret', (secret) => validateAppSecret(secret, true), 'appSecretError');
+        setupRealTimeValidation('accountNo', (accountNo) => validateAccountNumber(accountNo, true), 'accountNoError');
         
         // select 필드 유효성 검사
         const brokerTypeField = document.getElementById('brokerType');
@@ -105,13 +118,18 @@
             // 에러 메시지 초기화
             clearAllErrors();
             
+            // 서버타입 토글 값 가져오기 (체크박스는 checked 속성으로 확인)
+            const serverTypeCheckbox = document.getElementById('serverType');
+            const serverTypeValue = serverTypeCheckbox.checked ? '1' : '0';
+            
             const formData = {
                 username: document.getElementById('username').value.trim(),
                 password: document.getElementById('password').value,
                 brokerType: document.getElementById('brokerType').value,
                 appKey: document.getElementById('appKey').value,
                 appSecret: document.getElementById('appSecret').value,
-                serverType: document.getElementById('serverType').value
+                accountNo: document.getElementById('accountNo').value.trim(),
+                serverType: serverTypeValue
             };
             
             // 유효성 검사
@@ -147,10 +165,9 @@
                 isValid = false;
             }
             
-            const serverTypeValidation = validateServerType(formData.serverType, true);
-            if (!serverTypeValidation.valid) {
-                generalError.textContent = serverTypeValidation.message;
-                generalError.classList.add('show');
+            const accountNoValidation = validateAccountNumber(formData.accountNo, true);
+            if (!accountNoValidation.valid) {
+                showFieldError('accountNo', 'accountNoError', accountNoValidation.message);
                 isValid = false;
             }
             

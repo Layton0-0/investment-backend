@@ -199,7 +199,7 @@ docker compose cp redis:/data/dump.rdb ./backup_redis_$(date +%Y%m%d_%H%M%S).rdb
 포트 3306이 이미 사용 중이면 다음 중 하나를 선택하세요:
 
 1. **Windows MariaDB를 Docker로 마이그레이션 (권장)**
-   - 자세한 가이드: [07-mariadb-migration-to-docker.md](./07-mariadb-migration-to-docker.md)
+   - 자세한 가이드: [04-mariadb-migration-to-docker.md](./04-mariadb-migration-to-docker.md)
    - 데이터 백업 → Windows MariaDB 중지 → Docker 시작 → 데이터 복원
 
 2. **포트 변경 (임시 해결책)**
@@ -302,3 +302,9 @@ docker compose restart redis
 - 데이터는 Docker 볼륨에 저장되므로 컨테이너를 삭제해도 데이터는 유지됩니다.
 - 프로덕션 환경에서는 보안 설정(비밀번호, 네트워크 격리 등)을 강화해야 합니다.
 - 로컬 개발 환경이므로 기본 보안 설정만 적용되어 있습니다.
+
+## 문서 변경 이력
+
+| 버전 | 일자 | 작성자 | 변경 내용 |
+|------|------|--------|----------|
+| 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 - setup-guides 폴더로 이동 |

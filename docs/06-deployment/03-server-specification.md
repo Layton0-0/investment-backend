@@ -753,3 +753,9 @@ save ""  # 지속성 비활성화 (성능 우선)
 - [배포 가이드](./01-deployment-guide.md)
 - [운영 가이드](./02-operations-guide.md)
 - [성능 영향 분석](../02-architecture/06-performance-impact-analysis.md)
+
+## 문서 변경 이력
+
+| 버전 | 일자 | 작성자 | 변경 내용 |
+|------|------|--------|----------|
+| 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 |

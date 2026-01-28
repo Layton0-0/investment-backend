@@ -115,3 +115,9 @@ javap -verbose build/classes/java/main/com/investment/InvestmentApplication.clas
 - [Gradle 인코딩 설정](https://docs.gradle.org/current/userguide/build_environment.html#sec:gradle_system_properties)
 - [EditorConfig](https://editorconfig.org/)
 - [Java 인코딩 문제 해결](https://docs.oracle.com/javase/tutorial/i18n/text/index.html)
+
+## 문서 변경 이력
+
+| 버전 | 일자 | 작성자 | 변경 내용 |
+|------|------|--------|----------|
+| 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 - setup-guides 폴더로 이동 |

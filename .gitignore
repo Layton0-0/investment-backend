@@ -50,3 +50,7 @@ application-secret.yml
 
 # OS
 Thumbs.db
+*.env
+*.env.*
+
+*.xlsx

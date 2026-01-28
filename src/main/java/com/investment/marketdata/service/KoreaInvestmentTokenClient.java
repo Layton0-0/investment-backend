@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
@@ -62,12 +61,17 @@ public class KoreaInvestmentTokenClient {
 
         log.debug("한국투자증권 Access Token 발급 요청: baseUrl={}, appKey={}", baseUrl, maskAppKey(appKey));
 
+        // 요청 바디 생성 (JSON 형식)
+        Map<String, String> requestBody = Map.of(
+                "grant_type", "client_credentials",
+                "appkey", appKey,
+                "appsecret", appSecret
+        );
+
         return webClient.post()
                 .uri(uri)
-                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .body(BodyInserters.fromFormData("grant_type", "client_credentials")
-                        .with("appkey", appKey)
-                        .with("appsecret", appSecret))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(requestBody)
                 .exchangeToMono(response -> {
                     if (response.statusCode().is2xxSuccessful()) {
                         return response.bodyToMono(Map.class)

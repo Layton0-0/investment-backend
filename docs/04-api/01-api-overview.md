@@ -152,9 +152,15 @@
 
 ### 9.2 API 문서 구조
 - 각 API별 상세 문서는 별도 파일로 관리
-- [계좌 API](./02-account-api.md)
+- [API 엔드포인트 상세](./02-api-endpoints.md) (계좌 API 포함)
 - [주문 API](./03-order-api.md)
 - [전략 API](./04-strategy-api.md)
 - [분석 API](./05-analysis-api.md)
 - [설정 API](./06-setting-api.md)
 - [트레이딩 포트폴리오 API](./07-trading-portfolio-api.md)
+
+## 문서 변경 이력
+
+| 버전 | 일자 | 작성자 | 변경 내용 |
+|------|------|--------|----------|
+| 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 - 계좌 API 문서 통합 반영 |

@@ -99,11 +99,14 @@
                 
                 <div class="form-group">
                     <label for="serverType">서버 타입</label>
-                    <select id="serverType" name="serverType">
-                        <option value="">변경하지 않음</option>
-                        <option value="1">모의투자</option>
-                        <option value="0">실거래</option>
-                    </select>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="serverType" name="serverType" value="1">
+                        <label for="serverType" class="toggle-label">
+                            <span class="toggle-text-left">모의투자</span>
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-text-right">실거래</span>
+                        </label>
+                    </div>
                 </div>
                 
                 <div class="error-message" id="generalError"></div>
@@ -149,7 +152,12 @@
                 
                 // 현재 값으로 select 설정
                 document.getElementById('brokerType').value = data.brokerType || '';
-                document.getElementById('serverType').value = data.serverType || '';
+                
+                // 서버타입 토글 초기 상태 설정 ("1"이면 체크, "0"이면 체크 해제)
+                const serverTypeCheckbox = document.getElementById('serverType');
+                if (serverTypeCheckbox) {
+                    serverTypeCheckbox.checked = data.serverType === '1';
+                }
             } catch (error) {
                 console.error('사용자 정보 조회 실패:', error);
             }
@@ -178,7 +186,10 @@
             const brokerType = document.getElementById('brokerType').value;
             const appKey = document.getElementById('appKey').value;
             const appSecret = document.getElementById('appSecret').value;
-            const serverType = document.getElementById('serverType').value;
+            
+            // 서버타입 토글 값 가져오기 (체크박스는 checked 속성으로 확인)
+            const serverTypeCheckbox = document.getElementById('serverType');
+            const serverType = serverTypeCheckbox && serverTypeCheckbox.checked ? '1' : '0';
             
             // 유효성 검사 (입력된 값만 검사)
             let isValid = true;
@@ -207,14 +218,7 @@
                 }
             }
             
-            if (serverType) {
-                const serverTypeValidation = validateServerType(serverType, false);
-                if (!serverTypeValidation.valid) {
-                    generalError.textContent = serverTypeValidation.message;
-                    generalError.classList.add('show');
-                    isValid = false;
-                }
-            }
+            // serverType은 항상 값이 있으므로 검증 불필요 (체크박스이므로)
             
             if (!isValid) {
                 return;
@@ -225,7 +229,8 @@
             if (brokerType) formData.brokerType = brokerType;
             if (appKey) formData.appKey = appKey;
             if (appSecret) formData.appSecret = appSecret;
-            if (serverType) formData.serverType = serverType;
+            // serverType은 토글이므로 항상 값이 있음 (변경 여부는 백엔드에서 처리)
+            formData.serverType = serverType;
             
             if (Object.keys(formData).length === 0) {
                 generalError.textContent = '변경할 정보를 입력해주세요.';
@@ -277,11 +282,28 @@
         });
         
         // 로그아웃
-        function logout() {
-            localStorage.removeItem('token');
-            localStorage.removeItem('userId');
-            localStorage.removeItem('username');
-            window.location.href = '/login';
+        async function logout() {
+            try {
+                // 로그아웃 API 호출 (쿠키 삭제)
+                const token = localStorage.getItem('token');
+                if (token) {
+                    await fetch('/api/v1/auth/logout', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + token,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('로그아웃 API 호출 실패:', error);
+            } finally {
+                // localStorage 정리
+                localStorage.removeItem('token');
+                localStorage.removeItem('userId');
+                localStorage.removeItem('username');
+                window.location.href = '/login';
+            }
         }
         
         // 페이지 로드 시 실행

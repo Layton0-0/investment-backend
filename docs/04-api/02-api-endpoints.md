@@ -11,21 +11,48 @@
 **경로 파라미터**:
 - `accountNo` (String, required): 계좌번호
 
-**응답**:
+**요청 예시**:
+```bash
+curl -X GET "http://localhost:8080/api/v1/accounts/12345678/balance"
+```
+
+**성공 응답 (200 OK)**:
 ```json
 {
   "accountNo": "12345678",
   "deposit": 1000000.00,
   "availableAmount": 950000.00,
-  "totalAssetValue": 5000000.00,
+  "totalAssetValue": 1500000.00,
   "totalProfitLoss": 500000.00,
   "currency": "KRW"
+}
+```
+
+**에러 응답 (404 Not Found)**:
+```json
+{
+  "code": "ACCOUNT_NOT_FOUND",
+  "message": "계좌를 찾을 수 없습니다: 12345678",
+  "traceId": "550e8400-e29b-41d4-a716-446655440000",
+  "timestamp": "2026-01-26T10:00:00"
 }
 ```
 
 **에러 코드**:
 - `ACCOUNT_NOT_FOUND`: 계좌를 찾을 수 없음
 - `ACCOUNT_ACCESS_DENIED`: 계좌 접근 권한 없음
+
+**DTO 정의**:
+```java
+{
+  "accountNo": String,          // 계좌번호
+  "deposit": BigDecimal,        // 예수금
+  "availableAmount": BigDecimal, // 주문가능금액
+  "totalAssetValue": BigDecimal, // 총 평가금액
+  "totalProfitLoss": BigDecimal, // 총 손익
+  "currency": String            // 통화
+}
+```
 
 ---
 
@@ -38,7 +65,12 @@
 **경로 파라미터**:
 - `accountNo` (String, required): 계좌번호
 
-**응답**:
+**요청 예시**:
+```bash
+curl -X GET "http://localhost:8080/api/v1/accounts/12345678/positions"
+```
+
+**성공 응답 (200 OK)**:
 ```json
 [
   {
@@ -51,12 +83,229 @@
     "profitLoss": 500000.00,
     "profitLossRate": 7.14,
     "currency": "KRW"
+  },
+  {
+    "symbol": "000660",
+    "name": "SK하이닉스",
+    "quantity": 50,
+    "averagePrice": 120000.00,
+    "currentPrice": 130000.00,
+    "assetValue": 6500000.00,
+    "profitLoss": 500000.00,
+    "profitLossRate": 8.33,
+    "currency": "KRW"
   }
 ]
 ```
 
+**에러 응답 (404 Not Found)**:
+```json
+{
+  "code": "ACCOUNT_NOT_FOUND",
+  "message": "계좌를 찾을 수 없습니다: 12345678",
+  "traceId": "550e8400-e29b-41d4-a716-446655440000",
+  "timestamp": "2026-01-26T10:00:00"
+}
+```
+
 **에러 코드**:
 - `ACCOUNT_NOT_FOUND`: 계좌를 찾을 수 없음
+- `ACCOUNT_ACCESS_DENIED`: 계좌 접근 권한 없음
+
+**DTO 정의**:
+```java
+{
+  "symbol": String,             // 종목 코드
+  "name": String,               // 종목명
+  "quantity": Integer,          // 보유 수량
+  "averagePrice": BigDecimal,   // 평균 매수가
+  "currentPrice": BigDecimal,   // 현재가
+  "assetValue": BigDecimal,      // 평가금액
+  "profitLoss": BigDecimal,      // 평가손익
+  "profitLossRate": BigDecimal,  // 수익률 (%)
+  "currency": String             // 통화
+}
+```
+
+### 1.3 매수가능조회
+
+**엔드포인트**: `GET /api/v1/accounts/{accountNo}/buyable-amount`
+
+**설명**: 특정 종목의 매수 가능 금액 및 수량을 조회합니다.
+
+**경로 파라미터**:
+- `accountNo` (String, required): 계좌번호
+
+**쿼리 파라미터**:
+- `symbol` (String, required): 종목코드
+- `price` (BigDecimal, required): 주문가격
+
+**요청 예시**:
+```bash
+curl -X GET "http://localhost:8080/api/v1/accounts/12345678/buyable-amount?symbol=005930&price=75000"
+```
+
+**성공 응답 (200 OK)**:
+```json
+{
+  "accountNo": "12345678",
+  "symbol": "005930",
+  "price": 75000.00,
+  "buyableAmount": 950000.00,
+  "buyableQuantity": 12,
+  "currency": "KRW"
+}
+```
+
+---
+
+### 1.4 매도가능수량조회
+
+**엔드포인트**: `GET /api/v1/accounts/{accountNo}/sellable-quantity`
+
+**설명**: 특정 종목의 매도 가능 수량을 조회합니다.
+
+**경로 파라미터**:
+- `accountNo` (String, required): 계좌번호
+
+**쿼리 파라미터**:
+- `symbol` (String, required): 종목코드
+
+**요청 예시**:
+```bash
+curl -X GET "http://localhost:8080/api/v1/accounts/12345678/sellable-quantity?symbol=005930"
+```
+
+**성공 응답 (200 OK)**:
+```json
+{
+  "accountNo": "12345678",
+  "symbol": "005930",
+  "sellableQuantity": 100,
+  "holdingQuantity": 100,
+  "averagePrice": 70000.00,
+  "currency": "KRW"
+}
+```
+
+---
+
+### 1.5 주문체결조회
+
+**엔드포인트**: `GET /api/v1/accounts/{accountNo}/order-history`
+
+**설명**: 특정 기간의 주문 체결 내역을 조회합니다.
+
+**경로 파라미터**:
+- `accountNo` (String, required): 계좌번호
+
+**쿼리 파라미터**:
+- `startDate` (LocalDate, required): 시작일 (ISO 8601 형식: yyyy-MM-dd)
+- `endDate` (LocalDate, required): 종료일 (ISO 8601 형식: yyyy-MM-dd)
+
+**요청 예시**:
+```bash
+curl -X GET "http://localhost:8080/api/v1/accounts/12345678/order-history?startDate=2026-01-01&endDate=2026-01-31"
+```
+
+**성공 응답 (200 OK)**:
+```json
+[
+  {
+    "accountNo": "12345678",
+    "symbol": "005930",
+    "orderNo": "20260101001",
+    "orderType": "BUY",
+    "orderQuantity": 10,
+    "orderPrice": 75000.00,
+    "executedQuantity": 10,
+    "executedPrice": 75000.00,
+    "orderStatus": "EXECUTED",
+    "orderTime": "2026-01-01T09:00:00",
+    "executedTime": "2026-01-01T09:00:05",
+    "currency": "KRW"
+  }
+]
+```
+
+---
+
+### 1.6 투자계좌자산현황조회
+
+**엔드포인트**: `GET /api/v1/accounts/{accountNo}/assets`
+
+**설명**: 계좌의 자산 현황을 종합 조회합니다.
+
+**경로 파라미터**:
+- `accountNo` (String, required): 계좌번호
+
+**요청 예시**:
+```bash
+curl -X GET "http://localhost:8080/api/v1/accounts/12345678/assets"
+```
+
+**성공 응답 (200 OK)**:
+```json
+{
+  "accountNo": "12345678",
+  "totalAssetValue": 1500000.00,
+  "deposit": 1000000.00,
+  "stockValue": 500000.00,
+  "totalProfitLoss": 50000.00,
+  "totalProfitLossRate": 3.33,
+  "orderableCash": 950000.00,
+  "currency": "KRW"
+}
+```
+
+---
+
+### 1.7 기간별손익조회
+
+**엔드포인트**: `GET /api/v1/accounts/{accountNo}/profit-loss`
+
+**설명**: 특정 기간의 손익 정보를 조회합니다.
+
+**경로 파라미터**:
+- `accountNo` (String, required): 계좌번호
+
+**쿼리 파라미터**:
+- `startDate` (LocalDate, required): 시작일 (ISO 8601 형식: yyyy-MM-dd)
+- `endDate` (LocalDate, required): 종료일 (ISO 8601 형식: yyyy-MM-dd)
+
+**요청 예시**:
+```bash
+curl -X GET "http://localhost:8080/api/v1/accounts/12345678/profit-loss?startDate=2026-01-01&endDate=2026-01-31"
+```
+
+**성공 응답 (200 OK)**:
+```json
+{
+  "accountNo": "12345678",
+  "startDate": "2026-01-01",
+  "endDate": "2026-01-31",
+  "totalProfitLoss": 50000.00,
+  "totalProfitLossRate": 3.33,
+  "realizedProfitLoss": 30000.00,
+  "unrealizedProfitLoss": 20000.00,
+  "dailyProfitLossList": [
+    {
+      "date": "2026-01-01",
+      "profitLoss": 1000.00,
+      "profitLossRate": 0.07
+    }
+  ],
+  "currency": "KRW"
+}
+```
+
+---
+
+### 1.8 계좌 API 에러 코드
+
+- `ACCOUNT_NOT_FOUND`: 계좌를 찾을 수 없음
+- `ACCOUNT_ACCESS_DENIED`: 계좌 접근 권한 없음
+- `INSUFFICIENT_BALANCE`: 잔고 부족
 
 ---
 
@@ -507,3 +756,158 @@
   }
 ]
 ```
+
+## 8. 시장 데이터 API
+
+### 8.1 단일 종목 현재가 조회
+
+**엔드포인트**: `GET /api/v1/market-data/current-price/{symbol}`
+
+**설명**: 한국투자증권 API를 통해 단일 종목의 실시간 현재가 정보를 조회합니다.
+
+**경로 파라미터**:
+- `symbol` (String, required): 종목 코드 (6자리 또는 종목명), 예: "005930" 또는 "삼성전자"
+
+**요청 예시**:
+```bash
+curl -X GET "http://localhost:8080/api/v1/market-data/current-price/005930"
+```
+
+**성공 응답 (200 OK)**:
+```json
+{
+  "symbol": "005930",
+  "name": "삼성전자",
+  "currentPrice": 75000.00,
+  "changeRate": 1.5,
+  "changeAmount": 750.00,
+  "previousClose": 49250.00,
+  "openPrice": 49300.00,
+  "highPrice": 50200.00,
+  "lowPrice": 49200.00,
+  "volume": 1000000,
+  "tradingValue": 50000000000.00,
+  "marketCap": 1000000000000.00,
+  "listedShares": 20000000,
+  "queriedAt": "2026-01-28T10:30:00"
+}
+```
+
+**에러 응답 (404 Not Found)**:
+```json
+{
+  "code": "SYMBOL_NOT_FOUND",
+  "message": "종목을 찾을 수 없습니다: 005930",
+  "traceId": "550e8400-e29b-41d4-a716-446655440000",
+  "timestamp": "2026-01-28T10:30:00"
+}
+```
+
+**에러 코드**:
+- `SYMBOL_NOT_FOUND`: 종목을 찾을 수 없음
+- `API_ERROR`: 한국투자증권 API 호출 실패
+
+---
+
+### 8.2 여러 종목 현재가 일괄 조회
+
+**엔드포인트**: `POST /api/v1/market-data/current-prices`
+
+**설명**: 한국투자증권 API를 통해 여러 종목의 실시간 현재가 정보를 일괄 조회합니다.
+
+**요청 바디**:
+```json
+[
+  "005930",
+  "000660",
+  "035420"
+]
+```
+
+**요청 예시**:
+```bash
+curl -X POST "http://localhost:8080/api/v1/market-data/current-prices" \
+  -H "Content-Type: application/json" \
+  -d '["005930", "000660", "035420"]'
+```
+
+**성공 응답 (200 OK)**:
+```json
+[
+  {
+    "symbol": "005930",
+    "name": "삼성전자",
+    "currentPrice": 75000.00,
+    "changeRate": 1.5,
+    "changeAmount": 750.00,
+    "previousClose": 49250.00,
+    "openPrice": 49300.00,
+    "highPrice": 50200.00,
+    "lowPrice": 49200.00,
+    "volume": 1000000,
+    "tradingValue": 50000000000.00,
+    "marketCap": 1000000000000.00,
+    "listedShares": 20000000,
+    "queriedAt": "2026-01-28T10:30:00"
+  },
+  {
+    "symbol": "000660",
+    "name": "SK하이닉스",
+    "currentPrice": 130000.00,
+    "changeRate": 2.0,
+    "changeAmount": 2600.00,
+    "previousClose": 127400.00,
+    "openPrice": 128000.00,
+    "highPrice": 131000.00,
+    "lowPrice": 127500.00,
+    "volume": 500000,
+    "tradingValue": 65000000000.00,
+    "marketCap": 2000000000000.00,
+    "listedShares": 15000000,
+    "queriedAt": "2026-01-28T10:30:00"
+  }
+]
+```
+
+**에러 응답 (400 Bad Request)**:
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "종목 코드 목록이 비어있습니다",
+  "traceId": "550e8400-e29b-41d4-a716-446655440000",
+  "timestamp": "2026-01-28T10:30:00"
+}
+```
+
+**에러 코드**:
+- `INVALID_REQUEST`: 잘못된 요청 (종목 코드 목록이 비어있음 등)
+- `API_ERROR`: 한국투자증권 API 호출 실패
+
+**DTO 정의**:
+```java
+{
+  "symbol": String,              // 종목 코드 (6자리)
+  "name": String,               // 종목명
+  "currentPrice": BigDecimal,    // 현재가
+  "changeRate": BigDecimal,      // 전일 대비 등락률 (%)
+  "changeAmount": BigDecimal,    // 전일 대비 등락액
+  "previousClose": BigDecimal,   // 전일 종가
+  "openPrice": BigDecimal,       // 시가
+  "highPrice": BigDecimal,       // 고가
+  "lowPrice": BigDecimal,        // 저가
+  "volume": Long,                // 거래량
+  "tradingValue": BigDecimal,    // 거래대금
+  "marketCap": BigDecimal,       // 시가총액
+  "listedShares": Long,          // 상장주식수
+  "queriedAt": LocalDateTime     // 조회 시각
+}
+```
+
+---
+
+## 문서 변경 이력
+
+| 버전 | 일자 | 작성자 | 변경 내용 |
+|------|------|--------|----------|
+| 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 - 계좌 API 상세 내용 통합 |
+| 1.1 | 2026-01-28 | System | 시장 데이터 API 섹션 추가 (현재가 조회) |

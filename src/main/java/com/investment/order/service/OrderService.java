@@ -7,15 +7,20 @@ import com.investment.domain.entity.Order;
 import com.investment.domain.entity.TradingSetting;
 import com.investment.domain.repository.OrderRepository;
 import com.investment.domain.repository.TradingSettingRepository;
+import com.investment.order.client.KoreaInvestmentOrderClient;
 import com.investment.order.dto.OrderRequestDto;
 import com.investment.order.dto.OrderResponseDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -38,20 +43,20 @@ public class OrderService {
     
     private final OrderRepository orderRepository;
     private final TradingSettingRepository tradingSettingRepository;
+    private final KoreaInvestmentOrderClient orderClient;
     
     /**
      * 주문 실행
      * 
-     * <p>주문 요청을 검증하고 주문 엔티티를 생성하여 저장합니다.
+     * <p>주문 요청을 검증하고 한국투자증권 API를 통해 실제 주문을 실행합니다.
      * 거래 설정의 최소/최대 투자금액을 검증하며,
      * 주문 실행 후 계좌 관련 캐시를 무효화합니다.</p>
      * 
-     * <p>현재는 키움 API 연동이 제거되어 주문 상태가 PENDING으로 유지되며,
-     * 실제 거래는 수동으로 처리해야 합니다.</p>
+     * <p>한국투자증권 API를 통해 실제 주문이 실행되며, 주문 성공 시 주문번호를 받아 저장합니다.</p>
      * 
      * @param request 주문 요청 정보 (계좌번호, 종목코드, 주문유형, 수량, 가격)
      * @return 생성된 주문 정보
-     * @throws DomainException 거래 설정이 없거나, 투자금액이 범위를 벗어난 경우
+     * @throws DomainException 거래 설정이 없거나, 투자금액이 범위를 벗어난 경우, API 호출 실패 시
      */
     @Transactional
     @CacheEvict(value = CacheConfig.CACHE_ACCOUNT, allEntries = true)
@@ -59,6 +64,9 @@ public class OrderService {
         log.info("주문 실행 요청: accountNo={}, symbol={}, type={}, quantity={}, price={}", 
                 request.getAccountNo(), request.getSymbol(), request.getOrderType(), 
                 request.getQuantity(), request.getPrice());
+        
+        // 현재 사용자 ID 가져오기
+        String userId = getCurrentUserId();
         
         // 거래 설정 조회 및 검증
         TradingSetting setting = tradingSettingRepository.findByAccountNo(request.getAccountNo())
@@ -83,7 +91,7 @@ public class OrderService {
                             setting.getMinInvestmentAmount(), orderAmount));
         }
         
-        // 주문 엔티티 생성 및 저장
+        // 주문 엔티티 생성 (아직 저장하지 않음)
         Order order = Order.builder()
                 .accountNo(request.getAccountNo())
                 .symbol(request.getSymbol())
@@ -93,14 +101,75 @@ public class OrderService {
                 .status(Order.OrderStatus.PENDING)
                 .build();
         
-        order = orderRepository.save(order);
-        
-        // 키움 API 제거로 인해 주문은 DB에만 저장 (실제 거래는 수동 처리)
-        // 주문 상태는 PENDING으로 유지되며, 실제 거래는 별도 프로세스에서 처리해야 함
-        log.info("주문이 생성되었습니다 (수동 처리 필요): orderId={}, accountNo={}, symbol={}", 
-                order.getId(), order.getAccountNo(), order.getSymbol());
+        // 한국투자증권 API를 통한 주문 실행
+        try {
+            // 주문 유형에 따라 API 호출
+            KoreaInvestmentOrderClient.OrderResponse apiResponse;
+            String orderType = "00"; // 지정가 (시장가는 "01")
+            
+            if (request.getOrderType() == OrderRequestDto.OrderType.BUY) {
+                apiResponse = orderClient.placeBuyOrder(
+                        userId,
+                        request.getAccountNo(),
+                        request.getSymbol(),
+                        request.getQuantity(),
+                        request.getPrice(),
+                        orderType
+                ).block(Duration.ofSeconds(10));
+            } else {
+                apiResponse = orderClient.placeSellOrder(
+                        userId,
+                        request.getAccountNo(),
+                        request.getSymbol(),
+                        request.getQuantity(),
+                        request.getPrice(),
+                        orderType
+                ).block(Duration.ofSeconds(10));
+            }
+            
+            if (apiResponse == null || !"SUCCESS".equals(apiResponse.getStatus())) {
+                // API 호출 실패
+                order.fail("한국투자증권 API 호출 실패");
+                order = orderRepository.save(order);
+                throw new DomainException(ErrorCode.ORDER_FAILED, 
+                        "주문 실행에 실패했습니다: " + (apiResponse != null ? apiResponse.getStatus() : "API 응답 없음"));
+            }
+            
+            // 주문 성공 - 주문번호 저장
+            order.execute(request.getQuantity(), request.getPrice(), 
+                    "주문번호: " + apiResponse.getOrderNo());
+            order = orderRepository.save(order);
+            
+            log.info("주문이 성공적으로 실행되었습니다: orderId={}, orderNo={}, accountNo={}, symbol={}", 
+                    order.getId(), apiResponse.getOrderNo(), order.getAccountNo(), order.getSymbol());
+            
+        } catch (Exception e) {
+            // API 호출 실패 시 주문을 FAILED 상태로 저장
+            log.error("주문 실행 중 오류 발생: accountNo={}, symbol={}", 
+                    request.getAccountNo(), request.getSymbol(), e);
+            
+            order.fail("주문 실행 실패: " + e.getMessage());
+            order = orderRepository.save(order);
+            
+            if (e instanceof DomainException) {
+                throw e;
+            }
+            throw new DomainException(ErrorCode.ORDER_FAILED, 
+                    "주문 실행에 실패했습니다: " + e.getMessage(), e);
+        }
         
         return convertToResponseDto(order);
+    }
+    
+    /**
+     * 현재 사용자 ID 가져오기
+     */
+    private String getCurrentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null) {
+            throw new IllegalStateException("인증되지 않은 사용자입니다");
+        }
+        return authentication.getName();
     }
     
     /**
