@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -77,6 +78,38 @@ public class KoreaInvestmentTokenService {
                 .orElseThrow(() -> new RuntimeException("토큰 발급 후 조회 실패: userId=" + userId));
 
         return encryptionUtil.decrypt(token.getAccessTokenEncrypted());
+    }
+
+    /**
+     * 계좌인증 시 미리 발급받은 접근 토큰을 저장합니다.
+     * 회원가입 시 재발급 없이 이 토큰을 DB에 저장할 때 사용합니다.
+     *
+     * @param userId      사용자 ID (회원가입 직후의 user.getId())
+     * @param accessToken 계좌인증 시 발급받은 한국투자증권 접근 토큰 (평문)
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void savePreIssuedTokenForUser(String userId, String accessToken) {
+        if (userId == null || accessToken == null || accessToken.isBlank()) {
+            throw new IllegalArgumentException("userId와 accessToken은 필수입니다.");
+        }
+        String encryptedToken = encryptionUtil.encrypt(accessToken.trim());
+        long expiresAt = System.currentTimeMillis() + (23 * 60 * 60 * 1000); // 23시간
+
+        KoreaInvestmentToken existingToken = tokenRepository.findByUserId(userId).orElse(null);
+        if (existingToken != null) {
+            existingToken.updateToken(encryptedToken, expiresAt);
+            tokenRepository.save(existingToken);
+        } else {
+            KoreaInvestmentToken token = KoreaInvestmentToken.builder()
+                    .userId(userId)
+                    .accessTokenEncrypted(encryptedToken)
+                    .expiresAt(expiresAt)
+                    .issuedAt(LocalDateTime.now())
+                    .build();
+            tokenRepository.save(token);
+        }
+        recentTokenIssuance.put(userId, System.currentTimeMillis());
+        log.info("선발급 토큰 저장 완료: userId={}", userId);
     }
 
     /**

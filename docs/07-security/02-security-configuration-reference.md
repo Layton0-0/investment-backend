@@ -277,8 +277,40 @@ investment:
 - [ ] 의존성 보안 업데이트 (월간)
 - [ ] 보안 정책 검토 (분기별)
 
+## 로깅 시 민감정보 마스킹 (개발 규칙)
+
+로그에 **app key, secret, 계좌번호, userId** 등 암호화 저장 항목이 노출되지 않도록 **표준 모듈**을 사용합니다.
+
+### 적용 규칙
+
+1. **INFO/WARN/ERROR**: 반드시 **마스킹된 값만** 출력한다. 평문 출력 금지.
+2. **DEBUG**: 필요 시 마스킹된 값 + DEBUG 레벨에서만 실제 값 추가 출력 가능 (로컬 디버깅용).
+3. **공통 모듈**: `com.investment.common.security.LogMaskingUtil`만 사용한다. 각 클래스별 private 마스킹 메서드 사용 금지.
+
+### LogMaskingUtil 사용 예
+
+| 대상 | 메서드 | 예시 결과 |
+|------|--------|-----------|
+| App Key / API Key | `LogMaskingUtil.maskApiKey(value)` | 앞 4자리+**** |
+| App Secret | `LogMaskingUtil.maskSecret(value)` | 앞 4자리+**** |
+| 계좌번호 | `LogMaskingUtil.maskAccountNo(value)` | ****5678-12 |
+| 사용자 ID (UUID 등) | `LogMaskingUtil.maskUserId(value)` | 앞 8자리+**** |
+| 사용자명 | `LogMaskingUtil.maskUsername(value)` | 앞 2자리+** |
+
+### DEBUG에서 실제 값 추가 로그
+
+- **INFO 메시지 + DEBUG에서만 실제 값**: `LogMaskingUtil.logWithDebugActual(log, "메시지: key={}", new Object[]{masked}, "key(actual)={}", actual);`
+- **DEBUG 메시지 + DEBUG에서만 실제 값**: `LogMaskingUtil.logWithDebugActualAtDebug(log, "메시지: key={}", new Object[]{masked}, "key(actual)={}", actual);`
+
+### 적용 범위
+
+- 로그에 `accountNo`, `userId`, `appKey`, `appSecret`, `token`(민감 토큰) 등이 포함되는 모든 로그 구문.
+- API 요청 바디 로그 시 `CANO`(계좌번호) 등 민감 키는 마스킹 후 직렬화.
+- 상세: [개발 진행 현황](../09-planning/02-development-status.md) 완료 항목 "로그 마스킹 모듈화" 참조.
+
 ## 문서 변경 이력
 
 | 버전 | 일자 | 작성자 | 변경 내용 |
 |------|------|--------|----------|
 | 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 |
+| 1.1 | 2026-01-29 | System | 로깅 시 민감정보 마스킹(LogMaskingUtil) 개발 규칙 섹션 추가 |

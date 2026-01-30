@@ -5,6 +5,7 @@ import com.investment.account.dto.MainAccountResponseDto;
 import com.investment.account.service.AccountService;
 import com.investment.common.exception.DomainException;
 import com.investment.common.exception.ErrorCode;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -28,26 +29,34 @@ public class UserAccountController {
 
     /**
      * 사용자 계좌 목록 조회
+     * 
+     * @param serverType 서버 타입 ("1": 모의투자, "0": 실거래), 미지정 시 전체
      */
     @GetMapping
-    @Operation(summary = "계좌 목록 조회", description = "사용자의 모든 계좌 목록을 조회합니다")
-    public ResponseEntity<AccountListResponseDto> getUserAccounts(Authentication authentication) {
+    @Operation(summary = "계좌 목록 조회", description = "사용자의 계좌 목록을 조회합니다. serverType으로 모의/실거래 필터 가능")
+    public ResponseEntity<AccountListResponseDto> getUserAccounts(
+            @Parameter(description = "서버 타입 (1: 모의투자, 0: 실거래), 미지정 시 전체") @RequestParam(required = false) String serverType,
+            Authentication authentication) {
         String userId = getUserId(authentication);
 
-        AccountListResponseDto response = accountService.getUserAccounts(userId);
+        AccountListResponseDto response = accountService.getUserAccounts(userId, serverType);
         return ResponseEntity.ok(response);
     }
 
     /**
      * 메인 계좌 조회
+     * 
+     * @param serverType 서버 타입 ("1": 모의투자, "0": 실거래), 미지정 시 모의투자
      */
     @GetMapping("/main")
-    @Operation(summary = "메인 계좌 조회", description = "사용자의 메인 계좌를 조회합니다")
-    public ResponseEntity<MainAccountResponseDto> getMainAccount(Authentication authentication) {
+    @Operation(summary = "메인 계좌 조회", description = "사용자의 메인 계좌를 조회합니다. serverType별로 메인 계좌가 다릅니다")
+    public ResponseEntity<MainAccountResponseDto> getMainAccount(
+            @Parameter(description = "서버 타입 (1: 모의투자, 0: 실거래), 미지정 시 1") @RequestParam(required = false) String serverType,
+            Authentication authentication) {
         String userId = getUserId(authentication);
 
         try {
-            MainAccountResponseDto response = accountService.getMainAccount(userId);
+            MainAccountResponseDto response = accountService.getMainAccount(userId, serverType);
             return ResponseEntity.ok(response);
         } catch (DomainException e) {
             if (e.getErrorCode() == ErrorCode.ACCOUNT_NOT_FOUND) {

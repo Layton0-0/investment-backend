@@ -43,4 +43,10 @@ public class SignupRequestDto {
     @NotBlank(message = "계좌번호는 필수입니다")
     @Pattern(regexp = "^\\d{8}-\\d{2}$", message = "계좌번호 형식이 올바르지 않습니다. 형식: 숫자8자리-숫자2자리 (예: 12345678-12)")
     private String accountNo;
+
+    /**
+     * 계좌인증 시 미리 발급받은 한국투자증권 접근 토큰.
+     * 값이 있으면 회원가입 시 재발급하지 않고 이 토큰을 저장합니다. (한국투자증권만 해당)
+     */
+    private String preIssuedAccessToken;
 }

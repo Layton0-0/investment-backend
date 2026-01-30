@@ -20,32 +20,47 @@ import java.util.List;
 @RequestMapping("/strategies")
 @RequiredArgsConstructor
 public class WebStrategyController {
-    
+
     private final StrategyManagementService strategyManagementService;
-    
+
     @GetMapping
-    public String strategies(@RequestParam(required = false, defaultValue = "") String accountNo, 
-                            Model model) {
+    public String strategies(@RequestParam(required = false, defaultValue = "") String accountNo,
+            Model model) {
+        return strategiesByMarket(accountNo, null, model);
+    }
+
+    @GetMapping("/kr")
+    public String strategiesKr(@RequestParam(required = false, defaultValue = "") String accountNo,
+            Model model) {
+        return strategiesByMarket(accountNo, "KR", model);
+    }
+
+    @GetMapping("/us")
+    public String strategiesUs(@RequestParam(required = false, defaultValue = "") String accountNo,
+            Model model) {
+        return strategiesByMarket(accountNo, "US", model);
+    }
+
+    private String strategiesByMarket(String accountNo, String market, Model model) {
         if (accountNo != null && !accountNo.trim().isEmpty()) {
             try {
-                List<StrategyDto> strategies = strategyManagementService.getStrategies(accountNo);
-                
-                // 전략 타입별로 분류
+                List<StrategyDto> strategies = strategyManagementService.getStrategies(accountNo, market);
+
                 StrategyDto shortTerm = strategies.stream()
                         .filter(s -> s.getStrategyType() == StrategyType.SHORT_TERM)
                         .findFirst()
                         .orElse(null);
-                
+
                 StrategyDto mediumTerm = strategies.stream()
                         .filter(s -> s.getStrategyType() == StrategyType.MEDIUM_TERM)
                         .findFirst()
                         .orElse(null);
-                
+
                 StrategyDto longTerm = strategies.stream()
                         .filter(s -> s.getStrategyType() == StrategyType.LONG_TERM)
                         .findFirst()
                         .orElse(null);
-                
+
                 model.addAttribute("shortTerm", shortTerm);
                 model.addAttribute("mediumTerm", mediumTerm);
                 model.addAttribute("longTerm", longTerm);
@@ -54,30 +69,42 @@ public class WebStrategyController {
                 model.addAttribute("error", e.getMessage());
             }
         }
-        
+
         model.addAttribute("accountNo", accountNo);
+        model.addAttribute("market", market != null ? market : "");
+        model.addAttribute("marketLabel", "KR".equals(market) ? "국내" : ("US".equals(market) ? "미국" : "전체"));
         return "strategies";
     }
-    
+
     @PostMapping("/activate")
-    public String activateStrategy(@RequestParam String accountNo, 
-                                   @RequestParam StrategyType strategyType) {
+    public String activateStrategy(@RequestParam String accountNo,
+            @RequestParam StrategyType strategyType,
+            @RequestParam(required = false) String market) {
         try {
-            strategyManagementService.activateStrategy(accountNo, strategyType);
+            strategyManagementService.activateStrategy(accountNo, market, strategyType);
         } catch (Exception e) {
             // 에러 처리
         }
-        return "redirect:/strategies?accountNo=" + accountNo;
+        String redirectPath = ("US".equals(market)) ? "/strategies/us" : "/strategies/kr";
+        if (market == null || market.isEmpty()) {
+            redirectPath = "/strategies";
+        }
+        return "redirect:" + redirectPath + "?accountNo=" + accountNo;
     }
-    
+
     @PostMapping("/stop")
-    public String stopStrategy(@RequestParam String accountNo, 
-                              @RequestParam StrategyType strategyType) {
+    public String stopStrategy(@RequestParam String accountNo,
+            @RequestParam StrategyType strategyType,
+            @RequestParam(required = false) String market) {
         try {
-            strategyManagementService.stopStrategy(accountNo, strategyType);
+            strategyManagementService.stopStrategy(accountNo, market, strategyType);
         } catch (Exception e) {
             // 에러 처리
         }
-        return "redirect:/strategies?accountNo=" + accountNo;
+        String redirectPath = ("US".equals(market)) ? "/strategies/us" : "/strategies/kr";
+        if (market == null || market.isEmpty()) {
+            redirectPath = "/strategies";
+        }
+        return "redirect:" + redirectPath + "?accountNo=" + accountNo;
     }
 }

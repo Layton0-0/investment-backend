@@ -1,6 +1,7 @@
 package com.investment.web.controller;
 
 import com.investment.account.dto.*;
+import com.investment.common.security.LogMaskingUtil;
 import com.investment.account.service.AccountService;
 import com.investment.auth.dto.MyPageResponseDto;
 import com.investment.auth.service.AuthService;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 대시보드 웹 컨트롤러 (Thymeleaf)
@@ -111,23 +113,24 @@ public class DashboardController {
             }
         }
 
-        // 계좌번호가 있으면 데이터 조회
+        // 계좌번호가 있으면 데이터 조회 (잔고·보유·주문 필수, 거래 설정은 선택)
         if (accountNo != null && !accountNo.trim().isEmpty()) {
             try {
                 AccountBalanceDto balance = accountService.getAccountBalance(accountNo);
                 List<AccountPositionDto> positions = accountService.getPositions(accountNo);
                 List<OrderResponseDto> orders = orderService.getOrders(accountNo);
-                TradingSettingDto setting = tradingSettingService.getSetting(accountNo);
 
                 model.addAttribute("balance", balance);
                 model.addAttribute("positions", positions);
                 model.addAttribute("orders", orders);
-                model.addAttribute("setting", setting);
+
+                Optional<TradingSettingDto> settingOpt = tradingSettingService.getSettingOptional(accountNo);
+                settingOpt.ifPresent(dto -> model.addAttribute("setting", dto));
 
                 // 통계 계산
                 calculateStatistics(positions, model);
             } catch (Exception e) {
-                log.error("계좌 데이터 조회 실패: accountNo={}", accountNo, e);
+                log.error("계좌 데이터 조회 실패: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo), e);
                 model.addAttribute("error", "계좌 정보를 불러오는 중 오류가 발생했습니다: " + e.getMessage());
             }
         }

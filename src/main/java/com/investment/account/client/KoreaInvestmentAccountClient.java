@@ -12,8 +12,11 @@ import com.investment.account.dto.ProfitLossDto;
 import com.investment.common.exception.DomainException;
 import com.investment.common.exception.ErrorCode;
 import com.investment.common.security.EncryptionUtil;
+import com.investment.common.security.LogMaskingUtil;
 import com.investment.domain.entity.BrokerType;
+import com.investment.domain.entity.UserAccount;
 import com.investment.domain.entity.UserApiKey;
+import com.investment.domain.repository.UserAccountRepository;
 import com.investment.domain.repository.UserApiKeyRepository;
 import com.investment.marketdata.service.KoreaInvestmentTokenService;
 import com.investment.marketdata.util.KoreaInvestmentRequestBuilder;
@@ -38,6 +41,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static com.investment.account.client.KoreaInvestmentAccountApiConstants.*;
 
@@ -61,6 +65,7 @@ public class KoreaInvestmentAccountClient {
     private final RateLimiterRegistry rateLimiterRegistry;
     private final KoreaInvestmentTokenService tokenService;
     private final UserApiKeyRepository userApiKeyRepository;
+    private final UserAccountRepository userAccountRepository;
     private final EncryptionUtil encryptionUtil;
     private final ObjectMapper objectMapper;
     private final Environment environment;
@@ -93,14 +98,21 @@ public class KoreaInvestmentAccountClient {
                 log.info("요청 헤더:");
                 headers.forEach((name, values) -> {
                     if ("authorization".equalsIgnoreCase(name)) {
-                        // Authorization 헤더는 마스킹 처리
+                        // INFO: 마스킹, DEBUG: 실제 값 노출 (로컬 디버깅용)
                         log.info("  {}: Bearer ***", name);
+                        if (log.isDebugEnabled()) {
+                            log.debug("  {}: {}", name, values);
+                        }
                     } else {
                         log.info("  {}: {}", name, values);
                     }
                 });
-                log.info("요청 바디 (JSON):");
-                String jsonBody = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(requestBody);
+                log.info("요청 파라미터 (query):");
+                Map<String, String> maskedBody = new HashMap<>(requestBody);
+                if (maskedBody.containsKey("CANO") && maskedBody.get("CANO") != null) {
+                    maskedBody.put("CANO", LogMaskingUtil.maskAccountNo(maskedBody.get("CANO")));
+                }
+                String jsonBody = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(maskedBody);
                 log.info("{}", jsonBody);
                 log.info("=== 요청 종료 ===");
             } catch (Exception e) {
@@ -135,6 +147,18 @@ public class KoreaInvestmentAccountClient {
     }
 
     /**
+     * 조회 API용 URI 생성 (GET + query parameter).
+     * 한국투자증권 계좌/시세 조회 API는 GET 메서드에 query parameter로 전달한다.
+     */
+    private URI buildUriWithQueryParams(String baseUrl, String path, Map<String, String> queryParams) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(baseUrl).path(path);
+        if (queryParams != null) {
+            queryParams.forEach(builder::queryParam);
+        }
+        return builder.build().toUri();
+    }
+
+    /**
      * API 호출용 Rate Limiter 가져오기
      */
     private RateLimiter getApiRateLimiter(String serverType) {
@@ -142,6 +166,44 @@ public class KoreaInvestmentAccountClient {
             return rateLimiterRegistry.rateLimiter(RATE_LIMITER_API_REAL);
         }
         return rateLimiterRegistry.rateLimiter(RATE_LIMITER_API_VIRTUAL);
+    }
+
+    /**
+     * 계좌번호에 해당하는 서버 타입 조회 (모의/실거래 구분)
+     * UserAccount에서 userId·계좌번호 일치하는 계좌의 serverType 반환.
+     */
+    private String resolveServerTypeForAccount(String userId, String accountNo) {
+        if (userId == null || accountNo == null || accountNo.trim().isEmpty()) {
+            return null;
+        }
+        List<UserAccount> accounts = userAccountRepository.findByUserIdAndBrokerType(userId,
+                BrokerType.KOREA_INVESTMENT);
+        for (UserAccount account : accounts) {
+            try {
+                String decrypted = encryptionUtil.decrypt(account.getAccountNoEncrypted());
+                if (accountNo.trim().equals(decrypted)) {
+                    return account.getServerType() != null ? account.getServerType() : "1";
+                }
+            } catch (Exception e) {
+                log.trace("계좌번호 복호화 스킵: accountId={}", account.getId());
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 계좌번호에 해당하는 API 키 조회 (모의/실거래 구분하여 올바른 키 반환)
+     */
+    private Optional<UserApiKey> getUserApiKeyForAccount(String userId, String accountNo) {
+        String serverType = resolveServerTypeForAccount(userId, accountNo);
+        if (serverType != null) {
+            Optional<UserApiKey> byServer = userApiKeyRepository.findByUserIdAndBrokerTypeAndServerType(userId,
+                    BrokerType.KOREA_INVESTMENT, serverType);
+            if (byServer.isPresent()) {
+                return byServer;
+            }
+        }
+        return userApiKeyRepository.findByUserIdAndBrokerType(userId, BrokerType.KOREA_INVESTMENT);
     }
 
     /**
@@ -164,40 +226,36 @@ public class KoreaInvestmentAccountClient {
      * @return AccountBalanceDto와 보유 종목 목록
      */
     public BalanceAndPositionsResult inquireBalance(String userId, String accountNo, String accessToken) {
-        log.debug("주식잔고조회: userId={}, accountNo={}", userId, accountNo);
+        log.debug("주식잔고조회: userId={}, accountNo={}", LogMaskingUtil.maskUserId(userId),
+                LogMaskingUtil.maskAccountNo(accountNo));
 
         try {
-            // 사용자 API 키 조회
-            UserApiKey userApiKey = userApiKeyRepository.findByUserIdAndBrokerType(userId, BrokerType.KOREA_INVESTMENT)
+            // 사용자 API 키 조회 (계좌번호에 맞는 서버 타입의 키 사용)
+            UserApiKey userApiKey = getUserApiKeyForAccount(userId, accountNo)
                     .orElseThrow(() -> new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                             "한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
+            String serverType;
 
             // Access Token 조회 (제공되지 않은 경우에만)
             if (accessToken == null) {
                 accessToken = tokenService.getAccessToken(userId);
             }
 
-            // API 키 복호화
+            // API 키 복호화 (선택된 키의 서버 타입으로 API 호출)
             String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
             String appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
-            String serverType = userApiKey.getServerType();
+            serverType = userApiKey.getServerType();
 
             // Base URL 및 TR ID 결정
             String baseUrl = getBaseUrl(serverType);
             String trId = getBalanceTrId(serverType);
 
-            // API 엔드포인트
-            URI uri = UriComponentsBuilder.fromHttpUrl(baseUrl)
-                    .path(PATH_INQUIRE_BALANCE)
-                    .build()
-                    .toUri();
-
             // 요청 헤더 생성 (공통 유틸리티 사용)
             HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
                     accessToken, appKey, appSecret, trId);
 
-            // 요청 바디 생성 (공통 파라미터 + API별 고유 파라미터)
-            Map<String, String> requestBody = KoreaInvestmentRequestBuilder.createAccountRequestBody(
+            // 조회 파라미터 (GET query parameter로 전달)
+            Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createAccountRequestBody(
                     accountNo != null ? accountNo : "",
                     Map.of(
                             "AFHR_FLPR_YN", "N", // 시간외단일가여부
@@ -210,19 +268,19 @@ public class KoreaInvestmentAccountClient {
                             "CTX_AREA_FK100", "", // 연속조회검색조건100
                             "CTX_AREA_NK100", "" // 연속조회키100
                     ));
+            URI uri = buildUriWithQueryParams(baseUrl, PATH_INQUIRE_BALANCE, queryParams);
 
             // local 환경에서 요청 상세 로그 출력
-            logApiRequest("주식잔고조회", uri, headers, requestBody);
+            logApiRequest("주식잔고조회", uri, headers, queryParams);
 
             // Rate Limiter 적용
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
 
-            // API 호출
-            String responseJson = webClient.post()
+            // API 호출 (GET + query parameter)
+            String responseJson = webClient.get()
                     .uri(uri)
                     .headers(h -> h.addAll(headers))
-                    .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
                     .timeout(Duration.ofSeconds(10))
@@ -231,14 +289,14 @@ public class KoreaInvestmentAccountClient {
                                 if (throwable instanceof org.springframework.web.reactive.function.client.WebClientResponseException) {
                                     org.springframework.web.reactive.function.client.WebClientResponseException ex = (org.springframework.web.reactive.function.client.WebClientResponseException) throwable;
                                     if (ex.getStatusCode().value() == 401) {
-                                        log.warn("401 에러 발생, 토큰 재발급 시도: userId={}", userId);
+                                        log.warn("401 에러 발생, 토큰 재발급 시도: userId={}", LogMaskingUtil.maskUserId(userId));
                                         try {
                                             List<UserApiKey> apiKeys = userApiKeyRepository.findByUserId(userId);
                                             if (!apiKeys.isEmpty()) {
                                                 tokenService.issueTokenForUser(apiKeys.get(0));
                                             }
                                         } catch (Exception e) {
-                                            log.error("토큰 재발급 실패: userId={}", userId, e);
+                                            log.error("토큰 재발급 실패: userId={}", LogMaskingUtil.maskUserId(userId), e);
                                         }
                                         return true;
                                     }
@@ -279,7 +337,7 @@ public class KoreaInvestmentAccountClient {
         } catch (DomainException e) {
             // DomainException은 그대로 전파하되, 로깅 추가
             log.warn("주식잔고조회 DomainException: userId={}, accountNo={}, error={}",
-                    userId, accountNo, e.getMessage());
+                    LogMaskingUtil.maskUserId(userId), LogMaskingUtil.maskAccountNo(accountNo), e.getMessage());
             throw e;
         } catch (Exception e) {
             // 일반 Exception은 상세 로깅 후 DomainException으로 변환
@@ -290,13 +348,72 @@ public class KoreaInvestmentAccountClient {
     }
 
     /**
+     * 회원가입 전 계좌인증용: API Key/Secret·서버타입·계좌번호로 주식잔고조회를 호출하여 계좌 유효 여부 확인.
+     * (키·계좌번호는 로그에 남기지 않음)
+     *
+     * @param appKey      App Key (평문)
+     * @param appSecret   App Secret (평문)
+     * @param serverType  "1": 모의투자, "0": 실거래
+     * @param accountNo   계좌번호 (형식: 12345678-12)
+     * @param accessToken 이미 발급된 Access Token
+     */
+    public void verifyAccountByCredentials(String appKey, String appSecret, String serverType, String accountNo,
+            String accessToken) {
+        if (serverType == null || (!serverType.equals("0") && !serverType.equals("1"))) {
+            throw new IllegalArgumentException("서버 타입이 올바르지 않습니다 (0: 실거래, 1: 모의투자)");
+        }
+        String baseUrl = getBaseUrl(serverType);
+        String trId = getBalanceTrId(serverType);
+        HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
+                accessToken, appKey, appSecret, trId);
+        Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createAccountRequestBody(
+                accountNo != null ? accountNo : "",
+                Map.of(
+                        "AFHR_FLPR_YN", "N",
+                        "OFL_YN", "",
+                        "INQR_DVSN", "02",
+                        "UNPR_DVSN", "01",
+                        "FUND_STTL_ICLD_YN", "N",
+                        "FNCG_AMT_AUTO_RDPT_YN", "N",
+                        "PRCS_DVSN", "01",
+                        "CTX_AREA_FK100", "",
+                        "CTX_AREA_NK100", ""));
+        URI uri = buildUriWithQueryParams(baseUrl, PATH_INQUIRE_BALANCE, queryParams);
+        RateLimiter rateLimiter = getApiRateLimiter(serverType);
+        rateLimiter.acquirePermission();
+        String responseJson = webClient.get()
+                .uri(uri)
+                .headers(h -> h.addAll(headers))
+                .retrieve()
+                .bodyToMono(String.class)
+                .timeout(Duration.ofSeconds(10))
+                .block();
+        if (responseJson == null) {
+            throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND, "한국투자증권 API 응답이 없습니다.");
+        }
+        JsonNode rootNode;
+        try {
+            rootNode = objectMapper.readTree(responseJson);
+        } catch (Exception e) {
+            throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND, "한국투자증권 API 응답 파싱 실패.", e);
+        }
+        String rtCd = rootNode.path("rt_cd").asText();
+        if (!"0".equals(rtCd)) {
+            String msg1 = rootNode.path("msg1").asText("");
+            throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
+                    "계좌 조회 실패. 서버 타입(모의/실거래)과 계좌번호가 일치하는지 확인하세요. " + msg1);
+        }
+    }
+
+    /**
      * 매수가능조회
      */
     public BuyableAmountDto inquireBuyableAmount(String userId, String accountNo, String symbol, BigDecimal price) {
-        log.debug("매수가능조회: userId={}, accountNo={}, symbol={}, price={}", userId, accountNo, symbol, price);
+        log.debug("매수가능조회: userId={}, accountNo={}, symbol={}, price={}", LogMaskingUtil.maskUserId(userId),
+                LogMaskingUtil.maskAccountNo(accountNo), symbol, price);
 
         try {
-            UserApiKey userApiKey = userApiKeyRepository.findByUserIdAndBrokerType(userId, BrokerType.KOREA_INVESTMENT)
+            UserApiKey userApiKey = getUserApiKeyForAccount(userId, accountNo)
                     .orElseThrow(() -> new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                             "한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
 
@@ -308,17 +425,12 @@ public class KoreaInvestmentAccountClient {
             String baseUrl = getBaseUrl(serverType);
             String trId = getBuyableTrId(serverType);
 
-            URI uri = UriComponentsBuilder.fromHttpUrl(baseUrl)
-                    .path(PATH_INQUIRE_PSBL_ORDER)
-                    .build()
-                    .toUri();
-
             // 요청 헤더 생성 (공통 유틸리티 사용)
             HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
                     accessToken, appKey, appSecret, trId);
 
-            // 요청 바디 생성 (공통 파라미터 + API별 고유 파라미터)
-            Map<String, String> requestBody = KoreaInvestmentRequestBuilder.createAccountRequestBody(
+            // 조회 파라미터 (GET query parameter로 전달)
+            Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createAccountRequestBody(
                     accountNo,
                     Map.of(
                             "PDNO", symbol,
@@ -327,17 +439,17 @@ public class KoreaInvestmentAccountClient {
                             "CMA_EVLU_AMT_ICLD_YN", "N", // CMA평가금액포함여부
                             "OVRS_ICLD_YN", "N" // 해외포함여부
                     ));
+            URI uri = buildUriWithQueryParams(baseUrl, PATH_INQUIRE_PSBL_ORDER, queryParams);
 
             // local 환경에서 요청 상세 로그 출력
-            logApiRequest("매수가능조회", uri, headers, requestBody);
+            logApiRequest("매수가능조회", uri, headers, queryParams);
 
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
 
-            String responseJson = webClient.post()
+            String responseJson = webClient.get()
                     .uri(uri)
                     .headers(h -> h.addAll(headers))
-                    .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
                     .timeout(Duration.ofSeconds(10))
@@ -371,7 +483,8 @@ public class KoreaInvestmentAccountClient {
         } catch (DomainException e) {
             throw e;
         } catch (Exception e) {
-            log.error("매수가능조회 실패: userId={}, accountNo={}, symbol={}", userId, accountNo, symbol, e);
+            log.error("매수가능조회 실패: userId={}, accountNo={}, symbol={}", LogMaskingUtil.maskUserId(userId),
+                    LogMaskingUtil.maskAccountNo(accountNo), symbol, e);
             throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                     "매수가능조회 실패: " + e.getMessage(), e);
         }
@@ -384,7 +497,7 @@ public class KoreaInvestmentAccountClient {
         log.debug("매도가능수량조회: userId={}, accountNo={}, symbol={}", userId, accountNo, symbol);
 
         try {
-            UserApiKey userApiKey = userApiKeyRepository.findByUserIdAndBrokerType(userId, BrokerType.KOREA_INVESTMENT)
+            UserApiKey userApiKey = getUserApiKeyForAccount(userId, accountNo)
                     .orElseThrow(() -> new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                             "한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
 
@@ -396,33 +509,28 @@ public class KoreaInvestmentAccountClient {
             String baseUrl = getBaseUrl(serverType);
             String trId = getSellableTrId(serverType);
 
-            URI uri = UriComponentsBuilder.fromHttpUrl(baseUrl)
-                    .path(PATH_INQUIRE_PSBL_ORDER2)
-                    .build()
-                    .toUri();
-
             // 요청 헤더 생성 (공통 유틸리티 사용)
             HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
                     accessToken, appKey, appSecret, trId);
 
-            // 요청 바디 생성 (공통 파라미터 + API별 고유 파라미터)
-            Map<String, String> requestBody = KoreaInvestmentRequestBuilder.createAccountRequestBody(
+            // 조회 파라미터 (GET query parameter로 전달)
+            Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createAccountRequestBody(
                     accountNo,
                     Map.of(
                             "PDNO", symbol,
                             "ORD_DVSN", "01" // 주문구분 (01: 지정가)
                     ));
+            URI uri = buildUriWithQueryParams(baseUrl, PATH_INQUIRE_PSBL_ORDER2, queryParams);
 
             // local 환경에서 요청 상세 로그 출력
-            logApiRequest("매도가능수량조회", uri, headers, requestBody);
+            logApiRequest("매도가능수량조회", uri, headers, queryParams);
 
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
 
-            String responseJson = webClient.post()
+            String responseJson = webClient.get()
                     .uri(uri)
                     .headers(h -> h.addAll(headers))
-                    .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
                     .timeout(Duration.ofSeconds(10))
@@ -456,7 +564,8 @@ public class KoreaInvestmentAccountClient {
         } catch (DomainException e) {
             throw e;
         } catch (Exception e) {
-            log.error("매도가능수량조회 실패: userId={}, accountNo={}, symbol={}", userId, accountNo, symbol, e);
+            log.error("매도가능수량조회 실패: userId={}, accountNo={}, symbol={}", LogMaskingUtil.maskUserId(userId),
+                    LogMaskingUtil.maskAccountNo(accountNo), symbol, e);
             throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                     "매도가능수량조회 실패: " + e.getMessage(), e);
         }
@@ -467,10 +576,11 @@ public class KoreaInvestmentAccountClient {
      */
     public List<OrderHistoryDto> inquireOrderHistory(String userId, String accountNo, LocalDate startDate,
             LocalDate endDate) {
-        log.debug("주문체결조회: userId={}, accountNo={}, startDate={}, endDate={}", userId, accountNo, startDate, endDate);
+        log.debug("주문체결조회: userId={}, accountNo={}, startDate={}, endDate={}", LogMaskingUtil.maskUserId(userId),
+                LogMaskingUtil.maskAccountNo(accountNo), startDate, endDate);
 
         try {
-            UserApiKey userApiKey = userApiKeyRepository.findByUserIdAndBrokerType(userId, BrokerType.KOREA_INVESTMENT)
+            UserApiKey userApiKey = getUserApiKeyForAccount(userId, accountNo)
                     .orElseThrow(() -> new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                             "한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
 
@@ -482,16 +592,11 @@ public class KoreaInvestmentAccountClient {
             String baseUrl = getBaseUrl(serverType);
             String trId = getOrderHistoryTrId(serverType);
 
-            URI uri = UriComponentsBuilder.fromHttpUrl(baseUrl)
-                    .path(PATH_INQUIRE_DAILY_CCLD)
-                    .build()
-                    .toUri();
-
             // 요청 헤더 생성 (공통 유틸리티 사용)
             HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
                     accessToken, appKey, appSecret, trId);
 
-            // 요청 바디 생성 (공통 파라미터 + API별 고유 파라미터)
+            // 조회 파라미터 (GET query parameter로 전달)
             // Map.of()는 최대 10개 키-값 쌍만 지원하므로 HashMap 사용
             Map<String, String> additionalParams = new HashMap<>();
             additionalParams.put("INQR_STRT_DT", startDate.format(DateTimeFormatter.ofPattern("yyyyMMdd")));
@@ -507,19 +612,19 @@ public class KoreaInvestmentAccountClient {
             additionalParams.put("EXCG_ID_DVSN_CD", "KRX"); // 거래소ID구분코드 (KRX: 한국거래소)
             additionalParams.put("CTX_AREA_FK100", ""); // 연속조회검색조건100
             additionalParams.put("CTX_AREA_NK100", ""); // 연속조회키100
-            Map<String, String> requestBody = KoreaInvestmentRequestBuilder.createAccountRequestBody(
+            Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createAccountRequestBody(
                     accountNo, additionalParams);
+            URI uri = buildUriWithQueryParams(baseUrl, PATH_INQUIRE_DAILY_CCLD, queryParams);
 
             // local 환경에서 요청 상세 로그 출력
-            logApiRequest("주문체결조회", uri, headers, requestBody);
+            logApiRequest("주문체결조회", uri, headers, queryParams);
 
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
 
-            String responseJson = webClient.post()
+            String responseJson = webClient.get()
                     .uri(uri)
                     .headers(h -> h.addAll(headers))
-                    .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
                     .timeout(Duration.ofSeconds(10))
@@ -568,7 +673,8 @@ public class KoreaInvestmentAccountClient {
         } catch (DomainException e) {
             throw e;
         } catch (Exception e) {
-            log.error("주문체결조회 실패: userId={}, accountNo={}", userId, accountNo, e);
+            log.error("주문체결조회 실패: userId={}, accountNo={}", LogMaskingUtil.maskUserId(userId),
+                    LogMaskingUtil.maskAccountNo(accountNo), e);
             throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                     "주문체결조회 실패: " + e.getMessage(), e);
         }
@@ -578,10 +684,11 @@ public class KoreaInvestmentAccountClient {
      * 투자계좌자산현황조회
      */
     public AccountAssetDto inquireAssets(String userId, String accountNo) {
-        log.debug("투자계좌자산현황조회: userId={}, accountNo={}", userId, accountNo);
+        log.debug("투자계좌자산현황조회: userId={}, accountNo={}", LogMaskingUtil.maskUserId(userId),
+                LogMaskingUtil.maskAccountNo(accountNo));
 
         try {
-            UserApiKey userApiKey = userApiKeyRepository.findByUserIdAndBrokerType(userId, BrokerType.KOREA_INVESTMENT)
+            UserApiKey userApiKey = getUserApiKeyForAccount(userId, accountNo)
                     .orElseThrow(() -> new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                             "한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
 
@@ -593,17 +700,12 @@ public class KoreaInvestmentAccountClient {
             String baseUrl = getBaseUrl(serverType);
             String trId = getAssetsTrId(serverType);
 
-            URI uri = UriComponentsBuilder.fromHttpUrl(baseUrl)
-                    .path(PATH_INQUIRE_ASSETS)
-                    .build()
-                    .toUri();
-
             // 요청 헤더 생성 (공통 유틸리티 사용)
             HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
                     accessToken, appKey, appSecret, trId);
 
-            // 요청 바디 생성 (공통 파라미터 + API별 고유 파라미터)
-            Map<String, String> requestBody = KoreaInvestmentRequestBuilder.createAccountRequestBody(
+            // 조회 파라미터 (GET query parameter로 전달)
+            Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createAccountRequestBody(
                     accountNo,
                     Map.of(
                             "AFHR_FLPR_YN", "N",
@@ -615,17 +717,17 @@ public class KoreaInvestmentAccountClient {
                             "PRCS_DVSN", "01",
                             "CTX_AREA_FK100", "",
                             "CTX_AREA_NK100", ""));
+            URI uri = buildUriWithQueryParams(baseUrl, PATH_INQUIRE_ASSETS, queryParams);
 
             // local 환경에서 요청 상세 로그 출력
-            logApiRequest("투자계좌자산현황조회", uri, headers, requestBody);
+            logApiRequest("투자계좌자산현황조회", uri, headers, queryParams);
 
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
 
-            String responseJson = webClient.post()
+            String responseJson = webClient.get()
                     .uri(uri)
                     .headers(h -> h.addAll(headers))
-                    .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
                     .timeout(Duration.ofSeconds(10))
@@ -661,7 +763,8 @@ public class KoreaInvestmentAccountClient {
         } catch (DomainException e) {
             throw e;
         } catch (Exception e) {
-            log.error("투자계좌자산현황조회 실패: userId={}, accountNo={}", userId, accountNo, e);
+            log.error("투자계좌자산현황조회 실패: userId={}, accountNo={}", LogMaskingUtil.maskUserId(userId),
+                    LogMaskingUtil.maskAccountNo(accountNo), e);
             throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                     "투자계좌자산현황조회 실패: " + e.getMessage(), e);
         }
@@ -672,10 +775,11 @@ public class KoreaInvestmentAccountClient {
      */
     public ProfitLossDto inquirePeriodProfitLoss(String userId, String accountNo, LocalDate startDate,
             LocalDate endDate) {
-        log.debug("기간별손익조회: userId={}, accountNo={}, startDate={}, endDate={}", userId, accountNo, startDate, endDate);
+        log.debug("기간별손익조회: userId={}, accountNo={}, startDate={}, endDate={}", LogMaskingUtil.maskUserId(userId),
+                LogMaskingUtil.maskAccountNo(accountNo), startDate, endDate);
 
         try {
-            UserApiKey userApiKey = userApiKeyRepository.findByUserIdAndBrokerType(userId, BrokerType.KOREA_INVESTMENT)
+            UserApiKey userApiKey = getUserApiKeyForAccount(userId, accountNo)
                     .orElseThrow(() -> new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                             "한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
 
@@ -687,17 +791,12 @@ public class KoreaInvestmentAccountClient {
             String baseUrl = getBaseUrl(serverType);
             String trId = getPeriodProfitLossTrId(serverType);
 
-            URI uri = UriComponentsBuilder.fromHttpUrl(baseUrl)
-                    .path(PATH_INQUIRE_PERIOD_PROFIT_LOSS)
-                    .build()
-                    .toUri();
-
             // 요청 헤더 생성 (공통 유틸리티 사용)
             HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
                     accessToken, appKey, appSecret, trId);
 
-            // 요청 바디 생성 (공통 파라미터 + API별 고유 파라미터)
-            Map<String, String> requestBody = KoreaInvestmentRequestBuilder.createAccountRequestBody(
+            // 조회 파라미터 (GET query parameter로 전달)
+            Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createAccountRequestBody(
                     accountNo,
                     Map.of(
                             "INQR_STRT_DT", startDate.format(DateTimeFormatter.ofPattern("yyyyMMdd")),
@@ -706,17 +805,17 @@ public class KoreaInvestmentAccountClient {
                             "INQR_DVSN", "00", // 00: 역순
                             "CTX_AREA_FK100", "",
                             "CTX_AREA_NK100", ""));
+            URI uri = buildUriWithQueryParams(baseUrl, PATH_INQUIRE_PERIOD_PROFIT_LOSS, queryParams);
 
             // local 환경에서 요청 상세 로그 출력
-            logApiRequest("기간별손익조회", uri, headers, requestBody);
+            logApiRequest("기간별손익조회", uri, headers, queryParams);
 
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
 
-            String responseJson = webClient.post()
+            String responseJson = webClient.get()
                     .uri(uri)
                     .headers(h -> h.addAll(headers))
-                    .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
                     .timeout(Duration.ofSeconds(10))
@@ -768,7 +867,8 @@ public class KoreaInvestmentAccountClient {
         } catch (DomainException e) {
             throw e;
         } catch (Exception e) {
-            log.error("기간별손익조회 실패: userId={}, accountNo={}", userId, accountNo, e);
+            log.error("기간별손익조회 실패: userId={}, accountNo={}", LogMaskingUtil.maskUserId(userId),
+                    LogMaskingUtil.maskAccountNo(accountNo), e);
             throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                     "기간별손익조회 실패: " + e.getMessage(), e);
         }

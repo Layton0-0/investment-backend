@@ -2,4 +2,13 @@
 alwaysApply: true
 ---
 
-한국투자증권 API 관련된 개발의 경우 "한국투자증권 MCP"를 활용하여 API 정보를 확인하고 그에 맞게 개발한다.
+# 한국투자증권 API 개발 시 MCP 필수 사용
+
+1. **무조건 사용**: 이 프로젝트에서 한국투자증권 API를 사용하는 모든 개발·수정은 **한국투자증권 MCP**를 반드시 활용한다.
+2. **사용 시점**:
+   - 새 API 연동을 추가할 때: MCP로 해당 엔드포인트의 HTTP 메서드(GET/POST), 파라미터 전달 방식(query parameter vs request body)을 확인한 뒤 구현한다.
+   - 기존 API 호출을 수정할 때: MCP로 스펙을 확인한 뒤 요청 방식·파라미터가 스펙과 일치하는지 검증한다.
+3. **금지**: MCP 확인 없이 공식 문서 추정만으로 요청 형식(POST+body vs GET+query)을 가정하여 구현하지 않는다.
+4. **참고**: 조회 API(잔고·매수가능·매도가능·주문체결·자산현황·기간별손익·현재가·차트 등)는 **GET + query parameter**이며, 주문 실행·토큰 발급 등은 POST+JSON body이다. 세부 사항은 MCP로 확인한다.
+
+관련 문서: [한국투자증권 API 가이드](docs/04-api/09-korea-investment-api-guide.md), [아키텍처 결정 14](docs/decisions.md#14-한국투자증권-api-요청-방식-및-mcp-사용).

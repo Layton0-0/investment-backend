@@ -24,10 +24,10 @@ import java.util.stream.Collectors;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
-    
+
     @Value("${DEBUG_MODE:false}")
     private boolean debugMode;
-    
+
     @ExceptionHandler(DomainException.class)
     public ResponseEntity<ErrorResponse> handleDomainException(DomainException e) {
         String traceId = generateTraceId();
@@ -35,20 +35,20 @@ public class GlobalExceptionHandler {
         if (debugMode) {
             log.warn("DomainException occurred: [{}] {}", e.getErrorCode(), e.getMessage(), e);
         } else {
-            log.warn("DomainException occurred: [{}] {} [traceId={}]", 
+            log.warn("DomainException occurred: [{}] {} [traceId={}]",
                     e.getErrorCode(), e.getMessage(), traceId);
         }
-        
+
         ErrorResponse response = ErrorResponse.builder()
                 .code(e.getErrorCode())
                 .message(e.getMessage()) // 비즈니스 예외는 메시지 노출 허용
                 .traceId(traceId)
                 .timestamp(java.time.LocalDateTime.now())
                 .build();
-        
+
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
-    
+
     @ExceptionHandler(AppException.class)
     public ResponseEntity<ErrorResponse> handleAppException(AppException e) {
         String traceId = generateTraceId();
@@ -56,32 +56,32 @@ public class GlobalExceptionHandler {
         if (debugMode) {
             log.error("AppException occurred: [{}] {}", e.getErrorCode(), e.getMessage(), e);
         } else {
-            log.error("AppException occurred: [{}] {} [traceId={}]", 
+            log.error("AppException occurred: [{}] {} [traceId={}]",
                     e.getErrorCode(), e.getMessage(), traceId, e);
         }
-        
+
         // 프로덕션에서는 일반적인 메시지만 반환
         String userMessage = debugMode ? e.getMessage() : "시스템 오류가 발생했습니다";
-        
+
         ErrorResponse response = ErrorResponse.builder()
                 .code(e.getErrorCode())
                 .message(userMessage)
                 .traceId(traceId)
                 .timestamp(java.time.LocalDateTime.now())
                 .build();
-        
+
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }
-    
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationException(MethodArgumentNotValidException e) {
         String traceId = generateTraceId();
         log.warn("ValidationException occurred: {}", e.getMessage());
-        
+
         List<String> details = e.getBindingResult().getFieldErrors().stream()
                 .map(error -> String.format("%s: %s", error.getField(), error.getDefaultMessage()))
                 .collect(Collectors.toList());
-        
+
         ErrorResponse response = ErrorResponse.builder()
                 .code(ErrorCode.INVALID_INPUT)
                 .message("입력값 검증 실패")
@@ -89,19 +89,19 @@ public class GlobalExceptionHandler {
                 .traceId(traceId)
                 .timestamp(java.time.LocalDateTime.now())
                 .build();
-        
+
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
-    
+
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ErrorResponse> handleConstraintViolationException(ConstraintViolationException e) {
         String traceId = generateTraceId();
         log.warn("ConstraintViolationException occurred: {}", e.getMessage());
-        
+
         List<String> details = e.getConstraintViolations().stream()
                 .map(ConstraintViolation::getMessage)
                 .collect(Collectors.toList());
-        
+
         ErrorResponse response = ErrorResponse.builder()
                 .code(ErrorCode.INVALID_INPUT)
                 .message("입력값 검증 실패")
@@ -109,25 +109,30 @@ public class GlobalExceptionHandler {
                 .traceId(traceId)
                 .timestamp(java.time.LocalDateTime.now())
                 .build();
-        
+
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
-    
+
     /**
      * 정적 리소스(favicon.ico 등)를 찾을 수 없을 때 발생하는 예외 처리
-     * 브라우저가 자동으로 요청하는 리소스이므로 ERROR 레벨 로깅을 하지 않음
+     * 브라우저/DevTools가 자동으로 요청하는 리소스는 로깅 생략
      */
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<Void> handleNoResourceFoundException(NoResourceFoundException e) {
-        // favicon.ico 같은 정적 리소스 요청은 DEBUG 레벨로만 로깅
-        if (e.getResourcePath() != null && e.getResourcePath().contains("favicon")) {
-            log.debug("Favicon not found: {}", e.getResourcePath());
-        } else {
-            log.debug("Resource not found: {}", e.getResourcePath());
+        String path = e.getResourcePath();
+        if (path == null) {
+            return ResponseEntity.notFound().build();
+        }
+        // 브라우저/도구가 자동 요청하는 경로는 로깅하지 않음 (로그 노이즈 감소)
+        boolean skipLogging = path.contains("favicon")
+                || path.contains(".well-known")
+                || path.contains("com.chrome.devtools");
+        if (!skipLogging) {
+            log.debug("Resource not found: {}", path);
         }
         return ResponseEntity.notFound().build();
     }
-    
+
     /**
      * 트랜잭션 롤백 예외 처리
      * 내부 트랜잭션에서 예외가 발생하여 전체 트랜잭션이 롤백된 경우
@@ -137,11 +142,11 @@ public class GlobalExceptionHandler {
             org.springframework.transaction.UnexpectedRollbackException e) {
         String traceId = generateTraceId();
         log.error("Transaction rollback occurred", e);
-        
+
         // 원인 예외 확인
         Throwable cause = e.getCause();
         String message = "처리 중 오류가 발생했습니다";
-        
+
         // 원인 예외의 메시지 추출
         if (cause != null) {
             String causeMessage = cause.getMessage();
@@ -156,17 +161,17 @@ public class GlobalExceptionHandler {
                 }
             }
         }
-        
+
         ErrorResponse response = ErrorResponse.builder()
                 .code(ErrorCode.INTERNAL_ERROR)
                 .message(message)
                 .traceId(traceId)
                 .timestamp(java.time.LocalDateTime.now())
                 .build();
-        
+
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }
-    
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleException(Exception e) {
         String traceId = generateTraceId();
@@ -175,25 +180,24 @@ public class GlobalExceptionHandler {
             log.error("Unexpected exception occurred [traceId={}]", traceId, e);
         } else {
             // 프로덕션에서는 스택 트레이스 없이 로깅
-            log.error("Unexpected exception occurred: {} [traceId={}]", 
+            log.error("Unexpected exception occurred: {} [traceId={}]",
                     e.getClass().getSimpleName() + ": " + e.getMessage(), traceId);
         }
-        
+
         // 프로덕션에서는 일반적인 메시지만 반환
-        String userMessage = debugMode ? 
-                (e.getMessage() != null ? e.getMessage() : "시스템 오류가 발생했습니다") :
-                "시스템 오류가 발생했습니다";
-        
+        String userMessage = debugMode ? (e.getMessage() != null ? e.getMessage() : "시스템 오류가 발생했습니다")
+                : "시스템 오류가 발생했습니다";
+
         ErrorResponse response = ErrorResponse.builder()
                 .code(ErrorCode.INTERNAL_ERROR)
                 .message(userMessage)
                 .traceId(traceId)
                 .timestamp(java.time.LocalDateTime.now())
                 .build();
-        
+
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }
-    
+
     private String generateTraceId() {
         return UUID.randomUUID().toString();
     }

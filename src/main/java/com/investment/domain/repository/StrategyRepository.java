@@ -11,12 +11,18 @@ import java.util.Optional;
 
 @Repository
 public interface StrategyRepository extends JpaRepository<Strategy, String> {
-    
+
     List<Strategy> findByAccountNo(String accountNo);
-    
+
+    List<Strategy> findByAccountNoAndMarket(String accountNo, String market);
+
     Optional<Strategy> findByAccountNoAndStrategyType(String accountNo, StrategyType strategyType);
-    
+
+    Optional<Strategy> findByAccountNoAndMarketAndStrategyType(String accountNo, String market, StrategyType strategyType);
+
     List<Strategy> findByAccountNoAndStatus(String accountNo, StrategyStatus status);
-    
+
+    List<Strategy> findByAccountNoAndMarketAndStatus(String accountNo, String market, StrategyStatus status);
+
     List<Strategy> findByStatus(StrategyStatus status);
 }

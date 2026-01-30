@@ -23,9 +23,9 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class SecurityAuditService {
-    
+
     private final ObjectMapper objectMapper;
-    
+
     /**
      * 보안 이벤트 타입
      */
@@ -42,30 +42,31 @@ public class SecurityAuditService {
         TOKEN_EXPIRED,
         TOKEN_INVALID
     }
-    
+
     /**
      * 보안 이벤트 로깅
      * 
      * @param eventType 이벤트 타입
-     * @param userId 사용자 ID (마스킹됨)
-     * @param username 사용자명 (마스킹됨)
-     * @param details 추가 정보
+     * @param userId    사용자 ID (마스킹됨)
+     * @param username  사용자명 (마스킹됨)
+     * @param details   추가 정보
      */
-    public void logSecurityEvent(SecurityEventType eventType, String userId, String username, Map<String, Object> details) {
+    public void logSecurityEvent(SecurityEventType eventType, String userId, String username,
+            Map<String, Object> details) {
         try {
             Map<String, Object> auditLog = new HashMap<>();
             auditLog.put("timestamp", LocalDateTime.now().toString());
             auditLog.put("eventType", eventType.name());
             auditLog.put("userId", userId != null ? LogMaskingUtil.maskUserId(userId) : null);
             auditLog.put("username", username != null ? LogMaskingUtil.maskUsername(username) : null);
-            
+
             if (details != null) {
                 // details의 값들도 마스킹 처리
                 Map<String, Object> maskedDetails = new HashMap<>();
                 for (Map.Entry<String, Object> entry : details.entrySet()) {
                     Object value = entry.getValue();
                     String key = entry.getKey().toLowerCase();
-                    
+
                     // 민감한 정보 마스킹
                     if (value instanceof String) {
                         String strValue = (String) value;
@@ -85,15 +86,19 @@ public class SecurityAuditService {
                 }
                 auditLog.put("details", maskedDetails);
             }
-            
+
             String jsonLog = objectMapper.writeValueAsString(auditLog);
             log.info("[SECURITY_AUDIT] {}", jsonLog);
-            
+            if (log.isDebugEnabled()) {
+                log.debug("  [DEBUG] eventType={}, userId(actual)={}, username(actual)={}", eventType, userId,
+                        username);
+            }
+
         } catch (JsonProcessingException e) {
             log.error("보안 이벤트 로깅 실패: eventType={}, userId={}", eventType, userId, e);
         }
     }
-    
+
     /**
      * 인증 성공 로깅
      */
@@ -102,7 +107,7 @@ public class SecurityAuditService {
         details.put("ipAddress", ipAddress);
         logSecurityEvent(SecurityEventType.AUTHENTICATION_SUCCESS, userId, username, details);
     }
-    
+
     /**
      * 인증 실패 로깅
      */
@@ -112,7 +117,7 @@ public class SecurityAuditService {
         details.put("ipAddress", ipAddress);
         logSecurityEvent(SecurityEventType.AUTHENTICATION_FAILURE, null, username, details);
     }
-    
+
     /**
      * 권한 위반 로깅
      */
@@ -122,7 +127,7 @@ public class SecurityAuditService {
         details.put("action", action);
         logSecurityEvent(SecurityEventType.AUTHORIZATION_FAILURE, userId, username, details);
     }
-    
+
     /**
      * 계정 잠금 로깅
      */
@@ -131,28 +136,28 @@ public class SecurityAuditService {
         details.put("reason", reason);
         logSecurityEvent(SecurityEventType.ACCOUNT_LOCKED, userId, username, details);
     }
-    
+
     /**
      * 계정 잠금 해제 로깅
      */
     public void logAccountUnlocked(String userId, String username) {
         logSecurityEvent(SecurityEventType.ACCOUNT_UNLOCKED, userId, username, null);
     }
-    
+
     /**
      * 비밀번호 변경 로깅
      */
     public void logPasswordChanged(String userId, String username) {
         logSecurityEvent(SecurityEventType.PASSWORD_CHANGED, userId, username, null);
     }
-    
+
     /**
      * API 키 변경 로깅
      */
     public void logApiKeyChanged(String userId, String username) {
         logSecurityEvent(SecurityEventType.API_KEY_CHANGED, userId, username, null);
     }
-    
+
     /**
      * 비정상 행동 감지 로깅
      */
@@ -162,7 +167,7 @@ public class SecurityAuditService {
         details.put("ipAddress", ipAddress);
         logSecurityEvent(SecurityEventType.SUSPICIOUS_ACTIVITY, userId, username, details);
     }
-    
+
     /**
      * Rate Limit 초과 로깅
      */
@@ -173,14 +178,14 @@ public class SecurityAuditService {
         details.put("ipAddress", ipAddress);
         logSecurityEvent(SecurityEventType.RATE_LIMIT_EXCEEDED, identifier, null, details);
     }
-    
+
     /**
      * 토큰 만료 로깅
      */
     public void logTokenExpired(String userId, String username) {
         logSecurityEvent(SecurityEventType.TOKEN_EXPIRED, userId, username, null);
     }
-    
+
     /**
      * 토큰 무효 로깅
      */

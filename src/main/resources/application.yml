@@ -144,6 +144,10 @@ resilience4j:
         baseConfig: default
         failureRateThreshold: 50
         waitDurationInOpenState: 60s
+      orderService:
+        baseConfig: default
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
   timelimiter:
     configs:
       default:
@@ -153,6 +157,9 @@ resilience4j:
         baseConfig: default
         timeoutDuration: 3s
       marketDataService:
+        baseConfig: default
+        timeoutDuration: 5s
+      orderService:
         baseConfig: default
         timeoutDuration: 5s
   ratelimiter:

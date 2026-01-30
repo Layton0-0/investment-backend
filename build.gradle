@@ -8,6 +8,13 @@ group = 'com.investment'
 version = '2.0.0'
 sourceCompatibility = '17'
 
+// Windows 등에서 build 디렉터리 삭제 실패(프로세스 잠금) 회피: 시스템 임시 디렉터리에 빌드
+// 사용: .\scripts\run-tests.ps1  또는  $env:GRADLE_UNIQUE_BUILD_DIR='1'; .\gradlew test
+if (System.getenv('GRADLE_UNIQUE_BUILD_DIR') != null && !System.getenv('GRADLE_UNIQUE_BUILD_DIR').isEmpty()) {
+    def tmpBase = System.getProperty('java.io.tmpdir')
+    buildDir = file("${tmpBase}/investment-choi-build-${System.currentTimeMillis()}")
+}
+
 configurations {
     compileOnly {
         extendsFrom annotationProcessor
@@ -66,6 +73,7 @@ dependencies {
     
     // Testing
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.mockito:mockito-core'
     testImplementation 'org.mockito:mockito-junit-jupiter'
     testImplementation 'io.projectreactor:reactor-test'

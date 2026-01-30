@@ -24,7 +24,10 @@ public class StrategyDto {
     
     @NotNull(message = "계좌번호는 필수입니다")
     private String accountNo;
-    
+
+    /** 시장 (KR, US). 미지정 시 KR */
+    private String market;
+
     @NotNull(message = "전략 타입은 필수입니다")
     private StrategyType strategyType;
     

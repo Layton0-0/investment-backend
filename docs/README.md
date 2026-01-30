@@ -4,6 +4,15 @@
 
 이 문서는 Investment Choi 프로젝트의 기획 및 설계 문서를 포함합니다.
 
+## 기획 문서 (최상위)
+
+프로젝트의 핵심 기획 문서입니다. Cursor MCP를 활용하여 자동으로 관리 및 업데이트할 수 있습니다.
+
+- **[PRD (Product Requirements Document)](./PRD.md)** - 제품 요구사항 통합 문서
+- **[로드맵](./roadmap.md)** - 프로젝트 개발 계획 및 마일스톤
+- **[개발 진행 현황](./09-planning/02-development-status.md)** - 완료·진행중·진행예정 목록 (개발 시 참조·변동 시 수정)
+- **[아키텍처 결정 사항](./decisions.md)** - 주요 기술 및 설계 결정 기록 (ADR)
+
 ## 문서 목록
 
 ### 1. 요구사항 (01-requirements) ✅
@@ -17,6 +26,8 @@
 #### 현재 사용 중 ✅
 - [시스템 아키텍처](./02-architecture/01-system-architecture.md) ✅
 - [설계 패턴 및 원칙](./02-architecture/02-design-patterns.md) ✅
+- [자동투자 전략 명세](./02-architecture/12-auto-investment-strategy.md) ✅ — 4단계 파이프라인·시장별 알고리즘·KIS 실전 구축
+- [뉴스·공시 수집·연동 설계](./02-architecture/13-news-collection-design.md) ✅ — 확정 원천·전략 연동
 - [필수 기술 스펙](./02-architecture/10-essential-tech-spec.md) ✅
 
 #### 참고용 문서 📚
@@ -29,11 +40,16 @@
 - [AI 재설계](./02-architecture/03-ai-redesign.md) 📜
 - [구현 계획](./02-architecture/04-implementation-plan.md) 📜
 - [프론트엔드 간소화](./02-architecture/07-frontend-simplification.md) 📜
-- [프론트엔드 아키텍처](./02-architecture/08-frontend-architecture.md) 📜
+- [프론트엔드 아키텍처](./02-architecture/08-frontend-architecture.md) 📜 (확장 가능 메뉴·09-planning 참조 반영)
 
 ### 3. 설계 (03-design) ✅
 
 - [도메인 모델 설계](./03-design/01-domain-model.md) ✅
+
+### 3.5 기획 (09-planning) ✅
+
+- [화면·메뉴 기획서](./09-planning/01-screen-menu-spec.md) ✅ — 확장 가능 메뉴·메뉴별 화면·확장 규칙
+- **[개발 진행 현황](./09-planning/02-development-status.md)** — 완료·진행중·진행예정 목록 (참조·변동 시 수정)
 
 ### 4. API (04-api) ✅
 
@@ -73,6 +89,7 @@
 - [Windows MariaDB → Docker 마이그레이션](./08-setup-guides/04-mariadb-migration-to-docker.md) 🔧
 - [인코딩 문제 해결](./08-setup-guides/05-encoding-fix-guide.md) 🔧
 - [한국투자증권 MCP 통합 가이드](./08-setup-guides/06-mcp-integration-guide.md) ✅
+- [MCP 기획 문서 관리 가이드](./08-setup-guides/07-mcp-planning-guide.md) ✅
 
 ## 문서 상태 표시
 
@@ -87,6 +104,7 @@
 2. **한국어 사용**: 모든 문서는 한국어로 작성
 3. **버전 관리**: 문서 변경 시 버전 이력 관리
 4. **정기 업데이트**: 코드 변경 시 관련 문서도 함께 업데이트
+5. **개발 진행 현황**: 개발 완료·진행중·진행예정이 바뀔 때마다 [09-planning/02-development-status.md](./09-planning/02-development-status.md)를 참조하고 변동 사항을 반영한다.
 
 ## 문서 변경 이력
 
@@ -101,8 +119,20 @@
 | | | | - MCP 통합 가이드 추가 |
 | | | | - 한국투자증권 API 가이드에 MCP 사용 섹션 추가 |
 | | | | - 시장 데이터 API 엔드포인트 문서 추가 |
+| 1.2 | 2026-01-29 | System | 기획 문서 구조화 |
+| | | | - PRD.md 생성 (제품 요구사항 통합 문서) |
+| | | | - roadmap.md 생성 (프로젝트 로드맵) |
+| | | | - decisions.md 생성 (아키텍처 결정 사항) |
+| | | | - MCP 기획 문서 관리 가이드 추가 |
+| 1.3 | 2026-01-29 | System | 자동투자 기획 반영 |
+| | | | - 09-planning(화면·메뉴 기획서), 12·13 아키텍처(자동투자 전략·뉴스 수집) 문서 링크 추가 |
+| | | | - decisions에 시장(KR/US)·뉴스 파이프라인 ADR 추가 |
 
 ## 참고 자료
 
 - [프로젝트 README](../README.md)
+- [PRD](./PRD.md) - 제품 요구사항 문서
+- [로드맵](./roadmap.md) - 프로젝트 개발 계획
+- [아키텍처 결정 사항](./decisions.md) - 기술 결정 기록
 - [한국투자증권 API 가이드](./04-api/09-korea-investment-api-guide.md)
+- [MCP 기획 문서 관리 가이드](./08-setup-guides/07-mcp-planning-guide.md)

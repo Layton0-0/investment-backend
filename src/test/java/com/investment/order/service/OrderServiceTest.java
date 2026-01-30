@@ -6,169 +6,200 @@ import com.investment.domain.entity.Order;
 import com.investment.domain.entity.TradingSetting;
 import com.investment.domain.repository.OrderRepository;
 import com.investment.domain.repository.TradingSettingRepository;
+import com.investment.order.client.KoreaInvestmentOrderClient;
 import com.investment.order.dto.OrderRequestDto;
 import com.investment.order.dto.OrderResponseDto;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
 import java.util.Optional;
 
+import reactor.core.publisher.Mono;
+
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceTest {
-    
-    @Mock
-    private OrderRepository orderRepository;
-    
-    @Mock
-    private TradingSettingRepository tradingSettingRepository;
-    
-    @InjectMocks
-    private OrderService orderService;
-    
-    private TradingSetting tradingSetting;
-    private OrderRequestDto orderRequest;
-    
-    @BeforeEach
-    void setUp() {
-        tradingSetting = TradingSetting.builder()
-                .accountNo("1234567890")
-                .maxInvestmentAmount(new BigDecimal("1000000"))
-                .minInvestmentAmount(new BigDecimal("10000"))
-                .defaultCurrency("USD")
-                .autoTradingEnabled(false)
-                .build();
-        
-        orderRequest = OrderRequestDto.builder()
-                .accountNo("1234567890")
-                .symbol("005930") // 삼성전자
-                .orderType(OrderRequestDto.OrderType.BUY)
-                .quantity(10)
-                .price(new BigDecimal("70000.00"))
-                .build();
-    }
-    
-    @Test
-    void 주문_실행_성공() {
-        // given
-        when(tradingSettingRepository.findByAccountNo("1234567890"))
-                .thenReturn(Optional.of(tradingSetting));
-        
-        Order savedOrder = Order.builder()
-                .accountNo(orderRequest.getAccountNo())
-                .symbol(orderRequest.getSymbol())
-                .orderType(Order.OrderType.BUY)
-                .quantity(orderRequest.getQuantity())
-                .price(orderRequest.getPrice())
-                .status(Order.OrderStatus.PENDING)
-                .build();
-        
-        // Reflection을 사용하여 id 설정
-        try {
-            java.lang.reflect.Field idField = Order.class.getDeclaredField("id");
-            idField.setAccessible(true);
-            idField.set(savedOrder, java.util.UUID.randomUUID().toString());
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+
+        @Mock
+        private OrderRepository orderRepository;
+
+        @Mock
+        private TradingSettingRepository tradingSettingRepository;
+
+        @Mock
+        private KoreaInvestmentOrderClient orderClient;
+
+        @InjectMocks
+        private OrderService orderService;
+
+        private TradingSetting tradingSetting;
+        private OrderRequestDto orderRequest;
+        private static final String TEST_USER_ID = "test-user-id";
+
+        @BeforeEach
+        void setUp() {
+                SecurityContextHolder.getContext().setAuthentication(
+                                new UsernamePasswordAuthenticationToken(TEST_USER_ID, null));
+
+                tradingSetting = TradingSetting.builder()
+                                .accountNo("1234567890")
+                                .maxInvestmentAmount(new BigDecimal("1000000"))
+                                .minInvestmentAmount(new BigDecimal("10000"))
+                                .defaultCurrency("USD")
+                                .autoTradingEnabled(false)
+                                .build();
+
+                orderRequest = OrderRequestDto.builder()
+                                .accountNo("1234567890")
+                                .symbol("005930") // 삼성전자
+                                .orderType(OrderRequestDto.OrderType.BUY)
+                                .quantity(10)
+                                .price(new BigDecimal("70000.00"))
+                                .build();
         }
-        
-        when(orderRepository.save(any(Order.class))).thenReturn(savedOrder);
-        
-        // when
-        OrderResponseDto response = orderService.executeOrder(orderRequest);
-        
-        // then
-        assertNotNull(response);
-        assertEquals(OrderRequestDto.OrderType.BUY, response.getOrderType());
-        verify(orderRepository, times(2)).save(any(Order.class));
-    }
-    
-    @Test
-    void 주문_실행_최대투자금액_초과() {
-        // given
-        orderRequest.setPrice(new BigDecimal("200000.00")); // 2,000,000원 초과
-        
-        when(tradingSettingRepository.findByAccountNo("1234567890"))
-                .thenReturn(Optional.of(tradingSetting));
-        
-        // when & then
-        DomainException exception = assertThrows(DomainException.class, 
-                () -> orderService.executeOrder(orderRequest));
-        
-        assertEquals(ErrorCode.EXCEEDS_MAX_INVESTMENT, exception.getErrorCode());
-        verify(orderRepository, never()).save(any(Order.class));
-    }
-    
-    @Test
-    void 주문_실행_최소투자금액_미만() {
-        // given
-        orderRequest.setPrice(new BigDecimal("500.00")); // 5,000원 미만
-        
-        when(tradingSettingRepository.findByAccountNo("1234567890"))
-                .thenReturn(Optional.of(tradingSetting));
-        
-        // when & then
-        DomainException exception = assertThrows(DomainException.class, 
-                () -> orderService.executeOrder(orderRequest));
-        
-        assertEquals(ErrorCode.INVALID_ORDER_AMOUNT, exception.getErrorCode());
-        verify(orderRepository, never()).save(any(Order.class));
-    }
-    
-    @Test
-    void 주문_조회_성공() {
-        // given
-        Order order = Order.builder()
-                .accountNo("1234567890")
-                .symbol("005930") // 삼성전자
-                .orderType(Order.OrderType.BUY)
-                .quantity(10)
-                .price(new BigDecimal("70000.00"))
-                .status(Order.OrderStatus.EXECUTED)
-                .build();
-        
-        String orderId = java.util.UUID.randomUUID().toString();
-        
-        // Reflection을 사용하여 id 설정
-        try {
-            java.lang.reflect.Field idField = Order.class.getDeclaredField("id");
-            idField.setAccessible(true);
-            idField.set(order, orderId);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+
+        @AfterEach
+        void tearDown() {
+                SecurityContextHolder.clearContext();
         }
-        
-        when(orderRepository.findByIdAndAccountNo(orderId, "1234567890"))
-                .thenReturn(Optional.of(order));
-        
-        // when
-        OrderResponseDto response = orderService.getOrder(orderId, "1234567890");
-        
-        // then
-        assertNotNull(response);
-        assertEquals(orderId, response.getOrderId());
-        assertEquals("005930", response.getSymbol());
-    }
-    
-    @Test
-    void 주문_조회_실패_없는_주문() {
-        // given
-        String orderId = java.util.UUID.randomUUID().toString();
-        when(orderRepository.findByIdAndAccountNo(orderId, "1234567890"))
-                .thenReturn(Optional.empty());
-        
-        // when & then
-        DomainException exception = assertThrows(DomainException.class, 
-                () -> orderService.getOrder(orderId, "1234567890"));
-        
-        assertEquals(ErrorCode.ORDER_NOT_FOUND, exception.getErrorCode());
-    }
+
+        @Test
+        void 주문_실행_성공() {
+                // given: 한국투자증권 API 성공 응답
+                when(tradingSettingRepository.findByAccountNo("1234567890"))
+                                .thenReturn(Optional.of(tradingSetting));
+                when(orderClient.placeBuyOrder(eq(TEST_USER_ID), anyString(), anyString(), anyInt(), any(),
+                                anyString()))
+                                .thenReturn(Mono.just(KoreaInvestmentOrderClient.OrderResponse.builder()
+                                                .orderNo("ORD123")
+                                                .status("SUCCESS")
+                                                .build()));
+
+                Order savedOrder = Order.builder()
+                                .accountNo(orderRequest.getAccountNo())
+                                .symbol(orderRequest.getSymbol())
+                                .orderType(Order.OrderType.BUY)
+                                .quantity(orderRequest.getQuantity())
+                                .price(orderRequest.getPrice())
+                                .status(Order.OrderStatus.PENDING)
+                                .build();
+                try {
+                        java.lang.reflect.Field idField = Order.class.getDeclaredField("id");
+                        idField.setAccessible(true);
+                        idField.set(savedOrder, java.util.UUID.randomUUID().toString());
+                } catch (Exception e) {
+                        throw new RuntimeException(e);
+                }
+                when(orderRepository.save(any(Order.class))).thenReturn(savedOrder);
+
+                // when
+                OrderResponseDto response = orderService.executeOrder(orderRequest);
+
+                // then
+                assertNotNull(response);
+                assertEquals(OrderRequestDto.OrderType.BUY, response.getOrderType());
+                verify(orderRepository, times(1)).save(any(Order.class));
+        }
+
+        @Test
+        void 주문_실행_최대투자금액_초과() {
+                // given: 금액 2,000,000원 초과 (10 * 200,000)
+                OrderRequestDto overRequest = OrderRequestDto.builder()
+                                .accountNo("1234567890")
+                                .symbol("005930")
+                                .orderType(OrderRequestDto.OrderType.BUY)
+                                .quantity(10)
+                                .price(new BigDecimal("200000.00"))
+                                .build();
+                when(tradingSettingRepository.findByAccountNo("1234567890"))
+                                .thenReturn(Optional.of(tradingSetting));
+
+                // when & then
+                DomainException exception = assertThrows(DomainException.class,
+                                () -> orderService.executeOrder(overRequest));
+
+                assertEquals(ErrorCode.EXCEEDS_MAX_INVESTMENT, exception.getErrorCode());
+                verify(orderRepository, never()).save(any(Order.class));
+        }
+
+        @Test
+        void 주문_실행_최소투자금액_미만() {
+                // given: 금액 5,000원 미만
+                OrderRequestDto underRequest = OrderRequestDto.builder()
+                                .accountNo("1234567890")
+                                .symbol("005930")
+                                .orderType(OrderRequestDto.OrderType.BUY)
+                                .quantity(1)
+                                .price(new BigDecimal("500.00"))
+                                .build();
+                when(tradingSettingRepository.findByAccountNo("1234567890"))
+                                .thenReturn(Optional.of(tradingSetting));
+
+                // when & then
+                DomainException exception = assertThrows(DomainException.class,
+                                () -> orderService.executeOrder(underRequest));
+
+                assertEquals(ErrorCode.INVALID_ORDER_AMOUNT, exception.getErrorCode());
+                verify(orderRepository, never()).save(any(Order.class));
+        }
+
+        @Test
+        void 주문_조회_성공() {
+                // given
+                Order order = Order.builder()
+                                .accountNo("1234567890")
+                                .symbol("005930") // 삼성전자
+                                .orderType(Order.OrderType.BUY)
+                                .quantity(10)
+                                .price(new BigDecimal("70000.00"))
+                                .status(Order.OrderStatus.EXECUTED)
+                                .build();
+
+                String orderId = java.util.UUID.randomUUID().toString();
+
+                // Reflection을 사용하여 id 설정
+                try {
+                        java.lang.reflect.Field idField = Order.class.getDeclaredField("id");
+                        idField.setAccessible(true);
+                        idField.set(order, orderId);
+                } catch (Exception e) {
+                        throw new RuntimeException(e);
+                }
+
+                when(orderRepository.findByIdAndAccountNo(orderId, "1234567890"))
+                                .thenReturn(Optional.of(order));
+
+                // when
+                OrderResponseDto response = orderService.getOrder(orderId, "1234567890");
+
+                // then
+                assertNotNull(response);
+                assertEquals(orderId, response.getOrderId());
+                assertEquals("005930", response.getSymbol());
+        }
+
+        @Test
+        void 주문_조회_실패_없는_주문() {
+                // given
+                String orderId = java.util.UUID.randomUUID().toString();
+                when(orderRepository.findByIdAndAccountNo(orderId, "1234567890"))
+                                .thenReturn(Optional.empty());
+
+                // when & then
+                DomainException exception = assertThrows(DomainException.class,
+                                () -> orderService.getOrder(orderId, "1234567890"));
+
+                assertEquals(ErrorCode.ORDER_NOT_FOUND, exception.getErrorCode());
+        }
 }

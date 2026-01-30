@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+    <div class="app-header" th:fragment="header">
+        <div class="header-content">
+            <div>
+                <h1>Investment Choi</h1>
+                <div class="welcome" th:if="${userInfo}">
+                    안녕하세요, <strong th:text="${userInfo.username}"></strong>님
+                </div>
+                <div class="welcome" th:unless="${userInfo}">
+                    자동투자 시스템에 오신 것을 환영합니다
+                </div>
+            </div>
+            <div class="user-info">
+                <span class="user-badge" th:if="${userInfo}" th:text="${userInfo.brokerTypeName}"></span>
+                <span class="user-badge" th:if="${userInfo}" th:text="${userInfo.serverTypeName}"></span>
+                <a th:href="@{/mypage}" class="header-link">마이페이지</a>
+                <a href="#" onclick="logout(); return false;" class="header-link">로그아웃</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

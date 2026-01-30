@@ -1,70 +1,30 @@
-feat: 보안 강화 및 계정 관리 기능 확장
+feat: 뉴스·자동투자·계정검증 추가 및 플래닝·로컬 도구 정비
 
-주요 변경사항:
+(이전 커밋 bfbf2b3 "feat: 보안 강화 및 계정 관리 기능 확장" 이후 변경분)
 
-## 보안 강화
-- RateLimitFilter: API 요청 제한 기능 추가 (인증 API 5회/분, 일반 API 100회/분)
-- XssFilter: XSS 공격 방어 필터 추가
-- SecurityAuditService: 보안 이벤트 감사 로깅 서비스 추가
-- LogMaskingUtil: 민감 정보 마스킹 유틸리티 추가
-- SecurityHeadersConfig: 보안 헤더 설정 추가
-- AccountLockService: 계정 잠금 서비스 추가
-- EncryptionUtil: 암호화 유틸리티 개선
-- SecurityConfig: 보안 설정 강화
-- GlobalExceptionHandler: 보안 예외 처리 개선
+## 새 기능
+- 뉴스: NewsController, NewsItem 엔티티/Repository, NewsWebController, news.html
+- 자동투자: AutoInvestController, auto-invest.html, 아키텍처 문서(12-auto-investment-strategy.md)
+- 계정 검증: AccountVerificationService, AccountVerifyRequestDto/ResponseDto, UserExistenceChecker
+- 주문 웹: OrdersWebController, orders.html
+- 템플릿: fragments/ 공통 조각, 자동투자/뉴스/주문 페이지
 
-## 계정 관리 기능 확장
-- KoreaInvestmentAccountClient: 한국투자증권 계좌 API 클라이언트 추가
-- AccountService: 계좌 조회 기능 대폭 확장
-  - 주식잔고조회, 매수가능조회, 매도가능수량조회
-  - 주문내역조회, 계좌평가잔고조회, 손익조회
-- AccountController: 계좌 관련 API 엔드포인트 확장
-- UserAccountController: 사용자 계좌 관리 API 추가
-- UserAccount 엔티티 및 Repository 추가
-- 계좌 관련 DTO 추가 (AccountAssetDto, AccountListResponseDto, BuyableAmountDto, 
-  MainAccountResponseDto, OrderHistoryDto, ProfitLossDto, SellableQuantityDto, UserAccountDto)
+## 설정·로컬 도구
+- Gradle Wrapper: gradlew, gradlew.bat, setup-gradle-wrapper.ps1
+- 스크립트: bootRun-agent.ps1(8084), run-tests.ps1
+- 프로파일: application-local-agent.yml, application-no-redis.yml
+- Cursor 규칙: development-status.mdc, local-server-ports.mdc, logging-masking.mdc
 
-## 주문 기능 개선
-- KoreaInvestmentOrderClient: 한국투자증권 주문 API 클라이언트 추가
-- OrderService: 주문 서비스 개선
-- Order 엔티티 개선
+## 문서
+- 플래닝: docs/09-planning/, PRD.md, roadmap.md, decisions.md
+- 아키텍처: 13-news-collection-design.md, 07-mcp-planning-guide.md
+- 한국투자 API: docs/korea-investment-api/
+- DB: db/migration/ 마이그레이션 디렉터리
 
-## 시장 데이터 기능 개선
-- KoreaInvestmentMarketDataClient: 시장 데이터 클라이언트 대폭 개선
-- KoreaInvestmentTokenService: 토큰 서비스 개선
-- RealtimeMarketDataService: 실시간 시장 데이터 서비스 추가
-- MarketDataController: 시장 데이터 API 컨트롤러 추가
-- KoreaInvestmentHashkeyUtil: 해시키 생성 유틸리티 추가
-- KoreaInvestmentRequestBuilder: 요청 빌더 유틸리티 추가
-
-## 인증 및 사용자 관리
-- AuthService: 인증 서비스 개선 (계정 잠금, 보안 강화)
-- AuthController: 인증 컨트롤러 개선
-- SignupRequestDto, MyPageUpdateRequestDto: DTO 개선
-- Role: 역할 관리 추가
-
-## 도메인 모델 개선
-- Portfolio, Strategy, TradingSetting, UserApiKey 엔티티 개선
-- PortfolioRepository: 포트폴리오 리포지토리 개선
-
-## 프론트엔드 개선
-- Dashboard: 대시보드 UI 대폭 개선 (계좌 정보, 포트폴리오, 주문 내역 등)
-- Login, Register, Mypage: UI 개선 및 보안 강화
-- common.css: 공통 스타일 추가
-- validation.js: 입력 검증 로직 개선
-
-## 문서 업데이트
-- 보안 관련 문서 추가 (docs/07-security/)
-- 설정 가이드 추가 (docs/08-setup-guides/)
-- API 문서 업데이트 (한국투자증권 API 가이드 확장)
-- 데이터베이스 스키마 문서 업데이트
-- 배포 가이드 정리 및 업데이트
-- 불필요한 로컬 설정 가이드 제거
+## 테스트
+- NewsControllerTest, StrategyApiControllerTest
+- auth/, common/, news/, strategy/ 패키지 테스트 추가·정비
 
 ## 기타
-- MCP 통합 가이드 추가
-- Cursor 규칙 추가 (Investment-Banking-Securities-Firm-Level, MCP)
-- .gitignore 업데이트
-- application.yml 설정 업데이트
-
-통계: 68개 파일 변경, +3745줄 추가, -2343줄 삭제
+- 기존 68개 파일 리팩터·문서 동기화 (보안/계정/시장데이터/전략 등)
+- build.gradle, docker-compose.yml 조정

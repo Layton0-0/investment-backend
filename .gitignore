@@ -1,6 +1,7 @@
 # Gradle
 .gradle/
 build/
+build-*/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
@@ -33,24 +34,71 @@ bin/
 logs/
 *.log.*
 
-# Application
+# Application (로컬/예민 설정 - Git 제외)
 application-local.yml
+application-local-agent.yml
+application-no-redis.yml
 application-secret.yml
+application-*-local.yml
+application-*-secret.yml
+**/application-local*.yml
+**/application-secret*.yml
 
-# Secrets
+# Secrets & 인증서
 *.key
 *.p12
 *.jks
+*.pem
+*.pfx
+*.crt
+**/secrets/
+**/*.secret
 
 # Temporary files
 *.tmp
+*.temp
 *.bak
 *.swp
 *~
+*.orig
+*.rej
+temp_*
+tmp/
+.cache/
+
+# Python generated
+*.pyc
+__pycache__/
+.Python
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# Node (사용 시)
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# 빌드/배포 산출물 (소스 제외)
+*.class
+*.war
+*.ear
+*.zip
+*.tar
+*.tar.gz
+target/
+dist/
 
 # OS
 Thumbs.db
 *.env
 *.env.*
+.env.local
+.env.*.local
 
+# 문서/데이터
 *.xlsx
+*.xls
+*.pdf

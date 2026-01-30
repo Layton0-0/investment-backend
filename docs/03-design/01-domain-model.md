@@ -4,12 +4,14 @@
 
 Investment Choi 시스템의 핵심 도메인은 **투자 거래**입니다. 주요 도메인 개념은 다음과 같습니다:
 
-- **계좌 (Account)**: 투자 계좌
+- **계좌 (Account)**: 투자 계좌 (국내·미국 통합 증거금 지원)
+- **시장 (Market)**: KR(국내 KOSPI/KOSDAQ), US(미국 NYSE/NASDAQ) — 전략·유니버스·시그널은 시장별로 상이한 알고리즘 적용
 - **주문 (Order)**: 매수/매도 주문
-- **전략 (Strategy)**: 투자 전략
+- **전략 (Strategy)**: 투자 전략 (시장 + 전략 타입 조합으로 관리)
 - **포트폴리오 (Portfolio)**: 보유 종목
 - **트레이딩 포트폴리오 (Trading Portfolio)**: 일별 거래 계획
 - **거래 설정 (Trading Setting)**: 거래 제약 조건
+- **뉴스·공시 (NewsItem)**: 공시/데이터(Fact)·뉴스/속보(Speed)·센티멘트/수급(Buzz) 수집 항목 — 전략 연동용
 
 ## 2. 엔티티 상세
 
@@ -40,11 +42,12 @@ Investment Choi 시스템의 핵심 도메인은 **투자 거래**입니다. 주
 
 ### 2.2 Strategy (전략)
 
-**목적**: 투자 전략 정보 및 실행 통계를 저장합니다.
+**목적**: 투자 전략 정보 및 실행 통계를 저장합니다. **시장(Market)** 과 **전략 타입(StrategyType)** 조합으로 관리합니다.
 
 **속성**:
 - `id` (UUID): 전략 고유 ID
 - `accountNo` (String): 계좌번호
+- `market` (Enum): 시장 (KR, US) — 유니버스·시그널·손절 규칙이 시장별로 상이
 - `strategyType` (Enum): 전략 타입 (SHORT_TERM, MEDIUM_TERM, LONG_TERM)
 - `status` (Enum): 전략 상태 (ACTIVE, STOPPED, PAUSED)
 - `maxInvestmentAmount` (BigDecimal): 최대 투자금액
@@ -60,7 +63,7 @@ Investment Choi 시스템의 핵심 도메인은 **투자 거래**입니다. 주
 - `updatedAt` (LocalDateTime): 수정 시간
 
 **비즈니스 규칙**:
-- 계좌별 전략 타입은 유일해야 함 (UNIQUE KEY)
+- 계좌 + 시장 + 전략 타입 조합은 유일해야 함 (UNIQUE KEY: accountNo, market, strategyType)
 - ACTIVE 상태인 전략만 실행됨
 - 신뢰도가 임계값 이상일 때만 주문 실행
 
@@ -169,17 +172,50 @@ Investment Choi 시스템의 핵심 도메인은 **투자 거래**입니다. 주
 **비즈니스 규칙**:
 - 계좌번호 + 종목 코드 조합은 유일해야 함 (UNIQUE KEY)
 
+### 2.7 NewsItem (뉴스·공시)
+
+**목적**: 공시/데이터(Fact)·뉴스/속보(Speed)·센티멘트/수급(Buzz) 수집 항목을 저장합니다. 전략 연동(감정·중요도·이벤트 유형)에 사용합니다.
+
+**속성**:
+- `id` (UUID): 고유 ID
+- `source` (String): 원천 코드 (DART, SEC_EDGAR, YONHAP, REUTERS, NAVER_FINANCE, YAHOO_FINANCE)
+- `market` (Enum): 시장 (KR, US)
+- `type` (Enum): 유형 (FACT, SPEED, BUZZ)
+- `title` (String): 제목
+- `summary` (String): 요약
+- `url` (String): 원문 URL
+- `collectedAt` (LocalDateTime): 수집 시각
+- `symbol` (String): 연관 종목 코드 (nullable)
+- `sentimentScore` (BigDecimal): 감정 점수 (nullable)
+- `importanceScore` (BigDecimal): 중요도 점수 (nullable)
+- `eventType` (String): 이벤트 유형 (실적·배당·M&A 등, nullable)
+- `createdAt` (LocalDateTime): 생성 시간
+- `updatedAt` (LocalDateTime): 수정 시간
+
+**비즈니스 규칙**:
+- 동일 URL·원천은 중복 수집 제거 (UNIQUE 또는 업데이트)
+- TTL/보관 주기 정책에 따라 오래된 데이터 정리 가능
+
 ## 3. 도메인 값 객체 (Value Objects)
 
-### 3.1 StrategyType (전략 타입)
+### 3.1 Market (시장)
+- `KR`: 국내 (KOSPI/KOSDAQ)
+- `US`: 미국 (NYSE/NASDAQ)
+
+### 3.2 StrategyType (전략 타입)
 - `SHORT_TERM`: 단기 전략
 - `MEDIUM_TERM`: 중기 전략
 - `LONG_TERM`: 장기 전략
 
-### 3.2 StrategyStatus (전략 상태)
+### 3.3 StrategyStatus (전략 상태)
 - `ACTIVE`: 활성 (실행 중)
 - `STOPPED`: 중지됨
 - `PAUSED`: 일시 정지
+
+### 3.4 NewsItemType (뉴스·공시 유형)
+- `FACT`: 공시/데이터 (절대 기준)
+- `SPEED`: 뉴스/속보 (트리거)
+- `BUZZ`: 센티멘트/수급 (군중 심리)
 
 ## 4. 도메인 서비스
 
@@ -203,7 +239,8 @@ Investment Choi 시스템의 핵심 도메인은 **투자 거래**입니다. 주
 
 ### 5.2 StrategyRepository
 - `findByAccountNo(String accountNo)`: 계좌별 전략 조회
-- `findByAccountNoAndStrategyType(String accountNo, StrategyType type)`: 전략 조회
+- `findByAccountNoAndMarketAndStrategyType(String accountNo, Market market, StrategyType type)`: 전략 조회
+- `findByAccountNoAndStrategyType(String accountNo, StrategyType type)`: 계좌·전략 타입별 조회 (시장 무관, 하위 호환)
 - `findByStatus(StrategyStatus status)`: 상태별 전략 조회
 
 ### 5.3 TradingPortfolioRepository
@@ -226,3 +263,4 @@ Investment Choi 시스템의 핵심 도메인은 **투자 거래**입니다. 주
 | 버전 | 일자 | 작성자 | 변경 내용 |
 |------|------|--------|----------|
 | 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 |
+| 1.1 | 2026-01-29 | System | Market(KR/US), 전략-시장-기간 조합, NewsItem 엔티티·리포지토리 추가 |

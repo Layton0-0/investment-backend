@@ -36,6 +36,16 @@ public class UserAccountDto {
     private String brokerTypeName;
 
     /**
+     * 서버 타입 ("1": 모의투자, "0": 실거래)
+     */
+    private String serverType;
+
+    /**
+     * 서버 타입 표시명 ("모의투자" 또는 "실거래")
+     */
+    private String serverTypeName;
+
+    /**
      * 계좌 별칭
      */
     private String accountName;

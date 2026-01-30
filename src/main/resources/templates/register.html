@@ -58,14 +58,6 @@
             </div>
             
             <div class="form-group">
-                <label for="accountNo">계좌번호</label>
-                <input type="text" id="accountNo" name="accountNo" required autocomplete="off" 
-                       pattern="^\d{8}-\d{2}$" placeholder="12345678-12" maxlength="11">
-                <div class="info-text">형식: 숫자8자리-숫자2자리 (예: 12345678-12)</div>
-                <div class="error-message" id="accountNoError"></div>
-            </div>
-            
-            <div class="form-group">
                 <label for="serverType">서버 타입</label>
                 <div class="toggle-switch">
                     <input type="checkbox" id="serverType" name="serverType" value="1" checked>
@@ -75,7 +67,19 @@
                         <span class="toggle-text-right">실거래</span>
                     </label>
                 </div>
-                <div class="info-text">모의투자로 시작하는 것을 권장합니다</div>
+                <div class="info-text">모의투자로 시작하는 것을 권장합니다. 모의계좌와 실전계좌의 계좌번호는 다릅니다.</div>
+            </div>
+            
+            <div class="form-group">
+                <label for="accountNo">계좌번호</label>
+                <div class="account-verify-row">
+                    <input type="password" id="accountNo" name="accountNo" required autocomplete="off" 
+                           pattern="^\d{8}-\d{2}$" placeholder="12345678-12" maxlength="11">
+                    <button type="button" id="verifyAccountBtn" class="btn-secondary">계좌인증</button>
+                </div>
+                <div class="info-text">형식: 숫자8자리-숫자2자리 (예: 12345678-12). 비밀번호와 동일하게 입력 시 표시되지 않습니다.</div>
+                <div id="accountVerifyStatus" class="info-text" style="display:none;"></div>
+                <div class="error-message" id="accountNoError"></div>
             </div>
             
             <div class="error-message" id="generalError"></div>
@@ -93,6 +97,104 @@
         const registerForm = document.getElementById('registerForm');
         const registerButton = document.getElementById('registerButton');
         const generalError = document.getElementById('generalError');
+        const verifyAccountBtn = document.getElementById('verifyAccountBtn');
+        const accountVerifyStatus = document.getElementById('accountVerifyStatus');
+        const KOREA_INVESTMENT_CODE = 'KOREA_INVESTMENT';
+        let accountVerified = false;
+        /** 계좌인증 시 발급받은 한국투자증권 접근 토큰. 메모리에만 보관, 회원가입 시 전송 후 사용하지 않음. */
+        let preIssuedAccessToken = null;
+        
+        function resetAccountVerified() {
+            accountVerified = false;
+            preIssuedAccessToken = null;
+            if (verifyAccountBtn) {
+                verifyAccountBtn.disabled = false;
+                verifyAccountBtn.textContent = '계좌인증';
+            }
+            if (accountVerifyStatus) {
+                accountVerifyStatus.style.display = 'none';
+                accountVerifyStatus.textContent = '';
+                accountVerifyStatus.className = 'info-text';
+            }
+        }
+        
+        function setAccountVerifiedSuccess() {
+            accountVerified = true;
+            if (verifyAccountBtn) {
+                verifyAccountBtn.disabled = true;
+                verifyAccountBtn.textContent = '인증 완료';
+            }
+            if (accountVerifyStatus) {
+                accountVerifyStatus.style.display = 'block';
+                accountVerifyStatus.textContent = '계좌 인증이 완료되었습니다.';
+                accountVerifyStatus.className = 'info-text';
+                accountVerifyStatus.style.color = '#059669';
+            }
+        }
+        
+        document.getElementById('brokerType').addEventListener('change', resetAccountVerified);
+        document.getElementById('serverType').addEventListener('change', resetAccountVerified);
+        document.getElementById('accountNo').addEventListener('input', resetAccountVerified);
+        document.getElementById('appKey').addEventListener('input', resetAccountVerified);
+        document.getElementById('appSecret').addEventListener('input', resetAccountVerified);
+        
+        verifyAccountBtn.addEventListener('click', async function() {
+            const appKey = document.getElementById('appKey').value;
+            const appSecret = document.getElementById('appSecret').value;
+            const accountNo = document.getElementById('accountNo').value.trim();
+            const serverTypeCheckbox = document.getElementById('serverType');
+            const serverTypeValue = serverTypeCheckbox.checked ? '0' : '1';
+            
+            const accountNoRes = validateAccountNumber(accountNo, true);
+            if (!accountNoRes.valid) {
+                showFieldError('accountNo', 'accountNoError', accountNoRes.message);
+                return;
+            }
+            const appKeyRes = validateAppKey(appKey, true);
+            if (!appKeyRes.valid) {
+                showFieldError('appKey', 'appKeyError', appKeyRes.message);
+                return;
+            }
+            const appSecretRes = validateAppSecret(appSecret, true);
+            if (!appSecretRes.valid) {
+                showFieldError('appSecret', 'appSecretError', appSecretRes.message);
+                return;
+            }
+            
+            verifyAccountBtn.disabled = true;
+            verifyAccountBtn.textContent = '인증 중...';
+            accountVerifyStatus.style.display = 'block';
+            accountVerifyStatus.textContent = '';
+            accountVerifyStatus.className = 'info-text';
+            document.getElementById('accountNoError').textContent = '';
+            
+            try {
+                const response = await fetch('/api/v1/auth/verify-account', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ appKey: appKey, appSecret: appSecret, serverType: serverTypeValue, accountNo: accountNo })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    preIssuedAccessToken = data.accessToken || null;
+                    setAccountVerifiedSuccess();
+                } else {
+                    accountVerified = false;
+                    preIssuedAccessToken = null;
+                    verifyAccountBtn.disabled = false;
+                    verifyAccountBtn.textContent = '계좌인증';
+                    accountVerifyStatus.textContent = data.message || '계좌 인증에 실패했습니다.';
+                    accountVerifyStatus.style.color = '#DC2626';
+                }
+            } catch (err) {
+                accountVerified = false;
+                preIssuedAccessToken = null;
+                verifyAccountBtn.disabled = false;
+                verifyAccountBtn.textContent = '계좌인증';
+                accountVerifyStatus.textContent = '계좌 인증 요청 중 오류가 발생했습니다.';
+                accountVerifyStatus.style.color = '#DC2626';
+            }
+        });
         
         // 실시간 유효성 검사 설정
         setupRealTimeValidation('username', validateUsername, 'usernameError');
@@ -120,7 +222,8 @@
             
             // 서버타입 토글 값 가져오기 (체크박스는 checked 속성으로 확인)
             const serverTypeCheckbox = document.getElementById('serverType');
-            const serverTypeValue = serverTypeCheckbox.checked ? '1' : '0';
+            // 왼쪽=모의='1', 오른쪽=실전='0' (시각과 일치)
+            const serverTypeValue = serverTypeCheckbox.checked ? '0' : '1';
             
             const formData = {
                 username: document.getElementById('username').value.trim(),
@@ -131,6 +234,9 @@
                 accountNo: document.getElementById('accountNo').value.trim(),
                 serverType: serverTypeValue
             };
+            if (preIssuedAccessToken) {
+                formData.preIssuedAccessToken = preIssuedAccessToken;
+            }
             
             // 유효성 검사
             let isValid = true;
@@ -168,6 +274,11 @@
             const accountNoValidation = validateAccountNumber(formData.accountNo, true);
             if (!accountNoValidation.valid) {
                 showFieldError('accountNo', 'accountNoError', accountNoValidation.message);
+                isValid = false;
+            }
+            
+            if (formData.brokerType === KOREA_INVESTMENT_CODE && !accountVerified) {
+                showFieldError('accountNo', 'accountNoError', '한국투자증권을 선택한 경우 계좌인증을 완료한 후 회원가입할 수 있습니다.');
                 isValid = false;
             }
             

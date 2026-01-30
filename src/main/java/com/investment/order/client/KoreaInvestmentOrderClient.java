@@ -1,6 +1,7 @@
 package com.investment.order.client;
 
 import com.investment.common.security.EncryptionUtil;
+import com.investment.common.security.LogMaskingUtil;
 import com.investment.domain.entity.BrokerType;
 import com.investment.domain.entity.UserApiKey;
 import com.investment.domain.repository.UserApiKeyRepository;
@@ -41,7 +42,7 @@ import java.util.Map;
 @Component
 @RequiredArgsConstructor
 public class KoreaInvestmentOrderClient {
-    
+
     private final WebClient webClient;
     private final RateLimiterRegistry rateLimiterRegistry;
     private final KoreaInvestmentTokenService tokenService;
@@ -49,15 +50,15 @@ public class KoreaInvestmentOrderClient {
     private final EncryptionUtil encryptionUtil;
     private final Environment environment;
     private final KoreaInvestmentHashkeyUtil hashkeyUtil;
-    
+
     // Rate Limiter 인스턴스 이름
     private static final String RATE_LIMITER_API_VIRTUAL = "koreaInvestmentApi";
     private static final String RATE_LIMITER_API_REAL = "koreaInvestmentApiReal";
-    
+
     // 한국투자증권 API Base URL
     private static final String BASE_URL_REAL = "https://openapi.koreainvestment.com:9443"; // 실거래
     private static final String BASE_URL_VIRTUAL = "https://openapivts.koreainvestment.com:29443"; // 모의투자
-    
+
     /**
      * local 환경 여부 확인
      */
@@ -70,7 +71,7 @@ public class KoreaInvestmentOrderClient {
         }
         return false;
     }
-    
+
     /**
      * local 환경에서 API 요청 상세 로그 출력
      */
@@ -82,14 +83,14 @@ public class KoreaInvestmentOrderClient {
             log.debug("RequestBody: {}", requestBody);
         }
     }
-    
+
     /**
      * Base URL 가져오기
      */
     private String getBaseUrl(String serverType) {
         return "0".equals(serverType) ? BASE_URL_REAL : BASE_URL_VIRTUAL;
     }
-    
+
     /**
      * TR ID 가져오기 (실거래/모의투자 구분)
      */
@@ -102,7 +103,7 @@ public class KoreaInvestmentOrderClient {
             return "V" + baseTrId.substring(1);
         }
     }
-    
+
     /**
      * Rate Limiter 가져오기
      */
@@ -115,50 +116,51 @@ public class KoreaInvestmentOrderClient {
             return rateLimiterRegistry.rateLimiter(RATE_LIMITER_API_VIRTUAL);
         }
     }
-    
+
     /**
      * 주식 매수 주문
      * 
-     * @param userId 사용자 ID
+     * @param userId    사용자 ID
      * @param accountNo 계좌번호 (8자리)
-     * @param symbol 종목 코드
-     * @param quantity 주문 수량
-     * @param price 주문 가격 (시장가인 경우 null)
+     * @param symbol    종목 코드
+     * @param quantity  주문 수량
+     * @param price     주문 가격 (시장가인 경우 null)
      * @param orderType 주문 유형 ("00": 지정가, "01": 시장가)
      * @return 주문 응답 (주문번호 포함)
      */
-    public Mono<OrderResponse> placeBuyOrder(String userId, String accountNo, String symbol, 
-                                             Integer quantity, BigDecimal price, String orderType) {
-        log.info("주식 매수 주문: userId={}, accountNo={}, symbol={}, quantity={}, price={}, orderType={}", 
-                userId, accountNo, symbol, quantity, price, orderType);
-        
+    public Mono<OrderResponse> placeBuyOrder(String userId, String accountNo, String symbol,
+            Integer quantity, BigDecimal price, String orderType) {
+        log.info("주식 매수 주문: userId={}, accountNo={}, symbol={}, quantity={}, price={}, orderType={}",
+                LogMaskingUtil.maskUserId(userId), LogMaskingUtil.maskAccountNo(accountNo), symbol, quantity, price,
+                orderType);
+
         // 종목 코드 변환 (6자리)
         String stockCode = StockCodeConverter.toStockCode(symbol);
-        
+
         // 사용자 API 키 조회
         UserApiKey userApiKey = userApiKeyRepository.findByUserIdAndBrokerType(userId, BrokerType.KOREA_INVESTMENT)
                 .orElseThrow(() -> new IllegalStateException("한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
-        
+
         // 토큰 조회
         String accessToken = tokenService.getAccessToken(userId);
         String serverType = userApiKey.getServerType();
-        
+
         // API 키 복호화
         String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
         String appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
-        
+
         String baseUrl = getBaseUrl(serverType);
         String trId = getTrId("TTTC0012U", serverType); // 주식현재가 매수 주문 TR ID
-        
+
         // API 엔드포인트
         URI uri = UriComponentsBuilder.fromHttpUrl(baseUrl)
                 .path("/uapi/domestic-stock/v1/trading/order-cash")
                 .build()
                 .toUri();
-        
+
         // 요청 바디 생성
         Map<String, String> requestBody = KoreaInvestmentRequestBuilder.createAccountRequestBody(
-                accountNo, 
+                accountNo,
                 Map.of(
                         "PDNO", stockCode, // 종목코드
                         "ORD_DVSN", orderType != null ? orderType : "00", // 주문구분 (00: 지정가, 01: 시장가)
@@ -166,26 +168,26 @@ public class KoreaInvestmentOrderClient {
                         "ORD_UNPR", price != null ? price.toPlainString() : "0", // 주문단가 (시장가인 경우 0)
                         "EXCG_ID_DVSN_CD", "KRX" // 거래소ID구분코드 (KRX: 한국거래소)
                 ));
-        
+
         // 공통 헤더 생성
         HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
                 accessToken, appKey, appSecret, trId);
-        
+
         // Hashkey 생성 (주문 API는 Hashkey 필수)
         @SuppressWarnings("unchecked")
         Map<String, Object> requestBodyForHash = (Map<String, Object>) (Map<?, ?>) requestBody;
         String hashkey = hashkeyUtil.generateHashkey(requestBodyForHash, appSecret);
         headers.set("hashkey", hashkey);
-        
+
         logApiRequest("주식 매수 주문", uri, headers, requestBody);
-        
+
         // Rate Limiter 적용
         RateLimiter rateLimiter = getApiRateLimiter(serverType);
-        
+
         return Mono.fromCallable(() -> {
-                    rateLimiter.acquirePermission();
-                    return null;
-                })
+            rateLimiter.acquirePermission();
+            return null;
+        })
                 .flatMap(ignored -> webClient.post()
                         .uri(uri)
                         .headers(h -> h.addAll(headers))
@@ -196,8 +198,7 @@ public class KoreaInvestmentOrderClient {
                         .retryWhen(Retry.backoff(2, Duration.ofSeconds(1))
                                 .filter(throwable -> {
                                     if (throwable instanceof org.springframework.web.reactive.function.client.WebClientResponseException) {
-                                        org.springframework.web.reactive.function.client.WebClientResponseException ex = 
-                                                (org.springframework.web.reactive.function.client.WebClientResponseException) throwable;
+                                        org.springframework.web.reactive.function.client.WebClientResponseException ex = (org.springframework.web.reactive.function.client.WebClientResponseException) throwable;
                                         return ex.getStatusCode().is5xxServerError();
                                     }
                                     return false;
@@ -205,24 +206,25 @@ public class KoreaInvestmentOrderClient {
                         .map(response -> {
                             @SuppressWarnings("unchecked")
                             Map<String, Object> responseMap = (Map<String, Object>) response;
-                            
+
                             // rt_cd 체크
                             String rtCd = (String) responseMap.get("rt_cd");
                             if (rtCd == null || !"0".equals(rtCd)) {
                                 String msg1 = (String) responseMap.get("msg1");
                                 String msgCd = (String) responseMap.get("msg_cd");
-                                throw new RuntimeException("한국투자증권 주문 API 오류: rt_cd=" + rtCd + ", msg_cd=" + msgCd + ", msg1=" + msg1);
+                                throw new RuntimeException(
+                                        "한국투자증권 주문 API 오류: rt_cd=" + rtCd + ", msg_cd=" + msgCd + ", msg1=" + msg1);
                             }
-                            
+
                             // output 파싱
                             @SuppressWarnings("unchecked")
                             Map<String, Object> output = (Map<String, Object>) responseMap.get("output");
                             if (output == null) {
                                 throw new RuntimeException("한국투자증권 API 응답에 output이 없습니다");
                             }
-                            
+
                             String orderNo = (String) output.get("ODNO"); // 주문번호
-                            
+
                             return OrderResponse.builder()
                                     .orderNo(orderNo)
                                     .symbol(stockCode)
@@ -233,55 +235,56 @@ public class KoreaInvestmentOrderClient {
                                     .build();
                         })
                         .onErrorMap(throwable -> {
-                            log.error("주식 매수 주문 실패: userId={}, accountNo={}, symbol={}", 
+                            log.error("주식 매수 주문 실패: userId={}, accountNo={}, symbol={}",
                                     userId, accountNo, symbol, throwable);
                             return new RuntimeException("주문 실행 실패: " + throwable.getMessage(), throwable);
                         }));
     }
-    
+
     /**
      * 주식 매도 주문
      * 
-     * @param userId 사용자 ID
+     * @param userId    사용자 ID
      * @param accountNo 계좌번호 (8자리)
-     * @param symbol 종목 코드
-     * @param quantity 주문 수량
-     * @param price 주문 가격 (시장가인 경우 null)
+     * @param symbol    종목 코드
+     * @param quantity  주문 수량
+     * @param price     주문 가격 (시장가인 경우 null)
      * @param orderType 주문 유형 ("00": 지정가, "01": 시장가)
      * @return 주문 응답 (주문번호 포함)
      */
-    public Mono<OrderResponse> placeSellOrder(String userId, String accountNo, String symbol, 
-                                              Integer quantity, BigDecimal price, String orderType) {
-        log.info("주식 매도 주문: userId={}, accountNo={}, symbol={}, quantity={}, price={}, orderType={}", 
-                userId, accountNo, symbol, quantity, price, orderType);
-        
+    public Mono<OrderResponse> placeSellOrder(String userId, String accountNo, String symbol,
+            Integer quantity, BigDecimal price, String orderType) {
+        log.info("주식 매도 주문: userId={}, accountNo={}, symbol={}, quantity={}, price={}, orderType={}",
+                LogMaskingUtil.maskUserId(userId), LogMaskingUtil.maskAccountNo(accountNo), symbol, quantity, price,
+                orderType);
+
         // 종목 코드 변환 (6자리)
         String stockCode = StockCodeConverter.toStockCode(symbol);
-        
+
         // 사용자 API 키 조회
         UserApiKey userApiKey = userApiKeyRepository.findByUserIdAndBrokerType(userId, BrokerType.KOREA_INVESTMENT)
                 .orElseThrow(() -> new IllegalStateException("한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
-        
+
         // 토큰 조회
         String accessToken = tokenService.getAccessToken(userId);
         String serverType = userApiKey.getServerType();
-        
+
         // API 키 복호화
         String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
         String appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
-        
+
         String baseUrl = getBaseUrl(serverType);
         String trId = getTrId("TTTC0011U", serverType); // 주식현재가 매도 주문 TR ID
-        
+
         // API 엔드포인트
         URI uri = UriComponentsBuilder.fromHttpUrl(baseUrl)
                 .path("/uapi/domestic-stock/v1/trading/order-cash")
                 .build()
                 .toUri();
-        
+
         // 요청 바디 생성
         Map<String, String> requestBody = KoreaInvestmentRequestBuilder.createAccountRequestBody(
-                accountNo, 
+                accountNo,
                 Map.of(
                         "PDNO", stockCode, // 종목코드
                         "ORD_DVSN", orderType != null ? orderType : "00", // 주문구분 (00: 지정가, 01: 시장가)
@@ -289,26 +292,26 @@ public class KoreaInvestmentOrderClient {
                         "ORD_UNPR", price != null ? price.toPlainString() : "0", // 주문단가 (시장가인 경우 0)
                         "EXCG_ID_DVSN_CD", "KRX" // 거래소ID구분코드 (KRX: 한국거래소)
                 ));
-        
+
         // 공통 헤더 생성
         HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
                 accessToken, appKey, appSecret, trId);
-        
+
         // Hashkey 생성 (주문 API는 Hashkey 필수)
         @SuppressWarnings("unchecked")
         Map<String, Object> requestBodyForHash = (Map<String, Object>) (Map<?, ?>) requestBody;
         String hashkey = hashkeyUtil.generateHashkey(requestBodyForHash, appSecret);
         headers.set("hashkey", hashkey);
-        
+
         logApiRequest("주식 매도 주문", uri, headers, requestBody);
-        
+
         // Rate Limiter 적용
         RateLimiter rateLimiter = getApiRateLimiter(serverType);
-        
+
         return Mono.fromCallable(() -> {
-                    rateLimiter.acquirePermission();
-                    return null;
-                })
+            rateLimiter.acquirePermission();
+            return null;
+        })
                 .flatMap(ignored -> webClient.post()
                         .uri(uri)
                         .headers(h -> h.addAll(headers))
@@ -319,8 +322,7 @@ public class KoreaInvestmentOrderClient {
                         .retryWhen(Retry.backoff(2, Duration.ofSeconds(1))
                                 .filter(throwable -> {
                                     if (throwable instanceof org.springframework.web.reactive.function.client.WebClientResponseException) {
-                                        org.springframework.web.reactive.function.client.WebClientResponseException ex = 
-                                                (org.springframework.web.reactive.function.client.WebClientResponseException) throwable;
+                                        org.springframework.web.reactive.function.client.WebClientResponseException ex = (org.springframework.web.reactive.function.client.WebClientResponseException) throwable;
                                         return ex.getStatusCode().is5xxServerError();
                                     }
                                     return false;
@@ -328,24 +330,25 @@ public class KoreaInvestmentOrderClient {
                         .map(response -> {
                             @SuppressWarnings("unchecked")
                             Map<String, Object> responseMap = (Map<String, Object>) response;
-                            
+
                             // rt_cd 체크
                             String rtCd = (String) responseMap.get("rt_cd");
                             if (rtCd == null || !"0".equals(rtCd)) {
                                 String msg1 = (String) responseMap.get("msg1");
                                 String msgCd = (String) responseMap.get("msg_cd");
-                                throw new RuntimeException("한국투자증권 주문 API 오류: rt_cd=" + rtCd + ", msg_cd=" + msgCd + ", msg1=" + msg1);
+                                throw new RuntimeException(
+                                        "한국투자증권 주문 API 오류: rt_cd=" + rtCd + ", msg_cd=" + msgCd + ", msg1=" + msg1);
                             }
-                            
+
                             // output 파싱
                             @SuppressWarnings("unchecked")
                             Map<String, Object> output = (Map<String, Object>) responseMap.get("output");
                             if (output == null) {
                                 throw new RuntimeException("한국투자증권 API 응답에 output이 없습니다");
                             }
-                            
+
                             String orderNo = (String) output.get("ODNO"); // 주문번호
-                            
+
                             return OrderResponse.builder()
                                     .orderNo(orderNo)
                                     .symbol(stockCode)
@@ -356,12 +359,13 @@ public class KoreaInvestmentOrderClient {
                                     .build();
                         })
                         .onErrorMap(throwable -> {
-                            log.error("주식 매도 주문 실패: userId={}, accountNo={}, symbol={}", 
-                                    userId, accountNo, symbol, throwable);
+                            log.error("주식 매도 주문 실패: userId={}, accountNo={}, symbol={}",
+                                    LogMaskingUtil.maskUserId(userId), LogMaskingUtil.maskAccountNo(accountNo), symbol,
+                                    throwable);
                             return new RuntimeException("주문 실행 실패: " + throwable.getMessage(), throwable);
                         }));
     }
-    
+
     /**
      * 주문 응답 DTO
      */

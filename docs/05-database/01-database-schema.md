@@ -23,9 +23,10 @@
 4. **TB_ORDERS**: 주문 정보
 5. **TB_TRADING_SETTINGS**: 거래 설정
 6. **TB_PORTFOLIOS**: 보유 종목
-7. **TB_STRATEGIES**: 투자 전략
+7. **TB_STRATEGIES**: 투자 전략 (시장·전략 타입 조합)
 8. **TB_TRADING_PORTFOLIOS**: 트레이딩 포트폴리오
 9. **TB_TRADING_PORTFOLIO_ITEMS**: 트레이딩 포트폴리오 종목
+10. **TB_NEWS_ITEMS**: 뉴스·공시 수집 항목 (전략 연동용)
 
 ## 3. 테이블 상세
 
@@ -75,7 +76,7 @@
 
 ### 3.3 TB_USER_ACCOUNTS (사용자 계좌)
 
-**목적**: 사용자의 증권사 계좌 정보를 암호화하여 저장합니다.
+**목적**: 사용자의 증권사 계좌 정보를 암호화하여 저장합니다. 모의계좌와 실거래 계좌의 계좌번호가 각각 다르므로 SERVER_TYPE으로 구분합니다.
 
 **컬럼**:
 | 컬럼명 | 타입 | 제약 | 설명 |
@@ -85,8 +86,9 @@
 | USER_API_KEY_ID | VARCHAR(36) | NOT NULL, FK | 계좌에 사용할 API 키 |
 | ACCOUNT_NO_ENCRYPTED | TEXT | NOT NULL | 계좌번호 (암호화) |
 | BROKER_TYPE | VARCHAR(50) | NOT NULL | 증권사 코드 |
+| SERVER_TYPE | VARCHAR(1) | NOT NULL, DEFAULT '1' | 서버 타입 ("1": 모의투자, "0": 실거래) |
 | ACCOUNT_NAME | VARCHAR(100) | NULL | 계좌 별칭 |
-| IS_DEFAULT | TINYINT(1) | NOT NULL, DEFAULT 0 | 메인 계좌 여부 |
+| IS_DEFAULT | TINYINT(1) | NOT NULL, DEFAULT 0 | 메인 계좌 여부 (서버 타입별 1개) |
 | IS_ACTIVE | TINYINT(1) | NOT NULL, DEFAULT 1 | 활성화 여부 |
 | CREATED_AT | DATETIME | NOT NULL | 생성 시간 |
 | UPDATED_AT | DATETIME | NULL | 수정 시간 |
@@ -95,20 +97,23 @@
 - `IDX_USER_ACCOUNTS_USER_ID`: USER_ID
 - `IDX_USER_ACCOUNTS_USER_API_KEY`: USER_API_KEY_ID
 - `IDX_USER_ACCOUNTS_BROKER_TYPE`: BROKER_TYPE
-- `IDX_USER_ACCOUNTS_IS_DEFAULT`: USER_ID, IS_DEFAULT
-- `UK_USER_ACCOUNTS_USER_ACCOUNT`: USER_ID, ACCOUNT_NO_ENCRYPTED, BROKER_TYPE (UNIQUE)
+- `IDX_USER_ACCOUNTS_SERVER_TYPE`: SERVER_TYPE
+- `IDX_USER_ACCOUNTS_IS_DEFAULT`: USER_ID, SERVER_TYPE, IS_DEFAULT
+- `UK_USER_ACCOUNTS_USER_ACCOUNT`: USER_ID, ACCOUNT_NO_ENCRYPTED(255), BROKER_TYPE, SERVER_TYPE (UNIQUE)
 
 **외래키**:
 - `FK_USER_ACCOUNTS_USER`: USER_ID → TB_USERS.TB_USERS_UID (ON DELETE CASCADE)
 - `FK_USER_ACCOUNTS_API_KEY`: USER_API_KEY_ID → TB_USER_API_KEYS.TB_USER_API_KEYS_UID (ON DELETE RESTRICT)
 
 **비즈니스 규칙**:
-- 사용자당 메인 계좌는 1개만 가능 (IS_DEFAULT = 1)
-- 계좌 생성 시 메인 계좌가 없으면 자동으로 메인 계좌로 설정
-- 메인 계좌 변경 시 기존 메인 계좌는 자동으로 해제
-- USER_API_KEY_ID의 BROKER_TYPE과 BROKER_TYPE 컬럼은 일치해야 함
+- 사용자·서버 타입별 메인 계좌는 1개만 가능 (IS_DEFAULT = 1)
+- 계좌 생성 시 같은 서버 타입 내 메인 계좌가 없으면 자동으로 메인 계좌로 설정
+- 메인 계좌 변경 시 같은 서버 타입 내 기존 메인 계좌만 해제
+- USER_API_KEY_ID의 BROKER_TYPE·SERVER_TYPE과 일치해야 함
 - 한국투자증권: USER_API_KEY_ID와 계좌는 1:1 관계
 - 다른 증권사: USER_API_KEY_ID와 계좌는 1:N 관계
+
+**컬럼 COMMENT**: 모든 컬럼에 DB COMMENT 부여 (유지보수 및 도구 연동용). 마이그레이션 스크립트 `V2__add_column_comments.sql` 참고.
 
 ### 3.4 TB_ORDERS (주문)
 
@@ -189,7 +194,7 @@
 
 ### 3.7 TB_STRATEGIES (투자 전략)
 
-**목적**: 투자 전략 정보 및 실행 통계를 저장합니다.
+**목적**: 투자 전략 정보 및 실행 통계를 저장합니다. **시장(Market)** 과 **전략 타입(StrategyType)** 조합으로 관리합니다.
 
 **컬럼**:
 | 컬럼명 | 타입 | 제약 | 설명 |
@@ -197,7 +202,8 @@
 | TB_STRATEGIES_UID | VARCHAR(36) | PK | 전략 고유 ID (UUID) |
 | ACCOUNT_NO | VARCHAR(20) | NOT NULL | 계좌번호 |
 | USER_ID | VARCHAR(36) | NULL | 사용자 ID (선택적, 점진적 마이그레이션용) |
-| STRATEGY_TYPE | VARCHAR(20) | NOT NULL | 전략 타입 |
+| MARKET | VARCHAR(10) | NOT NULL, DEFAULT 'KR' | 시장 (KR, US) |
+| STRATEGY_TYPE | VARCHAR(20) | NOT NULL | 전략 타입 (SHORT_TERM, MEDIUM_TERM, LONG_TERM) |
 | STATUS | VARCHAR(20) | NOT NULL | 전략 상태 |
 | MAX_INVESTMENT_AMOUNT | DECIMAL(18,2) | NULL | 최대 투자금액 |
 | MIN_INVESTMENT_AMOUNT | DECIMAL(18,2) | NULL | 최소 투자금액 |
@@ -212,11 +218,15 @@
 | UPDATED_AT | DATETIME | NULL | 수정 시간 |
 
 **인덱스**:
-- `UK_TB_STRATEGIES_ACCOUNT_TYPE`: ACCOUNT_NO, STRATEGY_TYPE (UNIQUE)
-- `UK_TB_STRATEGIES_USER_ACCOUNT_TYPE`: USER_ID, ACCOUNT_NO, STRATEGY_TYPE (UNIQUE)
+- `UK_TB_STRATEGIES_ACCOUNT_MARKET_TYPE`: ACCOUNT_NO, MARKET, STRATEGY_TYPE (UNIQUE)
+- `UK_TB_STRATEGIES_USER_ACCOUNT_MARKET_TYPE`: USER_ID, ACCOUNT_NO, MARKET, STRATEGY_TYPE (UNIQUE, 선택)
 - `IDX_TB_STRATEGIES_ACCOUNT_NO`: ACCOUNT_NO
+- `IDX_TB_STRATEGIES_MARKET`: MARKET
 - `IDX_TB_STRATEGIES_USER_ID`: USER_ID
 - `IDX_TB_STRATEGIES_STATUS`: STATUS
+
+**비고**:
+- MARKET 추가 시 기존 데이터는 DEFAULT 'KR'로 채움. 마이그레이션 시 백업 후 적용.
 
 ### 3.8 TB_TRADING_PORTFOLIOS (트레이딩 포트폴리오)
 
@@ -276,6 +286,35 @@
 **외래키**:
 - `FK_TB_TRADING_PORTFOLIO_ITEMS_PORTFOLIO`: TRADING_PORTFOLIO_ID → TB_TRADING_PORTFOLIOS.TB_TRADING_PORTFOLIOS_UID (ON DELETE CASCADE)
 
+### 3.10 TB_NEWS_ITEMS (뉴스·공시)
+
+**목적**: 공시/데이터(Fact)·뉴스/속보(Speed)·센티멘트/수급(Buzz) 수집 항목을 저장합니다. 전략 연동(감정·중요도·이벤트 유형)에 사용합니다.
+
+**컬럼**:
+| 컬럼명 | 타입 | 제약 | 설명 |
+|--------|------|------|------|
+| TB_NEWS_ITEMS_UID | VARCHAR(36) | PK | 고유 ID (UUID) |
+| SOURCE | VARCHAR(50) | NOT NULL | 원천 코드 (DART, SEC_EDGAR, YONHAP, REUTERS, NAVER_FINANCE, YAHOO_FINANCE) |
+| MARKET | VARCHAR(10) | NOT NULL | 시장 (KR, US) |
+| ITEM_TYPE | VARCHAR(20) | NOT NULL | 유형 (FACT, SPEED, BUZZ) |
+| TITLE | VARCHAR(500) | NOT NULL | 제목 |
+| SUMMARY | TEXT | NULL | 요약 |
+| URL | VARCHAR(1000) | NOT NULL | 원문 URL |
+| COLLECTED_AT | DATETIME | NOT NULL | 수집 시각 |
+| SYMBOL | VARCHAR(20) | NULL | 연관 종목 코드 |
+| SENTIMENT_SCORE | DECIMAL(5,2) | NULL | 감정 점수 |
+| IMPORTANCE_SCORE | DECIMAL(5,2) | NULL | 중요도 점수 |
+| EVENT_TYPE | VARCHAR(50) | NULL | 이벤트 유형 (실적·배당·M&A 등) |
+| CREATED_AT | DATETIME | NOT NULL | 생성 시간 |
+| UPDATED_AT | DATETIME | NULL | 수정 시간 |
+
+**인덱스**:
+- `IDX_TB_NEWS_ITEMS_MARKET`: MARKET
+- `IDX_TB_NEWS_ITEMS_COLLECTED_AT`: COLLECTED_AT
+- `IDX_TB_NEWS_ITEMS_SYMBOL`: SYMBOL
+- `IDX_TB_NEWS_ITEMS_SOURCE_URL`: SOURCE, URL(255) — 중복 체크용
+- `UK_TB_NEWS_ITEMS_SOURCE_URL`: SOURCE, URL(255) (UNIQUE, 선택 — 원천·URL 중복 방지)
+
 ## 4. 관계도
 
 ```
@@ -331,12 +370,13 @@ TB_TRADING_PORTFOLIOS (1:N) TB_TRADING_PORTFOLIO_ITEMS
 
 ### 7.1 UNIQUE 제약
 - `TB_USERS.USERNAME`: 사용자 ID는 고유
-- `TB_USER_ACCOUNTS.USER_ID + ACCOUNT_NO_ENCRYPTED + BROKER_TYPE`: 사용자당 동일 증권사의 동일 계좌번호 중복 방지
+- `TB_USER_ACCOUNTS.USER_ID + ACCOUNT_NO_ENCRYPTED(255) + BROKER_TYPE + SERVER_TYPE`: 사용자·서버타입별 동일 증권사·계좌번호 중복 방지
 - `TB_TRADING_SETTINGS.USER_ID + ACCOUNT_NO`: 사용자당 계좌당 설정은 1개
 - `TB_PORTFOLIOS.ACCOUNT_NO + SYMBOL`: 계좌당 종목은 1개
-- `TB_STRATEGIES.ACCOUNT_NO + STRATEGY_TYPE`: 계좌당 전략 타입은 1개 (하위 호환성)
-- `TB_STRATEGIES.USER_ID + ACCOUNT_NO + STRATEGY_TYPE`: 사용자당 계좌당 전략 타입은 1개
+- `TB_STRATEGIES.ACCOUNT_NO + MARKET + STRATEGY_TYPE`: 계좌·시장·전략 타입 조합 유일
+- `TB_STRATEGIES.USER_ID + ACCOUNT_NO + MARKET + STRATEGY_TYPE`: 사용자·계좌·시장·전략 타입 조합 유일 (선택)
 - `TB_TRADING_PORTFOLIOS.TRADING_DATE`: 거래일당 포트폴리오는 1개
+- `TB_NEWS_ITEMS.SOURCE + URL(255)`: 원천·URL 중복 방지 (선택)
 
 ### 7.2 외래키 제약
 - `TB_USER_API_KEYS.USER_ID`: TB_USERS (CASCADE DELETE)
@@ -351,8 +391,19 @@ TB_TRADING_PORTFOLIOS (1:N) TB_TRADING_PORTFOLIO_ITEMS
 - **프로덕션 환경**: `ddl-auto: validate` (스키마 검증만)
 
 ### 8.2 수동 마이그레이션
-- `schema.sql`: 초기 스키마 생성 스크립트
+- `schema.sql`: 초기 스키마 생성 스크립트 (모든 테이블·컬럼 COMMENT 포함)
+- `db/migration/V1__add_user_accounts_server_type.sql`: TB_USER_ACCOUNTS에 SERVER_TYPE 컬럼 및 UK/인덱스 변경
+- `db/migration/V2__add_column_comments.sql`: 기존 테이블 모든 컬럼에 COMMENT 추가
+- `db/migration/V3__add_strategies_market_and_news_items.sql`: TB_STRATEGIES에 MARKET 컬럼 추가, UK 변경(ACCOUNT_NO, MARKET, STRATEGY_TYPE), TB_NEWS_ITEMS 테이블 생성. **Rollback**: `db/migration/rollback/V3_rollback.sql` — TB_NEWS_ITEMS DROP, TB_STRATEGIES에서 MARKET 제거 및 기존 UK 복원.
 - Flyway 또는 Liquibase 사용 고려 (향후)
+
+### 8.3 롤백 정책 (Database MCP 규칙)
+- **신규 테이블/컬럼 적용 전**: 반드시 DB 백업 수행. 마이그레이션 스크립트와 동일 버전의 **rollback 스크립트**를 `db/migration/rollback/` 에 보관.
+- **V3 롤백 예시**: `V3_rollback.sql` 에서 `DROP TABLE IF EXISTS TB_NEWS_ITEMS;`, `ALTER TABLE TB_STRATEGIES DROP COLUMN MARKET;`, 기존 UNIQUE 제약 복원 등.
+
+### 8.4 컬럼 COMMENT
+- 모든 테이블의 모든 컬럼에 DB COMMENT를 부여하여 가독성 및 도구 연동을 지원합니다.
+- 신규 스키마는 `schema.sql`에 COMMENT 포함, 기존 DB는 `V2__add_column_comments.sql`로 보강합니다.
 
 ## 문서 변경 이력
 
@@ -360,3 +411,5 @@ TB_TRADING_PORTFOLIOS (1:N) TB_TRADING_PORTFOLIO_ITEMS
 |------|------|--------|----------|
 | 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 |
 | 2.0 | 2026-01-28 | System | 사용자 및 계좌 관리 테이블 추가 (TB_USERS, TB_USER_API_KEYS, TB_USER_ACCOUNTS) |
+| 3.0 | 2026-01-29 | System | TB_USER_ACCOUNTS에 SERVER_TYPE 추가(모의/실거래 구분), UK·인덱스 변경, 전체 컬럼 COMMENT 정책 반영 |
+| 4.0 | 2026-01-29 | System | TB_STRATEGIES에 MARKET 컬럼 추가(시장·전략 타입 조합), TB_NEWS_ITEMS 테이블 추가, 롤백 정책 명시 |

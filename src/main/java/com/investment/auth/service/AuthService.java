@@ -8,6 +8,7 @@ import com.investment.common.security.JwtTokenProvider;
 import com.investment.common.security.LogMaskingUtil;
 import com.investment.common.security.SecurityAuditService;
 import com.investment.common.util.AccountNumberUtil;
+import com.investment.common.validation.PasswordValidator;
 import com.investment.domain.entity.BrokerType;
 import com.investment.domain.entity.User;
 import com.investment.domain.entity.UserAccount;
@@ -83,6 +84,9 @@ public class AuthService {
                 LogMaskingUtil.maskUserId(user.getId()),
                 LogMaskingUtil.maskUsername(user.getUsername()),
                 brokerType);
+        if (log.isDebugEnabled()) {
+            log.debug("  [DEBUG] userId(actual)={}, username(actual)={}", user.getId(), user.getUsername());
+        }
 
         // 한국투자증권인 경우 토큰 자동 발급 및 계좌번호 저장
         // 별도 트랜잭션으로 처리하여 토큰 발급 실패 시에도 회원가입은 성공하도록 함
@@ -106,10 +110,13 @@ public class AuthService {
                 String accountNoEncrypted = encryptionUtil.encrypt(accountNo);
 
                 // 계좌 별칭 생성 (증권사명 + 계좌번호 일부)
-                String accountName = brokerType.getName() + " " + maskAccountNo(accountNo);
+                String accountName = brokerType.getName() + " " + LogMaskingUtil.maskAccountNo(accountNo);
 
-                // 메인 계좌 여부 확인 (첫 계좌는 자동으로 메인 계좌)
-                boolean isMainAccount = !userAccountRepository.existsByUserIdAndIsDefaultTrue(user.getId());
+                // 서버 타입 (모의/실거래) - API 키와 동일하게 설정
+                String serverType = userApiKey.getServerType() != null ? userApiKey.getServerType() : "1";
+                // 메인 계좌 여부 확인 (같은 서버 타입 내 첫 계좌는 자동으로 메인 계좌)
+                boolean isMainAccount = !userAccountRepository.existsByUserIdAndServerTypeAndIsDefaultTrue(user.getId(),
+                        serverType);
 
                 // UserAccount 생성 및 저장
                 UserAccount userAccount = UserAccount.builder()
@@ -117,6 +124,7 @@ public class AuthService {
                         .userApiKeyId(userApiKey.getId())
                         .accountNoEncrypted(accountNoEncrypted)
                         .brokerType(brokerType)
+                        .serverType(serverType)
                         .accountName(accountName)
                         .isDefault(isMainAccount)
                         .isActive(true)
@@ -125,18 +133,36 @@ public class AuthService {
 
                 log.info("계좌번호 저장 완료: userId={}, accountNo={}, isMainAccount={}",
                         LogMaskingUtil.maskUserId(user.getId()),
-                        maskAccountNo(accountNo),
+                        LogMaskingUtil.maskAccountNo(accountNo),
                         isMainAccount);
+                if (log.isDebugEnabled()) {
+                    log.debug("  [DEBUG] userId(actual)={}, accountNo(actual)={}", user.getId(), accountNo);
+                }
 
-                // 토큰 발급
-                tokenService.issueTokenForUserInNewTransaction(userApiKey);
-                log.info("한국투자증권 토큰 발급 완료: userId={}", LogMaskingUtil.maskUserId(user.getId()));
+                // 토큰: 계좌인증 시 미리 발급받은 토큰이 있으면 저장만, 없으면 발급
+                String preIssued = request.getPreIssuedAccessToken();
+                if (preIssued != null && !preIssued.isBlank()) {
+                    tokenService.savePreIssuedTokenForUser(user.getId(), preIssued.trim());
+                    log.info("한국투자증권 선발급 토큰 저장 완료: userId={}", LogMaskingUtil.maskUserId(user.getId()));
+                    if (log.isDebugEnabled()) {
+                        log.debug("  [DEBUG] userId(actual)={}", user.getId());
+                    }
+                } else {
+                    tokenService.issueTokenForUserInNewTransaction(userApiKey);
+                    log.info("한국투자증권 토큰 발급 완료: userId={}", LogMaskingUtil.maskUserId(user.getId()));
+                    if (log.isDebugEnabled()) {
+                        log.debug("  [DEBUG] userId(actual)={}", user.getId());
+                    }
+                }
             } catch (DomainException e) {
                 // DomainException은 그대로 전파
                 throw e;
             } catch (Exception e) {
                 log.error("한국투자증권 토큰 발급 실패: userId={}, error={}",
                         LogMaskingUtil.maskUserId(user.getId()), e.getMessage(), e);
+                if (log.isDebugEnabled()) {
+                    log.debug("  [DEBUG] userId(actual)={}", user.getId());
+                }
                 // 토큰 발급 실패해도 회원가입은 성공으로 처리
                 // 사용자에게는 경고 메시지로 안내
             }
@@ -210,6 +236,9 @@ public class AuthService {
         log.info("로그인 성공: userId={}, username={}",
                 LogMaskingUtil.maskUserId(user.getId()),
                 LogMaskingUtil.maskUsername(user.getUsername()));
+        if (log.isDebugEnabled()) {
+            log.debug("  [DEBUG] userId(actual)={}, username(actual)={}", user.getId(), user.getUsername());
+        }
 
         // 한국투자증권 사용자인 경우 토큰 체크 및 발급
         // 별도 트랜잭션으로 실행되므로, 토큰 발급 실패가 로그인 트랜잭션에 영향을 주지 않음
@@ -222,6 +251,9 @@ public class AuthService {
                 } catch (Exception e) {
                     log.error("한국투자증권 토큰 발급 실패: userId={}, error={}",
                             LogMaskingUtil.maskUserId(user.getId()), e.getMessage());
+                    if (log.isDebugEnabled()) {
+                        log.debug("  [DEBUG] userId(actual)={}", user.getId());
+                    }
                     // 토큰 발급 실패해도 로그인은 성공으로 처리
                     // 사용자는 마이페이지에서 API 키를 다시 입력하여 문제를 해결할 수 있습니다
                 }
@@ -257,15 +289,24 @@ public class AuthService {
         String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
         String appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
 
+        // 메인 계좌 조회 (계좌번호 마스킹)
+        String accountNoMasked = null;
+        UserAccount mainAccount = userAccountRepository.findByUserIdAndIsDefaultTrue(userId).orElse(null);
+        if (mainAccount != null) {
+            String accountNo = encryptionUtil.decrypt(mainAccount.getAccountNoEncrypted());
+            accountNoMasked = LogMaskingUtil.maskAccountNo(accountNo);
+        }
+
         return MyPageResponseDto.builder()
                 .userId(user.getId())
                 .username(user.getUsername())
                 .brokerType(userApiKey.getBrokerType().getCode())
                 .brokerTypeName(userApiKey.getBrokerType().getName())
-                .appKeyMasked(maskSensitiveData(appKey))
-                .appSecretMasked(maskSensitiveData(appSecret))
+                .appKeyMasked(LogMaskingUtil.maskApiKey(appKey))
+                .appSecretMasked(LogMaskingUtil.maskSecret(appSecret))
                 .serverType(userApiKey.getServerType())
                 .serverTypeName("1".equals(userApiKey.getServerType()) ? "모의투자" : "실거래")
+                .accountNoMasked(accountNoMasked)
                 .build();
     }
 
@@ -283,7 +324,7 @@ public class AuthService {
         }
         UserApiKey userApiKey = userApiKeys.get(0);
 
-        // 민감한 작업(비밀번호 변경, API 키 변경) 시 재인증 확인
+        // 민감한 작업(비밀번호 변경, API 키 변경) 시 재인증 확인 (계좌번호 변경은 제외)
         boolean requiresReauthentication = (request.getPassword() != null && !request.getPassword().isEmpty()) ||
                 (request.getAppKey() != null && !request.getAppKey().isEmpty()) ||
                 (request.getAppSecret() != null && !request.getAppSecret().isEmpty());
@@ -305,9 +346,19 @@ public class AuthService {
 
         // 비밀번호 변경
         if (request.getPassword() != null && !request.getPassword().isEmpty()) {
+            // 새 비밀번호 검증
+            PasswordValidator.ValidationResult passwordValidation = PasswordValidator
+                    .validatePassword(request.getPassword());
+            if (!passwordValidation.isValid()) {
+                throw new DomainException(ErrorCode.INVALID_PASSWORD, passwordValidation.getMessage());
+            }
+
             user.updatePassword(passwordEncoder.encode(request.getPassword()));
             userRepository.save(user);
             log.info("비밀번호 변경: userId={}", LogMaskingUtil.maskUserId(userId));
+            if (log.isDebugEnabled()) {
+                log.debug("  [DEBUG] userId(actual)={}", userId);
+            }
             securityAuditService.logPasswordChanged(userId, user.getUsername());
         }
 
@@ -361,7 +412,71 @@ public class AuthService {
                 userApiKeyRepository.save(userApiKey);
             }
             log.info("API 키 정보 변경: userId={}", LogMaskingUtil.maskUserId(userId));
+            if (log.isDebugEnabled()) {
+                log.debug("  [DEBUG] userId(actual)={}", userId);
+            }
             securityAuditService.logApiKeyChanged(userId, user.getUsername());
+        }
+
+        // 계좌번호 변경 처리
+        String accountNoMasked = null;
+        if (request.getAccountNo() != null && !request.getAccountNo().trim().isEmpty()) {
+            String accountNo = request.getAccountNo().trim();
+
+            // 계좌번호 형식 검증
+            if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+                throw new DomainException(ErrorCode.INVALID_INPUT,
+                        "계좌번호 형식이 올바르지 않습니다. 형식: 숫자8자리-숫자2자리 (예: 12345678-12)");
+            }
+
+            // 계좌번호 암호화
+            String accountNoEncrypted = encryptionUtil.encrypt(accountNo);
+
+            // 같은 서버 타입 내 메인 계좌 조회 또는 생성 (모의/실거래 계좌 구분)
+            UserAccount mainAccount = userAccountRepository
+                    .findByUserIdAndServerTypeAndIsDefaultTrue(userId, serverType).orElse(null);
+            if (mainAccount != null) {
+                // 기존 메인 계좌 업데이트
+                mainAccount.updateAccountNo(accountNoEncrypted);
+                // 계좌 별칭도 업데이트
+                String accountName = brokerType.getName() + " " + LogMaskingUtil.maskAccountNo(accountNo);
+                mainAccount.updateAccountName(accountName);
+                userAccountRepository.save(mainAccount);
+                log.info("계좌번호 변경: userId={}, accountNo={}, serverType={}",
+                        LogMaskingUtil.maskUserId(userId), LogMaskingUtil.maskAccountNo(accountNo), serverType);
+                if (log.isDebugEnabled()) {
+                    log.debug("  [DEBUG] userId(actual)={}, accountNo(actual)={}", userId, accountNo);
+                }
+            } else {
+                // 메인 계좌가 없으면 새로 생성
+                String accountName = brokerType.getName() + " " + LogMaskingUtil.maskAccountNo(accountNo);
+                mainAccount = UserAccount.builder()
+                        .userId(userId)
+                        .userApiKeyId(userApiKey.getId())
+                        .brokerType(brokerType)
+                        .serverType(serverType)
+                        .accountNoEncrypted(accountNoEncrypted)
+                        .accountName(accountName)
+                        .isDefault(true)
+                        .isActive(true)
+                        .build();
+                userAccountRepository.save(mainAccount);
+                log.info("계좌번호 신규 등록: userId={}, accountNo={}, serverType={}",
+                        LogMaskingUtil.maskUserId(userId), LogMaskingUtil.maskAccountNo(accountNo), serverType);
+                if (log.isDebugEnabled()) {
+                    log.debug("  [DEBUG] userId(actual)={}, accountNo(actual)={}", userId, accountNo);
+                }
+            }
+
+            accountNoMasked = LogMaskingUtil.maskAccountNo(accountNo);
+        } else {
+            // 계좌번호 변경이 없으면 기존 계좌번호 마스킹 조회 (같은 서버 타입 메인 계좌)
+            UserAccount mainAccount = userAccountRepository
+                    .findByUserIdAndServerTypeAndIsDefaultTrue(userId, serverType).orElse(null);
+            if (mainAccount != null) {
+                String accountNo = encryptionUtil.decrypt(mainAccount.getAccountNoEncrypted());
+                accountNoMasked = LogMaskingUtil.maskAccountNo(accountNo);
+            }
         }
 
         // 응답 생성
@@ -373,31 +488,12 @@ public class AuthService {
                 .username(user.getUsername())
                 .brokerType(brokerType.getCode())
                 .brokerTypeName(brokerType.getName())
-                .appKeyMasked(maskSensitiveData(appKey))
-                .appSecretMasked(maskSensitiveData(appSecret))
+                .appKeyMasked(LogMaskingUtil.maskApiKey(appKey))
+                .appSecretMasked(LogMaskingUtil.maskSecret(appSecret))
                 .serverType(serverType)
                 .serverTypeName("1".equals(serverType) ? "모의투자" : "실거래")
+                .accountNoMasked(accountNoMasked)
                 .build();
     }
 
-    /**
-     * 민감한 데이터 마스킹 (앞 4자리만 표시)
-     */
-    private String maskSensitiveData(String data) {
-        if (data == null || data.length() <= 4) {
-            return "****";
-        }
-        return data.substring(0, 4) + "*".repeat(Math.min(data.length() - 4, 20));
-    }
-
-    /**
-     * 계좌번호 마스킹 (뒤 4자리만 표시)
-     */
-    private String maskAccountNo(String accountNo) {
-        if (accountNo == null || accountNo.length() <= 4) {
-            return "****";
-        }
-        int length = accountNo.length();
-        return "*".repeat(Math.max(0, length - 4)) + accountNo.substring(length - 4);
-    }
 }

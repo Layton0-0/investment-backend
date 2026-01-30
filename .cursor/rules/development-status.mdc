@@ -1,0 +1,21 @@
+---
+alwaysApply: true
+---
+
+# 개발 진행 현황 문서 참조·갱신
+
+1. **참조**: 개발·기획·태스크 관련 작업 시 [docs/09-planning/02-development-status.md](docs/09-planning/02-development-status.md)를 참조한다.
+2. **갱신**: 다음에 해당하면 해당 문서를 수정한다.
+   - 새 기능/태스크를 완료했을 때 → "1. 완료 (Completed)"에 항목 추가
+   - 진행 중인 스프린트/태스크가 바뀌었을 때 → "2. 진행중 (In progress)" 갱신
+   - 진행예정 범위·우선순위가 바뀌었을 때 → "3. 진행예정 (Planned)" 갱신
+3. **연동**: roadmap.md의 Phase·체크리스트와 불일치가 생기면, development-status를 우선 반영하고 필요 시 roadmap.md도 맞춘다.
+
+# 작업 중 문서 업데이트 (필수)
+
+4. **문서 동기화**: 작업 중에 설계·API·설정·결정 사항 등이 바뀌면 **반드시** 해당 문서를 즉시 수정한다.
+   - API 시그니처·요청/응답 형식 변경 → [API 개요](docs/04-api/01-api-overview.md), [엔드포인트](docs/04-api/02-api-endpoints.md), [한국투자증권 API 가이드](docs/04-api/09-korea-investment-api-guide.md) 등 해당 문서 반영
+   - 아키텍처·정책 결정 → [decisions.md](docs/decisions.md)에 ADR 추가 또는 갱신
+   - 완료된 기능·태스크 → [02-development-status.md](docs/09-planning/02-development-status.md) 완료 섹션에 추가
+   - 새 규칙·규약 도입 → 관련 `.cursor/rules/*.mdc` 또는 프로젝트 문서에 명시
+5. **금지**: 코드만 변경하고 관련 문서를 갱신하지 않은 채로 작업을 마치지 않는다.

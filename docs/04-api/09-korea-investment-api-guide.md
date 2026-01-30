@@ -4,6 +4,16 @@
 
 한국투자증권 Open API를 사용하여 국내 주식 시장 데이터를 조회할 수 있습니다.
 
+## 개발 시 필수: 한국투자증권 MCP 사용
+
+이 프로젝트에서는 **한국투자증권 API**를 추가·수정할 때 **한국투자증권 MCP**를 반드시 사용한다.
+
+- **새 API 연동**: MCP로 해당 엔드포인트의 HTTP 메서드(GET/POST), 파라미터 전달 방식(query parameter vs request body)을 확인한 뒤 구현한다.
+- **기존 API 수정**: MCP로 스펙을 확인한 뒤 요청 방식·파라미터가 스펙과 일치하는지 검증한다.
+- **금지**: MCP 확인 없이 공식 문서 추정만으로 요청 형식(POST+body vs GET+query)을 가정하여 구현하지 않는다.
+
+규칙 상세: [.cursor/rules/MCP.mdc](../../.cursor/rules/MCP.mdc). 결정 사항: [ADR 14 한국투자증권 API 요청 방식 및 MCP 사용](../decisions.md#14-한국투자증권-api-요청-방식-및-mcp-사용).
+
 ## 아키텍처
 
 ```
@@ -128,34 +138,40 @@ String symbol = "삼성전자"; // 자동으로 "005930"으로 변환
 **참고**: 
 - `appkey`와 `appsecret`은 한국투자증권 API 문서에서 Required='Y'로 명시된 필수 파라미터입니다.
 - `tr_id`는 각 API마다 고유한 값이며, 실거래와 모의투자 서버에서 다른 값을 사용합니다.
-- 모든 요청은 JSON 형식으로 전송해야 하므로 `Content-Type`은 `application/json`으로 설정합니다.
+- **조회 API**(계좌·시세 조회)는 **GET** 메서드이며 파라미터는 **URI query parameter**로 전달합니다. (주문 실행·토큰 발급 등은 POST + JSON body.)
 
-### 공통 requestBody 파라미터
+### 조회 API 요청 방식 (GET + query parameter)
+
+한국투자증권 국내주식 **조회** API(주식잔고조회, 매수가능조회, 매도가능수량조회, 주문체결조회, 투자계좌자산현황조회, 기간별손익조회, 현재가시세, 차트 조회 등)는 다음을 따릅니다:
+
+- **HTTP 메서드**: **GET**
+- **파라미터 전달**: **URI query parameter** (JSON body 아님)
+
+예: `GET /uapi/domestic-stock/v1/trading/inquire-balance?CANO=12345678&ACNT_PRDT_CD=01&INQR_DVSN=02&...`
+
+### 공통 파라미터 (조회 API는 query parameter로 전달)
 
 #### 계좌 관련 API 공통 파라미터
 
-계좌 관련 API(주식잔고조회, 매수가능조회, 매도가능수량조회, 주문체결조회 등)는 다음 공통 파라미터를 포함합니다:
+계좌 관련 조회 API(주식잔고조회, 매수가능조회, 매도가능수량조회, 주문체결조회 등)는 다음 공통 파라미터를 **query parameter**로 포함합니다:
 
 | 파라미터명 | 타입 | 필수 여부 | 기본값 | 설명 |
 |-----------|------|-----------|-------|------|
 | `CANO` | String | Required | - | 계좌번호 (8자리 또는 10자리) |
 | `ACNT_PRDT_CD` | String | Required | `"01"` | 계좌상품코드 (`"01"`: 주식) |
 
-**사용 예시**:
+**사용 예시** (Map을 URI query parameter로 사용):
 ```java
-// 공통 파라미터
-Map<String, String> requestBody = new HashMap<>();
-requestBody.put("CANO", "12345678");  // 계좌번호
-requestBody.put("ACNT_PRDT_CD", "01"); // 계좌상품코드 (주식)
-
-// API별 고유 파라미터 추가
-requestBody.put("INQR_DVSN", "02"); // 조회구분 (주식잔고조회용)
-requestBody.put("PDNO", "005930"); // 종목코드 (매수가능조회용)
+// 공통 파라미터 Map 생성 후 GET 요청의 query parameter로 전달
+Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createAccountRequestBody(
+    accountNo, Map.of("INQR_DVSN", "02", "PDNO", "005930"));
+URI uri = buildUriWithQueryParams(baseUrl, PATH_INQUIRE_BALANCE, queryParams);
+webClient.get().uri(uri).headers(...).retrieve()...
 ```
 
 #### 시세 관련 API 공통 파라미터
 
-시세 관련 API(차트 조회, 현재가 조회 등)는 계좌번호가 필요 없으며, API별로 고유한 파라미터를 사용합니다.
+시세 관련 조회 API(차트 조회, 현재가 조회 등)는 계좌번호가 필요 없으며, API별 고유 파라미터를 **query parameter**로 전달합니다.
 
 **차트 조회 API 예시**:
 ```java
@@ -176,14 +192,16 @@ requestBody.put("FID_PERIOD_DIV_CODE", "D"); // 기간분할코드 (D: 일봉, W
 HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
     accessToken, appKey, appSecret, trId);
 
-// 계좌 관련 API 공통 requestBody 생성
-Map<String, String> requestBody = KoreaInvestmentRequestBuilder.createAccountRequestBody(
+// 계좌 관련 조회 API: 파라미터 Map 생성 후 GET 요청의 query parameter로 사용
+Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createAccountRequestBody(
     accountNo, 
     Map.of(
         "INQR_DVSN", "02",  // API별 고유 파라미터
         "AFHR_FLPR_YN", "N"
     )
 );
+URI uri = buildUriWithQueryParams(baseUrl, path, queryParams);
+webClient.get().uri(uri).headers(h -> h.addAll(headers)).retrieve()...
 ```
 
 **장점**:
@@ -413,12 +431,14 @@ Java 17을 사용하는 경우 기본적으로 TLS 1.2 이상을 지원하므로
 #### 1. 주식잔고조회
 - **TR ID**: `TTTC8434R` (실거래) / `VTTC8434R` (모의투자)
 - **엔드포인트**: `/uapi/domestic-stock/v1/trading/inquire-balance`
+- **요청 방식**: **GET** + query parameter
 - **기능**: 계좌 잔고 정보 및 보유 종목 목록 조회
 - **사용 클래스**: `KoreaInvestmentAccountClient.inquireBalance()`
 
 #### 2. 매수가능조회
 - **TR ID**: `TTTC8908R` (실거래) / `VTTC8908R` (모의투자)
 - **엔드포인트**: `/uapi/domestic-stock/v1/trading/inquire-psbl-order`
+- **요청 방식**: **GET** + query parameter
 - **기능**: 종목별 매수 가능 금액 및 수량 조회
 - **사용 클래스**: `KoreaInvestmentAccountClient.inquireBuyableAmount()`
 - **필수 파라미터**: `CANO`, `ACNT_PRDT_CD`, `PDNO`, `ORD_UNPR`, `ORD_DVSN`, `CMA_EVLU_AMT_ICLD_YN`, `OVRS_ICLD_YN`
@@ -426,6 +446,7 @@ Java 17을 사용하는 경우 기본적으로 TLS 1.2 이상을 지원하므로
 #### 3. 매도가능수량조회
 - **TR ID**: `TTTC8901R` (실거래) / `VTTC8901R` (모의투자)
 - **엔드포인트**: `/uapi/domestic-stock/v1/trading/inquire-psbl-order2`
+- **요청 방식**: **GET** + query parameter
 - **기능**: 종목별 매도 가능 수량 조회
 - **사용 클래스**: `KoreaInvestmentAccountClient.inquireSellableQuantity()`
 
@@ -433,6 +454,7 @@ Java 17을 사용하는 경우 기본적으로 TLS 1.2 이상을 지원하므로
 - **TR ID**: `TTTC0081R` (실거래, 3개월 이내) / `VTTC0081R` (모의투자, 3개월 이내)
 - **TR ID (3개월 이전)**: `CTSC9215R` (실거래) / `VTSC9215R` (모의투자)
 - **엔드포인트**: `/uapi/domestic-stock/v1/trading/inquire-daily-ccld`
+- **요청 방식**: **GET** + query parameter
 - **기능**: 일별 주문 체결 내역 조회
 - **사용 클래스**: `KoreaInvestmentAccountClient.inquireOrderHistory()`
 - **필수 파라미터**: `CANO`, `ACNT_PRDT_CD`, `INQR_STRT_DT`, `INQR_END_DT`, `SLL_BUY_DVSN_CD`, `CCLD_DVSN`, `INQR_DVSN`, `INQR_DVSN_3`, `EXCG_ID_DVSN_CD` (선택)
@@ -440,12 +462,14 @@ Java 17을 사용하는 경우 기본적으로 TLS 1.2 이상을 지원하므로
 #### 5. 투자계좌자산현황조회
 - **TR ID**: `TTTC8436R` (실거래) / `VTTC8436R` (모의투자)
 - **엔드포인트**: `/uapi/domestic-stock/v1/trading/inquire-assets`
+- **요청 방식**: **GET** + query parameter
 - **기능**: 계좌 자산 현황 종합 조회
 - **사용 클래스**: `KoreaInvestmentAccountClient.inquireAssets()`
 
 #### 6. 기간별손익일별합산조회
 - **TR ID**: `TTTC8708R` (실거래) / `VTTC8708R` (모의투자)
 - **엔드포인트**: `/uapi/domestic-stock/v1/trading/inquire-period-profit-loss`
+- **요청 방식**: **GET** + query parameter
 - **기능**: 기간별 일별 손익 합산 조회
 - **사용 클래스**: `KoreaInvestmentAccountClient.inquirePeriodProfitLoss()`
 

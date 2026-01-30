@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+    <nav class="app-nav" th:fragment="menu">
+        <div class="nav-inner">
+            <a th:each="item : ${menuItems}"
+               th:href="${item.path}"
+               th:text="${item.label}"
+               th:classappend="${activeMenuId == item.id} ? 'active' : ''"
+               class="nav-link"></a>
+        </div>
+    </nav>
+</body>
+</html>

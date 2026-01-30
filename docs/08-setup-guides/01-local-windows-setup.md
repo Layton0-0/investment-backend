@@ -16,15 +16,25 @@ java -version
 # 예: openjdk version "17.0.x"
 ```
 
-### 2. Gradle 확인
+### 2. Gradle 확인 (Wrapper 사용, 전역 설치 불필요)
 
-```powershell
-# Gradle 버전 확인
-gradle -v
+이 프로젝트는 **Gradle Wrapper**를 사용합니다. winget/Chocolatey 등으로 Gradle을 전역 설치할 필요 없이, 프로젝트 루트에서 아래만 하면 됩니다.
 
-# Gradle 8.x 이상이 설치되어 있어야 함
-# 또는 프로젝트의 gradle wrapper 사용: .\gradlew.bat -v
-```
+1. **Wrapper JAR 한 번만 준비** (최초 1회)
+   ```powershell
+   # 프로젝트 루트에서 실행
+   .\scripts\setup-gradle-wrapper.ps1
+   ```
+   스크립트가 `gradle\wrapper\gradle-wrapper.jar`를 다운로드합니다. 실패 시 [GitHub v7.6.3 wrapper](https://github.com/gradle/gradle/raw/v7.6.3/gradle/wrapper/gradle-wrapper.jar)에서 직접 받아 `gradle\wrapper\gradle-wrapper.jar`에 저장하면 됩니다.
+
+2. **빌드/실행**
+   ```powershell
+   .\gradlew.bat -v          # 버전 확인
+   .\gradlew.bat build       # 빌드
+   .\gradlew.bat bootRun     # 실행
+   ```
+
+3. **테스트**: `.\gradlew test` (build 잠금 시 **표준**: `.\scripts\run-tests.ps1` 또는 `$env:GRADLE_UNIQUE_BUILD_DIR='1'; .\gradlew test`)
 
 ### 3. Git 확인
 
@@ -358,13 +368,46 @@ mysql -u investment -p investment < docs/05-database/schema.sql
 ### 3. Spring Boot 애플리케이션 실행
 
 ```powershell
-# 프로젝트 루트에서
+# 프로젝트 루트에서 (기본 local 프로파일 → 포트 8083)
 .\gradlew.bat bootRun
 
 # 또는 빌드 후 실행
 .\gradlew.bat build
 java -jar build\libs\investment-choi-2.0.0.jar
 ```
+
+### 3-1. Cursor/Agent 전용 서버 (포트 8084)
+
+동일 DB/Redis를 쓰면서 **별도 포트(8084)** 로 서버를 띄워 Cursor/Agent에서 확인할 때 사용합니다. 기존 로컬 서버(8083)와 충돌하지 않습니다.
+
+- **8083**: IntelliJ에서 수동 실행·확인용 (일상 개발용).
+- **8084**: Cursor/Agent로 확인할 때만 임시로 사용. **확인을 마친 뒤에는 반드시 8084 서버를 종료**한다.
+
+```powershell
+# 방법 1: 스크립트 사용 (프로젝트 루트에서)
+.\scripts\bootRun-agent.ps1
+
+# 방법 2: Gradle 직접 실행
+.\gradlew.bat bootRun --args="--spring.profiles.active=local,local-agent"
+```
+
+- **포트**: 8084  
+- **로그 파일**: `logs/investment-choi-agent.log`  
+- **프로파일**: `local` 설정을 그대로 쓰고, 포트와 로그만 `local-agent`에서 덮어씀.
+- **빌드 잠금 회피**: `bootRun-agent.ps1`은 내부적으로 `GRADLE_UNIQUE_BUILD_DIR=1`을 설정하여, 기존 `build` 디렉터리가 잠겨 있어도 임시 디렉터리에 빌드 후 실행합니다.
+- **종료**: 8084로 띄운 터미널에서 `Ctrl+C`로 프로세스를 종료한다.
+
+### 3-2. 빌드·테스트 시 주의사항 (build 잠금 회피)
+
+Windows 등에서 `build` 디렉터리가 다른 프로세스에 의해 잠겨 있으면 `Failed to clean up stale outputs` 등으로 빌드/테스트가 실패할 수 있습니다. 아래 **표준 방식**을 사용합니다.
+
+| 목적 | 표준 명령 | 비고 |
+|------|-----------|------|
+| **테스트** | `.\scripts\run-tests.ps1` | `GRADLE_UNIQUE_BUILD_DIR=1`로 임시 디렉터리에 빌드 후 테스트 |
+| **테스트 (환경변수 직접)** | `$env:GRADLE_UNIQUE_BUILD_DIR='1'; .\gradlew test` | 스크립트 없이 동일 동작 |
+| **Agent 전용 서버 실행** | `.\scripts\bootRun-agent.ps1` | 포트 8084, 동일하게 빌드 잠금 회피 |
+
+- **일반 빌드/실행** (`.\gradlew build`, `.\gradlew bootRun`): 잠금 없을 때는 그대로 사용. 잠금 발생 시 위 스크립트 또는 `$env:GRADLE_UNIQUE_BUILD_DIR='1'` 설정 후 실행.
 
 ### 4. AI 서비스 실행
 
@@ -385,15 +428,39 @@ python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ### 5. 서비스 확인
 
 ```powershell
-# Spring Boot 확인
-curl http://localhost:8080/actuator/health
+# Spring Boot 확인 (로컬 포트 8083)
+curl http://localhost:8083/actuator/health
 
 # AI 서비스 확인
 curl http://localhost:8000/
 
 # Swagger UI 확인
-# 브라우저에서: http://localhost:8080/swagger-ui.html
+# 브라우저에서: http://localhost:8083/swagger-ui.html
 ```
+
+### 5-1. 대시보드 사용 전 확인 사항 (입력해야 하는 설정값)
+
+대시보드(계좌 요약·잔고·보유·주문)를 오류 없이 사용하려면 아래 설정이 선행되어야 합니다.
+
+| 구분 | 내용 |
+|------|------|
+| **계좌·API** | API 키(앱키·시크릿), 서버 타입(모의/실전), 계좌번호, 계좌인증(접근 토큰 발급). 회원가입·마이페이지에서 입력. |
+| **거래 설정** | 최대/최소 투자금액, 기본 통화, 자동매매 여부, 리스크 레벨. **한 번도 저장하지 않으면** DB에 거래 설정 행이 없어, 대시보드에서는 "거래 설정" 카드만 비표시됨(잔고·보유·주문은 정상 표시). 설정 화면(마이페이지 또는 `PUT /api/v1/settings/{accountNo}`)에서 **한 번 이상 저장**하면 해당 계좌에 대한 거래 설정이 생성됨. |
+
+- 거래 설정 미저장 상태에서도 대시보드는 동작하며, 거래 설정 카드만 숨겨짐. "설정에서 거래 설정을 등록해 주세요" 안내는 설정 화면(마이페이지)에서 진행하면 됨.
+
+### 6. 개발 시 표준 명령 요약
+
+| 목적 | 명령 | 포트/비고 |
+|------|------|-----------|
+| 일반 서버 실행 (IntelliJ 수동 확인용) | `.\gradlew.bat bootRun` | **8083** (local), 일상 개발·수동 확인용 |
+| Agent/Cursor 전용 서버 (임시) | `.\scripts\bootRun-agent.ps1` | **8084**, 확인 후 **반드시 종료** (Ctrl+C) |
+| 빌드 | `.\gradlew.bat build` | 잠금 시 `$env:GRADLE_UNIQUE_BUILD_DIR='1'` 선 설정 |
+| 테스트 | `.\scripts\run-tests.ps1` 또는 `.\gradlew test` | 잠금 시 run-tests.ps1 권장 |
+| Gradle 버전 확인 | `.\gradlew.bat -v` | Wrapper 사용 |
+
+- **8083**: IntelliJ에서 수동 실행·확인용. **8084**: Cursor/Agent 확인 시에만 임시 사용하고, 확인 끝나면 8084 종료.
+- **로컬 프로파일**: `local`(기본 8083), `local-agent`(8084). 로깅·민감정보 마스킹 규칙은 [보안 설정 참조](../07-security/02-security-configuration-reference.md#로깅-시-민감정보-마스킹-개발-규칙) 참조.
 
 ## Docker Compose 사용 (선택)
 
@@ -521,3 +588,4 @@ taskkill /PID <PID> /F
 | 버전 | 일자 | 작성자 | 변경 내용 |
 |------|------|--------|----------|
 | 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 - setup-guides 폴더로 이동 |
+| 1.1 | 2026-01-30 | System | §5-1 대시보드 사용 전 확인 사항(입력해야 하는 설정값) 추가; §5 서비스 확인 포트 8083 명시 |

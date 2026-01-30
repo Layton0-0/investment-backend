@@ -18,7 +18,8 @@ import java.util.UUID;
 @Entity
 @Table(name = "TB_STRATEGIES", indexes = {
         @Index(name = "IDX_TB_STRATEGIES_USER_ID", columnList = "USER_ID"),
-        @Index(name = "UK_TB_STRATEGIES_USER_ACCOUNT_TYPE", columnList = "USER_ID,ACCOUNT_NO,STRATEGY_TYPE", unique = true)
+        @Index(name = "IDX_TB_STRATEGIES_MARKET", columnList = "MARKET"),
+        @Index(name = "UK_TB_STRATEGIES_ACCOUNT_MARKET_TYPE", columnList = "ACCOUNT_NO,MARKET,STRATEGY_TYPE", unique = true)
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -37,6 +38,9 @@ public class Strategy {
      */
     @Column(name = "USER_ID", length = 36)
     private String userId;
+
+    @Column(name = "MARKET", nullable = false, length = 10)
+    private String market;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "STRATEGY_TYPE", nullable = false, length = 20)
@@ -84,6 +88,9 @@ public class Strategy {
         if (id == null) {
             id = UUID.randomUUID().toString();
         }
+        if (market == null || market.isBlank()) {
+            market = "KR";
+        }
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
         if (totalExecutions == null) {
@@ -106,11 +113,12 @@ public class Strategy {
     }
 
     @Builder
-    public Strategy(String accountNo, String userId, StrategyType strategyType, StrategyStatus status,
+    public Strategy(String accountNo, String userId, String market, StrategyType strategyType, StrategyStatus status,
             BigDecimal maxInvestmentAmount, BigDecimal minInvestmentAmount,
             BigDecimal riskLevel, BigDecimal confidenceThreshold) {
         this.accountNo = accountNo;
         this.userId = userId;
+        this.market = market != null && !market.isBlank() ? market : "KR";
         this.strategyType = strategyType;
         this.status = status != null ? status : StrategyStatus.ACTIVE;
         this.maxInvestmentAmount = maxInvestmentAmount;

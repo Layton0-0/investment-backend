@@ -19,6 +19,7 @@ import java.math.BigDecimal;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.lenient;
 
 /**
  * KoreaInvestmentMarketDataClient 테스트
@@ -29,32 +30,33 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("KoreaInvestmentMarketDataClient 테스트")
 class KoreaInvestmentMarketDataClientTest {
-    
+
     @Mock
     private MarketDataProperties properties;
-    
+
     @Mock
     private WebClient webClient;
-    
+
     @Mock
     private ObjectMapper objectMapper;
-    
+
     @InjectMocks
     private KoreaInvestmentMarketDataClient client;
-    
+
     private MarketDataProperties.KoreaInvestmentProperties kiProps;
-    
+
     @BeforeEach
     void setUp() {
         kiProps = new MarketDataProperties.KoreaInvestmentProperties();
         kiProps.setAppKey("test-app-key");
         kiProps.setAppSecret("test-app-secret");
         kiProps.setServerType("1"); // 모의투자
-        
-        when(properties.getKoreaInvestment()).thenReturn(kiProps);
-        when(properties.getTimeout()).thenReturn(30000);
+
+        lenient().when(properties.getKoreaInvestment()).thenReturn(kiProps);
+        lenient().when(properties.getTimeout()).thenReturn(30000);
+        lenient().when(properties.isUseMockData()).thenReturn(true);
     }
-    
+
     @Test
     @DisplayName("모의 데이터 모드 - RSI 지표 조회")
     void getIndicator_모의데이터_RSI() {
@@ -62,12 +64,12 @@ class KoreaInvestmentMarketDataClientTest {
         String indicator = "rsi";
         String symbol = "005930"; // 삼성전자
         String interval = "1d";
-        
+
         when(properties.isUseMockData()).thenReturn(true);
-        
+
         // when
         Mono<IndicatorResponse> result = client.getIndicator(indicator, symbol, interval);
-        
+
         // then
         StepVerifier.create(result)
                 .assertNext(response -> {
@@ -78,7 +80,7 @@ class KoreaInvestmentMarketDataClientTest {
                 })
                 .verifyComplete();
     }
-    
+
     @Test
     @DisplayName("모의 데이터 모드 - MACD 지표 조회")
     void getIndicator_모의데이터_MACD() {
@@ -86,12 +88,12 @@ class KoreaInvestmentMarketDataClientTest {
         String indicator = "macd";
         String symbol = "005930";
         String interval = "1d";
-        
+
         when(properties.isUseMockData()).thenReturn(true);
-        
+
         // when
         Mono<IndicatorResponse> result = client.getIndicator(indicator, symbol, interval);
-        
+
         // then
         StepVerifier.create(result)
                 .assertNext(response -> {
@@ -102,7 +104,7 @@ class KoreaInvestmentMarketDataClientTest {
                 })
                 .verifyComplete();
     }
-    
+
     @Test
     @DisplayName("모의 데이터 모드 - EMA 지표 조회")
     void getIndicator_모의데이터_EMA() {
@@ -110,12 +112,12 @@ class KoreaInvestmentMarketDataClientTest {
         String indicator = "ema";
         String symbol = "005930";
         String interval = "1d";
-        
+
         when(properties.isUseMockData()).thenReturn(true);
-        
+
         // when
         Mono<IndicatorResponse> result = client.getIndicator(indicator, symbol, interval);
-        
+
         // then
         StepVerifier.create(result)
                 .assertNext(response -> {
@@ -125,7 +127,7 @@ class KoreaInvestmentMarketDataClientTest {
                 })
                 .verifyComplete();
     }
-    
+
     @Test
     @DisplayName("모의 데이터 모드 - Bollinger Bands 지표 조회")
     void getIndicator_모의데이터_BBANDS() {
@@ -133,12 +135,12 @@ class KoreaInvestmentMarketDataClientTest {
         String indicator = "bbands";
         String symbol = "005930";
         String interval = "1d";
-        
+
         when(properties.isUseMockData()).thenReturn(true);
-        
+
         // when
         Mono<IndicatorResponse> result = client.getIndicator(indicator, symbol, interval);
-        
+
         // then
         StepVerifier.create(result)
                 .assertNext(response -> {
@@ -152,7 +154,7 @@ class KoreaInvestmentMarketDataClientTest {
                 })
                 .verifyComplete();
     }
-    
+
     @Test
     @DisplayName("모의 데이터 모드 - ATR 지표 조회")
     void getIndicator_모의데이터_ATR() {
@@ -160,12 +162,12 @@ class KoreaInvestmentMarketDataClientTest {
         String indicator = "atr";
         String symbol = "005930";
         String interval = "1d";
-        
+
         when(properties.isUseMockData()).thenReturn(true);
-        
+
         // when
         Mono<IndicatorResponse> result = client.getIndicator(indicator, symbol, interval);
-        
+
         // then
         StepVerifier.create(result)
                 .assertNext(response -> {
@@ -175,7 +177,7 @@ class KoreaInvestmentMarketDataClientTest {
                 })
                 .verifyComplete();
     }
-    
+
     @Test
     @DisplayName("모의 데이터 모드 - VWAP 지표 조회")
     void getIndicator_모의데이터_VWAP() {
@@ -183,12 +185,12 @@ class KoreaInvestmentMarketDataClientTest {
         String indicator = "vwap";
         String symbol = "005930";
         String interval = "1d";
-        
+
         when(properties.isUseMockData()).thenReturn(true);
-        
+
         // when
         Mono<IndicatorResponse> result = client.getIndicator(indicator, symbol, interval);
-        
+
         // then
         StepVerifier.create(result)
                 .assertNext(response -> {
@@ -198,7 +200,7 @@ class KoreaInvestmentMarketDataClientTest {
                 })
                 .verifyComplete();
     }
-    
+
     @Test
     @DisplayName("모의 데이터 모드 - 지원하지 않는 지표")
     void getIndicator_모의데이터_지원하지_않는_지표() {
@@ -206,12 +208,12 @@ class KoreaInvestmentMarketDataClientTest {
         String indicator = "unknown";
         String symbol = "005930";
         String interval = "1d";
-        
+
         when(properties.isUseMockData()).thenReturn(true);
-        
+
         // when
         Mono<IndicatorResponse> result = client.getIndicator(indicator, symbol, interval);
-        
+
         // then
         StepVerifier.create(result)
                 .assertNext(response -> {
@@ -221,21 +223,20 @@ class KoreaInvestmentMarketDataClientTest {
                 })
                 .verifyComplete();
     }
-    
+
     @Test
     @DisplayName("모의 데이터 모드 - Bulk 지표 조회")
     void getBulkIndicators_모의데이터() {
         // given
         String symbol = "005930";
         String interval = "1d";
-        String[] indicators = {"rsi", "macd", "ema"};
-        
+        String[] indicators = { "rsi", "macd", "ema" };
+
         when(properties.isUseMockData()).thenReturn(true);
-        
+
         // when
-        Mono<java.util.Map<String, IndicatorResponse>> result = 
-                client.getBulkIndicators(symbol, interval, indicators);
-        
+        Mono<java.util.Map<String, IndicatorResponse>> result = client.getBulkIndicators(symbol, interval, indicators);
+
         // then
         StepVerifier.create(result)
                 .assertNext(map -> {
@@ -250,17 +251,17 @@ class KoreaInvestmentMarketDataClientTest {
                 })
                 .verifyComplete();
     }
-    
+
     @Test
     @DisplayName("Provider 이름 확인")
     void getProviderName() {
         // when
         String providerName = client.getProviderName();
-        
+
         // then
         assertEquals("Korea Investment", providerName);
     }
-    
+
     @Test
     @DisplayName("종목명을 종목코드로 변환")
     void getIndicator_종목명_변환() {
@@ -268,12 +269,12 @@ class KoreaInvestmentMarketDataClientTest {
         String indicator = "rsi";
         String symbol = "삼성전자"; // 종목명
         String interval = "1d";
-        
+
         when(properties.isUseMockData()).thenReturn(true);
-        
+
         // when
         Mono<IndicatorResponse> result = client.getIndicator(indicator, symbol, interval);
-        
+
         // then
         StepVerifier.create(result)
                 .assertNext(response -> {

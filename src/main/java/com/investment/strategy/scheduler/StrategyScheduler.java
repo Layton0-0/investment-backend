@@ -1,5 +1,6 @@
 package com.investment.strategy.scheduler;
 
+import com.investment.common.security.LogMaskingUtil;
 import com.investment.domain.entity.Strategy;
 import com.investment.domain.repository.StrategyRepository;
 import com.investment.order.dto.OrderRequestDto;
@@ -25,11 +26,11 @@ import java.util.List;
 @Component
 @RequiredArgsConstructor
 public class StrategyScheduler {
-    
+
     private final StrategyRepository strategyRepository;
     private final StrategyService strategyService;
     private final OrderService orderService;
-    
+
     /**
      * 단기 전략 실행 (매 1시간마다)
      */
@@ -39,7 +40,7 @@ public class StrategyScheduler {
         log.info("단기 전략 실행 시작");
         executeStrategies(StrategyType.SHORT_TERM);
     }
-    
+
     /**
      * 중기 전략 실행 (매일 오전 9시)
      */
@@ -49,7 +50,7 @@ public class StrategyScheduler {
         log.info("중기 전략 실행 시작");
         executeStrategies(StrategyType.MEDIUM_TERM);
     }
-    
+
     /**
      * 장기 전략 실행 (매주 월요일 오전 9시)
      */
@@ -59,62 +60,62 @@ public class StrategyScheduler {
         log.info("장기 전략 실행 시작");
         executeStrategies(StrategyType.LONG_TERM);
     }
-    
+
     /**
      * 전략 실행
      */
     private void executeStrategies(StrategyType strategyType) {
         // 활성화된 전략만 조회 (중지된 전략은 제외)
         List<Strategy> strategies = strategyRepository.findByStatus(StrategyStatus.ACTIVE);
-        
+
         strategies.stream()
                 .filter(s -> s.getStrategyType() == strategyType)
                 .forEach(strategy -> {
                     try {
                         executeStrategy(strategy);
                     } catch (Exception e) {
-                        log.error("전략 실행 실패: accountNo={}, strategyType={}", 
-                                strategy.getAccountNo(), strategy.getStrategyType(), e);
+                        log.error("전략 실행 실패: accountNo={}, strategyType={}",
+                                LogMaskingUtil.maskAccountNo(strategy.getAccountNo()), strategy.getStrategyType(), e);
                         // 실패 기록
                         strategy.recordExecution(false, BigDecimal.ZERO);
                         strategyRepository.save(strategy);
                     }
                 });
     }
-    
+
     /**
      * 개별 전략 실행
      */
     private void executeStrategy(Strategy strategy) {
-        log.info("전략 실행: accountNo={}, strategyType={}", 
+        log.info("전략 실행: accountNo={}, strategyType={}",
                 strategy.getAccountNo(), strategy.getStrategyType());
-        
+
         // 중지된 전략은 실행하지 않음 (이중 체크)
         if (strategy.isStopped()) {
-            log.warn("전략이 중지되어 있어 실행하지 않습니다: accountNo={}, strategyType={}", 
-                    strategy.getAccountNo(), strategy.getStrategyType());
+            log.warn("전략이 중지되어 있어 실행하지 않습니다: accountNo={}, strategyType={}",
+                    LogMaskingUtil.maskAccountNo(strategy.getAccountNo()), strategy.getStrategyType());
             return;
         }
-        
+
         // TODO: 모니터링할 종목 목록 조회 (예: 설정된 종목 목록 또는 포트폴리오 종목)
         // 임시로 빈 리스트 사용
         List<String> symbols = List.of(); // 실제로는 종목 목록을 조회해야 함
-        
+
         if (symbols.isEmpty()) {
-            log.debug("실행할 종목이 없습니다: accountNo={}, strategyType={}", 
-                    strategy.getAccountNo(), strategy.getStrategyType());
+            log.debug("실행할 종목이 없습니다: accountNo={}, strategyType={}",
+                    LogMaskingUtil.maskAccountNo(strategy.getAccountNo()), strategy.getStrategyType());
             return;
         }
-        
+
         // 전략 서비스를 통해 매매 결정
         List<OrderRequestDto> orders = strategyService.decideTradingActionsForSymbols(
-                strategy.getAccountNo(), symbols, strategy.getStrategyType());
-        
+                strategy.getAccountNo(), symbols, strategy.getMarket(), strategy.getStrategyType());
+
         // 주문 실행 및 결과 기록
         BigDecimal totalProfitLoss = BigDecimal.ZERO;
         int successCount = 0;
         int failureCount = 0;
-        
+
         for (OrderRequestDto order : orders) {
             try {
                 orderService.executeOrder(order);
@@ -126,13 +127,14 @@ public class StrategyScheduler {
                 failureCount++;
             }
         }
-        
+
         // 전략 실행 결과 기록
         boolean success = successCount > 0;
         strategy.recordExecution(success, totalProfitLoss);
         strategyRepository.save(strategy);
-        
-        log.info("전략 실행 완료: accountNo={}, strategyType={}, success={}, totalOrders={}", 
-                strategy.getAccountNo(), strategy.getStrategyType(), success, orders.size());
+
+        log.info("전략 실행 완료: accountNo={}, strategyType={}, success={}, totalOrders={}",
+                LogMaskingUtil.maskAccountNo(strategy.getAccountNo()), strategy.getStrategyType(), success,
+                orders.size());
     }
 }

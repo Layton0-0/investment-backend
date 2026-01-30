@@ -15,23 +15,29 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class MyPageResponseDto {
-    
+
     private String userId;
     private String username;
     private String brokerType;
     private String brokerTypeName;
-    
+
     /**
      * API Key 마스킹 (앞 4자리만 표시)
      * 예: "PSncYe4KU3cSzFZvTW71dmuHvHFfeyhqP3QM" -> "PSnc****************"
      */
     private String appKeyMasked;
-    
+
     /**
      * API Secret 마스킹 (앞 4자리만 표시)
      */
     private String appSecretMasked;
-    
+
     private String serverType;
     private String serverTypeName; // "모의투자" 또는 "실거래"
+
+    /**
+     * 계좌번호 마스킹 (뒤 4자리만 표시)
+     * 예: "12345678-12" -> "****5678-12"
+     */
+    private String accountNoMasked;
 }

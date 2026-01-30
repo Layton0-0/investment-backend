@@ -23,8 +23,9 @@ import java.util.UUID;
         @Index(name = "IDX_USER_ACCOUNTS_USER_ID", columnList = "USER_ID"),
         @Index(name = "IDX_USER_ACCOUNTS_USER_API_KEY", columnList = "USER_API_KEY_ID"),
         @Index(name = "IDX_USER_ACCOUNTS_BROKER_TYPE", columnList = "BROKER_TYPE"),
-        @Index(name = "IDX_USER_ACCOUNTS_IS_DEFAULT", columnList = "USER_ID,IS_DEFAULT"),
-        @Index(name = "UK_USER_ACCOUNTS_USER_ACCOUNT", columnList = "USER_ID,ACCOUNT_NO_ENCRYPTED,BROKER_TYPE", unique = true)
+        @Index(name = "IDX_USER_ACCOUNTS_SERVER_TYPE", columnList = "SERVER_TYPE"),
+        @Index(name = "IDX_USER_ACCOUNTS_IS_DEFAULT", columnList = "USER_ID,SERVER_TYPE,IS_DEFAULT"),
+        @Index(name = "UK_USER_ACCOUNTS_USER_ACCOUNT", columnList = "USER_ID,ACCOUNT_NO_ENCRYPTED,BROKER_TYPE,SERVER_TYPE", unique = true)
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -61,6 +62,13 @@ public class UserAccount {
     @Enumerated(EnumType.STRING)
     @Column(name = "BROKER_TYPE", nullable = false, length = 50)
     private BrokerType brokerType;
+
+    /**
+     * 서버 타입 (모의투자: "1", 실거래: "0")
+     * 모의계좌와 실거래 계좌의 계좌번호가 각각 다름
+     */
+    @Column(name = "SERVER_TYPE", nullable = false, length = 1)
+    private String serverType = "1";
 
     /**
      * 계좌 별칭 (예: "한국투자증권 ****1234")
@@ -103,11 +111,12 @@ public class UserAccount {
 
     @Builder
     public UserAccount(String userId, String userApiKeyId, String accountNoEncrypted,
-            BrokerType brokerType, String accountName, Boolean isDefault, Boolean isActive) {
+            BrokerType brokerType, String serverType, String accountName, Boolean isDefault, Boolean isActive) {
         this.userId = userId;
         this.userApiKeyId = userApiKeyId;
         this.accountNoEncrypted = accountNoEncrypted;
         this.brokerType = brokerType;
+        this.serverType = serverType != null ? serverType : "1";
         this.accountName = accountName;
         this.isDefault = isDefault != null ? isDefault : false;
         this.isActive = isActive != null ? isActive : true;
@@ -139,5 +148,12 @@ public class UserAccount {
      */
     public void setActive(Boolean isActive) {
         this.isActive = isActive != null ? isActive : true;
+    }
+
+    /**
+     * 계좌번호 업데이트
+     */
+    public void updateAccountNo(String accountNoEncrypted) {
+        this.accountNoEncrypted = accountNoEncrypted;
     }
 }

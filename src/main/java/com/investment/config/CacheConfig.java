@@ -17,52 +17,61 @@ import java.util.Map;
 
 /**
  * Redis 캐싱 설정
- * 
+ *
  * 캐시 전략:
  * - marketData: 시장 데이터 (5분 TTL)
+ * - currentPrice: 실시간 현재가 (5분 TTL)
  * - analysis: 종목 분석 결과 (10분 TTL)
  * - account: 계좌 정보 (1분 TTL)
+ *
+ * 캐시 무효화: 주문 체결·계좌 갱신 시 해당 계좌/종목 캐시는 TTL 만료로 자동 갱신.
+ * 강제 무효화가 필요하면 서비스에서 CacheManager.getCache(CACHE_ACCOUNT).evict(key) 등 호출.
+ * Redis 미사용 시: spring.profiles.include=no-redis 로 캐시 타입 simple 사용 (로컬 개발용).
  */
 @Configuration
 @EnableCaching
 public class CacheConfig {
-    
-    /**
-     * 캐시 이름 상수
-     */
-    public static final String CACHE_MARKET_DATA = "marketData";
-    public static final String CACHE_ANALYSIS = "analysis";
-    public static final String CACHE_ACCOUNT = "account";
-    
-    /**
-     * Redis 캐시 매니저 설정
-     */
-    @Bean
-    public CacheManager cacheManager(RedisConnectionFactory redisConnectionFactory) {
-        // 기본 캐시 설정
-        RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
-                .entryTtl(Duration.ofMinutes(10)) // 기본 10분
-                .serializeKeysWith(RedisSerializationContext.SerializationPair
-                        .fromSerializer(new StringRedisSerializer()))
-                .serializeValuesWith(RedisSerializationContext.SerializationPair
-                        .fromSerializer(new GenericJackson2JsonRedisSerializer()))
-                .disableCachingNullValues(); // null 값 캐싱 비활성화
-        
-        // 캐시별 TTL 설정
-        Map<String, RedisCacheConfiguration> cacheConfigurations = new HashMap<>();
-        
-        // 시장 데이터: 5분 TTL
-        cacheConfigurations.put(CACHE_MARKET_DATA, defaultConfig.entryTtl(Duration.ofMinutes(5)));
-        
-        // 종목 분석 결과: 10분 TTL
-        cacheConfigurations.put(CACHE_ANALYSIS, defaultConfig.entryTtl(Duration.ofMinutes(10)));
-        
-        // 계좌 정보: 1분 TTL (자주 변경될 수 있음)
-        cacheConfigurations.put(CACHE_ACCOUNT, defaultConfig.entryTtl(Duration.ofMinutes(1)));
-        
-        return RedisCacheManager.builder(redisConnectionFactory)
-                .cacheDefaults(defaultConfig)
-                .withInitialCacheConfigurations(cacheConfigurations)
-                .build();
-    }
+
+        /**
+         * 캐시 이름 상수
+         */
+        public static final String CACHE_MARKET_DATA = "marketData";
+        /** 실시간 현재가 (종목별, 5분 TTL) */
+        public static final String CACHE_CURRENT_PRICE = "currentPrice";
+        public static final String CACHE_ANALYSIS = "analysis";
+        public static final String CACHE_ACCOUNT = "account";
+
+        /**
+         * Redis 캐시 매니저 설정
+         */
+        @Bean
+        public CacheManager cacheManager(RedisConnectionFactory redisConnectionFactory) {
+                // 기본 캐시 설정
+                RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
+                                .entryTtl(Duration.ofMinutes(10)) // 기본 10분
+                                .serializeKeysWith(RedisSerializationContext.SerializationPair
+                                                .fromSerializer(new StringRedisSerializer()))
+                                .serializeValuesWith(RedisSerializationContext.SerializationPair
+                                                .fromSerializer(new GenericJackson2JsonRedisSerializer()))
+                                .disableCachingNullValues(); // null 값 캐싱 비활성화
+
+                // 캐시별 TTL 설정
+                Map<String, RedisCacheConfiguration> cacheConfigurations = new HashMap<>();
+
+                // 시장 데이터: 5분 TTL
+                cacheConfigurations.put(CACHE_MARKET_DATA, defaultConfig.entryTtl(Duration.ofMinutes(5)));
+                // 실시간 현재가: 5분 TTL
+                cacheConfigurations.put(CACHE_CURRENT_PRICE, defaultConfig.entryTtl(Duration.ofMinutes(5)));
+
+                // 종목 분석 결과: 10분 TTL
+                cacheConfigurations.put(CACHE_ANALYSIS, defaultConfig.entryTtl(Duration.ofMinutes(10)));
+
+                // 계좌 정보: 1분 TTL (자주 변경될 수 있음)
+                cacheConfigurations.put(CACHE_ACCOUNT, defaultConfig.entryTtl(Duration.ofMinutes(1)));
+
+                return RedisCacheManager.builder(redisConnectionFactory)
+                                .cacheDefaults(defaultConfig)
+                                .withInitialCacheConfigurations(cacheConfigurations)
+                                .build();
+        }
 }

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>뉴스·이벤트 - Investment Choi</title>
+    <link rel="stylesheet" th:href="@{/css/common.css}">
+    <style>
+        .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+        .page-title { font-size: 22px; font-weight: 700; margin-bottom: 24px; color: #191F28; }
+        .filters { background: #fff; padding: 16px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+        .filters input, .filters select { padding: 8px 12px; border: 1px solid #E5E8EB; border-radius: 8px; }
+        .card { background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #E5E8EB; }
+        th { background: #f8f9fa; font-weight: 600; color: #8B95A1; }
+        .empty-state { text-align: center; padding: 48px; color: #8B95A1; }
+        .pagination { margin-top: 16px; display: flex; gap: 8px; align-items: center; }
+    </style>
+</head>
+<body>
+    <div th:replace="~{fragments/layout-header :: header}"></div>
+    <nav th:replace="~{fragments/layout-menu :: menu}"></nav>
+
+    <div class="container">
+        <h2 class="page-title">뉴스·이벤트</h2>
+
+        <div class="filters">
+            <form method="get" th:action="@{/news}" class="filter-form" style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+                <select name="market">
+                    <option value="">전체 시장</option>
+                    <option value="KR" th:selected="${market == 'KR'}">국내(KR)</option>
+                    <option value="US" th:selected="${market == 'US'}">미국(US)</option>
+                </select>
+                <input type="text" name="source" th:value="${source}" placeholder="원천 (DART, SEC_EDGAR 등)">
+                <input type="text" name="symbol" th:value="${symbol}" placeholder="종목 코드">
+                <input type="date" name="from" th:value="${from}">
+                <input type="date" name="to" th:value="${to}">
+                <button type="submit">조회</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <table th:if="${newsPage != null and newsPage.content != null and !newsPage.content.isEmpty()}">
+                <thead>
+                    <tr>
+                        <th>수집 시각</th>
+                        <th>원천</th>
+                        <th>시장</th>
+                        <th>유형</th>
+                        <th>제목</th>
+                        <th>종목</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="item : ${newsPage.content}">
+                        <td th:text="${#temporals.format(item.collectedAt, 'yyyy-MM-dd HH:mm')}"></td>
+                        <td th:text="${item.source}"></td>
+                        <td th:text="${item.market}"></td>
+                        <td th:text="${item.itemType}"></td>
+                        <td><a th:href="${item.url}" th:text="${item.title}" target="_blank" rel="noopener"></a></td>
+                        <td th:text="${item.symbol}"></td>
+                    </tr>
+                </tbody>
+            </table>
+            <div th:if="${newsPage == null or newsPage.content == null or newsPage.content.isEmpty()}" class="empty-state">
+                뉴스·공시 항목이 없습니다. 수집 파이프라인 연동 후 목록이 표시됩니다.
+            </div>
+            <div th:if="${newsPage != null and newsPage.page != null and newsPage.page.totalPages > 1}" class="pagination">
+                <span th:text="${'총 ' + newsPage.page.totalElements + '건'}"></span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -48,6 +48,14 @@
 
 ## 3. API 엔드포인트 목록
 
+### 3.0 인증 API
+- `POST /api/v1/auth/signup` - 회원가입
+- `POST /api/v1/auth/login` - 로그인
+- `POST /api/v1/auth/verify-account` - 계좌인증 (회원가입 전: API Key·서버타입·계좌번호가 모의/실전 도메인에서 유효한지 확인)
+- `GET /api/v1/auth/mypage` - 마이페이지 조회
+- `PUT /api/v1/auth/mypage` - 마이페이지 수정
+- `POST /api/v1/auth/logout` - 로그아웃
+
 ### 3.1 계좌 API
 - `GET /api/v1/accounts/{accountNo}/balance` - 계좌 잔고 조회
 - `GET /api/v1/accounts/{accountNo}/positions` - 보유 종목 조회
@@ -59,12 +67,12 @@
 - `DELETE /api/v1/orders/{orderId}` - 주문 취소
 
 ### 3.3 전략 API
-- `GET /api/v1/strategies/{accountNo}` - 전략 목록 조회
-- `GET /api/v1/strategies/{accountNo}/{strategyType}` - 전략 상세 조회
-- `POST /api/v1/strategies` - 전략 생성/업데이트
-- `PUT /api/v1/strategies/{accountNo}/{strategyType}/status` - 전략 상태 변경
-- `POST /api/v1/strategies/{accountNo}/{strategyType}/activate` - 전략 활성화
-- `POST /api/v1/strategies/{accountNo}/{strategyType}/stop` - 전략 중지
+- `GET /api/v1/strategies/{accountNo}` - 전략 목록 조회 (쿼리: `market` 선택, KR/US)
+- `GET /api/v1/strategies/{accountNo}/{strategyType}` - 전략 상세 조회 (쿼리: `market` 선택)
+- `POST /api/v1/strategies` - 전략 생성/업데이트 (body에 `market` 포함 가능, 기본 KR)
+- `PUT /api/v1/strategies/{accountNo}/{strategyType}/status` - 전략 상태 변경 (쿼리: `market` 선택)
+- `POST /api/v1/strategies/{accountNo}/{strategyType}/activate` - 전략 활성화 (쿼리: `market` 선택)
+- `POST /api/v1/strategies/{accountNo}/{strategyType}/stop` - 전략 중지 (쿼리: `market` 선택)
 
 ### 3.4 분석 API
 - `POST /api/v1/analysis` - 종목 분석
@@ -78,6 +86,9 @@
 
 ### 3.7 배치 관리 API
 - `GET /api/v1/batch/jobs` - 배치 작업 목록 조회
+
+### 3.8 뉴스·공시 API
+- `GET /api/v1/news` - 뉴스·공시 목록 조회 (쿼리: `market`, `source`, `symbol`, `from`, `to`, `page`, `size`)
 
 ## 4. API 버전 관리
 

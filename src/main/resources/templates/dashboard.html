@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>투자 대시보드 - Investment Choi</title>
     <meta name="description" content="고수익 자동투자 시스템 대시보드">
+    <link rel="stylesheet" th:href="@{/css/common.css}">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -353,28 +354,11 @@
     </style>
 </head>
 <body>
-    <!-- 헤더 -->
-    <div class="header">
-        <div class="header-content">
-            <div>
-                <h1>투자 대시보드</h1>
-                <div class="welcome" th:if="${userInfo}">
-                    안녕하세요, <strong th:text="${userInfo.username}"></strong>님
-                </div>
-                <div class="welcome" th:unless="${userInfo}">
-                    투자 대시보드에 오신 것을 환영합니다
-                </div>
-            </div>
-            <div class="user-info">
-                <span class="user-badge" th:if="${userInfo}" th:text="${userInfo.brokerTypeName}"></span>
-                <span class="user-badge" th:if="${userInfo}" th:text="${userInfo.serverTypeName}"></span>
-                <a href="/mypage" class="logout-link">마이페이지</a>
-                <a href="#" onclick="logout(); return false;" class="logout-link">로그아웃</a>
-            </div>
-        </div>
-    </div>
-    
+    <div th:replace="~{fragments/layout-header :: header}"></div>
+    <nav th:replace="~{fragments/layout-menu :: menu}"></nav>
+
     <div class="container">
+        <h2 style="margin-bottom: 20px;">대시보드</h2>
         <!-- 에러 메시지 -->
         <div th:if="${error}" class="error" th:text="${'오류: ' + error}"></div>
         
@@ -399,11 +383,19 @@
                 </select>
             </div>
             
-            <!-- 빠른 액션 -->
+            <!-- 빠른 액션 (화면·메뉴 스펙) -->
             <div class="quick-actions">
-                <a th:href="@{/strategies(accountNo=${accountNo})}" class="quick-action-card">
-                    <div class="icon">📈</div>
-                    <div class="title">전략 관리</div>
+                <a th:href="@{/strategies/kr(accountNo=${accountNo})}" class="quick-action-card">
+                    <div class="icon">🇰🇷</div>
+                    <div class="title">국내 전략</div>
+                </a>
+                <a th:href="@{/strategies/us(accountNo=${accountNo})}" class="quick-action-card">
+                    <div class="icon">🇺🇸</div>
+                    <div class="title">미국 전략</div>
+                </a>
+                <a href="/news" class="quick-action-card">
+                    <div class="icon">📰</div>
+                    <div class="title">뉴스·이벤트</div>
                 </a>
                 <a href="/portfolio" class="quick-action-card">
                     <div class="icon">💼</div>
@@ -411,7 +403,7 @@
                 </a>
                 <a th:href="@{/orders(accountNo=${accountNo})}" class="quick-action-card">
                     <div class="icon">📋</div>
-                    <div class="title">주문 내역</div>
+                    <div class="title">주문·체결</div>
                 </a>
                 <a href="/mypage" class="quick-action-card">
                     <div class="icon">⚙️</div>

@@ -51,10 +51,11 @@ public final class KoreaInvestmentRequestBuilder {
     }
 
     /**
-     * 계좌 관련 API 공통 requestBody 생성
+     * 계좌 관련 API 공통 파라미터 Map 생성
      * 
-     * 계좌 관련 API(주식잔고조회, 매수가능조회, 매도가능수량조회, 주문체결조회 등)의
-     * 공통 파라미터를 포함한 requestBody를 생성합니다.
+     * 계좌 관련 조회 API(주식잔고조회, 매수가능조회, 매도가능수량조회, 주문체결조회 등)는
+     * 한국투자증권 스펙상 GET 메서드 + query parameter로 호출합니다.
+     * 이 메서드가 반환한 Map은 요청 body가 아니라 URI query parameter로 사용합니다.
      * 
      * 공통 파라미터:
      * - CANO: 계좌번호 (8자리)
@@ -66,7 +67,7 @@ public final class KoreaInvestmentRequestBuilder {
      * 
      * @param accountNo        계좌번호 (형식: "12345678-12")
      * @param additionalParams API별 고유 파라미터 (추가/수정할 파라미터)
-     * @return 공통 파라미터와 추가 파라미터가 포함된 requestBody
+     * @return 공통 파라미터와 추가 파라미터가 포함된 Map (조회 API는 query parameter로 사용)
      * @throws IllegalArgumentException 계좌번호 형식이 올바르지 않은 경우
      */
     public static Map<String, String> createAccountRequestBody(String accountNo,
@@ -93,23 +94,24 @@ public final class KoreaInvestmentRequestBuilder {
     }
 
     /**
-     * 계좌 관련 API 공통 requestBody 생성 (추가 파라미터 없음)
+     * 계좌 관련 API 공통 파라미터 Map 생성 (추가 파라미터 없음)
      * 
      * @param accountNo 계좌번호
-     * @return 공통 파라미터만 포함된 requestBody
+     * @return 공통 파라미터만 포함된 Map (조회 API는 query parameter로 사용)
      */
     public static Map<String, String> createAccountRequestBody(String accountNo) {
         return createAccountRequestBody(accountNo, null);
     }
 
     /**
-     * 시세 관련 API requestBody 생성
+     * 시세 관련 API 파라미터 Map 생성
      * 
-     * 시세 관련 API(차트 조회, 현재가 조회 등)의 requestBody를 생성합니다.
-     * 시세 API는 계좌번호가 필요 없으므로 파라미터를 직접 지정합니다.
+     * 시세 관련 조회 API(차트 조회, 현재가 조회 등)는 한국투자증권 스펙상
+     * GET 메서드 + query parameter로 호출합니다.
+     * 이 메서드가 반환한 Map은 URI query parameter로 사용합니다.
      * 
      * @param params API별 파라미터 맵
-     * @return 파라미터가 포함된 requestBody
+     * @return 파라미터가 포함된 Map (조회 API는 query parameter로 사용)
      */
     public static Map<String, String> createMarketDataRequestBody(Map<String, String> params) {
         Map<String, String> requestBody = new HashMap<>();

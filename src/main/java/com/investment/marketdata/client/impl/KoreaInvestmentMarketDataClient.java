@@ -48,22 +48,22 @@ import java.util.Map;
 @RequiredArgsConstructor
 @ConditionalOnProperty(name = "investment.market-data.provider", havingValue = "korea-investment")
 public class KoreaInvestmentMarketDataClient implements MarketDataClient {
-    
+
     private final MarketDataProperties properties;
     private final WebClient webClient;
     private final RateLimiterRegistry rateLimiterRegistry;
     private final KoreaInvestmentTokenService tokenService;
     private final UserApiKeyRepository userApiKeyRepository;
     private final EncryptionUtil encryptionUtil;
-    
+
     // 한국투자증권 API Base URL
     private static final String BASE_URL_REAL = "https://openapi.koreainvestment.com:9443"; // 실거래
     private static final String BASE_URL_VIRTUAL = "https://openapivts.koreainvestment.com:29443"; // 모의투자
-    
+
     // Rate Limiter 인스턴스 이름
     private static final String RATE_LIMITER_API_VIRTUAL = "koreaInvestmentApi";
     private static final String RATE_LIMITER_API_REAL = "koreaInvestmentApiReal";
-    
+
     /**
      * 현재 사용자 ID 가져오기
      */
@@ -74,7 +74,7 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
         }
         return authentication.getName();
     }
-    
+
     /**
      * API 호출용 Rate Limiter 가져오기
      * 서버 타입(실전투자/모의투자)에 따라 적절한 Rate Limiter 반환
@@ -88,29 +88,41 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
             return rateLimiterRegistry.rateLimiter(RATE_LIMITER_API_VIRTUAL);
         }
     }
-    
+
+    /**
+     * 조회 API용 URI 생성 (GET + query parameter).
+     * 한국투자증권 시세 조회 API는 GET 메서드에 query parameter로 전달한다.
+     */
+    private URI buildUriWithQueryParams(String baseUrl, String path, Map<String, String> queryParams) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(baseUrl).path(path);
+        if (queryParams != null) {
+            queryParams.forEach(builder::queryParam);
+        }
+        return builder.build().toUri();
+    }
+
     @Override
     public Mono<IndicatorResponse> getIndicator(String indicator, String symbol, String interval) {
         log.debug("한국투자증권 API 호출: indicator={}, symbol={}, interval={}", indicator, symbol, interval);
-        
+
         // 모의 데이터 사용 여부 확인
         if (properties.isUseMockData()) {
             log.debug("모의 데이터 사용: symbol={}", symbol);
             return Mono.just(createMockIndicatorResponse(indicator, symbol));
         }
-        
+
         // 현재 사용자 ID 가져오기
         String userId = getCurrentUserId();
-        
+
         // Access Token 확인 및 갱신
         return ensureAccessToken(userId)
                 .flatMap(tokenInfo -> {
                     String token = tokenInfo.get("token");
                     String serverType = tokenInfo.get("serverType");
-                    
+
                     // 종목 코드 변환 (6자리 종목코드)
                     String stockCode = StockCodeConverter.toStockCode(symbol);
-                    
+
                     // 차트 데이터 조회 (한국투자증권 API는 차트 데이터를 제공하고, 클라이언트에서 지표 계산)
                     return getChartData(stockCode, interval, token, userId, serverType)
                             .map(chartData -> calculateIndicator(chartData, indicator))
@@ -122,25 +134,36 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
                 .timeout(Duration.ofMillis(properties.getTimeout()))
                 .onErrorReturn(createErrorResponse("타임아웃 또는 오류 발생"));
     }
-    
+
     @Override
     public Mono<Map<String, IndicatorResponse>> getBulkIndicators(
             String symbol, String interval, String... indicators) {
-        
+
         log.debug("한국투자증권 Bulk API 호출: symbol={}, interval={}, indicators={}", symbol, interval, indicators);
-        
+
+        // 모의 데이터 사용 여부 확인
+        if (properties.isUseMockData()) {
+            log.debug("모의 데이터 사용: symbol={}, indicators={}", symbol, indicators);
+            String stockCode = StockCodeConverter.toStockCode(symbol);
+            Map<String, IndicatorResponse> resultMap = new HashMap<>();
+            for (String indicator : indicators) {
+                resultMap.put(indicator, createMockIndicatorResponse(indicator, stockCode));
+            }
+            return Mono.just(resultMap);
+        }
+
         // 종목 코드 변환
         String stockCode = StockCodeConverter.toStockCode(symbol);
-        
+
         // 현재 사용자 ID 가져오기
         String userId = getCurrentUserId();
-        
+
         // Access Token 확인 및 갱신
         return ensureAccessToken(userId)
                 .flatMap(tokenInfo -> {
                     String token = tokenInfo.get("token");
                     String serverType = tokenInfo.get("serverType");
-                    
+
                     // 차트 데이터를 한 번만 조회
                     return getChartData(stockCode, interval, token, userId, serverType)
                             .map(chartData -> {
@@ -165,12 +188,12 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
                 .timeout(Duration.ofMillis(properties.getTimeout()))
                 .onErrorReturn(new HashMap<>());
     }
-    
+
     @Override
     public String getProviderName() {
         return "Korea Investment";
     }
-    
+
     /**
      * 주식 현재가 조회
      * 
@@ -182,25 +205,25 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
      */
     public Mono<com.investment.marketdata.dto.CurrentPriceDto> getCurrentPrice(String symbol) {
         log.debug("한국투자증권 현재가 조회: symbol={}", symbol);
-        
+
         // 모의 데이터 사용 여부 확인
         if (properties.isUseMockData()) {
             log.debug("모의 데이터 사용: symbol={}", symbol);
             return Mono.just(createMockCurrentPrice(symbol));
         }
-        
+
         // 현재 사용자 ID 가져오기
         String userId = getCurrentUserId();
-        
+
         // 종목 코드 변환 (6자리 종목코드)
         String stockCode = StockCodeConverter.toStockCode(symbol);
-        
+
         // Access Token 확인 및 갱신
         return ensureAccessToken(userId)
                 .flatMap(tokenInfo -> {
                     String token = tokenInfo.get("token");
                     String serverType = tokenInfo.get("serverType");
-                    
+
                     return getCurrentPriceFromApi(stockCode, token, userId, serverType)
                             .onErrorResume(error -> {
                                 log.error("한국투자증권 현재가 조회 실패: symbol={}", symbol, error);
@@ -210,65 +233,58 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
                 .timeout(Duration.ofMillis(properties.getTimeout()))
                 .onErrorMap(throwable -> new RuntimeException("현재가 조회 타임아웃 또는 오류 발생", throwable));
     }
-    
+
     /**
      * 한국투자증권 API를 통한 현재가 조회
      */
     private Mono<com.investment.marketdata.dto.CurrentPriceDto> getCurrentPriceFromApi(
             String stockCode, String accessToken, String userId, String serverType) {
-        
+
         // 사용자 API 키 정보 조회
         List<UserApiKey> userApiKeys = userApiKeyRepository.findByUserId(userId);
         if (userApiKeys.isEmpty()) {
             return Mono.error(new IllegalStateException("사용자 API 키를 찾을 수 없습니다: userId=" + userId));
         }
         UserApiKey userApiKey = userApiKeys.get(0);
-        
+
         // API 키 복호화
         String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
         String appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
-        
+
         String baseUrl = getBaseUrl(serverType);
         String trId = "FHKST01010100"; // 주식현재가 조회 TR ID
-        
-        // API 엔드포인트
-        URI uri = UriComponentsBuilder.fromHttpUrl(baseUrl)
-                .path("/uapi/domestic-stock/v1/quotations/inquire-price")
-                .build()
-                .toUri();
-        
+
         // 요청 헤더 생성 (공통 유틸리티 사용)
         HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
                 accessToken, appKey, appSecret, trId);
-        
-        // 요청 바디 생성 (시세 API 파라미터)
-        Map<String, String> requestBody = KoreaInvestmentRequestBuilder.createMarketDataRequestBody(
+
+        // 조회 파라미터 (GET query parameter로 전달)
+        Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createMarketDataRequestBody(
                 Map.of(
                         "FID_COND_MRKT_DIV_CODE", "J", // J: 주식, ETF, ETN
                         "FID_INPUT_ISCD", stockCode // 종목코드
                 ));
-        
+        URI uri = buildUriWithQueryParams(baseUrl, "/uapi/domestic-stock/v1/quotations/inquire-price", queryParams);
+
         log.debug("한국투자증권 현재가 조회 API 호출: stockCode={}", stockCode);
-        
+
         // Rate Limiter 적용
         RateLimiter rateLimiter = getApiRateLimiter(serverType);
-        
+
         return Mono.fromCallable(() -> {
-                    rateLimiter.acquirePermission();
-                    return null;
-                })
-                .flatMap(ignored -> webClient.post()
+            rateLimiter.acquirePermission();
+            return null;
+        })
+                .flatMap(ignored -> webClient.get()
                         .uri(uri)
                         .headers(h -> h.addAll(headers))
-                        .bodyValue(requestBody)
                         .retrieve()
                         .bodyToMono(Map.class)
                         .timeout(Duration.ofMillis(properties.getTimeout()))
                         .retryWhen(Retry.backoff(2, Duration.ofSeconds(1))
                                 .filter(throwable -> {
                                     if (throwable instanceof org.springframework.web.reactive.function.client.WebClientResponseException) {
-                                        org.springframework.web.reactive.function.client.WebClientResponseException ex = 
-                                                (org.springframework.web.reactive.function.client.WebClientResponseException) throwable;
+                                        org.springframework.web.reactive.function.client.WebClientResponseException ex = (org.springframework.web.reactive.function.client.WebClientResponseException) throwable;
                                         if (ex.getStatusCode().value() == 401) {
                                             log.warn("401 에러 발생, 토큰 재발급 시도: userId={}", userId);
                                             try {
@@ -288,32 +304,33 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
                         .map(response -> {
                             @SuppressWarnings("unchecked")
                             Map<String, Object> responseMap = (Map<String, Object>) response;
-                            
+
                             // rt_cd 체크
                             String rtCd = (String) responseMap.get("rt_cd");
                             if (rtCd == null || !"0".equals(rtCd)) {
                                 String msg1 = (String) responseMap.get("msg1");
                                 String msgCd = (String) responseMap.get("msg_cd");
-                                throw new RuntimeException("한국투자증권 API 오류: rt_cd=" + rtCd + ", msg_cd=" + msgCd + ", msg1=" + msg1);
+                                throw new RuntimeException(
+                                        "한국투자증권 API 오류: rt_cd=" + rtCd + ", msg_cd=" + msgCd + ", msg1=" + msg1);
                             }
-                            
+
                             // output 파싱
                             @SuppressWarnings("unchecked")
                             Map<String, Object> output = (Map<String, Object>) responseMap.get("output");
                             if (output == null) {
                                 throw new RuntimeException("한국투자증권 API 응답에 output이 없습니다");
                             }
-                            
+
                             return parseCurrentPriceResponse(output, stockCode);
                         }));
     }
-    
+
     /**
      * 현재가 응답 파싱
      */
     private com.investment.marketdata.dto.CurrentPriceDto parseCurrentPriceResponse(
             Map<String, Object> output, String stockCode) {
-        
+
         // 한국투자증권 API 응답 필드명 매핑
         // 실제 API 응답 필드명에 맞게 수정 필요
         String name = (String) output.getOrDefault("hts_kor_isnm", "");
@@ -328,7 +345,7 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
         String tradingValueStr = (String) output.getOrDefault("acml_tr_pbmn", "0");
         String marketCapStr = (String) output.getOrDefault("hts_avls", "0");
         String listedSharesStr = (String) output.getOrDefault("lstc_stck_cnt", "0");
-        
+
         return com.investment.marketdata.dto.CurrentPriceDto.builder()
                 .symbol(stockCode)
                 .name(name)
@@ -346,7 +363,7 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
                 .queriedAt(java.time.LocalDateTime.now())
                 .build();
     }
-    
+
     /**
      * BigDecimal 파싱 헬퍼
      */
@@ -363,7 +380,7 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
             return BigDecimal.ZERO;
         }
     }
-    
+
     /**
      * Long 파싱 헬퍼
      */
@@ -379,7 +396,7 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
             return 0L;
         }
     }
-    
+
     /**
      * 모의 현재가 데이터 생성
      */
@@ -401,7 +418,7 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
                 .queriedAt(java.time.LocalDateTime.now())
                 .build();
     }
-    
+
     /**
      * Access Token 확인 및 갱신
      * DB에서 사용자별 토큰을 조회하고, 만료되었으면 자동으로 재발급합니다.
@@ -410,35 +427,35 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
         try {
             // DB에서 토큰 조회
             String accessToken = tokenService.getAccessToken(userId);
-            
+
             // 사용자 API 키 정보 조회 (서버 타입 확인용)
             List<UserApiKey> userApiKeys = userApiKeyRepository.findByUserId(userId);
             if (userApiKeys.isEmpty()) {
                 throw new IllegalStateException("사용자 API 키를 찾을 수 없습니다: userId=" + userId);
             }
             UserApiKey userApiKey = userApiKeys.get(0);
-            
+
             Map<String, String> tokenInfo = new HashMap<>();
             tokenInfo.put("token", accessToken);
             tokenInfo.put("serverType", userApiKey.getServerType());
-            
+
             return Mono.just(tokenInfo);
         } catch (RuntimeException e) {
             // 토큰이 없거나 만료된 경우 재발급 시도
             log.warn("토큰 조회 실패, 재발급 시도: userId={}, error={}", userId, e.getMessage());
-            
+
             return Mono.fromCallable(() -> {
                 List<UserApiKey> userApiKeys = userApiKeyRepository.findByUserId(userId);
                 if (userApiKeys.isEmpty()) {
                     throw new IllegalStateException("사용자 API 키를 찾을 수 없습니다: userId=" + userId);
                 }
                 UserApiKey userApiKey = userApiKeys.get(0);
-                
+
                 // 한국투자증권인 경우에만 토큰 발급
                 if (userApiKey.getBrokerType() == BrokerType.KOREA_INVESTMENT) {
                     tokenService.issueTokenForUser(userApiKey);
                     String accessToken = tokenService.getAccessToken(userId);
-                    
+
                     Map<String, String> tokenInfo = new HashMap<>();
                     tokenInfo.put("token", accessToken);
                     tokenInfo.put("serverType", userApiKey.getServerType());
@@ -449,48 +466,41 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
             });
         }
     }
-    
-    
+
     /**
      * 차트 데이터 조회
      * 한국투자증권 API의 주식 차트 조회 API를 사용합니다.
      * Rate Limiter 적용: 실전투자 1초당 20건, 모의투자 1초당 2건
      */
-    private Mono<List<Map<String, Object>>> getChartData(String stockCode, String interval, 
-                                                          String accessToken, String userId, String serverType) {
+    private Mono<List<Map<String, Object>>> getChartData(String stockCode, String interval,
+            String accessToken, String userId, String serverType) {
         // 사용자 API 키 정보 조회
         List<UserApiKey> userApiKeys = userApiKeyRepository.findByUserId(userId);
         if (userApiKeys.isEmpty()) {
             return Mono.error(new IllegalStateException("사용자 API 키를 찾을 수 없습니다: userId=" + userId));
         }
         UserApiKey userApiKey = userApiKeys.get(0);
-        
+
         // API 키 복호화
         String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
         String appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
-        
+
         String baseUrl = getBaseUrl(serverType);
-        
+
         String trId = "FHKST03010100"; // 주식현재가 일봉차트 조회 TR ID
-        
+
         // 날짜 설정 (최근 200일)
         LocalDate endDate = LocalDate.now();
         LocalDate startDate = endDate.minusDays(200);
         String endDateStr = endDate.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
         String startDateStr = startDate.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        
-        // API 엔드포인트
-        URI uri = UriComponentsBuilder.fromHttpUrl(baseUrl)
-                .path("/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice")
-                .build()
-                .toUri();
-        
+
         // 요청 헤더 생성 (공통 유틸리티 사용)
         HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
                 accessToken, appKey, appSecret, trId);
-        
-        // 요청 바디 생성 (시세 API 파라미터)
-        Map<String, String> requestBody = KoreaInvestmentRequestBuilder.createMarketDataRequestBody(
+
+        // 조회 파라미터 (GET query parameter로 전달)
+        Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createMarketDataRequestBody(
                 Map.of(
                         "FID_COND_MRKT_DIV_CODE", "J", // J: 주식, ETF, ETN
                         "FID_INPUT_ISCD", stockCode, // 종목코드
@@ -499,43 +509,43 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
                         "FID_PERIOD_DIV_CODE", convertIntervalToPeriodCode(interval), // 기간분할코드
                         "FID_ORG_ADJ_PRC", "0" // 수정주가 원주가 가격 여부 (0: 수정주가, 1: 원주가)
                 ));
-        
+        URI uri = buildUriWithQueryParams(baseUrl, "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice",
+                queryParams);
+
         log.debug("한국투자증권 차트 데이터 조회: stockCode={}, interval={}", stockCode, interval);
-        
+
         // Rate Limiter 적용 (실전투자: 1초당 20건, 모의투자: 1초당 2건)
         RateLimiter rateLimiter = getApiRateLimiter(serverType);
-        
+
         return Mono.fromCallable(() -> {
-                    // Rate Limiter가 허용할 때까지 대기
-                    rateLimiter.acquirePermission();
-                    return null;
-                })
-                .flatMap(ignored -> webClient.post()
+            // Rate Limiter가 허용할 때까지 대기
+            rateLimiter.acquirePermission();
+            return null;
+        })
+                .flatMap(ignored -> webClient.get()
                         .uri(uri)
                         .headers(h -> h.addAll(headers))
-                        .bodyValue(requestBody)
                         .retrieve()
                         .bodyToMono(Map.class)
                         .timeout(Duration.ofMillis(properties.getTimeout()))
                         .retryWhen(Retry.backoff(2, Duration.ofSeconds(1))
                                 .filter(throwable -> {
                                     if (throwable instanceof org.springframework.web.reactive.function.client.WebClientResponseException) {
-                                        org.springframework.web.reactive.function.client.WebClientResponseException ex = 
-                                                (org.springframework.web.reactive.function.client.WebClientResponseException) throwable;
-                                // 401 에러는 토큰 갱신 후 재시도
-                                if (ex.getStatusCode().value() == 401) {
-                                    log.warn("401 에러 발생, 토큰 재발급 시도: userId={}", userId);
-                                    // 토큰 재발급
-                                    try {
-                                        List<UserApiKey> apiKeys = userApiKeyRepository.findByUserId(userId);
-                                        if (!apiKeys.isEmpty()) {
-                                            tokenService.issueTokenForUser(apiKeys.get(0));
+                                        org.springframework.web.reactive.function.client.WebClientResponseException ex = (org.springframework.web.reactive.function.client.WebClientResponseException) throwable;
+                                        // 401 에러는 토큰 갱신 후 재시도
+                                        if (ex.getStatusCode().value() == 401) {
+                                            log.warn("401 에러 발생, 토큰 재발급 시도: userId={}", userId);
+                                            // 토큰 재발급
+                                            try {
+                                                List<UserApiKey> apiKeys = userApiKeyRepository.findByUserId(userId);
+                                                if (!apiKeys.isEmpty()) {
+                                                    tokenService.issueTokenForUser(apiKeys.get(0));
+                                                }
+                                            } catch (Exception e) {
+                                                log.error("토큰 재발급 실패: userId={}", userId, e);
+                                            }
+                                            return true;
                                         }
-                                    } catch (Exception e) {
-                                        log.error("토큰 재발급 실패: userId={}", userId, e);
-                                    }
-                                    return true;
-                                }
                                         return ex.getStatusCode().is5xxServerError();
                                     }
                                     return false;
@@ -543,21 +553,22 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
                         .map(response -> {
                             @SuppressWarnings("unchecked")
                             Map<String, Object> responseMap = (Map<String, Object>) response;
-                            
+
                             // rt_cd 체크 (한국투자증권 API 응답 코드)
                             String rtCd = (String) responseMap.get("rt_cd");
                             if (rtCd == null || !"0".equals(rtCd)) {
                                 String msg1 = (String) responseMap.get("msg1");
                                 String msgCd = (String) responseMap.get("msg_cd");
-                                String errorMsg = String.format("API 호출 실패: rt_cd=%s, msg_cd=%s, msg1=%s", 
+                                String errorMsg = String.format("API 호출 실패: rt_cd=%s, msg_cd=%s, msg1=%s",
                                         rtCd, msgCd, msg1);
                                 log.error("한국투자증권 API 에러 응답: {}", errorMsg);
                                 throw new IllegalStateException(errorMsg);
                             }
-                            
+
                             // output2 직접 접근 (배열로 반환됨)
                             @SuppressWarnings("unchecked")
-                            List<Map<String, Object>> chartData = (List<Map<String, Object>>) responseMap.get("output2");
+                            List<Map<String, Object>> chartData = (List<Map<String, Object>>) responseMap
+                                    .get("output2");
                             if (chartData == null) {
                                 log.warn("차트 데이터가 null입니다. 응답: {}", responseMap);
                                 return List.<Map<String, Object>>of();
@@ -569,7 +580,7 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
                     return new IllegalStateException("차트 데이터 조회 실패", error);
                 });
     }
-    
+
     /**
      * 차트 데이터로부터 지표 계산
      */
@@ -577,7 +588,7 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
         if (chartData == null || chartData.isEmpty()) {
             return createErrorResponse("차트 데이터가 없습니다");
         }
-        
+
         // 차트 데이터를 숫자 배열로 변환 (null 체크 강화)
         double[] closes = chartData.stream()
                 .map(d -> {
@@ -619,9 +630,9 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
                 })
                 .mapToDouble(Double::doubleValue)
                 .toArray();
-        
+
         IndicatorResponse.IndicatorResponseBuilder builder = IndicatorResponse.builder();
-        
+
         switch (indicator.toLowerCase()) {
             case "rsi":
                 double rsi = calculateRSI(closes, 14);
@@ -637,7 +648,7 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
                 double ema20 = calculateEMA(closes, 20);
                 double ema60 = calculateEMA(closes, 60);
                 double ema120 = calculateEMA(closes, 120);
-                builder.values(new BigDecimal[]{
+                builder.values(new BigDecimal[] {
                         BigDecimal.valueOf(ema20),
                         BigDecimal.valueOf(ema60),
                         BigDecimal.valueOf(ema120)
@@ -660,10 +671,10 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
             default:
                 return createErrorResponse("지원하지 않는 지표: " + indicator);
         }
-        
+
         return builder.build();
     }
-    
+
     /**
      * RSI 계산
      */
@@ -671,39 +682,39 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
         if (closes.length < period + 1) {
             return 50.0; // 기본값
         }
-        
+
         double[] gains = new double[closes.length - 1];
         double[] losses = new double[closes.length - 1];
-        
+
         for (int i = 1; i < closes.length; i++) {
             double change = closes[i] - closes[i - 1];
             gains[i - 1] = change > 0 ? change : 0;
             losses[i - 1] = change < 0 ? -change : 0;
         }
-        
+
         double avgGain = 0;
         double avgLoss = 0;
-        
+
         for (int i = 0; i < period; i++) {
             avgGain += gains[i];
             avgLoss += losses[i];
         }
         avgGain /= period;
         avgLoss /= period;
-        
+
         for (int i = period; i < gains.length; i++) {
             avgGain = (avgGain * (period - 1) + gains[i]) / period;
             avgLoss = (avgLoss * (period - 1) + losses[i]) / period;
         }
-        
+
         if (avgLoss == 0) {
             return 100.0;
         }
-        
+
         double rs = avgGain / avgLoss;
         return 100 - (100 / (1 + rs));
     }
-    
+
     /**
      * MACD 계산
      */
@@ -711,14 +722,14 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
         double ema12 = calculateEMA(closes, 12);
         double ema26 = calculateEMA(closes, 26);
         double macd = ema12 - ema26;
-        
+
         // Signal은 MACD의 9일 EMA (간단화를 위해 MACD 값 사용)
         double signal = macd * 0.9; // 근사값
         double hist = macd - signal;
-        
-        return new double[]{macd, signal, hist};
+
+        return new double[] { macd, signal, hist };
     }
-    
+
     /**
      * EMA 계산
      */
@@ -726,46 +737,46 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
         if (closes.length < period) {
             return closes[closes.length - 1];
         }
-        
+
         double multiplier = 2.0 / (period + 1);
         double ema = closes[0];
-        
+
         for (int i = 1; i < closes.length; i++) {
             ema = (closes[i] * multiplier) + (ema * (1 - multiplier));
         }
-        
+
         return ema;
     }
-    
+
     /**
      * Bollinger Bands 계산
      */
     private double[] calculateBollingerBands(double[] closes, int period, double numStdDev) {
         if (closes.length < period) {
             double price = closes[closes.length - 1];
-            return new double[]{price, price, price};
+            return new double[] { price, price, price };
         }
-        
+
         // SMA 계산
         double sum = 0;
         for (int i = closes.length - period; i < closes.length; i++) {
             sum += closes[i];
         }
         double sma = sum / period;
-        
+
         // 표준편차 계산
         double variance = 0;
         for (int i = closes.length - period; i < closes.length; i++) {
             variance += Math.pow(closes[i] - sma, 2);
         }
         double stdDev = Math.sqrt(variance / period);
-        
+
         double upper = sma + (numStdDev * stdDev);
         double lower = sma - (numStdDev * stdDev);
-        
-        return new double[]{upper, sma, lower};
+
+        return new double[] { upper, sma, lower };
     }
-    
+
     /**
      * ATR 계산
      */
@@ -773,7 +784,7 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
         if (highs.length < period + 1) {
             return 0;
         }
-        
+
         double[] trueRanges = new double[highs.length - 1];
         for (int i = 1; i < highs.length; i++) {
             double tr1 = highs[i] - lows[i];
@@ -781,15 +792,15 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
             double tr3 = Math.abs(lows[i] - closes[i - 1]);
             trueRanges[i - 1] = Math.max(tr1, Math.max(tr2, tr3));
         }
-        
+
         double sum = 0;
         for (int i = 0; i < period; i++) {
             sum += trueRanges[i];
         }
-        
+
         return sum / period;
     }
-    
+
     /**
      * VWAP 계산
      */
@@ -797,18 +808,18 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
         if (closes.length != volumes.length || closes.length == 0) {
             return closes.length > 0 ? closes[closes.length - 1] : 0;
         }
-        
+
         double totalValue = 0;
         double totalVolume = 0;
-        
+
         for (int i = 0; i < closes.length; i++) {
             totalValue += closes[i] * volumes[i];
             totalVolume += volumes[i];
         }
-        
+
         return totalVolume > 0 ? totalValue / totalVolume : closes[closes.length - 1];
     }
-    
+
     /**
      * interval을 한국투자증권 API의 기간분할코드로 변환
      */
@@ -816,9 +827,9 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
         if (interval == null) {
             return "D"; // 일봉
         }
-        
+
         String lowerInterval = interval.toLowerCase();
-        
+
         if (lowerInterval.equals("1d") || lowerInterval.equals("1day")) {
             return "D"; // 일봉
         }
@@ -828,10 +839,10 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
         if (lowerInterval.equals("1m") || lowerInterval.equals("1month")) {
             return "M"; // 월봉
         }
-        
+
         return "D"; // 기본값: 일봉
     }
-    
+
     /**
      * Base URL 가져오기 (실거래/모의투자)
      */
@@ -841,13 +852,13 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
         }
         return BASE_URL_REAL; // 실거래
     }
-    
+
     /**
      * 모의 지표 응답 생성 (개발/테스트용)
      */
     private IndicatorResponse createMockIndicatorResponse(String indicator, String symbol) {
         IndicatorResponse.IndicatorResponseBuilder builder = IndicatorResponse.builder();
-        
+
         switch (indicator.toLowerCase()) {
             case "rsi":
                 builder.value(new BigDecimal("50.5"));
@@ -858,7 +869,7 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
                 builder.valueMacdHist(new BigDecimal("0.2"));
                 break;
             case "ema":
-                builder.values(new BigDecimal[]{
+                builder.values(new BigDecimal[] {
                         new BigDecimal("50000"),
                         new BigDecimal("51000"),
                         new BigDecimal("52000")
@@ -878,10 +889,10 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
             default:
                 return createErrorResponse("지원하지 않는 지표: " + indicator);
         }
-        
+
         return builder.build();
     }
-    
+
     /**
      * 에러 응답 생성
      */

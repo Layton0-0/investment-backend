@@ -2,6 +2,7 @@ package com.investment.setting.service;
 
 import com.investment.common.exception.DomainException;
 import com.investment.common.exception.ErrorCode;
+import com.investment.common.security.LogMaskingUtil;
 import com.investment.domain.entity.TradingSetting;
 import com.investment.domain.repository.TradingSettingRepository;
 import com.investment.setting.dto.TradingSettingDto;
@@ -10,6 +11,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Optional;
+
 /**
  * 거래 설정 서비스
  */
@@ -17,32 +20,41 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class TradingSettingService {
-    
+
     private final TradingSettingRepository tradingSettingRepository;
-    
+
     /**
-     * 거래 설정 조회
+     * 거래 설정 조회 (없으면 예외). API용.
      */
     @Transactional(readOnly = true)
     public TradingSettingDto getSetting(String accountNo) {
         TradingSetting setting = tradingSettingRepository.findByAccountNo(accountNo)
                 .orElseThrow(() -> new DomainException(
-                        ErrorCode.SETTING_NOT_FOUND, 
+                        ErrorCode.SETTING_NOT_FOUND,
                         "거래 설정을 찾을 수 없습니다: " + accountNo));
-        
+
         return convertToDto(setting);
     }
-    
+
+    /**
+     * 거래 설정 선택 조회 (없으면 empty). 대시보드 등 선택 표시용.
+     */
+    @Transactional(readOnly = true)
+    public Optional<TradingSettingDto> getSettingOptional(String accountNo) {
+        return tradingSettingRepository.findByAccountNo(accountNo)
+                .map(this::convertToDto);
+    }
+
     /**
      * 거래 설정 저장/업데이트
      */
     @Transactional
     public TradingSettingDto saveSetting(String accountNo, TradingSettingDto dto) {
-        log.info("거래 설정 저장: accountNo={}, maxAmount={}, minAmount={}", 
-                accountNo, dto.getMaxInvestmentAmount(), dto.getMinInvestmentAmount());
-        
+        log.info("거래 설정 저장: accountNo={}, maxAmount={}, minAmount={}",
+                LogMaskingUtil.maskAccountNo(accountNo), dto.getMaxInvestmentAmount(), dto.getMinInvestmentAmount());
+
         validateSetting(dto);
-        
+
         TradingSetting setting = tradingSettingRepository.findByAccountNo(accountNo)
                 .orElse(TradingSetting.builder()
                         .accountNo(accountNo)
@@ -52,7 +64,7 @@ public class TradingSettingService {
                         .autoTradingEnabled(dto.getAutoTradingEnabled() != null ? dto.getAutoTradingEnabled() : false)
                         .riskLevel(dto.getRiskLevel())
                         .build());
-        
+
         if (setting.getId() != null && !setting.getId().isEmpty()) {
             // 업데이트
             setting.updateMaxInvestmentAmount(dto.getMaxInvestmentAmount());
@@ -62,29 +74,29 @@ public class TradingSettingService {
                 setting.updateRiskLevel(dto.getRiskLevel());
             }
         }
-        
+
         setting = tradingSettingRepository.save(setting);
         return convertToDto(setting);
     }
-    
+
     /**
      * 설정 검증
      */
     private void validateSetting(TradingSettingDto dto) {
         if (dto.getMaxInvestmentAmount().compareTo(dto.getMinInvestmentAmount()) < 0) {
-            throw new DomainException(ErrorCode.INVALID_SETTING_VALUE, 
+            throw new DomainException(ErrorCode.INVALID_SETTING_VALUE,
                     "최대 투자금액은 최소 투자금액보다 크거나 같아야 합니다");
         }
-        
+
         if (dto.getRiskLevel() != null) {
-            if (dto.getRiskLevel().compareTo(java.math.BigDecimal.ZERO) < 0 || 
-                dto.getRiskLevel().compareTo(java.math.BigDecimal.ONE) > 0) {
-                throw new DomainException(ErrorCode.INVALID_SETTING_VALUE, 
+            if (dto.getRiskLevel().compareTo(java.math.BigDecimal.ZERO) < 0 ||
+                    dto.getRiskLevel().compareTo(java.math.BigDecimal.ONE) > 0) {
+                throw new DomainException(ErrorCode.INVALID_SETTING_VALUE,
                         "리스크 레벨은 0.0 ~ 1.0 사이의 값이어야 합니다");
             }
         }
     }
-    
+
     private TradingSettingDto convertToDto(TradingSetting setting) {
         return TradingSettingDto.builder()
                 .maxInvestmentAmount(setting.getMaxInvestmentAmount())

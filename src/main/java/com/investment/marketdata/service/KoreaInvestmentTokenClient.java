@@ -1,5 +1,6 @@
 package com.investment.marketdata.service;
 
+import com.investment.common.security.LogMaskingUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -59,14 +60,16 @@ public class KoreaInvestmentTokenClient {
                 .build()
                 .toUri();
 
-        log.debug("한국투자증권 Access Token 발급 요청: baseUrl={}, appKey={}", baseUrl, maskAppKey(appKey));
+        LogMaskingUtil.logWithDebugActualAtDebug(log,
+                "한국투자증권 Access Token 발급 요청: baseUrl={}, appKey={}",
+                new Object[] { baseUrl, LogMaskingUtil.maskApiKey(appKey) },
+                "appKey(actual)={}", appKey);
 
         // 요청 바디 생성 (JSON 형식)
         Map<String, String> requestBody = Map.of(
                 "grant_type", "client_credentials",
                 "appkey", appKey,
-                "appsecret", appSecret
-        );
+                "appsecret", appSecret);
 
         return webClient.post()
                 .uri(uri)
@@ -96,7 +99,10 @@ public class KoreaInvestmentTokenClient {
                                     log.error(
                                             "한국투자증권 Access Token 발급 실패: status={}, body={}, message={}, baseUrl={}, appKey={}",
                                             response.statusCode(), errorBody, errorMessage, baseUrl,
-                                            maskAppKey(appKey));
+                                            LogMaskingUtil.maskApiKey(appKey));
+                                    if (log.isDebugEnabled()) {
+                                        log.debug("  [DEBUG] appKey(actual)={}", appKey);
+                                    }
 
                                     // 403 Forbidden인 경우 인증 실패로 간주
                                     if (response.statusCode().value() == 403) {
@@ -119,19 +125,12 @@ public class KoreaInvestmentTokenClient {
                         return error;
                     }
                     log.error("한국투자증권 Access Token 발급 중 예외 발생: baseUrl={}, appKey={}",
-                            baseUrl, maskAppKey(appKey), error);
+                            baseUrl, LogMaskingUtil.maskApiKey(appKey), error);
+                    if (log.isDebugEnabled()) {
+                        log.debug("  [DEBUG] appKey(actual)={}", appKey);
+                    }
                     return new RuntimeException("Access Token 발급 실패", error);
                 });
-    }
-
-    /**
-     * App Key 마스킹 (로그용)
-     */
-    private String maskAppKey(String appKey) {
-        if (appKey == null || appKey.length() <= 4) {
-            return "****";
-        }
-        return appKey.substring(0, 4) + "****";
     }
 
     /**

@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>투자 전략 관리</title>
+    <title th:text="${marketLabel != null ? (marketLabel + ' 전략 - Investment Choi') : '투자 전략 관리 - Investment Choi'}">전략 관리</title>
+    <link rel="stylesheet" th:href="@{/css/common.css}">
     <style>
         * {
             margin: 0;
@@ -255,19 +256,31 @@
     </style>
 </head>
 <body>
+    <div th:replace="~{fragments/layout-header :: header}"></div>
+    <nav th:replace="~{fragments/layout-menu :: menu}"></nav>
+
     <div class="container">
         <div class="header">
-            <h1>📊 투자 전략 관리</h1>
+            <h1 th:text="${marketLabel != null and !marketLabel.isEmpty()} ? ('📊 ' + ${marketLabel} + ' 전략') : '📊 투자 전략 관리'">전략 관리</h1>
             <p>단기/중기/장기 전략 현황 및 제어</p>
         </div>
-        
+
         <div class="nav-links">
             <a th:href="@{/(accountNo=${accountNo})}">대시보드</a>
-            <a th:href="@{/strategies(accountNo=${accountNo})}" style="background: #667eea; color: white;">전략 관리</a>
+            <a th:href="@{/strategies/kr(accountNo=${accountNo})}" th:styleappend="${market == 'KR'} ? 'background: #667eea; color: white;' : ''">국내 전략</a>
+            <a th:href="@{/strategies/us(accountNo=${accountNo})}" th:styleappend="${market == 'US'} ? 'background: #667eea; color: white;' : ''">미국 전략</a>
         </div>
-        
+
         <div class="search-box">
-            <form method="get" action="/strategies">
+            <form method="get" th:action="@{/strategies}" th:if="${market == null || #strings.isEmpty(market)}">
+                <input type="text" name="accountNo" th:value="${accountNo}" placeholder="계좌번호를 입력하세요">
+                <button type="submit">조회</button>
+            </form>
+            <form method="get" th:action="@{/strategies/kr}" th:if="${market == 'KR'}">
+                <input type="text" name="accountNo" th:value="${accountNo}" placeholder="계좌번호를 입력하세요">
+                <button type="submit">조회</button>
+            </form>
+            <form method="get" th:action="@{/strategies/us}" th:if="${market == 'US'}">
                 <input type="text" name="accountNo" th:value="${accountNo}" placeholder="계좌번호를 입력하세요">
                 <button type="submit">조회</button>
             </form>
@@ -333,12 +346,14 @@
                         <div class="strategy-actions">
                             <form method="post" th:action="@{/strategies/activate}" style="flex: 1;">
                                 <input type="hidden" name="accountNo" th:value="${accountNo}">
+                                <input type="hidden" name="market" th:value="${market}">
                                 <input type="hidden" name="strategyType" value="SHORT_TERM">
                                 <button type="submit" class="btn btn-activate" 
                                         th:disabled="${shortTerm.status == T(com.investment.strategy.domain.StrategyStatus).ACTIVE}">시작</button>
                             </form>
                             <form method="post" th:action="@{/strategies/stop}" style="flex: 1;">
                                 <input type="hidden" name="accountNo" th:value="${accountNo}">
+                                <input type="hidden" name="market" th:value="${market}">
                                 <input type="hidden" name="strategyType" value="SHORT_TERM">
                                 <button type="submit" class="btn btn-stop"
                                         th:disabled="${shortTerm.status == T(com.investment.strategy.domain.StrategyStatus).STOPPED}">중지</button>
@@ -405,12 +420,14 @@
                         <div class="strategy-actions">
                             <form method="post" th:action="@{/strategies/activate}" style="flex: 1;">
                                 <input type="hidden" name="accountNo" th:value="${accountNo}">
+                                <input type="hidden" name="market" th:value="${market}">
                                 <input type="hidden" name="strategyType" value="MEDIUM_TERM">
                                 <button type="submit" class="btn btn-activate" 
                                         th:disabled="${mediumTerm.status == T(com.investment.strategy.domain.StrategyStatus).ACTIVE}">시작</button>
                             </form>
                             <form method="post" th:action="@{/strategies/stop}" style="flex: 1;">
                                 <input type="hidden" name="accountNo" th:value="${accountNo}">
+                                <input type="hidden" name="market" th:value="${market}">
                                 <input type="hidden" name="strategyType" value="MEDIUM_TERM">
                                 <button type="submit" class="btn btn-stop"
                                         th:disabled="${mediumTerm.status == T(com.investment.strategy.domain.StrategyStatus).STOPPED}">중지</button>
@@ -477,12 +494,14 @@
                         <div class="strategy-actions">
                             <form method="post" th:action="@{/strategies/activate}" style="flex: 1;">
                                 <input type="hidden" name="accountNo" th:value="${accountNo}">
+                                <input type="hidden" name="market" th:value="${market}">
                                 <input type="hidden" name="strategyType" value="LONG_TERM">
                                 <button type="submit" class="btn btn-activate" 
                                         th:disabled="${longTerm.status == T(com.investment.strategy.domain.StrategyStatus).ACTIVE}">시작</button>
                             </form>
                             <form method="post" th:action="@{/strategies/stop}" style="flex: 1;">
                                 <input type="hidden" name="accountNo" th:value="${accountNo}">
+                                <input type="hidden" name="market" th:value="${market}">
                                 <input type="hidden" name="strategyType" value="LONG_TERM">
                                 <button type="submit" class="btn btn-stop"
                                         th:disabled="${longTerm.status == T(com.investment.strategy.domain.StrategyStatus).STOPPED}">중지</button>
