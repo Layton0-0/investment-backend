@@ -251,8 +251,16 @@ minimum-idle: 5
 
 **최소 스펙으로도 동작은 가능하나, Redis 캐싱과 비동기 처리는 반드시 유지해야 합니다.**
 
+---
+
+## 적용된 성능 최적화 (2026-01-30)
+
+- **대시보드 병렬 로딩**: 잔고·보유·주문·거래설정을 `CompletableFuture`로 병렬 조회. SecurityContext 전파(`runWithAuth`)로 인증 유지. 순차 4회 호출 → 최대 1회 대기 시간 수준으로 단축.
+- **현재가 캐시·병렬 조회**: `RealtimeMarketDataService`에 동기 캐시 계층 `getCurrentPriceBlocking(symbol)` 도입 — `@Cacheable`(종목별 5분 TTL)·`@CircuitBreaker` 적용. 단일/다중 종목 모두 동일 캐시 사용. `getCurrentPrices(symbols)`는 `CompletableFuture.supplyAsync`로 종목별 병렬 조회 후 결과 수집. 캐시 미스 시에도 N종목 순차 대기 → 병렬 대기로 응답 시간 단축.
+
 ## 문서 변경 이력
 
 | 버전 | 일자 | 작성자 | 변경 내용 |
 |------|------|--------|----------|
 | 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 - 참고용 문서로 분류 |
+| 1.1 | 2026-01-30 | System | 적용된 성능 최적화 섹션 추가 — 대시보드 병렬 로딩, 현재가 동기 캐시·다중 종목 병렬 조회 |

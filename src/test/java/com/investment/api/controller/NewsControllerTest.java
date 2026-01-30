@@ -79,4 +79,59 @@ class NewsControllerTest {
                 mockMvc.perform(get("/api/v1/news").param("market", "KR"))
                                 .andExpect(status().isOk());
         }
+
+        @Test
+        @DisplayName("GET /api/v1/news source 파라미터 전달 시 서비스에 전달한다")
+        void getNews_withSource_callsServiceWithSource() throws Exception {
+                NewsItemPageResponseDto response = NewsItemPageResponseDto.builder()
+                                .content(Collections.emptyList())
+                                .page(NewsItemPageResponseDto.PageMeta.builder().number(0).size(20).totalElements(0)
+                                                .totalPages(0).build())
+                                .build();
+                when(newsItemService.getNewsItems(any(), eq("DART"), any(), any(), any(), anyInt(), anyInt()))
+                                .thenReturn(response);
+
+                mockMvc.perform(get("/api/v1/news").param("source", "DART"))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("GET /api/v1/news 빈 결과 시 content 빈 배열·페이지 메타 반환")
+        void getNews_emptyResult_returnsEmptyContentAndPageMeta() throws Exception {
+                NewsItemPageResponseDto response = NewsItemPageResponseDto.builder()
+                                .content(Collections.emptyList())
+                                .page(NewsItemPageResponseDto.PageMeta.builder()
+                                                .number(0)
+                                                .size(20)
+                                                .totalElements(0)
+                                                .totalPages(0)
+                                                .build())
+                                .build();
+                when(newsItemService.getNewsItems(any(), any(), any(), any(), any(), eq(0), eq(20)))
+                                .thenReturn(response);
+
+                mockMvc.perform(get("/api/v1/news").param("page", "0").param("size", "20"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content").isArray())
+                                .andExpect(jsonPath("$.content.length()").value(0))
+                                .andExpect(jsonPath("$.page.totalElements").value(0))
+                                .andExpect(jsonPath("$.page.totalPages").value(0));
+        }
+
+        @Test
+        @DisplayName("GET /api/v1/news from·to 파라미터 전달 시 서비스에 전달한다")
+        void getNews_withFromTo_callsServiceWithDates() throws Exception {
+                NewsItemPageResponseDto response = NewsItemPageResponseDto.builder()
+                                .content(Collections.emptyList())
+                                .page(NewsItemPageResponseDto.PageMeta.builder().number(0).size(20).totalElements(0)
+                                                .totalPages(0).build())
+                                .build();
+                when(newsItemService.getNewsItems(any(), any(), any(), any(), any(), anyInt(), anyInt()))
+                                .thenReturn(response);
+
+                mockMvc.perform(get("/api/v1/news")
+                                .param("from", "2026-01-01")
+                                .param("to", "2026-01-31"))
+                                .andExpect(status().isOk());
+        }
 }

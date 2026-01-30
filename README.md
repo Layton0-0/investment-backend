@@ -91,6 +91,16 @@ java -jar build/libs/investment-choi-1.0.0.jar
 ./gradlew bootRun --args='--spring.profiles.active=dev'
 ```
 
+### 테스트 및 커버리지
+
+- **목표**: 라인 커버리지 80% 이상, 브랜치 커버리지 70% 이상 (JaCoCo `jacocoTestCoverageVerification`).
+- **실행**  
+  - PowerShell: `.\scripts\run-tests-with-coverage.ps1` (임시 빌드 사용 후 삭제)  
+  - 또는 `.\scripts\run-tests-with-coverage.ps1 -NoUniqueDir` (프로젝트 `build` 사용)  
+  - 또는 `.\gradlew test jacocoTestReport` (기본 `build` 사용)
+- **Windows 참고**: `build`/`agent-build`를 사용 중인 다른 프로세스(IntelliJ, 이전 Gradle 등)가 있으면 테스트 실행 시 파일 잠금으로 실패할 수 있음. IntelliJ를 닫거나 해당 프로세스를 종료한 뒤 실행하거나, 2회차 재실행으로 회피할 수 있음.
+- **리포트**: HTML은 `build/reports/jacoco/test/html/index.html` (또는 스크립트 사용 시 `coverage-report/index.html`).
+
 ## API 엔드포인트
 
 ### 계좌 조회
@@ -143,6 +153,15 @@ java -jar build/libs/investment-choi-1.0.0.jar
 ```bash
 ./gradlew test
 ```
+
+**커버리지**: JaCoCo 리포트 생성 — 라인 80%, 브랜치 70% 목표.
+
+```bash
+./gradlew test jacocoTestReport
+# Windows(빌드 잠금 회피): .\scripts\run-tests-with-coverage.ps1
+```
+
+리포트: `build/reports/jacoco/test/html/index.html`. 한계값 검증: `./gradlew jacocoTestCoverageVerification`.
 
 ## 예외 처리
 

@@ -3,6 +3,8 @@ package com.investment.web.controller;
 import com.investment.account.service.AccountService;
 import com.investment.auth.dto.MyPageResponseDto;
 import com.investment.auth.service.AuthService;
+import com.investment.factor.dto.SignalScorePageResponseDto;
+import com.investment.factor.service.SignalScoreService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -12,9 +14,12 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import java.time.LocalDate;
+import java.util.Collections;
+
 /**
  * 자동투자 현황 웹 컨트롤러
- * 4단계 파이프라인(유니버스→시그널→자금관리→매매실행) 요약·시그널/체결 스텁
+ * 4단계 파이프라인(유니버스→시그널→자금관리→매매실행) 요약·시그널/체결 연동
  */
 @Slf4j
 @Controller
@@ -24,6 +29,7 @@ public class AutoInvestController {
 
     private final AuthService authService;
     private final AccountService accountService;
+    private final SignalScoreService signalScoreService;
 
     @GetMapping
     @SuppressWarnings("deprecation")
@@ -54,6 +60,21 @@ public class AutoInvestController {
 
         model.addAttribute("accountNo", accountNo);
         model.addAttribute("hasAccount", accountNo != null && !accountNo.trim().isEmpty());
+
+        try {
+            LocalDate signalBasDt = LocalDate.now().minusDays(1);
+            long signalCount = signalScoreService.countSignals(signalBasDt, "KR");
+            SignalScorePageResponseDto signalPage = signalScoreService.getSignals(signalBasDt, "KR", null, null, 0, 10);
+            model.addAttribute("signalCount", signalCount);
+            model.addAttribute("signalList", signalPage.getContent());
+            model.addAttribute("signalBasDt", signalBasDt);
+        } catch (Exception e) {
+            log.debug("시그널 조회 실패(스킵): {}", e.getMessage());
+            model.addAttribute("signalCount", 0L);
+            model.addAttribute("signalList", Collections.emptyList());
+            model.addAttribute("signalBasDt", LocalDate.now().minusDays(1));
+        }
+
         return "auto-invest";
     }
 }

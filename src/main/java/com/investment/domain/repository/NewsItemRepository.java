@@ -13,6 +13,12 @@ import java.time.LocalDateTime;
 @Repository
 public interface NewsItemRepository extends JpaRepository<NewsItem, String> {
 
+        /**
+         * 원천·URL 기준 중복 여부 (수집 저장 시 중복 방지용).
+         * URL은 DB 인덱스가 255자이므로 255자 초과 시 동일 URL로 간주할 수 있음.
+         */
+        boolean existsBySourceAndUrl(String source, String url);
+
         @Query("SELECT n FROM NewsItem n WHERE " +
                         "(:market IS NULL OR n.market = :market) AND " +
                         "(:source IS NULL OR n.source = :source) AND " +

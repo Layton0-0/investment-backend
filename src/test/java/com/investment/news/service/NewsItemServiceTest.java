@@ -20,6 +20,8 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -76,5 +78,51 @@ class NewsItemServiceTest {
 
                 assertNotNull(result);
                 assertEquals(100, result.getPage().getSize());
+        }
+
+        @Test
+        @DisplayName("saveCollectedItem 중복 시 저장하지 않고 false 반환")
+        void saveCollectedItem_duplicate_returnsFalseAndDoesNotSave() {
+                NewsItem item = NewsItem.builder()
+                                .source("DART")
+                                .market("KR")
+                                .itemType("FACT")
+                                .title("제목")
+                                .url("https://dart.fss.or.kr/dsbh001/main.do?rcpNo=123")
+                                .collectedAt(LocalDateTime.now())
+                                .build();
+                when(newsItemRepository.existsBySourceAndUrl("DART", item.getUrl())).thenReturn(true);
+
+                boolean result = newsItemService.saveCollectedItem(item);
+
+                assertFalse(result);
+                verify(newsItemRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("saveCollectedItem 중복 아닐 때 저장하고 true 반환")
+        void saveCollectedItem_notDuplicate_savesAndReturnsTrue() {
+                NewsItem item = NewsItem.builder()
+                                .source("DART")
+                                .market("KR")
+                                .itemType("FACT")
+                                .title("제목")
+                                .url("https://dart.fss.or.kr/dsbh001/main.do?rcpNo=456")
+                                .collectedAt(LocalDateTime.now())
+                                .build();
+                when(newsItemRepository.existsBySourceAndUrl("DART", item.getUrl())).thenReturn(false);
+
+                boolean result = newsItemService.saveCollectedItem(item);
+
+                assertTrue(result);
+                verify(newsItemRepository).save(item);
+        }
+
+        @Test
+        @DisplayName("saveCollectedItem item null 시 false 반환")
+        void saveCollectedItem_nullItem_returnsFalse() {
+                boolean result = newsItemService.saveCollectedItem(null);
+                assertFalse(result);
+                verify(newsItemRepository, never()).save(any());
         }
 }

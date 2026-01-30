@@ -78,6 +78,19 @@ public class BatchManagementService {
                 .successCount(0L)
                 .failureCount(0L)
                 .build());
+
+        // 5. DART 공시 수집
+        jobs.add(BatchJobDto.builder()
+                .id("dart-disclosure-collector")
+                .name("DART 공시 수집")
+                .description("10분마다 Open DART 공시 목록을 수집하여 TB_NEWS_ITEMS에 저장합니다.")
+                .cronExpression("0 */10 * * * *")
+                .timeZone("Asia/Seoul")
+                .status("ACTIVE")
+                .executionCount(0L)
+                .successCount(0L)
+                .failureCount(0L)
+                .build());
         
         // 다음 실행 시간 계산
         jobs.forEach(job -> {
@@ -121,6 +134,15 @@ public class BatchManagementService {
                     next = next.plusDays(1);
                 }
                 return next.toLocalDateTime();
+            }
+            // cron: "0 */10 * * * *" -> 10분마다
+            else if (cronExpression.startsWith("0 */10")) {
+                int minute = now.getMinute();
+                int nextMin = ((minute / 10) + 1) * 10;
+                if (nextMin >= 60) {
+                    return now.plusHours(1).withMinute(0).withSecond(0).toLocalDateTime();
+                }
+                return now.withMinute(nextMin).withSecond(0).toLocalDateTime();
             }
             // cron: "0 0 9 * * MON" -> 매주 월요일 9시
             else if (cronExpression.equals("0 0 9 * * MON")) {

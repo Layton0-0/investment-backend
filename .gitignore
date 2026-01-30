@@ -2,6 +2,10 @@
 .gradle/
 build/
 build-*/
+coverage-report/
+agent-build/
+agent-build-*/
+.agent-build-dir
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
@@ -93,10 +97,11 @@ dist/
 
 # OS
 Thumbs.db
-*.env
-*.env.*
+# .env 에 키/시크릿 입력 — Git 제외. 템플릿만 커밋
+.env
 .env.local
 .env.*.local
+!.env.example
 
 # 문서/데이터
 *.xlsx

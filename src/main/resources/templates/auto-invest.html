@@ -14,6 +14,9 @@
         .pipeline-card .value { font-size: 24px; font-weight: 700; color: #191F28; }
         .card { background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 20px; }
         .card h2 { font-size: 18px; margin-bottom: 16px; color: #191F28; }
+        .signal-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        .signal-table th, .signal-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }
+        .signal-table th { color: #8B95A1; font-weight: 600; }
         .empty-state { text-align: center; padding: 48px 24px; color: #8B95A1; font-size: 14px; }
     </style>
 </head>
@@ -33,8 +36,8 @@
                 </div>
                 <div class="pipeline-card">
                     <div class="label">2단계: 시그널</div>
-                    <div class="value">준비 중</div>
-                    <div class="label">오늘 시그널 건수</div>
+                    <div class="value" th:text="${signalCount != null ? signalCount : 0">0</div>
+                    <div class="label">기준일 <span th:text="${signalBasDt}">-</span> 시그널 건수 (KR)</div>
                 </div>
                 <div class="pipeline-card">
                     <div class="label">3단계: 자금 관리</div>
@@ -49,7 +52,25 @@
             </div>
             <div class="card">
                 <h2>시그널·체결 요약</h2>
-                <div class="empty-state">4단계 파이프라인 API 연동 후 시그널·체결 목록이 표시됩니다.</div>
+                <div th:if="${signalList != null and !signalList.isEmpty()}" class="signal-table-wrap">
+                    <table class="signal-table">
+                        <thead>
+                            <tr>
+                                <th>종목</th>
+                                <th>팩터</th>
+                                <th>점수</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="s : ${signalList}">
+                                <td th:text="${s.symbol}">-</td>
+                                <td th:text="${s.factorType}">-</td>
+                                <td th:text="${s.score != null ? s.score : '-'}">-</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div th:if="${signalList == null or signalList.isEmpty()}" class="empty-state">시그널 데이터가 없습니다. 팩터 계산 스케줄(매일 장 시작 전) 후 KR 일별 시세가 수집되면 표시됩니다.</div>
             </div>
         </div>
         <div th:unless="${hasAccount}" class="card">

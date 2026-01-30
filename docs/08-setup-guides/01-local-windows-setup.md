@@ -340,22 +340,26 @@ Write-Host "4. AI 서비스 실행: cd ai-service\prediction-service && .\venv\S
 
 ## 빠른 시작 가이드
 
-### 1. 환경 변수 설정 (선택)
+### 1. 키/시크릿 설정 (.env — 한 곳에서만 입력)
 
-```powershell
-# PowerShell 프로필에 추가 (영구 설정)
-# $PROFILE 파일 편집
-notepad $PROFILE
+**모든 API 키·비밀번호·시크릿은 `.env` 한 파일에서만 입력하면 됩니다.**
 
-# 다음 내용 추가:
-$env:SPRING_DATASOURCE_URL = "jdbc:mariadb://localhost:3306/investment?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Seoul"
-$env:SPRING_DATASOURCE_USERNAME = "investment"
-$env:SPRING_DATASOURCE_PASSWORD = "password"
-$env:REDIS_HOST = "localhost"
-$env:REDIS_PORT = "6379"
-```
+1. **`.env` 파일 준비**
+   - 프로젝트 루트에 `.env`가 있으면 그대로 사용. 없으면 `application-local.yml`에서 참조하는 변수명을 기준으로 생성.
+   - 변수명·기본값은 `src/main/resources/application-local.yml` 참고.
 
-또는 프로젝트 루트에 `.env` 파일 생성 (Spring Boot는 자동으로 읽지 않으므로 별도 설정 필요)
+2. **`.env` 파일을 열어 필요한 값만 입력**
+   - DB: `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` (로컬 기본: `investment_portfolio`, `local_maria`, `local_maria_pass`)
+   - Redis(없으면 비움): `REDIS_PASSWORD`
+   - 보안(필수): `INVESTMENT_ENCRYPTION_KEY`, `INVESTMENT_JWT_SECRET` (생성: `openssl rand -base64 32`)
+   - 한국투자증권(선택): `KOREA_INVESTMENT_APP_KEY`, `KOREA_INVESTMENT_APP_SECRET`
+   - 데이터 수집(선택): `DART_API_KEY`, `KRX_AUTH_KEY`, `DATA_COLLECTION_INTERNAL_KEY`
+
+3. **실행 방법**
+   - **IntelliJ / IDE**: Run Configuration의 **Working directory**를 프로젝트 루트(`investment-choi`)로 두면, 앱 시작 시 **프로젝트 루트의 `.env`를 자동으로 읽어** 환경 변수로 사용합니다. (EnvFile 플러그인 없이 동작)
+   - **터미널**: `.env`를 로드한 뒤 실행하려면 `.\scripts\bootRun-with-env.ps1` 사용.
+
+- **주의**: `.env`는 Git에 포함되지 않습니다. 키는 `.env`에만 입력하고, `application.yml`은 수정하지 않아도 됩니다.
 
 ### 2. 데이터베이스 스키마 생성
 
@@ -368,10 +372,13 @@ mysql -u investment -p investment < docs/05-database/schema.sql
 ### 3. Spring Boot 애플리케이션 실행
 
 ```powershell
-# 프로젝트 루트에서 (기본 local 프로파일 → 포트 8083)
+# 프로젝트 루트에서 — .env 로드 후 실행 (권장)
+.\scripts\bootRun-with-env.ps1
+
+# 또는 .env 없이 실행 (기본값/시스템 환경변수 사용)
 .\gradlew.bat bootRun
 
-# 또는 빌드 후 실행
+# 빌드 후 실행
 .\gradlew.bat build
 java -jar build\libs\investment-choi-2.0.0.jar
 ```
@@ -517,6 +524,11 @@ docker-compose down
 ```
 
 ## 트러블슈팅
+
+### Agent 테스트 실행 전 확인
+
+- **8084 포트**: Cursor/Agent로 서버를 띄웠다면 **테스트 실행 전 8084 서버를 반드시 종료**한다. (해당 터미널에서 Ctrl+C.) 8084가 켜져 있으면 build/ 또는 임시 빌드 잠금으로 테스트가 실패할 수 있다.
+- **임시 빌드 삭제 오류**: Windows에서 `Unable to delete directory ... test-results\test\binary` 발생 시, `.\scripts\run-tests.ps1 -NoUniqueDir` 또는 `.\scripts\run-tests-with-coverage.ps1 -NoUniqueDir` 로 **프로젝트 build 폴더**를 사용해 실행한다. (build 폴더는 IntelliJ와 공유되므로, 테스트 후 IntelliJ에서 빌드하면 갱신된다.)
 
 ### MariaDB 연결 실패
 

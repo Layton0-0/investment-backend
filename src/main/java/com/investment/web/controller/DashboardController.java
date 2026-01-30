@@ -12,6 +12,7 @@ import com.investment.setting.service.TradingSettingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,6 +22,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * 대시보드 웹 컨트롤러 (Thymeleaf)
@@ -113,21 +115,31 @@ public class DashboardController {
             }
         }
 
-        // 계좌번호가 있으면 데이터 조회 (잔고·보유·주문 필수, 거래 설정은 선택)
+        // 계좌번호가 있으면 데이터 조회 (잔고·보유·주문·설정 병렬 로딩으로 응답 시간 단축)
         if (accountNo != null && !accountNo.trim().isEmpty()) {
             try {
-                AccountBalanceDto balance = accountService.getAccountBalance(accountNo);
-                List<AccountPositionDto> positions = accountService.getPositions(accountNo);
-                List<OrderResponseDto> orders = orderService.getOrders(accountNo);
+                final String accNo = accountNo;
+                final Authentication auth = authentication;
+
+                CompletableFuture<AccountBalanceDto> balanceFuture =
+                        CompletableFuture.supplyAsync(() -> runWithAuth(auth, () -> accountService.getAccountBalance(accNo)));
+                CompletableFuture<List<AccountPositionDto>> positionsFuture =
+                        CompletableFuture.supplyAsync(() -> runWithAuth(auth, () -> accountService.getPositions(accNo)));
+                CompletableFuture<List<OrderResponseDto>> ordersFuture =
+                        CompletableFuture.supplyAsync(() -> runWithAuth(auth, () -> orderService.getOrders(accNo)));
+                CompletableFuture<Optional<TradingSettingDto>> settingFuture =
+                        CompletableFuture.supplyAsync(() -> runWithAuth(auth, () -> tradingSettingService.getSettingOptional(accNo)));
+
+                AccountBalanceDto balance = balanceFuture.join();
+                List<AccountPositionDto> positions = positionsFuture.join();
+                List<OrderResponseDto> orders = ordersFuture.join();
+                Optional<TradingSettingDto> settingOpt = settingFuture.join();
 
                 model.addAttribute("balance", balance);
                 model.addAttribute("positions", positions);
                 model.addAttribute("orders", orders);
-
-                Optional<TradingSettingDto> settingOpt = tradingSettingService.getSettingOptional(accountNo);
                 settingOpt.ifPresent(dto -> model.addAttribute("setting", dto));
 
-                // 통계 계산
                 calculateStatistics(positions, model);
             } catch (Exception e) {
                 log.error("계좌 데이터 조회 실패: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo), e);
@@ -138,6 +150,21 @@ public class DashboardController {
         model.addAttribute("accountNo", accountNo);
         model.addAttribute("hasAccount", accountNo != null && !accountNo.trim().isEmpty());
         return "dashboard";
+    }
+
+    /**
+     * 인증 컨텍스트를 설정한 뒤 작업을 실행 (병렬 스레드에서 계좌/주문 서비스 호출 시 사용)
+     */
+    private <T> T runWithAuth(Authentication authentication, java.util.function.Supplier<T> supplier) {
+        if (authentication == null) {
+            return supplier.get();
+        }
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        try {
+            return supplier.get();
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
     }
 
     /**

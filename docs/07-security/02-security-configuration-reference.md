@@ -131,6 +131,13 @@ investment:
     jwt-expiration: ${INVESTMENT_JWT_EXPIRATION:3600000}
 ```
 
+### investment.data (데이터 수집 API 키 — 로그 마스킹 대상)
+
+- **DART_API_KEY**: Open DART API 인증키 (opendart.fss.or.kr 발급). 로그 출력 시 `LogMaskingUtil.maskApiKey` 사용.
+- **KRX_AUTH_KEY**: KRX Open API 인증키 (openapi.krx.co.kr 발급). 로그 출력 시 `LogMaskingUtil.maskApiKey` 사용.
+- **SEC_API_KEY**: SEC EDGAR API 키 (data.sec.gov). SEC 공시 수집 시 사용. 미설정 시 SEC 수집 스킵. 로그 출력 시 `LogMaskingUtil.maskApiKey` 사용.
+- **DATA_COLLECTION_INTERNAL_KEY**: 내부 수집 API 보호 키. Yahoo 등 Python 수집기가 POST /api/v1/internal/collected-news 호출 시 `X-Internal-Data-Key` 헤더에 전달. 미설정 시 내부 API는 403 반환.
+
 ## Redis 키 구조
 
 ### Rate Limiting 키
@@ -253,8 +260,8 @@ investment:
 | 파일 | 경로 | 설명 |
 |------|------|------|
 | `application.yml` | `src/main/resources` | 기본 설정 |
-| `application-local.yml` | `src/main/resources` | 로컬 환경 설정 |
-| `.env.example` | 프로젝트 루트 | 환경 변수 예제 |
+| `application-local.yml` | `src/main/resources` | 로컬 환경 설정(환경 변수 기본값 참조) |
+| `.env` | 프로젝트 루트 | 환경 변수 입력(Git 제외). 변수명은 application-local.yml / application.yml과 동일 |
 
 ## 보안 체크리스트
 

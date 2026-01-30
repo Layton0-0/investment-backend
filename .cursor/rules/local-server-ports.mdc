@@ -10,4 +10,6 @@ alwaysApply: true
 
 **8084 사용 시**: 확인을 마친 뒤 **반드시 8084 서버를 종료**한다. (해당 터미널에서 Ctrl+C로 프로세스 종료.) 8083은 사용자의 IntelliJ 수동 확인용으로 유지한다.
 
+**작업 종료 시**: Agent는 [agent-cleanup.mdc](agent-cleanup.mdc)에 따라 임시 빌드 폴더·8084 프로세스 등 사용한 자원을 전부 정리한 뒤 마친다.
+
 참조: [로컬 Windows 설정 가이드](docs/08-setup-guides/01-local-windows-setup.md) § 3-1, § 6.

@@ -22,7 +22,7 @@
 - [x] **대시보드 보강**  
   공통 헤더·메뉴 적용, 빠른 액션(국내/미국 전략, 뉴스·이벤트, 포트폴리오, 주문·체결, 설정).
 - [x] **자동투자 현황**  
-  `/auto-invest`, AutoInvestController, auto-invest.html (4단계 파이프라인·시그널 스텁).
+  `/auto-invest`, AutoInvestController, auto-invest.html (4단계 파이프라인·시그널 건수/목록 GET /api/v1/signals 연동).
 - [x] **국내/미국 전략 분리**  
   `/strategies/kr`, `/strategies/us`, WebStrategyController 시장별 조회·폼 market 전달.
 - [x] **뉴스·이벤트**  
@@ -59,6 +59,16 @@
   조회 API(주식잔고·매수가능·매도가능·주문체결·자산현황·기간별손익·현재가·차트)가 query parameter로 전달되어야 하는데 JSON body로 호출되던 오류 수정. `KoreaInvestmentAccountClient` 7곳·`KoreaInvestmentMarketDataClient` 2곳을 **GET + URI query parameter**로 변경. `buildUriWithQueryParams` 헬퍼 추가, `KoreaInvestmentRequestBuilder` 주석 보강(조회 API는 Map을 query로 사용). [한국투자증권 API 가이드](../04-api/09-korea-investment-api-guide.md)에 조회 API GET·query 명시, [ADR 14](../decisions.md#14-한국투자증권-api-요청-방식-및-mcp-사용) 및 [MCP 규칙](../.cursor/rules/MCP.mdc): 한국투자증권 API 개발 시 MCP 무조건 사용·작업 중 문서 업데이트 필수.
 - [x] **대시보드 거래 설정 optional 처리**  
   TradingSettingService.getSettingOptional(accountNo) 추가(없으면 empty). DashboardController에서 계좌 데이터 조회 시 getSettingOptional 사용, 있으면 setting 모델 추가·없으면 미추가(거래 설정 카드 미표시). 거래 설정 미저장 상태에서도 대시보드(잔고·보유·주문) 정상 표시.
+- [x] **테스트 커버리지**  
+  JaCoCo 도입(build.gradle), 라인 80%·브랜치 70% 목표 설정(jacocoTestCoverageVerification). 전략(market 파라미터)·뉴스 API·API 컨트롤러(Account, Analysis, MarketData, Setting, UserAccount)·서비스(AccountService, AccountVerificationService, UserExistenceChecker, AnalysisService)·FastApiPredictionClient·Batch 등 단위/슬라이스 테스트 추가. `.\scripts\run-tests-with-coverage.ps1` 또는 `gradlew test jacocoTestReport`로 리포트 생성. 로컬 실행 시 build/agent-build를 사용하는 다른 프로세스가 없을 때 실행할 것(Windows 파일 잠금 시 2회차 재실행 또는 `-NoUniqueDir` 사용).
+- [x] **성능 최적화 (1차)**  
+  **대시보드**: 잔고·보유·주문·거래설정을 CompletableFuture로 병렬 로딩, SecurityContext 전파(`runWithAuth`)로 인증 유지. **시장 데이터**: 현재가 조회를 동기 캐시 계층(`getCurrentPriceBlocking`)으로 통일 — `@Cacheable`·`@CircuitBreaker` 적용, Mono 반환은 `Mono.fromCallable`로 래핑. 다중 종목 현재가(`getCurrentPrices`)는 종목별 캐시 사용 + CompletableFuture 병렬 조회로 응답 시간 단축. 목표: 시장 데이터·계좌 조회 응답 평균 500ms·95%ile 1초 근접.
+- [x] **데이터 수집 연동 (구축 로드맵 1단계)**  
+  **공통**: NewsItemRepository.existsBySourceAndUrl, NewsItemService.saveCollectedItem, DataCollectionProperties(DART/KRX/내부 API 키), application.yml investment.data.*. **Open DART**: DartApiClient(공시 목록 list.json), DartCollectionService(공시→NewsItem 저장), DataCollectionScheduler(10분마다 DART 수집). **KRX**: KrxApiClient(유가증권 일별매매정보, AUTH_KEY 헤더), 1단계 연동·DTO만, 저장은 2단계 검토. **Yahoo**: Python scripts/yahoo_collector.py(yfinance 또는 스텁), Spring POST /api/v1/internal/collected-news(X-Internal-Data-Key 헤더), NewsItem(SOURCE=YAHOO_FINANCE, ITEM_TYPE=BUZZ) 저장. Fallback: 원천별 try-catch, 해당 원천만 스킵.
+- [x] **팩터 계산 엔진 (구축 로드맵 2단계)**  
+  **KRX 일별 저장**: TB_DAILY_STOCK(V4), DailyStock 엔티티·DailyStockRepository, KrxCollectionService(OutBlock_1 파싱·저장), DataCollectionScheduler KRX 일별 수집(매일 16:00 KST). **팩터 계산**: FactorCalculationService(이격도·변동성 돌파·유동성), FactorCalculationScheduler(매일 08:00 KST). **시그널 저장·API**: TB_SIGNAL_SCORE(V5), SignalScore 엔티티·SignalScoreRepository·SignalScoreService, GET `/api/v1/signals` (basDt·market·symbol·factorType·페이징). **자동투자 현황**: 시그널 건수·목록 GET /api/v1/signals 연동, 2단계 카드·시그널 테이블 실데이터 표시. application.yml investment.factor.*, API 개요 반영.
+- [x] **4단계 파이프라인 구현 (1차)**  
+  **1단계 유니버스**: TB_UNIVERSE(V6), Universe 엔티티·UniverseRepository, UniverseFilterService(유동성 Cut-off), FactorCalculationScheduler에서 유니버스 선행 실행 후 팩터 계산은 유니버스 종목만 대상. **2단계 시그널**: 기존 FactorCalculationService에 유니버스 필터 적용. **3단계 자금 관리**: PositionSizingService(ATR 포지션 사이징·변동성 역가중), PositionRecommendationDto, application.factor.position-risk-pct. **4단계 실행·청산**: TB_STRATEGY_POSITION(V7), StrategyPosition·StrategyPositionRepository, PipelineExecutor(dry-run 기본·auto-execute=false), ExitRuleService(Time-Cut 평가). application.pipeline.auto-execute.
 
 ---
 
@@ -76,21 +86,23 @@
 
 - [x] **테스트 코드 보강 (1차)**  
   단위·슬라이스 테스트 추가: PasswordValidator, GlobalExceptionHandler, NewsItemService, NewsController, StrategyManagementService, StrategyApiController, AuthController, AuthService. 기존 OrderController/OrderService/TradingSettingService/KoreaInvestmentMarketDataClient/StockCodeConverter 테스트 수정. getBulkIndicators 모의 데이터 분기 추가. WebMvcTest에 SecurityConfig 의존 MockBean 추가. 전체 테스트 실행: `$env:GRADLE_UNIQUE_BUILD_DIR='1'; .\gradlew test` 또는 `.\scripts\run-tests.ps1`. (AuthController getMyPage 슬라이스 테스트 1건은 addFilters=false 시 principal 미전달로 @Disabled.)
-- [ ] **테스트 커버리지**  
-  라인 80%·브랜치 70% 목표. 전략(market 파라미터)·뉴스 API 등 추가 커버리지.
-- [ ] **성능 최적화**  
-  쿼리·캐싱·비동기 적용. 시장 데이터·종목 분석·계좌 조회 응답 시간 목표(평균 500ms, 95%ile 1초) 달성.
-- [ ] **데이터 수집 연동 (구축 로드맵 1단계)**  
-  Yahoo Finance API(미국), KRX/OpenDart API(한국) 연동. 확정 원천만 파이프라인 입력으로 사용.
-- [ ] **팩터 계산 엔진 (구축 로드맵 2단계)**  
-  2단계 시그널 수식(듀얼 모멘텀·퀄리티-성장·수급 강도·이격도·변동성 돌파 등)을 Python(Pandas/Numpy) 또는 Java로 구현, **매일 장 시작 전** 종목별 점수 산출 스케줄러.
+- [x] **성능 최적화 (1차)**  
+  대시보드 병렬 로딩(잔고·보유·주문·설정), 현재가 동기 캐시·다중 종목 병렬 조회 적용. 상세는 완료 섹션 참조.
+- [ ] **성능 최적화 (2차·선택)**  
+  쿼리·캐싱·비동기 추가 적용. 시장 데이터·종목 분석·계좌 조회 응답 시간 목표(평균 500ms, 95%ile 1초) 측정·튜닝.
+- [x] **데이터 수집 연동 (구축 로드맵 1단계)**  
+  DART/KRX/Yahoo 연동·수집·저장·스케줄 적용 완료. 상세는 완료 섹션 참조.
+- [x] **팩터 계산 엔진 (구축 로드맵 2단계)**  
+  완료. 상세는 완료 섹션 참조.
 - [ ] **LSTM 예측 모델(초기)**  
   데이터 수집·전처리, LSTM 모델·학습 파이프라인, 서빙 API. AI는 분석 정보 제공용, 최종 매매 결정은 규칙 엔진 유지.
 
 ### 중기 (로드맵 Phase 5~6)
 
-- [ ] **4단계 파이프라인 구현**  
-  **1) 유니버스 필터링**: 공통 Liquidity Cut-off, 한국 Sector Relative Strength, 미국 Post-Earnings Drift. **2) 시그널 생성**: 한국 수급 강도(Smart Money Intensity)·이격도(Disparity)·변동성 돌파(k 동적); 미국 듀얼 모멘텀·퀄리티-성장(PEG & Rule of 40)·VAA 변형. **3) 자금 관리**: 켈리(Half-Kelly)·변동성 역가중·ATR 포지션 사이징(1회 1% 리스크). **4) 매매 실행·청산**: ATR Trailing Stop(2.0~2.5), Time-Cut(N일/목표 수익률 미도달 시 전량 매도).
+- [x] **4단계 파이프라인 구현 (1차)**  
+  유니버스(유동성만)·시그널 유니버스 필터·PositionSizingService·PipelineExecutor·ExitRuleService(Time-Cut) 완료. 상세는 완료 섹션 참조.
+- [ ] **4단계 파이프라인 확장**  
+  **1) 유니버스**: 한국 Sector Relative Strength, 미국 Post-Earnings Drift 추가. **2) 시그널**: 한국 수급 강도(Smart Money Intensity)·변동성 돌파 k 동적; 미국 듀얼 모멘텀·퀄리티-성장(PEG & Rule of 40)·VAA 변형. **3) 자금 관리**: Half-Kelly(백테스트 p·b 연동). **4) 청산**: ATR Trailing Stop(장중 고가·현재가 연동), 체결 확인 후 포지션 등록.
 - [ ] **시장·기간별 전략 로직**  
   단기(20%): 유동성·RSI(14)>60 & MACD>Signal·수급 필터, Trailing Stop -3%. 중기(40%): 듀얼 모멘텀 상위 10%, EPS YoY>20%, PEG<1.5, 20·60일선 정배열, 월 1회 리밸런싱, 개별 -10% 손절. 장기(40%): ROE>20%, OPM>25%, Rule of 40, MDD -15%~-20% 분할 매수, 펀더멘털 훼손 시에만 매도.
 - [ ] **뉴스·공시 파이프라인 (확정 원천만)**  
@@ -141,3 +153,8 @@
 | 1.3 | 2026-01-29 | 완료: JWT 인증 시 사용자 존재 여부 검증(방어코드) — UserExistenceChecker, JwtAuthenticationFilter DB 검사·쿠키 제거 |
 | 1.4 | 2026-01-30 | 완료: 한국투자증권 API 조회 GET+query 수정 — AccountClient 7곳·MarketDataClient 2곳 GET+queryParam 적용, MCP 필수 사용·작업 중 문서 업데이트 규칙 반영 |
 | 1.5 | 2026-01-30 | 완료: 대시보드 거래 설정 optional 처리 — TradingSettingService.getSettingOptional, DashboardController optional 조회, 설정 없을 때 오류 제거; 대시보드 사용 전 확인 사항(설정값) 문서 반영 |
+| 1.6 | 2026-01-30 | 완료: 테스트 커버리지 — JaCoCo 도입, 80% 라인·70% 브랜치 목표, API 컨트롤러·서비스·전략·뉴스·Batch 등 단위/슬라이스 테스트 추가, run-tests-with-coverage.ps1 |
+| 1.7 | 2026-01-30 | 완료: 성능 최적화 (1차) — 대시보드 잔고·보유·주문·설정 병렬 로딩, 현재가 동기 캐시 계층·다중 종목 병렬 조회 |
+| 1.8 | 2026-01-30 | 완료: 데이터 수집 연동 (1단계) — DART 공시·KRX 시세·Yahoo 내부 API 연동, NewsItem 저장·스케줄러·Fallback |
+| 1.9 | 2026-01-30 | 완료: 팩터 계산 엔진 (2단계) — KRX 일별 TB_DAILY_STOCK 저장·KrxCollectionService·FactorCalculationService(이격도·변동성 돌파·유동성)·TB_SIGNAL_SCORE·GET /api/v1/signals·자동투자 현황 시그널 연동 |
+| 1.10 | 2026-01-30 | 완료: 4단계 파이프라인 (1차) — TB_UNIVERSE·UniverseFilterService·유니버스 선행 스케줄·PositionSizingService·TB_STRATEGY_POSITION·PipelineExecutor·ExitRuleService(Time-Cut)·pipeline.auto-execute |

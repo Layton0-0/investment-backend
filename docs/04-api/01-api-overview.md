@@ -89,6 +89,10 @@
 
 ### 3.8 뉴스·공시 API
 - `GET /api/v1/news` - 뉴스·공시 목록 조회 (쿼리: `market`, `source`, `symbol`, `from`, `to`, `page`, `size`)
+- `POST /api/v1/news/collect` - 뉴스·공시 수집 실행 (DART·SEC EDGAR 즉시 수집, 인증 필요)
+
+### 3.9 시그널/팩터 API
+- `GET /api/v1/signals` - 시그널/팩터 점수 목록 조회 (쿼리: `basDt`, `market`, `symbol`, `factorType`, `page`, `size`)
 
 ## 4. API 버전 관리
 
@@ -169,9 +173,11 @@
 - [분석 API](./05-analysis-api.md)
 - [설정 API](./06-setting-api.md)
 - [트레이딩 포트폴리오 API](./07-trading-portfolio-api.md)
+- [데이터 수집 API 및 설정](./10-data-collection-api.md) (DART/KRX/Yahoo, 내부 수집 API)
 
 ## 문서 변경 이력
 
 | 버전 | 일자 | 작성자 | 변경 내용 |
 |------|------|--------|----------|
 | 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 - 계좌 API 문서 통합 반영 |
+| 1.1 | 2026-01-30 | System | 데이터 수집 API 문서 링크 추가 (10-data-collection-api.md) |

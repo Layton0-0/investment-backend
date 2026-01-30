@@ -48,7 +48,11 @@ public class StockScreeningService {
         return Flux.fromIterable(WATCH_LIST)
                 .concatMap(symbol -> stockAnalysisService.analyzeStock(symbol, interval)
                         .map(analysis -> {
-                            // 점수 계산
+                            // RSI 미반환 시 50으로 보정 (차트 데이터 부족/API 오류 시에도 점수 계산 가능)
+                            if (analysis.getRsi() == null && (analysis.getEma20() != null || analysis.getCurrentPrice() != null)) {
+                                analysis.setRsi(new BigDecimal("50"));
+                                log.debug("종목 RSI 미반환, 50으로 보정: symbol={}", analysis.getSymbol());
+                            }
                             BigDecimal score = calculateScore(analysis);
                             analysis.setExpectedReturn(score);
                             return analysis;
@@ -59,17 +63,16 @@ public class StockScreeningService {
                         }))
                 .collectList()
                 .map(analyses -> {
-                    // 점수 순으로 정렬하고 상위 N개 선택
+                    // 점수 순으로 정렬하고 상위 N개 선택 (점수가 있는 것만)
                     List<StockAnalysisDto> filtered = analyses.stream()
-                            .filter(a -> a.getRsi() != null) // RSI가 있는 것만 필터링
-                            .sorted(Comparator.comparing(StockAnalysisDto::getExpectedReturn, 
+                            .filter(a -> a.getExpectedReturn() != null)
+                            .sorted(Comparator.comparing(StockAnalysisDto::getExpectedReturn,
                                     Comparator.nullsLast(Comparator.reverseOrder())))
                             .limit(limit)
                             .collect(Collectors.toList());
                     
-                    // 모든 종목 분석이 실패한 경우
                     if (filtered.isEmpty() && !analyses.isEmpty()) {
-                        log.warn("모든 종목 분석이 실패했습니다. API 키 설정 또는 네트워크 오류 가능성이 있습니다.");
+                        log.warn("선정된 종목이 없습니다. API 키·인증·네트워크 또는 차트 데이터 부족을 확인하세요.");
                     }
                     
                     return filtered;

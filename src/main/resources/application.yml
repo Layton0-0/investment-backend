@@ -89,6 +89,34 @@ management:
         enabled: true
 
 investment:
+  # 데이터 수집 (DART/KRX API 키는 로그 마스킹 대상)
+  data:
+    dart:
+      api-key: ${DART_API_KEY:}
+      base-url: ${DART_BASE_URL:https://opendart.fss.or.kr/api}
+      collect-days: ${DART_COLLECT_DAYS:3}
+      schedule-cron: ${DART_SCHEDULE_CRON:0 */10 * * * *}
+    krx:
+      auth-key: ${KRX_AUTH_KEY:}
+      base-url: ${KRX_BASE_URL:https://openapi.krx.co.kr}
+      schedule-cron: ${KRX_SCHEDULE_CRON:0 0 16 * * *}
+    sec:
+      api-key: ${SEC_API_KEY:}
+      base-url: ${SEC_BASE_URL:https://data.sec.gov}
+      collect-days: ${SEC_COLLECT_DAYS:3}
+      schedule-cron: ${SEC_SCHEDULE_CRON:0 */15 * * * *}
+    # 내부 수집 API (Yahoo 등 Python 스크립트 → Spring 전달 시 사용). 키 미설정 시 내부 API 비활성화.
+    internal-api-key: ${DATA_COLLECTION_INTERNAL_KEY:}
+  # 팩터 계산 (이격도·변동성 돌파·유동성). 매일 장 시작 전 실행.
+  factor:
+    schedule-cron: ${FACTOR_SCHEDULE_CRON:0 0 8 * * *}
+    disparity-ma-days: ${FACTOR_DISPARITY_MA_DAYS:20}
+    volatility-breakout-k: ${FACTOR_VOLATILITY_BREAKOUT_K:0.5}
+    liquidity-min-trd-val: ${FACTOR_LIQUIDITY_MIN_TRD_VAL:1000000000}
+    position-risk-pct: ${FACTOR_POSITION_RISK_PCT:0.01}  # 1회 매매당 총자산 1% 리스크
+  # 4단계 파이프라인 실행. auto-execute=false 시 주문 생성 없이 dry-run만.
+  pipeline:
+    auto-execute: ${PIPELINE_AUTO_EXECUTE:false}
   # 보안 설정
   security:
     encryption-key: ${INVESTMENT_ENCRYPTION_KEY:}  # AES-256 키 (Base64 인코딩)

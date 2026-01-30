@@ -2,17 +2,23 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '3.2.2'
     id 'io.spring.dependency-management' version '1.1.4'
+    id 'jacoco'
 }
 
 group = 'com.investment'
 version = '2.0.0'
 sourceCompatibility = '17'
 
-// Windows 등에서 build 디렉터리 삭제 실패(프로세스 잠금) 회피: 시스템 임시 디렉터리에 빌드
-// 사용: .\scripts\run-tests.ps1  또는  $env:GRADLE_UNIQUE_BUILD_DIR='1'; .\gradlew test
+// Agent/Cursor 전용: build 폴더는 IntelliJ용. 임시 빌드는 고정 경로 agent-build(같은 루트, JaCoCo 호환) 사용 후 스크립트에서 삭제.
+// Windows에서 1회차 test 시 삭제 잠금 시 2회차 재실행으로 회피 가능.
+// 사용: .\scripts\run-tests.ps1 또는 run-tests-with-coverage.ps1 (GRADLE_UNIQUE_BUILD_DIR=1)
 if (System.getenv('GRADLE_UNIQUE_BUILD_DIR') != null && !System.getenv('GRADLE_UNIQUE_BUILD_DIR').isEmpty()) {
-    def tmpBase = System.getProperty('java.io.tmpdir')
-    buildDir = file("${tmpBase}/investment-choi-build-${System.currentTimeMillis()}")
+    buildDir = file("${projectDir}/agent-build")
+    gradle.buildFinished {
+        if (buildDir?.exists()) {
+            new File(projectDir, '.agent-build-dir').text = buildDir.absolutePath
+        }
+    }
 }
 
 configurations {
@@ -81,4 +87,60 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+    finalizedBy jacocoTestReport
+    if (System.getenv('GRADLE_UNIQUE_BUILD_DIR') != null && !System.getenv('GRADLE_UNIQUE_BUILD_DIR').isEmpty()) {
+        maxParallelForks = 1
+        forkEvery = 0
+    }
+}
+
+jacoco {
+    toolVersion = '0.8.11'
+}
+
+def jacocoExcludes = [
+    'com/investment/InvestmentApplication.class',
+    'com/investment/**/config/**',
+    'com/investment/**/dto/**',
+    'com/investment/**/domain/entity/**',
+    '**/*Dto.class',
+    '**/*DTO.class',
+    '**/MenuItem.class',
+    '**/ErrorCode.class',
+    '**/ErrorResponse.class',
+    '**/Role.class',
+    '**/BrokerType.class',
+    '**/StrategyStatus.class',
+    '**/StrategyType.class'
+]
+
+tasks.named('jacocoTestReport') {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+        html.outputLocation = layout.buildDirectory.dir('reports/jacoco/test/html')
+    }
+}
+
+tasks.named('jacocoTestCoverageVerification', JacocoCoverageVerification) {
+    dependsOn jacocoTestReport
+    executionData.from(file("${layout.buildDirectory.get().asFile}/jacoco/test.exec"))
+    sourceSets sourceSets.main
+    violationRules {
+        rule {
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.80
+            }
+        }
+        rule {
+            limit {
+                counter = 'BRANCH'
+                value = 'COVEREDRATIO'
+                minimum = 0.70
+            }
+        }
+    }
 }

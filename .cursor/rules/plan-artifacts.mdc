@@ -1,0 +1,9 @@
+# Plan 모드 산출물 보관 (User Rule)
+
+- Plan 모드에서 생성·실행된 계획서(md)는 **전부 히스토리**로 남긴다.
+- 프로젝트 내 **plan 폴더**를 두고, 그 안에 **분류별**로 md를 저장한다.
+- Agent가 plan을 실행(또는 plan build)할 때마다 **해당 시점의 md를 별도 파일**로 저장한다 (실행 시점별 히스토리).
+- **저장 경로**: `docs/09-planning/plans/<분류>/` 아래, 파일명에 일시 포함 (예: `YYYYMMDD_제목.md`).
+- **분류 예**: pipeline, data-collection, architecture, security 등 계획 주제별 서브폴더.
+
+참조: [개발 진행 현황](docs/09-planning/02-development-status.md).
