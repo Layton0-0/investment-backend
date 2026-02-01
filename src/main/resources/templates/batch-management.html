@@ -3,207 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>배치 관리</title>
+    <title>스케줄 현황 - Investment Choi</title>
+    <link rel="stylesheet" th:href="@{/css/common.css}">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            padding: 30px;
-        }
-        
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 2px solid #e0e0e0;
-        }
-        
-        .header h1 {
-            color: #333;
-            font-size: 28px;
-        }
-        
-        .nav-links {
-            display: flex;
-            gap: 10px;
-        }
-        
-        .nav-links a {
-            padding: 8px 16px;
-            background: #667eea;
-            color: white;
-            text-decoration: none;
-            border-radius: 6px;
-            font-size: 14px;
-            transition: background 0.3s;
-        }
-        
-        .nav-links a:hover {
-            background: #5568d3;
-        }
-        
-        .jobs-grid {
-            display: grid;
-            gap: 20px;
-        }
-        
-        .job-card {
-            background: #f8f9fa;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 20px;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        
-        .job-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(0,0,0,0.1);
-        }
-        
-        .job-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: start;
-            margin-bottom: 15px;
-        }
-        
-        .job-title {
-            flex: 1;
-        }
-        
-        .job-title h3 {
-            font-size: 20px;
-            color: #333;
-            margin-bottom: 5px;
-        }
-        
-        .job-title .description {
-            font-size: 14px;
-            color: #666;
-            margin-top: 5px;
-        }
-        
-        .job-status {
-            padding: 6px 12px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-        
-        .job-status.active {
-            background: #27ae60;
-            color: white;
-        }
-        
-        .job-status.paused {
-            background: #f39c12;
-            color: white;
-        }
-        
-        .job-status.disabled {
-            background: #95a5a6;
-            color: white;
-        }
-        
-        .job-info {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-            margin-top: 15px;
-        }
-        
-        .info-item {
-            background: white;
-            padding: 12px;
-            border-radius: 6px;
-            border-left: 4px solid #667eea;
-        }
-        
-        .info-item label {
-            display: block;
-            font-size: 11px;
-            color: #999;
-            margin-bottom: 5px;
-            text-transform: uppercase;
-        }
-        
-        .info-item .value {
-            font-size: 14px;
-            font-weight: bold;
-            color: #333;
-        }
-        
-        .info-item.cron .value {
-            font-family: 'Courier New', monospace;
-            background: #f8f9fa;
-            padding: 4px 8px;
-            border-radius: 4px;
-        }
-        
-        .stats {
-            display: flex;
-            gap: 15px;
-            margin-top: 15px;
-            padding-top: 15px;
-            border-top: 1px solid #e0e0e0;
-        }
-        
-        .stat-item {
-            flex: 1;
-            text-align: center;
-            padding: 10px;
-            background: white;
-            border-radius: 6px;
-        }
-        
-        .stat-item label {
-            display: block;
-            font-size: 11px;
-            color: #999;
-            margin-bottom: 5px;
-        }
-        
-        .stat-item .value {
-            font-size: 18px;
-            font-weight: bold;
-            color: #667eea;
-        }
-        
-        .empty-state {
-            text-align: center;
-            padding: 40px;
-            color: #999;
-        }
+        .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+        .page-title { font-size: 22px; font-weight: 700; margin-bottom: 24px; color: #191F28; }
+        .jobs-grid { display: grid; gap: 20px; }
+        .job-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .job-card:hover { box-shadow: 0 6px 12px rgba(0,0,0,0.08); }
+        .job-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px; }
+        .job-title h3 { font-size: 18px; color: #191F28; margin-bottom: 6px; }
+        .job-title .description { font-size: 13px; color: #8B95A1; }
+        .job-status { padding: 6px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+        .job-status.active { background: #27ae60; color: white; }
+        .job-status.paused { background: #f39c12; color: white; }
+        .job-status.disabled { background: #95a5a6; color: white; }
+        .job-info { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-top: 15px; }
+        .info-item { background: #f8f9fa; padding: 12px; border-radius: 8px; border-left: 4px solid #3182F6; }
+        .info-item label { display: block; font-size: 11px; color: #8B95A1; margin-bottom: 4px; text-transform: uppercase; }
+        .info-item .value { font-size: 14px; font-weight: 600; color: #191F28; }
+        .info-item.cron .value { font-family: 'Courier New', monospace; }
+        .stats { display: flex; gap: 12px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; }
+        .stat-item { flex: 1; text-align: center; padding: 10px; background: #f8f9fa; border-radius: 8px; }
+        .stat-item label { display: block; font-size: 11px; color: #8B95A1; margin-bottom: 4px; }
+        .stat-item .value { font-size: 16px; font-weight: 700; color: #3182F6; }
+        .empty-state { text-align: center; padding: 48px 24px; color: #8B95A1; }
     </style>
 </head>
-<body>
+<body class="page-background">
+    <div th:replace="~{fragments/layout-header :: header}"></div>
+    <nav th:replace="~{fragments/layout-menu :: menu}"></nav>
+
     <div class="container">
-        <div class="header">
-            <h1>⚙️ 배치 관리</h1>
-            <div class="nav-links">
-                <a href="/">대시보드</a>
-                <a href="/portfolio">포트폴리오</a>
-            </div>
-        </div>
-        
+        <h2 class="page-title">스케줄 현황</h2>
+
         <div th:if="${jobs != null and !jobs.isEmpty()}">
             <div class="jobs-grid">
                 <div class="job-card" th:each="job : ${jobs}">
@@ -212,12 +45,10 @@
                             <h3 th:text="${job.name}"></h3>
                             <div class="description" th:text="${job.description}"></div>
                         </div>
-                        <span class="job-status" 
-                              th:classappend="${job.status == 'ACTIVE'} ? 'active' : 
-                                               (${job.status == 'PAUSED'} ? 'paused' : 'disabled')"
+                        <span class="job-status"
+                              th:classappend="${job.status == 'ACTIVE' ? 'active' : (job.status == 'PAUSED' ? 'paused' : 'disabled')}"
                               th:text="${job.status}"></span>
                     </div>
-                    
                     <div class="job-info">
                         <div class="info-item cron">
                             <label>Cron 표현식</label>
@@ -229,14 +60,13 @@
                         </div>
                         <div class="info-item" th:if="${job.nextExecutionTime}">
                             <label>다음 실행 시간</label>
-                            <div class="value" th:text="${#temporals.format(job.nextExecutionTime, 'yyyy-MM-dd HH:mm:ss')}"></div>
+                            <div class="value" th:text="${#temporals.format(job.nextExecutionTime, 'yyyy-MM-dd HH:mm')}"></div>
                         </div>
                         <div class="info-item" th:if="${job.lastExecutionTime}">
                             <label>마지막 실행 시간</label>
-                            <div class="value" th:text="${#temporals.format(job.lastExecutionTime, 'yyyy-MM-dd HH:mm:ss')}"></div>
+                            <div class="value" th:text="${#temporals.format(job.lastExecutionTime, 'yyyy-MM-dd HH:mm')}"></div>
                         </div>
                     </div>
-                    
                     <div class="stats">
                         <div class="stat-item">
                             <label>총 실행 횟수</label>
@@ -244,21 +74,19 @@
                         </div>
                         <div class="stat-item">
                             <label>성공 횟수</label>
-                            <div class="value" style="color: #27ae60;" 
-                                 th:text="${job.successCount != null ? job.successCount : 0}"></div>
+                            <div class="value" style="color: #27ae60;" th:text="${job.successCount != null ? job.successCount : 0}"></div>
                         </div>
                         <div class="stat-item">
                             <label>실패 횟수</label>
-                            <div class="value" style="color: #e74c3c;" 
-                                 th:text="${job.failureCount != null ? job.failureCount : 0}"></div>
+                            <div class="value" style="color: #e74c3c;" th:text="${job.failureCount != null ? job.failureCount : 0}"></div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        
+
         <div th:if="${jobs == null or jobs.isEmpty()}" class="empty-state">
-            <h2>등록된 배치 작업이 없습니다.</h2>
+            <h2>등록된 스케줄 작업이 없습니다.</h2>
         </div>
     </div>
 </body>

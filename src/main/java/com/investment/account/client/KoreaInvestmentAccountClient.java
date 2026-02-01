@@ -348,6 +348,182 @@ public class KoreaInvestmentAccountClient {
     }
 
     /**
+     * 해외주식 현재잔고(체결기준) 조회 — 미국(840) 외화(02) 기준.
+     * GET + query parameter. 보유 종목만 반환하며, 국내 잔고와 병합해 대시보드 등에서 KR/US 구분 표시에 사용.
+     *
+     * @param userId    사용자 ID
+     * @param accountNo 계좌번호 (8-2 형식)
+     * @return 해외(US) 보유 종목 목록 (실패 시 빈 목록, 예외 없음)
+     */
+    public List<AccountPositionDto> inquireOverseasBalance(String userId, String accountNo) {
+        if (userId == null || accountNo == null || accountNo.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        try {
+            UserApiKey userApiKey = getUserApiKeyForAccount(userId, accountNo).orElse(null);
+            if (userApiKey == null) {
+                return new ArrayList<>();
+            }
+            String accessToken = tokenService.getAccessToken(userId);
+            String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
+            String appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
+            String serverType = userApiKey.getServerType();
+            String baseUrl = getBaseUrl(serverType);
+            String trId = getOverseasBalanceTrId(serverType);
+
+            HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
+                    accessToken, appKey, appSecret, trId);
+
+            Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createAccountRequestBody(
+                    accountNo,
+                    Map.of(
+                            "WCRC_FRCR_DVSN_CD", "02", // 외화
+                            "NATN_CD", "840",          // 미국
+                            "TR_MKET_CD", "00",        // 전체
+                            "INQR_DVSN_CD", "00"       // 전체
+                    ));
+            URI uri = buildUriWithQueryParams(baseUrl, PATH_OVERSAS_INQUIRE_PRESENT_BALANCE, queryParams);
+
+            logApiRequest("해외주식현재잔고조회", uri, headers, queryParams);
+            RateLimiter rateLimiter = getApiRateLimiter(serverType);
+            rateLimiter.acquirePermission();
+
+            String responseJson = webClient.get()
+                    .uri(uri)
+                    .headers(h -> h.addAll(headers))
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .timeout(Duration.ofSeconds(10))
+                    .block();
+
+            if (responseJson == null) {
+                return new ArrayList<>();
+            }
+            logApiResponse("해외주식현재잔고조회", responseJson);
+
+            JsonNode rootNode = objectMapper.readTree(responseJson);
+            String rtCd = rootNode.path("rt_cd").asText();
+            if (!"0".equals(rtCd)) {
+                log.warn("해외주식 잔고 조회 실패: rt_cd={}, msg1={}", rtCd, rootNode.path("msg1").asText(""));
+                return new ArrayList<>();
+            }
+
+            JsonNode output1 = rootNode.path("output1");
+            return parseOverseasPositionsOutput(output1);
+        } catch (Exception e) {
+            log.debug("해외주식 잔고 조회 실패(스킵): accountNo={}, error={}",
+                    LogMaskingUtil.maskAccountNo(accountNo), e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * 해외주식 현재잔고 응답의 보유 종목 목록 파싱.
+     * output1 배열 사용. 필드명은 KIS 해외 API 스펙(ovrs_* 등)에 맞춤.
+     */
+    private List<AccountPositionDto> parseOverseasPositionsOutput(JsonNode output1) {
+        List<AccountPositionDto> positions = new ArrayList<>();
+        if (output1 == null || !output1.isArray()) {
+            return positions;
+        }
+        for (JsonNode item : output1) {
+            AccountPositionDto dto = parseOverseasPositionItem(item);
+            if (dto != null) {
+                positions.add(dto);
+            }
+        }
+        return positions;
+    }
+
+    private AccountPositionDto parseOverseasPositionItem(JsonNode item) {
+        try {
+            String symbol = pathText(item, "pdno", "iscd", "ovrs_pdno");
+            String name = pathText(item, "prdt_name", "ovrs_item_name", "item_name");
+            int quantity = pathInt(item, "hldg_qty", "ovrs_stck_hold_qty");
+            BigDecimal avgPrice = pathDecimal(item, "pchs_avg_pric", "ovrs_avg_pric", "avg_pric");
+            BigDecimal currentPrice = pathDecimal(item, "prpr", "now_pric", "ovrs_stck_prpr");
+            BigDecimal evalAmt = pathDecimal(item, "evlu_amt", "ovrs_stck_evlu_amt", "evlu_amt");
+            BigDecimal profitLoss = pathDecimal(item, "evlu_pfls_amt", "ovrs_pfls_amt");
+            BigDecimal profitLossRate = pathDecimal(item, "evlu_pfls_rt", "ovrs_pfls_rt");
+            if (symbol == null || symbol.isEmpty()) {
+                return null;
+            }
+            if (currentPrice == null || currentPrice.compareTo(BigDecimal.ZERO) == 0) {
+                currentPrice = avgPrice != null ? avgPrice : BigDecimal.ZERO;
+            }
+            if (evalAmt == null) {
+                evalAmt = currentPrice.multiply(BigDecimal.valueOf(quantity));
+            }
+            if (profitLoss == null) {
+                profitLoss = BigDecimal.ZERO;
+            }
+            if (profitLossRate == null) {
+                profitLossRate = BigDecimal.ZERO;
+            }
+            if (avgPrice == null) {
+                avgPrice = currentPrice;
+            }
+            return AccountPositionDto.builder()
+                    .symbol(symbol)
+                    .name(name != null ? name : symbol)
+                    .quantity(quantity)
+                    .averagePrice(avgPrice)
+                    .currentPrice(currentPrice)
+                    .totalValue(evalAmt)
+                    .profitLoss(profitLoss)
+                    .profitLossRate(profitLossRate)
+                    .currency("USD")
+                    .market("US")
+                    .lastUpdated(LocalDateTime.now())
+                    .purchaseAmount(avgPrice.multiply(BigDecimal.valueOf(quantity)))
+                    .evaluationAmount(evalAmt)
+                    .evaluationProfitLoss(profitLoss)
+                    .evaluationProfitLossRate(profitLossRate)
+                    .holdingQuantity(quantity)
+                    .build();
+        } catch (Exception e) {
+            log.debug("해외 보유 종목 1건 파싱 스킵: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private static String pathText(JsonNode node, String... keys) {
+        for (String key : keys) {
+            if (node.has(key)) {
+                String v = node.path(key).asText(null);
+                if (v != null && !v.isEmpty()) {
+                    return v;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static int pathInt(JsonNode node, String... keys) {
+        for (String key : keys) {
+            if (node.has(key)) {
+                return node.path(key).asInt(0);
+            }
+        }
+        return 0;
+    }
+
+    private static BigDecimal pathDecimal(JsonNode node, String... keys) {
+        for (String key : keys) {
+            if (node.has(key)) {
+                String s = node.path(key).asText(null);
+                if (s != null && !s.isEmpty()) {
+                    try {
+                        return new BigDecimal(s);
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
      * 회원가입 전 계좌인증용: API Key/Secret·서버타입·계좌번호로 주식잔고조회를 호출하여 계좌 유효 여부 확인.
      * (키·계좌번호는 로그에 남기지 않음)
      *
@@ -934,6 +1110,14 @@ public class KoreaInvestmentAccountClient {
             BigDecimal evaluationProfitLoss = new BigDecimal(item.path("evlu_pfls_amt").asText("0"));
             BigDecimal evaluationProfitLossRate = new BigDecimal(item.path("evlu_pfls_rt").asText("0"));
 
+            // 거래소 구분: 국내 잔고 API는 KRX만 반환. 해외 포함 시 응답 필드(예: excg_dvsn_cd)로 US 구분 가능.
+            String market = "KR";
+            if (item.has("excg_dvsn_cd")) {
+                String excg = item.path("excg_dvsn_cd").asText("");
+                if ("NASD".equals(excg) || "NYSE".equals(excg) || "AMEX".equals(excg)) {
+                    market = "US";
+                }
+            }
             AccountPositionDto position = AccountPositionDto.builder()
                     .symbol(symbol)
                     .name(name)
@@ -944,6 +1128,7 @@ public class KoreaInvestmentAccountClient {
                     .profitLoss(evaluationProfitLoss)
                     .profitLossRate(evaluationProfitLossRate)
                     .currency("KRW")
+                    .market(market)
                     .lastUpdated(LocalDateTime.now())
                     .purchaseAmount(purchaseAmount)
                     .evaluationAmount(evaluationAmount)

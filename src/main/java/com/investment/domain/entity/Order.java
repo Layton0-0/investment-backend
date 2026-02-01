@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import jakarta.persistence.*;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -66,6 +67,16 @@ public class Order {
 
     @Column(name = "MESSAGE", length = 500)
     private String message;
+
+    /** 체결 확인 후 포지션 등록 시 사용 (기준일·시장·전략타입) */
+    @Column(name = "POSITION_BAS_DT")
+    private LocalDate positionBasDt;
+
+    @Column(name = "POSITION_MARKET", length = 10)
+    private String positionMarket;
+
+    @Column(name = "POSITION_STRATEGY_TYPE", length = 20)
+    private String positionStrategyType;
 
     @Column(name = "CREATED_AT", nullable = false)
     private LocalDateTime createdAt;
@@ -143,6 +154,24 @@ public class Order {
     public void fail(String message) {
         this.status = OrderStatus.FAILED;
         this.message = message;
+    }
+
+    /**
+     * 체결 확인 후 포지션 등록 시 사용할 컨텍스트 설정.
+     */
+    public void setPositionContext(LocalDate positionBasDt, String positionMarket, String positionStrategyType) {
+        this.positionBasDt = positionBasDt;
+        this.positionMarket = positionMarket;
+        this.positionStrategyType = positionStrategyType;
+    }
+
+    /**
+     * 포지션 등록 완료 후 컨텍스트 초기화.
+     */
+    public void clearPositionContext() {
+        this.positionBasDt = null;
+        this.positionMarket = null;
+        this.positionStrategyType = null;
     }
 
     public enum OrderType {

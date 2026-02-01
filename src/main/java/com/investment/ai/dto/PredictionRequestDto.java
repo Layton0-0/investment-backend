@@ -8,7 +8,9 @@ import lombok.NoArgsConstructor;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * AI 예측 요청 DTO
@@ -37,6 +39,7 @@ public class PredictionRequestDto {
      * 모델 타입 (lstm, transformer, ensemble)
      * 기본값: ensemble
      */
+    @Builder.Default
     private String modelType = "ensemble";
     
     /**
@@ -50,4 +53,16 @@ public class PredictionRequestDto {
      * 요청 시각 (캐싱 키 생성용)
      */
     private LocalDateTime requestedAt;
+    
+    /**
+     * 일별 OHLCV 시계열 (LSTM 추론용, optional).
+     * 채워지면 예측 서비스에서 LSTM 사용 가능.
+     */
+    private List<DailyPricePoint> series;
+    
+    /**
+     * 현재가 (LSTM 응답 매핑용, optional).
+     * 없으면 series 마지막 close 또는 Mock 기준 사용.
+     */
+    private BigDecimal currentPrice;
 }

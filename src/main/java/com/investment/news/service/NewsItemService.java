@@ -32,23 +32,30 @@ public class NewsItemService {
         /**
          * 필터·페이징으로 뉴스 목록 조회
          *
-         * @param market 시장 (KR, US). null이면 전체
-         * @param source 원천 코드. null이면 전체
-         * @param symbol 종목 코드. null이면 전체
-         * @param from   수집 시작일 (포함). null이면 제한 없음
-         * @param to     수집 종료일 (포함). null이면 제한 없음
+         * @param market   시장 (KR, US). null/빈값이면 전체
+         * @param source   원천 코드. null/빈값이면 전체
+         * @param itemType 유형 (FACT, SPEED, BUZZ). null/빈값이면 전체
+         * @param symbol   종목 코드. null/빈값이면 전체
+         * @param title    제목 부분 일치. null/빈값이면 제한 없음
+         * @param from     수집 시작일 (포함). null이면 제한 없음
+         * @param to       수집 종료일 (포함). null이면 제한 없음
          */
         @Transactional(readOnly = true)
-        public NewsItemPageResponseDto getNewsItems(String market, String source, String symbol,
-                        LocalDate from, LocalDate to, int page, int size) {
+        public NewsItemPageResponseDto getNewsItems(String market, String source, String itemType, String symbol,
+                        String title, LocalDate from, LocalDate to, int page, int size) {
+                market = (market != null && !market.isBlank()) ? market.trim() : null;
+                source = (source != null && !source.isBlank()) ? source.trim() : null;
+                itemType = (itemType != null && !itemType.isBlank()) ? itemType.trim() : null;
+                symbol = (symbol != null && !symbol.isBlank()) ? symbol.trim() : null;
+                String titlePattern = (title != null && !title.isBlank()) ? "%" + title.trim() + "%" : null;
                 LocalDateTime fromAt = from != null ? from.atStartOfDay() : null;
                 LocalDateTime toAt = to != null ? to.atTime(LocalTime.MAX) : null;
 
                 Pageable pageable = PageRequest.of(page, Math.min(size, 100),
                                 Sort.by(Sort.Direction.DESC, "collectedAt"));
 
-                Page<NewsItem> result = newsItemRepository.findByFilters(market, source, symbol, fromAt, toAt,
-                                pageable);
+                Page<NewsItem> result = newsItemRepository.findByFilters(market, source, itemType, symbol,
+                                titlePattern, fromAt, toAt, pageable);
                 List<NewsItemDto> content = result.getContent().stream()
                                 .map(this::toDto)
                                 .collect(Collectors.toList());
@@ -103,6 +110,19 @@ public class NewsItemService {
                 return true;
         }
 
+        /**
+         * 표시용 URL 보정. DB에 예전 경로(dsbh001)로 저장된 DART 링크를 현재 정식 경로(dsaf001)로 치환.
+         */
+        private String fixDisplayUrl(String url) {
+                if (url == null || url.isBlank()) {
+                        return url;
+                }
+                if (url.contains("dart.fss.or.kr/dsbh001")) {
+                        return url.replace("dsbh001", "dsaf001");
+                }
+                return url;
+        }
+
         private NewsItemDto toDto(NewsItem n) {
                 return NewsItemDto.builder()
                                 .id(n.getId())
@@ -111,7 +131,7 @@ public class NewsItemService {
                                 .itemType(n.getItemType())
                                 .title(n.getTitle())
                                 .summary(n.getSummary())
-                                .url(n.getUrl())
+                                .url(fixDisplayUrl(n.getUrl()))
                                 .collectedAt(n.getCollectedAt())
                                 .symbol(n.getSymbol())
                                 .sentimentScore(n.getSentimentScore())

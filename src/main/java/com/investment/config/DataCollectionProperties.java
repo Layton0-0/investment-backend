@@ -18,6 +18,7 @@ public class DataCollectionProperties {
     private Dart dart = new Dart();
     private Krx krx = new Krx();
     private Sec sec = new Sec();
+    private Us us = new Us();
     /** 내부 수집 API 키 (X-Internal-Data-Key). 미설정 시 내부 API 비활성화 */
     private String internalApiKey = "";
 
@@ -53,5 +54,18 @@ public class DataCollectionProperties {
         private int collectDays = 3;
         /** 수집 cron. 기본 15분마다 */
         private String scheduleCron = "0 */15 * * * *";
+    }
+
+    @Getter
+    @Setter
+    public static class Us {
+        /** US 시장 일별 시세 수집 cron. 기본 매일 17:00 KST (미국 장 마감 후) */
+        private String scheduleCron = "0 0 17 * * *";
+        /** yfinance 스크립트 절대/상대 경로. 미설정 시 US 일별 수집 스킵(스텁) */
+        private String yfinanceScriptPath = "";
+        /** 수집 대상 종목 코드 (쉼표 구분). 스크립트에 --symbols 로 전달 */
+        private String symbols = "AAPL,MSFT,GOOGL,AMZN,META,TSLA,NVDA,JPM,V,JNJ";
+        /** Python 실행 명령 (예: python, python3, py). 기본 python */
+        private String pythonCommand = "python";
     }
 }

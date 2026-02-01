@@ -22,6 +22,8 @@ public class MenuConfig {
                 new MenuItem("news-events", "뉴스·이벤트", "/news", 5),
                 new MenuItem("portfolio", "포트폴리오", "/portfolio", 6),
                 new MenuItem("orders", "주문·체결", "/orders", 7),
-                new MenuItem("settings", "설정", "/mypage", 8));
+                new MenuItem("schedule-status", "스케줄 현황", "/batch", 8),
+                new MenuItem("settings", "설정", "/settings", 9),
+                new MenuItem("backtest", "백테스트", "/backtest", 10));
     }
 }

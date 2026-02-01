@@ -5,6 +5,8 @@ import com.investment.analysis.dto.AnalysisResponseDto;
 import com.investment.taapi.dto.StockAnalysisDto;
 import com.investment.taapi.service.StockAnalysisService;
 import com.investment.ai.client.AiPredictionClient;
+import com.investment.domain.repository.DailyStockRepository;
+import com.investment.marketdata.service.RealtimeMarketDataService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,6 +17,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -32,6 +35,12 @@ class AnalysisServiceTest {
 
     @Mock
     private StockAnalysisService stockAnalysisService;
+
+    @Mock
+    private DailyStockRepository dailyStockRepository;
+
+    @Mock
+    private RealtimeMarketDataService realtimeMarketDataService;
 
     @InjectMocks
     private AnalysisService analysisService;
@@ -74,6 +83,8 @@ class AnalysisServiceTest {
     @DisplayName("analyze 기술적 분석만 있을 때(AI empty) 기술적 분석 기반 응답")
     void analyze_technicalOnly_returnsTechnicalBasedResponse() {
         ReflectionTestUtils.setField(analysisService, "aiServiceEnabled", true);
+        when(dailyStockRepository.findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(any(), any(), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(List.of());
 
         AnalysisRequestDto request = AnalysisRequestDto.builder()
                 .symbol("005930")

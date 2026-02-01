@@ -1,11 +1,21 @@
 package com.investment.factor.execution;
 
+import com.investment.common.exception.DomainException;
+import com.investment.common.exception.ErrorCode;
+import com.investment.common.security.EncryptionUtil;
+import com.investment.domain.entity.BrokerType;
+import com.investment.domain.entity.Order;
 import com.investment.domain.entity.StrategyPosition;
+import com.investment.domain.entity.UserAccount;
+import com.investment.domain.repository.OrderRepository;
 import com.investment.domain.repository.StrategyPositionRepository;
+import com.investment.domain.repository.TradingSettingRepository;
+import com.investment.domain.repository.UserAccountRepository;
 import com.investment.factor.dto.PositionRecommendationDto;
 import com.investment.factor.service.PositionSizingService;
 import com.investment.order.dto.OrderRequestDto;
 import com.investment.order.service.OrderService;
+import com.investment.strategy.domain.StrategyType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,23 +43,67 @@ public class PipelineExecutor {
     private final PositionSizingService positionSizingService;
     private final OrderService orderService;
     private final StrategyPositionRepository strategyPositionRepository;
+    private final OrderRepository orderRepository;
+    private final TradingSettingRepository tradingSettingRepository;
+    private final UserAccountRepository userAccountRepository;
+    private final EncryptionUtil encryptionUtil;
 
     @Value("${investment.pipeline.auto-execute:false}")
     private boolean autoExecute = false;
 
+    /** 실전 계좌(serverType=0) 자동 실행 허용. false면 모의계좌만 실제 주문 */
+    @Value("${investment.pipeline.allow-real-execution:false}")
+    private boolean allowRealExecution = false;
+
+    /** 체결 확인 후 포지션 등록 여부 (true면 체결 확인 후, false면 주문 성공 시 즉시 등록) */
+    @Value("${investment.pipeline.register-position-on-execution:false}")
+    private boolean registerPositionOnExecution = false;
+
     /**
-     * 기준일·시장에 대해 권장 포지션 산출 후, 설정에 따라 주문 실행.
-     *
-     * @param basDt        기준일
-     * @param market       시장 (KR, US)
-     * @param accountNo    계좌번호
-     * @param totalCapital 총 투자 가능 자산 (원)
-     * @param dryRun       true면 주문 실행 없이 권장 목록만 반환
-     * @return 실행(또는 dry-run) 결과 요약
+     * 계좌의 서버 타입 조회 (모의=1, 실전=0). userId·accountNo에 해당하는 UserAccount 기준.
+     */
+    private String resolveServerTypeForAccount(String userId, String accountNo) {
+        if (userId == null || accountNo == null || accountNo.trim().isEmpty()) {
+            return "1";
+        }
+        List<UserAccount> accounts = userAccountRepository.findByUserIdAndBrokerType(userId, BrokerType.KOREA_INVESTMENT);
+        for (UserAccount account : accounts) {
+            try {
+                String decrypted = encryptionUtil.decrypt(account.getAccountNoEncrypted());
+                if (accountNo.trim().equals(decrypted)) {
+                    return account.getServerType() != null ? account.getServerType() : "1";
+                }
+            } catch (Exception e) {
+                log.trace("계좌번호 복호화 스킵: accountId={}", account.getId());
+            }
+        }
+        return "1";
+    }
+
+    /**
+     * 기준일·시장에 대해 권장 포지션 산출 후, 설정에 따라 주문 실행 (기본 SHORT_TERM).
      */
     @Transactional
     public PipelineRunResult run(LocalDate basDt, String market, String accountNo, BigDecimal totalCapital, boolean dryRun) {
-        List<PositionRecommendationDto> recommendations = positionSizingService.getRecommendations(basDt, market, totalCapital);
+        return run(basDt, market, accountNo, StrategyType.SHORT_TERM, totalCapital, dryRun);
+    }
+
+    /**
+     * 기준일·시장·기간별 권장 포지션 산출 후, 설정에 따라 주문 실행.
+     *
+     * @param basDt             기준일
+     * @param market            시장 (KR, US)
+     * @param accountNo         계좌번호
+     * @param strategyType      기간 (SHORT_TERM, MEDIUM_TERM, LONG_TERM)
+     * @param allocatedCapital  해당 기간 배분 자산 (원)
+     * @param dryRun            true면 주문 실행 없이 권장 목록만 반환
+     * @return 실행(또는 dry-run) 결과 요약
+     */
+    @Transactional
+    public PipelineRunResult run(LocalDate basDt, String market, String accountNo, StrategyType strategyType,
+            BigDecimal allocatedCapital, boolean dryRun) {
+        List<PositionRecommendationDto> recommendations = positionSizingService.getRecommendations(
+                basDt, market, strategyType, allocatedCapital);
         List<PipelineRunResult.OrderResult> orderResults = new ArrayList<>();
         boolean actuallyExecute = autoExecute && !dryRun;
 
@@ -64,21 +118,51 @@ public class PipelineExecutor {
                     .build();
             if (actuallyExecute) {
                 try {
-                    orderService.executeOrder(request);
-                    StrategyPosition position = StrategyPosition.builder()
-                            .accountNo(accountNo)
-                            .symbol(rec.getSymbol())
-                            .market(rec.getMarket())
-                            .entryDt(basDt)
-                            .entryPrice(rec.getEntryPrice())
-                            .quantity((int) rec.getRecommendedQty())
-                            .trailingHigh(rec.getEntryPrice())
-                            .atrMultiplier(DEFAULT_ATR_MULTIPLIER)
-                            .timeCutDays(DEFAULT_TIME_CUT_DAYS)
-                            .targetReturnPct(DEFAULT_TARGET_RETURN_PCT)
-                            .build();
-                    strategyPositionRepository.save(position);
-                    orderResults.add(PipelineRunResult.OrderResult.success(rec.getSymbol(), rec.getRecommendedQty(), rec.getEntryPrice()));
+                    // 스케줄러 등 인증 컨텍스트 없음: accountNo → userId 조회 후 파이프라인용 주문 실행
+                    com.investment.domain.entity.TradingSetting setting = tradingSettingRepository.findByAccountNo(accountNo)
+                            .orElseThrow(() -> new DomainException(ErrorCode.SETTING_NOT_FOUND,
+                                    "거래 설정을 찾을 수 없습니다: " + accountNo));
+                    String userId = setting.getUserId();
+                    // 실전 계좌(serverType=0)는 allow-real-execution=false 시 주문 스킵
+                    String serverType = resolveServerTypeForAccount(userId, accountNo);
+                    if ("0".equals(serverType) && !allowRealExecution) {
+                        log.warn("실전 계좌 자동 실행 미허용(allow-real-execution=false), 주문 스킵: accountNo={}, symbol={}",
+                                accountNo, rec.getSymbol());
+                        orderResults.add(PipelineRunResult.OrderResult.dryRun(rec.getSymbol(), rec.getRecommendedQty(), rec.getEntryPrice()));
+                        continue;
+                    }
+                    com.investment.order.dto.OrderResponseDto orderResponse = orderService.executeOrderForPipeline(request, userId);
+
+                    // 포지션 등록: 체결 확인 후 등록 옵션에 따라 분기
+                    if (registerPositionOnExecution) {
+                        // 체결 확인 후 등록: 주문에 포지션 컨텍스트 저장, FillConfirmationScheduler에서 포지션 등록
+                        orderRepository.findById(orderResponse.getOrderId()).ifPresent(order -> {
+                            order.setPositionContext(basDt, market, strategyType != null ? strategyType.name() : StrategyType.SHORT_TERM.name());
+                            orderRepository.save(order);
+                        });
+                        log.debug("파이프라인 주문 성공 (체결 확인 후 포지션 등록 대기): orderId={}, symbol={}, qty={}, price={}",
+                                orderResponse.getOrderId(), rec.getSymbol(), rec.getRecommendedQty(), rec.getEntryPrice());
+                        orderResults.add(PipelineRunResult.OrderResult.success(rec.getSymbol(), rec.getRecommendedQty(), rec.getEntryPrice()));
+                    } else {
+                        // 주문 성공 시 즉시 등록 (기존 로직)
+                        StrategyPosition position = StrategyPosition.builder()
+                                .accountNo(accountNo)
+                                .symbol(rec.getSymbol())
+                                .market(rec.getMarket())
+                                .strategyType(strategyType != null ? strategyType : StrategyType.SHORT_TERM)
+                                .entryDt(basDt)
+                                .entryPrice(rec.getEntryPrice())
+                                .quantity((int) rec.getRecommendedQty())
+                                .trailingHigh(rec.getEntryPrice())
+                                .atrMultiplier(DEFAULT_ATR_MULTIPLIER)
+                                .timeCutDays(DEFAULT_TIME_CUT_DAYS)
+                                .targetReturnPct(DEFAULT_TARGET_RETURN_PCT)
+                                .build();
+                        strategyPositionRepository.save(position);
+                        log.debug("파이프라인 주문 성공 (포지션 즉시 등록): symbol={}, qty={}, price={}",
+                                rec.getSymbol(), rec.getRecommendedQty(), rec.getEntryPrice());
+                        orderResults.add(PipelineRunResult.OrderResult.success(rec.getSymbol(), rec.getRecommendedQty(), rec.getEntryPrice()));
+                    }
                 } catch (Exception e) {
                     log.warn("파이프라인 주문 실패: symbol={}, error={}", rec.getSymbol(), e.getMessage());
                     orderResults.add(PipelineRunResult.OrderResult.failure(rec.getSymbol(), e.getMessage()));
@@ -95,6 +179,81 @@ public class PipelineExecutor {
                 .recommendationCount(recommendations.size())
                 .orderResults(orderResults)
                 .build();
+    }
+
+    /**
+     * 체결 확인 후 포지션 등록 (체결 확인 스케줄러/리스너에서 호출).
+     * 주문이 EXECUTED 상태이고 아직 포지션이 등록되지 않은 경우 포지션을 등록합니다.
+     *
+     * @param orderId 주문 ID
+     * @param basDt 기준일
+     * @param market 시장
+     * @return 포지션 등록 성공 여부
+     */
+    @Transactional
+    public boolean registerPositionOnExecution(String orderId, LocalDate basDt, String market) {
+        Order order = orderRepository.findById(orderId).orElse(null);
+        if (order == null) {
+            log.warn("체결 확인 후 포지션 등록 실패: 주문 없음, orderId={}", orderId);
+            return false;
+        }
+
+        // 매수 주문만 처리
+        if (order.getOrderType() != Order.OrderType.BUY) {
+            return false;
+        }
+
+        // 체결 완료 상태 확인
+        if (order.getStatus() != Order.OrderStatus.EXECUTED) {
+            log.debug("체결 확인 후 포지션 등록 스킵: 주문 미체결, orderId={}, status={}", orderId, order.getStatus());
+            return false;
+        }
+
+        String posMarket = market != null ? market : (order.getPositionMarket() != null ? order.getPositionMarket() : "KR");
+        // 이미 포지션이 등록되어 있는지 확인
+        List<StrategyPosition> existing = strategyPositionRepository.findByAccountNoAndSymbolAndMarketAndExitDtIsNull(
+                order.getAccountNo(), order.getSymbol(), posMarket);
+        if (!existing.isEmpty()) {
+            log.debug("체결 확인 후 포지션 등록 스킵: 이미 등록됨, orderId={}, symbol={}", orderId, order.getSymbol());
+            return false;
+        }
+
+        // 실제 체결가·수량 사용
+        BigDecimal entryPrice = order.getExecutedPrice() != null ? order.getExecutedPrice() : order.getPrice();
+        int quantity = order.getExecutedQuantity() != null ? order.getExecutedQuantity() : order.getQuantity();
+        LocalDate posBasDt = basDt != null ? basDt : (order.getPositionBasDt() != null ? order.getPositionBasDt()
+                : order.getExecutedTime() != null ? order.getExecutedTime().toLocalDate() : order.getOrderTime().toLocalDate());
+        StrategyType posStrategyType = parseStrategyType(order.getPositionStrategyType());
+
+        StrategyPosition position = StrategyPosition.builder()
+                .accountNo(order.getAccountNo())
+                .symbol(order.getSymbol())
+                .market(posMarket)
+                .strategyType(posStrategyType)
+                .entryDt(posBasDt)
+                .entryPrice(entryPrice)
+                .quantity(quantity)
+                .trailingHigh(entryPrice)
+                .atrMultiplier(DEFAULT_ATR_MULTIPLIER)
+                .timeCutDays(DEFAULT_TIME_CUT_DAYS)
+                .targetReturnPct(DEFAULT_TARGET_RETURN_PCT)
+                .build();
+        strategyPositionRepository.save(position);
+
+        log.info("체결 확인 후 포지션 등록 완료: orderId={}, symbol={}, qty={}, price={}",
+                orderId, order.getSymbol(), quantity, entryPrice);
+        return true;
+    }
+
+    private static StrategyType parseStrategyType(String value) {
+        if (value == null || value.isBlank()) {
+            return StrategyType.SHORT_TERM;
+        }
+        try {
+            return StrategyType.valueOf(value);
+        } catch (IllegalArgumentException e) {
+            return StrategyType.SHORT_TERM;
+        }
     }
 
     @lombok.Getter

@@ -24,6 +24,22 @@ import java.util.UUID;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class NewsItem {
 
+    /** EVENT_TYPE 컬럼 최대 길이 (DB VARCHAR(500)과 동일) */
+    public static final int MAX_EVENT_TYPE_LENGTH = 500;
+
+    /**
+     * EVENT_TYPE 저장 시 길이 제한. null이면 null, 초과 시 앞쪽만 반환.
+     */
+    public static String truncateEventType(String value) {
+        if (value == null) {
+            return null;
+        }
+        if (value.length() <= MAX_EVENT_TYPE_LENGTH) {
+            return value;
+        }
+        return value.substring(0, MAX_EVENT_TYPE_LENGTH);
+    }
+
     @Id
     @Column(name = "TB_NEWS_ITEMS_UID", length = 36, nullable = false, unique = true)
     private String id;
@@ -58,7 +74,7 @@ public class NewsItem {
     @Column(name = "IMPORTANCE_SCORE", precision = 5, scale = 2)
     private BigDecimal importanceScore;
 
-    @Column(name = "EVENT_TYPE", length = 50)
+    @Column(name = "EVENT_TYPE", length = MAX_EVENT_TYPE_LENGTH)
     private String eventType;
 
     @Column(name = "CREATED_AT", nullable = false)

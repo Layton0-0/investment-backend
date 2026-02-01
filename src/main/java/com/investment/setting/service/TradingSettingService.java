@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.Optional;
 
 /**
@@ -63,15 +64,20 @@ public class TradingSettingService {
                         .defaultCurrency(dto.getDefaultCurrency())
                         .autoTradingEnabled(dto.getAutoTradingEnabled() != null ? dto.getAutoTradingEnabled() : false)
                         .riskLevel(dto.getRiskLevel())
+                        .shortTermRatio(dto.getShortTermRatio())
+                        .mediumTermRatio(dto.getMediumTermRatio())
+                        .longTermRatio(dto.getLongTermRatio())
                         .build());
 
         if (setting.getId() != null && !setting.getId().isEmpty()) {
-            // 업데이트
             setting.updateMaxInvestmentAmount(dto.getMaxInvestmentAmount());
             setting.updateMinInvestmentAmount(dto.getMinInvestmentAmount());
             setting.updateAutoTradingEnabled(dto.getAutoTradingEnabled() != null ? dto.getAutoTradingEnabled() : false);
             if (dto.getRiskLevel() != null) {
                 setting.updateRiskLevel(dto.getRiskLevel());
+            }
+            if (dto.getShortTermRatio() != null && dto.getMediumTermRatio() != null && dto.getLongTermRatio() != null) {
+                setting.updateStrategyRatios(dto.getShortTermRatio(), dto.getMediumTermRatio(), dto.getLongTermRatio());
             }
         }
 
@@ -89,10 +95,27 @@ public class TradingSettingService {
         }
 
         if (dto.getRiskLevel() != null) {
-            if (dto.getRiskLevel().compareTo(java.math.BigDecimal.ZERO) < 0 ||
-                    dto.getRiskLevel().compareTo(java.math.BigDecimal.ONE) > 0) {
+            if (dto.getRiskLevel().compareTo(BigDecimal.ZERO) < 0 ||
+                    dto.getRiskLevel().compareTo(BigDecimal.ONE) > 0) {
                 throw new DomainException(ErrorCode.INVALID_SETTING_VALUE,
                         "리스크 레벨은 0.0 ~ 1.0 사이의 값이어야 합니다");
+            }
+        }
+
+        if (dto.getShortTermRatio() != null || dto.getMediumTermRatio() != null || dto.getLongTermRatio() != null) {
+            BigDecimal s = dto.getShortTermRatio() != null ? dto.getShortTermRatio() : BigDecimal.ZERO;
+            BigDecimal m = dto.getMediumTermRatio() != null ? dto.getMediumTermRatio() : BigDecimal.ZERO;
+            BigDecimal l = dto.getLongTermRatio() != null ? dto.getLongTermRatio() : BigDecimal.ZERO;
+            if (s.compareTo(BigDecimal.ZERO) < 0 || s.compareTo(BigDecimal.ONE) > 0
+                    || m.compareTo(BigDecimal.ZERO) < 0 || m.compareTo(BigDecimal.ONE) > 0
+                    || l.compareTo(BigDecimal.ZERO) < 0 || l.compareTo(BigDecimal.ONE) > 0) {
+                throw new DomainException(ErrorCode.INVALID_SETTING_VALUE,
+                        "단기/중기/장기 비율은 각각 0~1 사이여야 합니다");
+            }
+            BigDecimal sum = s.add(m).add(l);
+            if (sum.compareTo(BigDecimal.ONE) != 0) {
+                throw new DomainException(ErrorCode.INVALID_SETTING_VALUE,
+                        "단기·중기·장기 비율의 합은 1이어야 합니다 (현재 합: " + sum + ")");
             }
         }
     }
@@ -104,6 +127,9 @@ public class TradingSettingService {
                 .defaultCurrency(setting.getDefaultCurrency())
                 .autoTradingEnabled(setting.getAutoTradingEnabled())
                 .riskLevel(setting.getRiskLevel())
+                .shortTermRatio(setting.getShortTermRatio())
+                .mediumTermRatio(setting.getMediumTermRatio())
+                .longTermRatio(setting.getLongTermRatio())
                 .build();
     }
 }

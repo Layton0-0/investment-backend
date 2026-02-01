@@ -7,6 +7,8 @@ import com.investment.auth.dto.MyPageResponseDto;
 import com.investment.auth.service.AuthService;
 import com.investment.order.dto.OrderResponseDto;
 import com.investment.order.service.OrderService;
+import com.investment.factor.dto.PipelineSummaryDto;
+import com.investment.factor.service.PipelineSummaryService;
 import com.investment.setting.dto.TradingSettingDto;
 import com.investment.setting.service.TradingSettingService;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -35,6 +38,7 @@ public class DashboardController {
     private final AccountService accountService;
     private final OrderService orderService;
     private final TradingSettingService tradingSettingService;
+    private final PipelineSummaryService pipelineSummaryService;
     private final AuthService authService;
 
     /**
@@ -115,23 +119,22 @@ public class DashboardController {
             }
         }
 
-        // 계좌번호가 있으면 데이터 조회 (잔고·보유·주문·설정 병렬 로딩으로 응답 시간 단축)
+        // 계좌번호가 있으면 데이터 조회 (잔고+보유 1회, 주문·설정 병렬 로딩으로 응답 시간 단축)
         if (accountNo != null && !accountNo.trim().isEmpty()) {
             try {
                 final String accNo = accountNo;
                 final Authentication auth = authentication;
 
-                CompletableFuture<AccountBalanceDto> balanceFuture =
-                        CompletableFuture.supplyAsync(() -> runWithAuth(auth, () -> accountService.getAccountBalance(accNo)));
-                CompletableFuture<List<AccountPositionDto>> positionsFuture =
-                        CompletableFuture.supplyAsync(() -> runWithAuth(auth, () -> accountService.getPositions(accNo)));
+                CompletableFuture<BalanceAndPositionsDto> balanceAndPositionsFuture =
+                        CompletableFuture.supplyAsync(() -> runWithAuth(auth, () -> accountService.getBalanceAndPositions(accNo)));
                 CompletableFuture<List<OrderResponseDto>> ordersFuture =
                         CompletableFuture.supplyAsync(() -> runWithAuth(auth, () -> orderService.getOrders(accNo)));
                 CompletableFuture<Optional<TradingSettingDto>> settingFuture =
                         CompletableFuture.supplyAsync(() -> runWithAuth(auth, () -> tradingSettingService.getSettingOptional(accNo)));
 
-                AccountBalanceDto balance = balanceFuture.join();
-                List<AccountPositionDto> positions = positionsFuture.join();
+                BalanceAndPositionsDto balanceAndPositions = balanceAndPositionsFuture.join();
+                AccountBalanceDto balance = balanceAndPositions.getBalance();
+                List<AccountPositionDto> positions = balanceAndPositions.getPositions();
                 List<OrderResponseDto> orders = ordersFuture.join();
                 Optional<TradingSettingDto> settingOpt = settingFuture.join();
 
@@ -141,6 +144,8 @@ public class DashboardController {
                 settingOpt.ifPresent(dto -> model.addAttribute("setting", dto));
 
                 calculateStatistics(positions, model);
+                addMarketSummary(positions, model);
+                addPipelineSummary(accNo, model);
             } catch (Exception e) {
                 log.error("계좌 데이터 조회 실패: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo), e);
                 model.addAttribute("error", "계좌 정보를 불러오는 중 오류가 발생했습니다: " + e.getMessage());
@@ -198,5 +203,42 @@ public class DashboardController {
         model.addAttribute("positionCount", positionCount);
         model.addAttribute("totalProfitLoss", totalProfitLoss);
         model.addAttribute("totalProfitLossRate", totalProfitLossRate);
+    }
+
+    /**
+     * 시장(KR/US)별 보유 종목 수 집계 (대시보드 계좌 요약 KR/US 구분용).
+     */
+    private void addMarketSummary(List<AccountPositionDto> positions, Model model) {
+        if (positions == null || positions.isEmpty()) {
+            model.addAttribute("positionCountKr", 0);
+            model.addAttribute("positionCountUs", 0);
+            return;
+        }
+        long countKr = positions.stream()
+                .filter(p -> p.getMarket() == null || "KR".equals(p.getMarket()))
+                .count();
+        long countUs = positions.stream()
+                .filter(p -> "US".equals(p.getMarket()))
+                .count();
+        model.addAttribute("positionCountKr", (int) countKr);
+        model.addAttribute("positionCountUs", (int) countUs);
+    }
+
+    /**
+     * 자동투자 파이프라인 요약 (유니버스·시그널·보유 포지션 수) 및 자동투자 ON/OFF.
+     */
+    private void addPipelineSummary(String accountNo, Model model) {
+        try {
+            PipelineSummaryDto summary = pipelineSummaryService.getSummary(LocalDate.now(), accountNo);
+            model.addAttribute("pipelineSummary", summary);
+            model.addAttribute("universeCountKr", summary.getUniverseCountKr());
+            model.addAttribute("universeCountUs", summary.getUniverseCountUs());
+            model.addAttribute("signalCountKr", summary.getSignalCountKr());
+            model.addAttribute("signalCountUs", summary.getSignalCountUs());
+            model.addAttribute("openPositionCount", summary.getOpenPositionCount());
+        } catch (Exception e) {
+            log.debug("파이프라인 요약 조회 실패(스킵): {}", e.getMessage());
+            model.addAttribute("pipelineSummary", null);
+        }
     }
 }

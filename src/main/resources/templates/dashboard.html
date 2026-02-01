@@ -405,10 +405,53 @@
                     <div class="icon">📋</div>
                     <div class="title">주문·체결</div>
                 </a>
-                <a href="/mypage" class="quick-action-card">
+                <a href="/settings" class="quick-action-card">
                     <div class="icon">⚙️</div>
                     <div class="title">설정</div>
                 </a>
+            </div>
+
+            <!-- 자동투자 상태 카드 -->
+            <div class="card" th:if="${hasAccount}">
+                <h2>자동투자 상태</h2>
+                <div class="balance-row" style="margin-bottom: 16px;">
+                    <div class="balance-item">
+                        <label>자동 매매</label>
+                        <div class="value" th:text="${setting != null and setting.autoTradingEnabled} ? 'ON' : 'OFF'">OFF</div>
+                    </div>
+                    <div class="balance-item">
+                        <label>유니버스 (KR · US)</label>
+                        <div class="value" th:text="|${universeCountKr != null ? universeCountKr : 0} · ${universeCountUs != null ? universeCountUs : 0}|">0 · 0</div>
+                    </div>
+                    <div class="balance-item">
+                        <label>시그널 (KR · US)</label>
+                        <div class="value" th:text="|${signalCountKr != null ? signalCountKr : 0} · ${signalCountUs != null ? signalCountUs : 0}|">0 · 0</div>
+                    </div>
+                    <div class="balance-item">
+                        <label>보유 포지션</label>
+                        <div class="value" th:text="${openPositionCount != null ? openPositionCount : 0}">0</div>
+                    </div>
+                </div>
+                <p style="font-size: 13px; color: #7f8c8d;"><a th:href="@{/auto-invest(accountNo=${accountNo})}">자동투자 현황 자세히 보기</a></p>
+            </div>
+
+            <!-- 계좌 요약 (국내·미국 구분) -->
+            <div class="card" th:if="${hasAccount and balance != null}">
+                <h2>계좌 요약 (국내 · 미국)</h2>
+                <div class="balance-row">
+                    <div class="balance-item">
+                        <label>국내(KR) 보유 종목</label>
+                        <div class="value" th:text="|${positionCountKr != null ? positionCountKr : 0}종목|">0종목</div>
+                    </div>
+                    <div class="balance-item">
+                        <label>미국(US) 보유 종목</label>
+                        <div class="value" th:text="|${positionCountUs != null ? positionCountUs : 0}종목|">0종목</div>
+                    </div>
+                    <div class="balance-item">
+                        <label>총 잔고 (현재 계좌)</label>
+                        <div class="value" th:text="|${#numbers.formatDecimal(balance.totalBalance, 0, 'COMMA', 0, 'POINT')} ${balance.currency}|">-</div>
+                    </div>
+                </div>
             </div>
             
             <!-- 통계 요약 (데이터가 있을 때만) -->
@@ -460,6 +503,7 @@
                 <table>
                     <thead>
                         <tr>
+                            <th>시장</th>
                             <th>종목</th>
                             <th>수량</th>
                             <th>현재가</th>
@@ -470,6 +514,7 @@
                     </thead>
                     <tbody>
                         <tr th:each="position : ${positions}">
+                            <td th:text="${position.market != null ? position.market : 'KR'}">KR</td>
                             <td>
                                 <strong th:text="${position.symbol}"></strong><br>
                                 <span style="font-size: 12px; color: #7f8c8d;" th:text="${position.name}"></span>

@@ -3,6 +3,8 @@ package com.investment.api.controller;
 import com.investment.common.security.JwtAuthenticationFilter;
 import com.investment.common.security.RateLimitFilter;
 import com.investment.config.SecurityHeadersConfig;
+import com.investment.datacollection.service.DartCollectionService;
+import com.investment.datacollection.service.SecCollectionService;
 import com.investment.news.dto.NewsItemPageResponseDto;
 import com.investment.news.service.NewsItemService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,6 +34,10 @@ class NewsControllerTest {
         @MockBean
         private NewsItemService newsItemService;
         @MockBean
+        private DartCollectionService dartCollectionService;
+        @MockBean
+        private SecCollectionService secCollectionService;
+        @MockBean
         private JwtAuthenticationFilter jwtAuthenticationFilter;
         @MockBean
         private RateLimitFilter rateLimitFilter;
@@ -53,7 +59,7 @@ class NewsControllerTest {
                                                 .totalPages(0)
                                                 .build())
                                 .build();
-                when(newsItemService.getNewsItems(any(), any(), any(), any(), any(), eq(0), eq(20)))
+                when(newsItemService.getNewsItems(any(), any(), any(), any(), any(), any(), any(), eq(0), eq(20)))
                                 .thenReturn(response);
 
                 mockMvc.perform(get("/api/v1/news")
@@ -73,7 +79,7 @@ class NewsControllerTest {
                                 .page(NewsItemPageResponseDto.PageMeta.builder().number(0).size(20).totalElements(0)
                                                 .totalPages(0).build())
                                 .build();
-                when(newsItemService.getNewsItems(eq("KR"), any(), any(), any(), any(), anyInt(), anyInt()))
+                when(newsItemService.getNewsItems(eq("KR"), any(), any(), any(), any(), any(), any(), anyInt(), anyInt()))
                                 .thenReturn(response);
 
                 mockMvc.perform(get("/api/v1/news").param("market", "KR"))
@@ -88,7 +94,7 @@ class NewsControllerTest {
                                 .page(NewsItemPageResponseDto.PageMeta.builder().number(0).size(20).totalElements(0)
                                                 .totalPages(0).build())
                                 .build();
-                when(newsItemService.getNewsItems(any(), eq("DART"), any(), any(), any(), anyInt(), anyInt()))
+                when(newsItemService.getNewsItems(any(), eq("DART"), any(), any(), any(), any(), any(), anyInt(), anyInt()))
                                 .thenReturn(response);
 
                 mockMvc.perform(get("/api/v1/news").param("source", "DART"))
@@ -107,7 +113,7 @@ class NewsControllerTest {
                                                 .totalPages(0)
                                                 .build())
                                 .build();
-                when(newsItemService.getNewsItems(any(), any(), any(), any(), any(), eq(0), eq(20)))
+                when(newsItemService.getNewsItems(any(), any(), any(), any(), any(), any(), any(), eq(0), eq(20)))
                                 .thenReturn(response);
 
                 mockMvc.perform(get("/api/v1/news").param("page", "0").param("size", "20"))
@@ -126,7 +132,7 @@ class NewsControllerTest {
                                 .page(NewsItemPageResponseDto.PageMeta.builder().number(0).size(20).totalElements(0)
                                                 .totalPages(0).build())
                                 .build();
-                when(newsItemService.getNewsItems(any(), any(), any(), any(), any(), anyInt(), anyInt()))
+                when(newsItemService.getNewsItems(any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt()))
                                 .thenReturn(response);
 
                 mockMvc.perform(get("/api/v1/news")

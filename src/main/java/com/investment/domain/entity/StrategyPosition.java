@@ -1,5 +1,6 @@
 package com.investment.domain.entity;
 
+import com.investment.strategy.domain.StrategyType;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -12,13 +13,14 @@ import java.time.LocalDateTime;
 
 /**
  * 파이프라인 매수 포지션 — TB_STRATEGY_POSITION.
- * 4단계 실행·청산 규칙(ATR Trailing Stop, Time-Cut) 추적용.
+ * 4단계 실행·청산 규칙(ATR Trailing Stop, Time-Cut, 기간별 -3%/-10% 등) 추적용.
  */
 @Entity
 @Table(name = "TB_STRATEGY_POSITION", indexes = {
         @Index(name = "IDX_TB_STRATEGY_POSITION_ACCOUNT", columnList = "ACCOUNT_NO"),
         @Index(name = "IDX_TB_STRATEGY_POSITION_SYMBOL", columnList = "SYMBOL"),
-        @Index(name = "IDX_TB_STRATEGY_POSITION_OPEN", columnList = "ACCOUNT_NO, EXIT_DT")
+        @Index(name = "IDX_TB_STRATEGY_POSITION_OPEN", columnList = "ACCOUNT_NO, EXIT_DT"),
+        @Index(name = "IDX_TB_STRATEGY_POSITION_ACCOUNT_EXIT_TYPE", columnList = "ACCOUNT_NO, EXIT_DT, STRATEGY_TYPE")
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -37,6 +39,10 @@ public class StrategyPosition {
 
     @Column(name = "MARKET", nullable = false, length = 10)
     private String market;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "STRATEGY_TYPE", nullable = false, length = 20)
+    private StrategyType strategyType;
 
     @Column(name = "ENTRY_DT", nullable = false)
     private LocalDate entryDt;
@@ -77,13 +83,14 @@ public class StrategyPosition {
 
     @Builder
     public StrategyPosition(Long id, String accountNo, String symbol, String market,
-            LocalDate entryDt, BigDecimal entryPrice, int quantity, BigDecimal trailingHigh,
-            BigDecimal atrMultiplier, int timeCutDays, BigDecimal targetReturnPct,
+            StrategyType strategyType, LocalDate entryDt, BigDecimal entryPrice, int quantity,
+            BigDecimal trailingHigh, BigDecimal atrMultiplier, int timeCutDays, BigDecimal targetReturnPct,
             LocalDateTime createdAt, LocalDate exitDt, BigDecimal exitPrice) {
         this.id = id;
         this.accountNo = accountNo;
         this.symbol = symbol;
         this.market = market != null ? market : "KR";
+        this.strategyType = strategyType != null ? strategyType : StrategyType.SHORT_TERM;
         this.entryDt = entryDt;
         this.entryPrice = entryPrice;
         this.quantity = quantity;

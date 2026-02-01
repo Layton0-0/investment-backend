@@ -1,6 +1,7 @@
 package com.investment.order.client;
 
 import com.investment.common.security.EncryptionUtil;
+import com.investment.domain.repository.UserAccountRepository;
 import com.investment.domain.repository.UserApiKeyRepository;
 import com.investment.marketdata.service.KoreaInvestmentTokenService;
 import com.investment.marketdata.util.KoreaInvestmentHashkeyUtil;
@@ -35,6 +36,9 @@ class KoreaInvestmentOrderClientTest {
     private UserApiKeyRepository userApiKeyRepository;
 
     @Mock
+    private UserAccountRepository userAccountRepository;
+
+    @Mock
     private EncryptionUtil encryptionUtil;
 
     @Mock
@@ -52,6 +56,7 @@ class KoreaInvestmentOrderClientTest {
                 rateLimiterRegistry,
                 tokenService,
                 userApiKeyRepository,
+                userAccountRepository,
                 encryptionUtil,
                 environment,
                 hashkeyUtil);

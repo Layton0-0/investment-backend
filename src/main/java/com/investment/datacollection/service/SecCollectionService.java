@@ -74,7 +74,7 @@ public class SecCollectionService {
                 .url(url)
                 .collectedAt(collectedAt)
                 .symbol(null)
-                .eventType(dto.getForm())
+                .eventType(NewsItem.truncateEventType(dto.getForm()))
                 .build();
     }
 

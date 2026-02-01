@@ -12,10 +12,15 @@ import java.util.Optional;
 
 @Repository
 public interface OrderRepository extends JpaRepository<Order, String> {
-    
+
     List<Order> findByAccountNo(String accountNo);
-    
+
     List<Order> findByAccountNoAndStatus(String accountNo, Order.OrderStatus status);
+
+    /**
+     * 체결 완료 상태이면서 포지션 등록 대기 중인 주문 목록 (FillConfirmationScheduler용).
+     */
+    List<Order> findByStatusAndPositionBasDtIsNotNull(Order.OrderStatus status);
     
     @Query("SELECT o FROM Order o WHERE o.accountNo = :accountNo AND o.orderTime >= :startTime ORDER BY o.orderTime DESC")
     List<Order> findByAccountNoAndOrderTimeAfter(@Param("accountNo") String accountNo, 

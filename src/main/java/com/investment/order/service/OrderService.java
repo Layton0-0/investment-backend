@@ -74,34 +74,64 @@ public class OrderService {
         log.info("주문 실행 요청: accountNo={}, symbol={}, type={}, quantity={}, price={}",
                 LogMaskingUtil.maskAccountNo(request.getAccountNo()), request.getSymbol(), request.getOrderType(),
                 request.getQuantity(), request.getPrice());
+        return executeOrderInternal(request, getCurrentUserId());
+    }
 
-        // 현재 사용자 ID 가져오기
-        String userId = getCurrentUserId();
+    @SuppressWarnings("unused")
+    public OrderResponseDto executeOrderFallback(OrderRequestDto request, Exception e) {
+        log.warn("주문 API Circuit Breaker fallback: accountNo={}, symbol={}, error={}",
+                LogMaskingUtil.maskAccountNo(request.getAccountNo()), request.getSymbol(), e.getMessage());
+        throw new DomainException(ErrorCode.ORDER_FAILED,
+                "일시적으로 주문 API를 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.", e);
+    }
 
-        // 거래 설정 조회 및 검증
+    /**
+     * 파이프라인(청산 스케줄러 등)에서 사용하는 주문 실행.
+     * 인증 컨텍스트 없이 지정한 userId로 API를 호출합니다.
+     *
+     * @param request 주문 요청
+     * @param userId  주문 실행에 사용할 사용자 ID (한국투자증권 API 토큰·계좌 매핑용)
+     * @return 생성된 주문 정보
+     */
+    @Transactional
+    @CacheEvict(value = CacheConfig.CACHE_ACCOUNT, allEntries = true)
+    @CircuitBreaker(name = "orderService", fallbackMethod = "executeOrderForPipelineFallback")
+    public OrderResponseDto executeOrderForPipeline(OrderRequestDto request, String userId) {
+        log.info("파이프라인 주문 실행: accountNo={}, symbol={}, type={}, userId={}",
+                LogMaskingUtil.maskAccountNo(request.getAccountNo()), request.getSymbol(), request.getOrderType(),
+                LogMaskingUtil.maskUserId(userId));
+        return executeOrderInternal(request, userId);
+    }
+
+    @SuppressWarnings("unused")
+    public OrderResponseDto executeOrderForPipelineFallback(OrderRequestDto request, String userId, Exception e) {
+        log.warn("파이프라인 주문 API Circuit Breaker fallback: accountNo={}, symbol={}, error={}",
+                LogMaskingUtil.maskAccountNo(request.getAccountNo()), request.getSymbol(), e.getMessage());
+        throw new DomainException(ErrorCode.ORDER_FAILED,
+                "일시적으로 주문 API를 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.", e);
+    }
+
+    /**
+     * 주문 실행 내부 로직 (userId 지정).
+     */
+    private OrderResponseDto executeOrderInternal(OrderRequestDto request, String userId) {
         TradingSetting setting = tradingSettingRepository.findByAccountNo(request.getAccountNo())
                 .orElseThrow(() -> new DomainException(
                         ErrorCode.SETTING_NOT_FOUND,
                         "거래 설정을 찾을 수 없습니다: " + request.getAccountNo()));
 
-        // 주문 금액 계산 및 검증
         BigDecimal orderAmount = request.getPrice().multiply(BigDecimal.valueOf(request.getQuantity()));
-
-        // 최대 투자금액 검증
         if (orderAmount.compareTo(setting.getMaxInvestmentAmount()) > 0) {
             throw new DomainException(ErrorCode.EXCEEDS_MAX_INVESTMENT,
                     String.format("최대 투자금액(%s)을 초과합니다: %s",
                             setting.getMaxInvestmentAmount(), orderAmount));
         }
-
-        // 최소 투자금액 검증
         if (orderAmount.compareTo(setting.getMinInvestmentAmount()) < 0) {
             throw new DomainException(ErrorCode.INVALID_ORDER_AMOUNT,
                     String.format("최소 투자금액(%s) 미만입니다: %s",
                             setting.getMinInvestmentAmount(), orderAmount));
         }
 
-        // 주문 엔티티 생성 (아직 저장하지 않음)
         Order order = Order.builder()
                 .accountNo(request.getAccountNo())
                 .symbol(request.getSymbol())
@@ -111,71 +141,42 @@ public class OrderService {
                 .status(Order.OrderStatus.PENDING)
                 .build();
 
-        // 한국투자증권 API를 통한 주문 실행
         try {
-            // 주문 유형에 따라 API 호출
+            String orderType = "00";
             KoreaInvestmentOrderClient.OrderResponse apiResponse;
-            String orderType = "00"; // 지정가 (시장가는 "01")
-
             if (request.getOrderType() == OrderRequestDto.OrderType.BUY) {
                 apiResponse = orderClient.placeBuyOrder(
-                        userId,
-                        request.getAccountNo(),
-                        request.getSymbol(),
-                        request.getQuantity(),
-                        request.getPrice(),
-                        orderType).block(Duration.ofSeconds(10));
+                        userId, request.getAccountNo(), request.getSymbol(),
+                        request.getQuantity(), request.getPrice(), orderType).block(Duration.ofSeconds(10));
             } else {
                 apiResponse = orderClient.placeSellOrder(
-                        userId,
-                        request.getAccountNo(),
-                        request.getSymbol(),
-                        request.getQuantity(),
-                        request.getPrice(),
-                        orderType).block(Duration.ofSeconds(10));
+                        userId, request.getAccountNo(), request.getSymbol(),
+                        request.getQuantity(), request.getPrice(), orderType).block(Duration.ofSeconds(10));
             }
 
             if (apiResponse == null || !"SUCCESS".equals(apiResponse.getStatus())) {
-                // API 호출 실패
                 order.fail("한국투자증권 API 호출 실패");
                 order = orderRepository.save(order);
                 throw new DomainException(ErrorCode.ORDER_FAILED,
                         "주문 실행에 실패했습니다: " + (apiResponse != null ? apiResponse.getStatus() : "API 응답 없음"));
             }
 
-            // 주문 성공 - 주문번호 저장
             order.execute(request.getQuantity(), request.getPrice(),
                     "주문번호: " + apiResponse.getOrderNo());
             order = orderRepository.save(order);
-
-            log.info("주문이 성공적으로 실행되었습니다: orderId={}, orderNo={}, accountNo={}, symbol={}",
+            log.info("주문 실행 완료: orderId={}, orderNo={}, accountNo={}, symbol={}",
                     order.getId(), apiResponse.getOrderNo(), LogMaskingUtil.maskAccountNo(order.getAccountNo()),
                     order.getSymbol());
-
         } catch (Exception e) {
-            // API 호출 실패 시 주문을 FAILED 상태로 저장
-            log.error("주문 실행 중 오류 발생: accountNo={}, symbol={}",
-                    LogMaskingUtil.maskAccountNo(request.getAccountNo()), request.getSymbol(), e);
-
             order.fail("주문 실행 실패: " + e.getMessage());
             order = orderRepository.save(order);
-
             if (e instanceof DomainException) {
-                throw e;
+                throw (DomainException) e;
             }
             throw new DomainException(ErrorCode.ORDER_FAILED,
                     "주문 실행에 실패했습니다: " + e.getMessage(), e);
         }
-
         return convertToResponseDto(order);
-    }
-
-    @SuppressWarnings("unused")
-    public OrderResponseDto executeOrderFallback(OrderRequestDto request, Exception e) {
-        log.warn("주문 API Circuit Breaker fallback: accountNo={}, symbol={}, error={}",
-                LogMaskingUtil.maskAccountNo(request.getAccountNo()), request.getSymbol(), e.getMessage());
-        throw new DomainException(ErrorCode.ORDER_FAILED,
-                "일시적으로 주문 API를 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.", e);
     }
 
     /**

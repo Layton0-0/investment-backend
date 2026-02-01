@@ -99,12 +99,13 @@ public class DartApiClient {
     }
 
     /**
-     * 공시 뷰어 URL 생성 (한국어 DART)
+     * 공시 뷰어 URL 생성 (한국어 DART 전자공시시스템)
+     * 정식 경로: dsaf001/main.do (dsbh001은 미사용/폐기)
      */
     public static String buildViewerUrl(String rceptNo) {
         if (rceptNo == null || rceptNo.isBlank()) {
             return "";
         }
-        return "https://dart.fss.or.kr/dsbh001/main.do?rcpNo=" + rceptNo;
+        return "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=" + rceptNo;
     }
 }

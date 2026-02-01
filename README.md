@@ -65,6 +65,31 @@ investment:
 - `MAX_INVESTMENT_AMOUNT`: 최대 투자금액
 - `MIN_INVESTMENT_AMOUNT`: 최소 투자금액
 
+## 로컬 개발 환경 구축
+
+**완전히 새로운 컴퓨터에서도 한두 개 파일만 따라하면 설정 가능합니다!**
+
+### 빠른 시작 (자동화)
+
+```powershell
+# 전체 자동화 스크립트 실행
+.\scripts\setup-local-complete.ps1
+```
+
+### 단계별 가이드
+
+자세한 설정 가이드는 다음 문서를 참고하세요:
+
+- **[로컬 개발 환경 구축 가이드 (완전판)](docs/08-setup-guides/01-local-setup-complete.md)** - WSL2 + Docker Compose 중심
+- **[부록 (마이그레이션, 인코딩, 트러블슈팅)](docs/08-setup-guides/02-appendix.md)** - 고급 설정 및 문제 해결
+
+### 사전 요구사항 확인
+
+```powershell
+# 사전 요구사항 자동 확인
+.\scripts\check-prerequisites.ps1
+```
+
 ## 빌드 및 실행
 
 ### 빌드
@@ -75,8 +100,12 @@ investment:
 
 ### 실행
 
-```bash
-./gradlew bootRun
+```powershell
+# .env 로드 후 실행 (권장)
+.\scripts\bootRun-with-env.ps1
+
+# 또는 직접 실행
+.\gradlew.bat bootRun
 ```
 
 또는

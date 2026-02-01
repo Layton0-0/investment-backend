@@ -81,7 +81,7 @@ public class InternalDataCollectionController {
                 .url(dto.getUrl() != null ? dto.getUrl() : "")
                 .collectedAt(collectedAt)
                 .symbol(dto.getSymbol())
-                .eventType(dto.getEventType())
+                .eventType(NewsItem.truncateEventType(dto.getEventType()))
                 .build();
     }
 
