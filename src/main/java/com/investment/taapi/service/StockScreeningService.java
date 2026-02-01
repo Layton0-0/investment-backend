@@ -53,6 +53,10 @@ public class StockScreeningService {
                                 analysis.setRsi(new BigDecimal("50"));
                                 log.debug("종목 RSI 미반환, 50으로 보정: symbol={}", analysis.getSymbol());
                             }
+                            if (analysis.getRsi() == null) {
+                                analysis.setExpectedReturn(null); // RSI 없으면 선정 제외
+                                return analysis;
+                            }
                             BigDecimal score = calculateScore(analysis);
                             analysis.setExpectedReturn(score);
                             return analysis;

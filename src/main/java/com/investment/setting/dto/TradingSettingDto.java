@@ -30,6 +30,21 @@ public class TradingSettingDto {
     private String defaultCurrency;
     
     private Boolean autoTradingEnabled;
-    
+
     private BigDecimal riskLevel; // 0.0 ~ 1.0
+
+    /**
+     * 단기 비율 (0~1). 세 비율 합=1. NULL이면 스케줄러 기본값 0.2/0.4/0.4 사용.
+     */
+    private BigDecimal shortTermRatio;
+
+    /**
+     * 중기 비율 (0~1).
+     */
+    private BigDecimal mediumTermRatio;
+
+    /**
+     * 장기 비율 (0~1).
+     */
+    private BigDecimal longTermRatio;
 }

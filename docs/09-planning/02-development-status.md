@@ -13,6 +13,8 @@
   Strategy 엔티티 `market` 필드, Repository 시장 조건 조회, Service/API `market` 파라미터(선택), DTO 반영. DB V3(ACCOUNT_NO,MARKET,STRATEGY_TYPE UK) 반영.
 - [x] **뉴스·공시 도메인 및 API**  
   NewsItem 엔티티, NewsItemRepository, NewsItemService, GET `/api/v1/news` (필터·페이징). API 개요 문서 반영.
+- [x] **TB_NEWS_ITEMS EVENT_TYPE 확장 (V11)**  
+  DART report_nm 등 긴 보고서명 저장 시 50자 초과 오류 방지. DB V11(EVENT_TYPE VARCHAR(500)), NewsItem.MAX_EVENT_TYPE_LENGTH·truncateEventType, DartCollectionService·SecCollectionService·InternalDataCollectionController에서 eventType 500자 truncate 적용. 롤백: db/migration/rollback/V11_rollback.sql.
 - [x] **캐시 키 정리**  
   CacheConfig에 CACHE_CURRENT_PRICE 정의, RealtimeMarketDataService에서 상수 사용.
 
@@ -62,13 +64,51 @@
 - [x] **테스트 커버리지**  
   JaCoCo 도입(build.gradle), 라인 80%·브랜치 70% 목표 설정(jacocoTestCoverageVerification). 전략(market 파라미터)·뉴스 API·API 컨트롤러(Account, Analysis, MarketData, Setting, UserAccount)·서비스(AccountService, AccountVerificationService, UserExistenceChecker, AnalysisService)·FastApiPredictionClient·Batch 등 단위/슬라이스 테스트 추가. `.\scripts\run-tests-with-coverage.ps1` 또는 `gradlew test jacocoTestReport`로 리포트 생성. 로컬 실행 시 build/agent-build를 사용하는 다른 프로세스가 없을 때 실행할 것(Windows 파일 잠금 시 2회차 재실행 또는 `-NoUniqueDir` 사용).
 - [x] **성능 최적화 (1차)**  
-  **대시보드**: 잔고·보유·주문·거래설정을 CompletableFuture로 병렬 로딩, SecurityContext 전파(`runWithAuth`)로 인증 유지. **시장 데이터**: 현재가 조회를 동기 캐시 계층(`getCurrentPriceBlocking`)으로 통일 — `@Cacheable`·`@CircuitBreaker` 적용, Mono 반환은 `Mono.fromCallable`로 래핑. 다중 종목 현재가(`getCurrentPrices`)는 종목별 캐시 사용 + CompletableFuture 병렬 조회로 응답 시간 단축. 목표: 시장 데이터·계좌 조회 응답 평균 500ms·95%ile 1초 근접.
+  **대시보드**: 잔고·보유·주문·거래설정을 CompletableFuture로 병렬 로딩, SecurityContext 전파(`runWithAuth`)로 인증 유지.
+- [x] **대시보드 잔고·보유종목 중복 조회 제거**  
+  AccountService에 `getBalanceAndPositions(accountNo)` 추가(주식잔고조회 1회만 호출). DashboardController에서 잔고/보유종목용 Future 2개를 1개로 통합. BalanceAndPositionsDto·@Cacheable(balanceAndPositions_) 적용. API 개요에 단일 리소스용 balance/positions·대시보드용 일괄 조회 설명 반영. **시장 데이터**: 현재가 조회를 동기 캐시 계층(`getCurrentPriceBlocking`)으로 통일 — `@Cacheable`·`@CircuitBreaker` 적용, Mono 반환은 `Mono.fromCallable`로 래핑. 다중 종목 현재가(`getCurrentPrices`)는 종목별 캐시 사용 + CompletableFuture 병렬 조회로 응답 시간 단축. 목표: 시장 데이터·계좌 조회 응답 평균 500ms·95%ile 1초 근접.
 - [x] **데이터 수집 연동 (구축 로드맵 1단계)**  
   **공통**: NewsItemRepository.existsBySourceAndUrl, NewsItemService.saveCollectedItem, DataCollectionProperties(DART/KRX/내부 API 키), application.yml investment.data.*. **Open DART**: DartApiClient(공시 목록 list.json), DartCollectionService(공시→NewsItem 저장), DataCollectionScheduler(10분마다 DART 수집). **KRX**: KrxApiClient(유가증권 일별매매정보, AUTH_KEY 헤더), 1단계 연동·DTO만, 저장은 2단계 검토. **Yahoo**: Python scripts/yahoo_collector.py(yfinance 또는 스텁), Spring POST /api/v1/internal/collected-news(X-Internal-Data-Key 헤더), NewsItem(SOURCE=YAHOO_FINANCE, ITEM_TYPE=BUZZ) 저장. Fallback: 원천별 try-catch, 해당 원천만 스킵.
 - [x] **팩터 계산 엔진 (구축 로드맵 2단계)**  
   **KRX 일별 저장**: TB_DAILY_STOCK(V4), DailyStock 엔티티·DailyStockRepository, KrxCollectionService(OutBlock_1 파싱·저장), DataCollectionScheduler KRX 일별 수집(매일 16:00 KST). **팩터 계산**: FactorCalculationService(이격도·변동성 돌파·유동성), FactorCalculationScheduler(매일 08:00 KST). **시그널 저장·API**: TB_SIGNAL_SCORE(V5), SignalScore 엔티티·SignalScoreRepository·SignalScoreService, GET `/api/v1/signals` (basDt·market·symbol·factorType·페이징). **자동투자 현황**: 시그널 건수·목록 GET /api/v1/signals 연동, 2단계 카드·시그널 테이블 실데이터 표시. application.yml investment.factor.*, API 개요 반영.
 - [x] **4단계 파이프라인 구현 (1차)**  
   **1단계 유니버스**: TB_UNIVERSE(V6), Universe 엔티티·UniverseRepository, UniverseFilterService(유동성 Cut-off), FactorCalculationScheduler에서 유니버스 선행 실행 후 팩터 계산은 유니버스 종목만 대상. **2단계 시그널**: 기존 FactorCalculationService에 유니버스 필터 적용. **3단계 자금 관리**: PositionSizingService(ATR 포지션 사이징·변동성 역가중), PositionRecommendationDto, application.factor.position-risk-pct. **4단계 실행·청산**: TB_STRATEGY_POSITION(V7), StrategyPosition·StrategyPositionRepository, PipelineExecutor(dry-run 기본·auto-execute=false), ExitRuleService(Time-Cut 평가). application.pipeline.auto-execute.
+- [x] **4단계 파이프라인 확장**  
+  **1) 유니버스**: UniverseFilterService에 한국 Sector Relative Strength·미국 Post-Earnings Drift 필터 스텁 구현(후속 데이터 수집 대비 인터페이스). **2) 시그널**: FactorCalculationService 변동성 돌파 k 동적 적용(한국장 변동성 반영, 최근 5일 평균 변동성 기반 k 조정), 한국 수급 강도(Smart Money Intensity)·미국 듀얼 모멘텀·퀄리티-성장(PEG & Rule of 40) 팩터 스텁 구현. **3) 자금 관리**: PositionSizingService에 Half-Kelly 계산 메서드 추가(기본값 p=0.6, b=2.0, 설정값 지원). **4) 청산**: ExitRuleService에 ATR Trailing Stop 평가 로직 추가(장중 고가·현재가 연동, trailing_high 갱신), PipelineExecutor에 체결 확인 후 포지션 등록 옵션 추가(register-position-on-execution 설정). application.yml investment.factor.volatility-breakout-k-dynamic, investment.factor.kelly-p/b, investment.pipeline.atr-trailing-stop-multiplier, investment.pipeline.register-position-on-execution 설정 추가.
+- [x] **시장(Market KR/US) 차원 도입**  
+  **스케줄러 확장**: FactorCalculationScheduler를 KR/US 모두 처리하도록 확장(processMarket 메서드 추가, 시장별 예외 처리). **US 데이터 수집 스텁**: UsMarketCollectionService 생성(Yahoo Finance 또는 KIS API 연동 준비, 현재는 스텁). **스케줄러 연동**: DataCollectionScheduler에 US 수집 스케줄 추가(매일 17:00 KST, 미국 장 마감 후). **API 일관성**: Strategy/Signal/News API에서 market 파라미터 일관성 확인 완료. application.yml investment.data.us.schedule-cron 설정 추가.
+- [x] **US 일별 시세 수집 (yfinance)**  
+  **Python**: scripts/us_daily_collector.py — yfinance로 기준일 US 종목 OHLCV·거래대금(volume×close) 수집, JSON 배열 stdout 출력. **Spring**: UsMarketCollectionService에서 yfinance-script-path 설정 시 스크립트 실행·stdout 파싱·TB_DAILY_STOCK(MARKET=US) 저장. DataCollectionProperties.Us(yfinanceScriptPath, symbols, pythonCommand), application.yml investment.data.us.yfinance-script-path, symbols, python-command. 미설정 시 기존처럼 0 반환(스텁).
+- [x] **전략·계산 방식 통합 문서 및 버전 스택**  
+  [00-strategy-registry.md](../02-architecture/00-strategy-registry.md) 신설 — 공통·나라별(KR/US)·기간별(단기/중기/장기)·파이프라인 단계·수식·파라미터 일람·버전 스택 반영. 12-auto-investment-strategy는 상세 수식·파라미터를 00-strategy-registry 참조로 정리. development-status.mdc에 전략/팩터 변경 시 통합 문서 갱신·버전 스택 추가 규칙 반영. 전략 통합 문서 반영 (버전 1.0).
+- [x] **LSTM 예측 모델(초기)**  
+  **데이터·전처리**: app/data(시계열 로드·SeriesDataset), app/preprocessing(정규화·시퀀스 생성), scripts/fetch_training_data.py(yfinance OHLCV CSV). **LSTM·학습**: app/models/lstm_model.py(LSTMPredictor), app/train.py(학습 진입점, state_dict 저장). **서빙**: POST /api/v1/predict에 optional series·currentPrice 추가, MODEL_PATH에서 LSTM lazy 로드, series·모델 있으면 LSTM 추론·없으면 Mock. **Spring 연동**: PredictionRequestDto에 optional series·currentPrice, DailyPricePoint DTO, AnalysisService에서 일별 시세(DailyStockRepository)·현재가(RealtimeMarketDataService) 조회 후 예측 요청에 설정. AI는 분석 정보 제공용, 매매는 규칙 엔진 유지.
+- [x] **자동투자 현황 파이프라인 실데이터 연동**  
+  **서비스·DTO**: PipelineSummaryService(기준일·계좌별 유니버스 수 KR/US·시그널 건수 KR/US·보유 포지션 수·목록 한 번에 조회), PipelineSummaryDto·OpenPositionItemDto. **컨트롤러·화면**: AutoInvestController에서 pipelineSummaryService.getSummary 호출 후 모델에 반영. **auto-invest.html**: 1단계 카드 유니버스 수(KR·US), 2단계 카드 시그널 건수(KR·US), 4단계 카드 보유 포지션 수 실데이터 표시; 시그널 테이블 시장(KR/US) 컬럼·보유 포지션 테이블 추가. StrategyPositionRepository.countByAccountNoAndExitDtIsNull 추가.
+- [x] **시장·기간별 전략 로직**  
+  **DB**: TB_STRATEGY_POSITION에 STRATEGY_TYPE 추가(V8), StrategyPosition 엔티티·Builder 반영. **청산**: ExitRuleService 기간별 분기 — 단기 -3% Trailing Stop(short-term-trailing-pct), 중기 -10% 손절(medium-term-stop-loss-pct)·Time-Cut, 장기 스텁. **자금관리**: PositionSizingService getRecommendations(basDt, market, strategyType, totalCapital), 단기 RSI>60 & MACD>Signal(TechnicalIndicatorUtil), 중기 시그널 상위 10%, 장기 전체. **실행**: PipelineExecutor run(..., strategyType, allocatedCapital), 포지션 저장 시 strategyType. **스케줄러**: PipelineExecutionScheduler(09:10, 0.2/0.4/0.4 배분·6회 run), MediumTermRebalanceScheduler(매월 1일 스텁). application.yml pipeline.short-term-trailing-pct, medium-term-stop-loss-pct, execution-schedule-cron, scheduler.default-capital, medium-term-rebalance-cron. [00-strategy-registry.md](../02-architecture/00-strategy-registry.md) 기간별 청산·시드 배분·버전 스택 v1.1 반영.
+- [x] **ATR Trailing Stop 장중 연동 및 체결 확인 후 포지션 등록**  
+  **청산 장중 연동**: ExitRuleService.getSellSignals(accountNo, currentPriceBySymbol, todayHighBySymbol) 오버로드 — todayHighBySymbol이 있으면 장중 당일 고가로 trailingHigh 갱신. PipelineExitScheduler(exit-schedule-cron: 장중 5분마다) — 보유 포지션에 대해 RealtimeMarketDataService.getCurrentPrices로 현재가·당일 고가 조회 후 getSellSignals 호출, auto-execute 시 매도 주문 실행·포지션 close. **체결 확인 후 포지션 등록**: TB_ORDERS에 POSITION_BAS_DT·POSITION_MARKET·POSITION_STRATEGY_TYPE 추가(V9), Order.setPositionContext/clearPositionContext. PipelineExecutor에서 register-position-on-execution=true 시 주문 성공 후 Order에 포지션 컨텍스트 저장. FillConfirmationScheduler(fill-confirmation-cron: 매분) — EXECUTED·positionBasDtNotNull 주문에 대해 PipelineExecutor.registerPositionOnExecution 호출 후 컨텍스트 초기화. OrderService.executeOrderForPipeline(request, userId) 추가(파이프라인/청산 스케줄러용). application.yml pipeline.exit-schedule-cron, fill-confirmation-cron. [00-strategy-registry.md](../02-architecture/00-strategy-registry.md) 버전 스택 v1.2 반영.
+- [x] **백테스팅 (필수)**  
+  **청산 규칙 공통화**: ExitRuleEvaluator·ExitRuleInput·ExitRuleResult — 포지션 + 당일 시세만으로 청산 여부 판단. ExitRuleService는 evaluator 호출로 동일 동작 유지. **백테스트 엔진**: BacktestService — 과거 일봉(TB_DAILY_STOCK)·시그널(TB_SIGNAL_SCORE)로 4단계 파이프라인 일자별 재생, 가상 포지션·거래 목록·수익 곡선 산출. **메트릭**: MDD·CAGR·Sharpe·Sortino·Calmar·승률(winRate)·손익비(profitFactor) 노출(Half-Kelly p·b 연동용). **API**: POST /api/v1/backtest (BacktestRunRequest → BacktestRunResult). **화면**: /backtest 메뉴·BacktestWebController·backtest.html(조건 폼·결과 요약·수익 곡선·거래 목록). 실전 반영(전략별 p·b 주입)은 별도 태스크.
+- [x] **모의계좌 자동투자 실행 가능화**  
+  **스케줄러 매수 시 사용자 컨텍스트**: PipelineExecutor에서 actuallyExecute 시 accountNo → TradingSettingRepository로 userId 조회 후 `OrderService.executeOrderForPipeline(request, userId)` 호출(스케줄러는 SecurityContext 없음). **실행 대상 계좌**: PipelineExecutionScheduler가 `TradingSettingRepository.findAllByAutoTradingEnabledTrue()`로 자동투자 ON 계좌만 대상. **실제 주문 활성화 조건**: 실제 매수/매도가 나가려면 `investment.pipeline.auto-execute=true`(또는 환경변수 `PIPELINE_AUTO_EXECUTE=true`) 필요. 기본값은 `false`라 설정하지 않으면 dry-run만 동작(주문 생성 없음). 실계좌 자동투자 전 조건: 모의 2주 테스트 권장, KIS 실전 URL·Throttling·토큰 갱신 등은 [12-auto-investment-strategy](../02-architecture/12-auto-investment-strategy.md) §8 및 [로드맵](../roadmap.md) Phase 7 참조.
+- [x] **스케줄 현황 메뉴 및 설정 전용 화면**  
+  **스케줄 현황**: MenuConfig에 "스케줄 현황"(/batch) 메뉴 추가. BatchManagementService에 데이터 수집(DART/SEC/KRX/US)·팩터 계산·파이프라인 실행/청산/체결확인·중기 리밸런스 등 전체 스케줄 작업 목록 반영. batch-management.html 공통 레이아웃(layout-header·layout-menu) 적용, 제목 "스케줄 현황". **설정 전용 화면**: "설정" 메뉴 경로를 /settings로 변경. GET /settings → settings.html. **계좌/API 한번에**: GET/PUT /api/v1/settings/accounts — 모의·실 계좌 블록 한번에 조회·수정. AuthService getSettingsAccounts/updateSettingsAccounts, SettingsAccountsResponseDto·SettingsAccountBlockDto·SettingsAccountsUpdateRequestDto. **거래 설정**: TB_TRADING_SETTINGS에 단기/중기/장기 비율 컬럼 추가(V10). TradingSetting·TradingSettingDto·TradingSettingService 비율 필드·검증(합=1). settings.html에서 계좌/API 한번에 저장·거래 설정(비율·자동투자 ON/OFF) 계좌별 저장. **모의계좌 자동투자 설정 반영**: PipelineExecutionScheduler가 findAllByAutoTradingEnabledTrue()로 자동투자 ON 계좌만 대상, 계좌별 maxInvestmentAmount·shortTermRatio/mediumTermRatio/longTermRatio 사용(NULL이면 기본 0.2/0.4/0.4). [00-strategy-registry.md](../02-architecture/00-strategy-registry.md) 버전 스택 v1.3 반영.
+- [x] **대시보드·UX 1차**  
+  **계좌 요약(국내·미국 구분)**: AccountPositionDto에 market(KR/US) 필드 추가. KoreaInvestmentAccountClient.parsePositionsOutput에서 응답의 excg_dvsn_cd로 KR/US 매핑(KRX→KR, NASD/NYSE/AMEX→US). DashboardController에서 시장별 보유 종목 수(positionCountKr/Us) 집계, dashboard.html에 "계좌 요약 (국내·미국)" 카드·보유 종목 테이블 시장 컬럼 추가. **자동투자 상태 카드**: PipelineSummaryService.getSummary(오늘, accountNo) 연동, 자동 매매 ON/OFF·유니버스·시그널(KR/US)·보유 포지션 수 표시, "자동투자 현황 자세히 보기" 링크. 설정 링크를 /settings로 통일. [01-screen-menu-spec.md](01-screen-menu-spec.md) §3.1·[09-korea-investment-api-guide.md](../04-api/09-korea-investment-api-guide.md) 잔고·보유 시장 구분 반영.
+- [x] **트레이딩 포트폴리오 생성 로직을 파이프라인 기반으로 통합**  
+  **1차**: ShortTermTradingStrategyService에서 PositionSizingService.getRecommendations(tradingDate, KR, SHORT_TERM, defaultCapital)로 TB_SIGNAL_SCORE + TB_DAILY_STOCK 기반 단기 권장 종목 사용. PositionRecommendationDto → TradingPortfolioItem 변환(목표가 R:R 2:1/3:1, 진입가 ±1%). **2차**: 시그널 없으면 StockScreeningService fallback 또는 모의 데이터. **N+1 제거**: KoreaInvestmentMarketDataClient에서 토큰/API키 5초 TTL 캐시(tokenInfo: token, serverType, appKey, appSecret)로 동일 요청 내 재사용, getChartData/getCurrentPriceFromApi는 tokenInfo만 사용. **스케줄**: TradingPortfolioScheduler 09:00 KST(팩터 08:00 이후). **리스크 문구**: generateRiskManagementStrategy를 전략 레지스트리(포지션 리스크 1%, ATR, Half-Kelly, 단기 -3% Trailing Stop)와 동일하게 수정. application.yml investment.trading-portfolio.default-capital.
+- [x] **해외(미국) 잔고·보유 조회 API 연동**  
+  **상수**: KoreaInvestmentAccountApiConstants에 PATH_OVERSAS_INQUIRE_PRESENT_BALANCE, TR_ID_OVERSAS_BALANCE_REAL/VIRTUAL(CTRP6504R/VTRP6504R), getOverseasBalanceTrId. **클라이언트**: KoreaInvestmentAccountClient.inquireOverseasBalance(userId, accountNo) — GET+query(CANO, ACNT_PRDT_CD, WCRC_FRCR_DVSN_CD=02, NATN_CD=840, TR_MKET_CD=00, INQR_DVSN_CD=00), output1 파싱·parseOverseasPositionsOutput·parseOverseasPositionItem(ovrs_* 등 필드 대응), market=US·currency=USD. **서비스**: AccountService.getBalanceAndPositions에서 국내 inquireBalance 후 inquireOverseasBalance 호출해 US 보유 목록 병합. 실패 시 해외만 스킵·국내만 반환. [09-korea-investment-api-guide.md](../04-api/09-korea-investment-api-guide.md) 해외주식 현재잔고 조회 섹션 추가.
+- [x] **모의계좌 투자 실제 실행 준비**  
+  **토큰 서버 타입별 저장**: TB_KOREA_INVESTMENT_TOKENS에 SERVER_TYPE 추가(V12), UK(USER_ID, SERVER_TYPE). KoreaInvestmentToken 엔티티·KoreaInvestmentTokenRepository.findByUserIdAndServerType. **TokenService**: getAccessToken(userId, serverType) 추가, 발급/저장 시 serverType 반영, getAccessToken(userId)는 serverType="1" 위임(호환). **주문 경로 계좌별 키·토큰**: KoreaInvestmentOrderClient에서 accountNo → resolveServerTypeForAccount, getUserApiKeyForAccount(userId, accountNo), getAccessToken(userId, serverType) 사용. **실전 계좌 실행 가드**: investment.pipeline.allow-real-execution(false 기본). PipelineExecutor·PipelineExitScheduler에서 serverType='0' 계좌는 allow-real-execution=false 시 주문 스킵(로그 경고). application.yml pipeline.allow-real-execution, PIPELINE_ALLOW_REAL_EXECUTION. 롤백: db/migration/rollback/V12_rollback.sql.
+- [x] **4단계 파이프라인 확장 (데이터 수집 후 실제 구현)**  
+  **1) 미국 듀얼 모멘텀**: FactorCalculationService — TB_DAILY_STOCK(US) 기간별 수익률 가중합(dual-momentum-period-days/weights), 시장 모멘텀=유니버스 평균, score=종목 모멘텀−시장 모멘텀(%). **2) Half-Kelly p·b 백테스트 연동**: PositionSizingService.applyHalfKelly(전략별 p·b), application.yml kelly-p/kelly-b + kelly-p-short-term 등 전략별 키(백테스트 winRate·profitFactor 반영용). **3) 유니버스**: TB_SECTOR_RETURN·TB_SYMBOL_SECTOR(V13), TB_EARNINGS_SURPRISE(V14). UniverseFilterService — Sector RS(상위 N개 업종 내 종목), Post-Earnings Drift(최근 N일 실적 발표 상위 20%), 데이터 없으면 유동성만. sector-rs-top-n, earnings-surprise-lookback-days, earnings-surprise-top-pct. **4) 시그널**: TB_ORDER_FLOW(V15), TB_FUNDAMENTALS(V16). FactorCalculationService — 수급 강도(KR) TB_ORDER_FLOW 기반 순매수/시총 비율(%), 퀄리티-성장(US) TB_FUNDAMENTALS 기반 PEG·Rule of 40 합산 점수, 데이터 없으면 0. smart-money-intensity-threshold-pct. [00-strategy-registry.md](../02-architecture/00-strategy-registry.md) 버전 스택 v1.5 반영.
+
+### 자동투자 프로세스·활성화 체크리스트
+
+실제 자동 매수/매도 주문이 나가게 하려면: **(1)** 설정 화면(/settings)에서 거래 설정 저장, **자동 매매 ON**, 최대 투자금액·단기/중기/장기 비율 입력. **(2)** 서버/환경에서 `PIPELINE_AUTO_EXECUTE=true` 또는 `investment.pipeline.auto-execute: true` 설정(기본값 false이면 dry-run만 동작). **(3)** 모의계좌 권장(실전 전 2주 테스트). **(4)** 실전 계좌 자동 실행은 `PIPELINE_ALLOW_REAL_EXECUTION=true`(또는 `investment.pipeline.allow-real-execution: true`)로만 허용(기본값 false). 상세 플로우·스케줄은 [12-auto-investment-strategy §6.2](../02-architecture/12-auto-investment-strategy.md#62-자동투자-프로세스-플로우) 참조.
 
 ---
 
@@ -94,25 +134,23 @@
   DART/KRX/Yahoo 연동·수집·저장·스케줄 적용 완료. 상세는 완료 섹션 참조.
 - [x] **팩터 계산 엔진 (구축 로드맵 2단계)**  
   완료. 상세는 완료 섹션 참조.
-- [ ] **LSTM 예측 모델(초기)**  
-  데이터 수집·전처리, LSTM 모델·학습 파이프라인, 서빙 API. AI는 분석 정보 제공용, 최종 매매 결정은 규칙 엔진 유지.
+- [x] **LSTM 예측 모델(초기)**  
+  완료. 상세는 완료 섹션 참조.
 
 ### 중기 (로드맵 Phase 5~6)
 
 - [x] **4단계 파이프라인 구현 (1차)**  
   유니버스(유동성만)·시그널 유니버스 필터·PositionSizingService·PipelineExecutor·ExitRuleService(Time-Cut) 완료. 상세는 완료 섹션 참조.
-- [ ] **4단계 파이프라인 확장**  
-  **1) 유니버스**: 한국 Sector Relative Strength, 미국 Post-Earnings Drift 추가. **2) 시그널**: 한국 수급 강도(Smart Money Intensity)·변동성 돌파 k 동적; 미국 듀얼 모멘텀·퀄리티-성장(PEG & Rule of 40)·VAA 변형. **3) 자금 관리**: Half-Kelly(백테스트 p·b 연동). **4) 청산**: ATR Trailing Stop(장중 고가·현재가 연동), 체결 확인 후 포지션 등록.
-- [ ] **시장·기간별 전략 로직**  
-  단기(20%): 유동성·RSI(14)>60 & MACD>Signal·수급 필터, Trailing Stop -3%. 중기(40%): 듀얼 모멘텀 상위 10%, EPS YoY>20%, PEG<1.5, 20·60일선 정배열, 월 1회 리밸런싱, 개별 -10% 손절. 장기(40%): ROE>20%, OPM>25%, Rule of 40, MDD -15%~-20% 분할 매수, 펀더멘털 훼손 시에만 매도.
+- [x] **4단계 파이프라인 확장 (데이터 수집 후 실제 구현)**  
+  완료. 상세는 완료 섹션 참조.
+- [x] **시장·기간별 전략 로직**  
+  완료. 상세는 완료 섹션 참조.
 - [ ] **뉴스·공시 파이프라인 (확정 원천만)**  
   **한국**: DART(Open API) 실시간/단기 폴링 공시, 키워드(무상증자·영업익 30% 증가 등) 포착 시 매수 시그널; 연합뉴스 수집·NLP·속보/긴급 가중치; 네이버 금융(많이 본 뉴스·실시간 검색 종목) 수집·이용약관 준수. **미국**: SEC EDGAR API(8-K·10-K·10-Q), 8-K 발생 시 **최우선 순위** 로직; Reuters 헤드라인·감정 분석; Yahoo Finance(OHLCV·Earnings Calendar·Analyst Up/Down). 수집·저장(TB_NEWS_ITEMS)·감정/중요도/이벤트 유형 분석, 전략 시그널 점수 반영, Fallback(원천 장애 시 파이프라인 중단 없음).
 - [ ] **고급 분석·포트폴리오**  
   섹터 분석, 상관관계·리스크 메트릭(VaR/CVaR, Sharpe/Sortino), 리밸런싱 자동화, 리스크 기반 포지션 사이징.
-- [ ] **백테스팅 (필수)**  
-  과거 10년 데이터로 알고리즘 시뮬레이션. **2020년 코로나 폭락장**, **2022년 금리 인상기** 방어율 검증.
 - [ ] **대시보드·UX**  
-  자동투자 현황 화면: 파이프라인 단계별 실데이터(유니버스 수·시그널 건수·체결 건수), 시그널/체결 목록 테이블. 대시보드: 계좌 요약(국내·미국 구분), 자동투자 상태 카드. 실시간 차트, 성과 분석, 반응형·모바일.
+  자동투자 현황 파이프라인 실데이터·시그널/보유 포지션 테이블은 완료. 대시보드: 계좌 요약(국내·미국 구분), 자동투자 상태 카드. 실시간 차트, 성과 분석, 반응형·모바일.
 
 ### 장기 (로드맵 Phase 7~8)
 
@@ -121,7 +159,7 @@
 - [ ] **다중 계좌·실시간 스트리밍**  
   다중 계좌 관리, WebSocket 시세·알림, 통합 포트폴리오 뷰.
 - [ ] **화면 확장 (기획서 향후 메뉴)**  
-  백테스트(`/backtest`) 결과·파라미터 화면; 리스크 리포트(`/risk`) MDD·VaR·노출 등.
+  백테스트(`/backtest`) 결과·파라미터 화면은 완료. 리스크 리포트(`/risk`) MDD·VaR·노출 등.
 - [ ] **모바일 앱**  
   iOS/Android, 푸시 알림 (선택).
 
@@ -158,3 +196,18 @@
 | 1.8 | 2026-01-30 | 완료: 데이터 수집 연동 (1단계) — DART 공시·KRX 시세·Yahoo 내부 API 연동, NewsItem 저장·스케줄러·Fallback |
 | 1.9 | 2026-01-30 | 완료: 팩터 계산 엔진 (2단계) — KRX 일별 TB_DAILY_STOCK 저장·KrxCollectionService·FactorCalculationService(이격도·변동성 돌파·유동성)·TB_SIGNAL_SCORE·GET /api/v1/signals·자동투자 현황 시그널 연동 |
 | 1.10 | 2026-01-30 | 완료: 4단계 파이프라인 (1차) — TB_UNIVERSE·UniverseFilterService·유니버스 선행 스케줄·PositionSizingService·TB_STRATEGY_POSITION·PipelineExecutor·ExitRuleService(Time-Cut)·pipeline.auto-execute |
+| 1.11 | 2026-01-30 | 완료: 4단계 파이프라인 확장 — ExitRuleService ATR Trailing Stop, FactorCalculationService 변동성 돌파 k 동적 적용·시그널 스텁(수급 강도·듀얼 모멘텀·퀄리티-성장), PositionSizingService Half-Kelly, PipelineExecutor 체결 확인 후 포지션 등록 옵션, UniverseFilterService 유니버스 필터 스텁(Sector RS·Post-Earnings Drift). application.yml 설정 추가. |
+| 1.12 | 2026-01-30 | 완료: 시장(Market KR/US) 차원 도입 — FactorCalculationScheduler KR/US 모두 처리(processMarket 메서드), UsMarketCollectionService 스텁 추가, DataCollectionScheduler US 수집 스케줄, API 일관성 확인. application.yml investment.data.us.schedule-cron 추가. |
+| 1.13 | 2026-01-31 | 완료: 전략·계산 방식 통합 문서 및 버전 스택 — 00-strategy-registry.md 신설(공통·나라별·기간별·파이프라인·수식 일람·버전 스택), 12-auto-investment-strategy 상세 참조 정리, development-status.mdc 전략/팩터 변경 시 통합 문서 갱신 규칙 추가. |
+| 1.14 | 2026-01-31 | 완료: US 일별 시세 수집 (yfinance) — scripts/us_daily_collector.py(yfinance OHLCV·trdVal), UsMarketCollectionService 스크립트 호출·JSON 파싱·TB_DAILY_STOCK(MARKET=US) 저장. investment.data.us.yfinance-script-path, symbols, python-command. |
+| 1.15 | 2026-01-31 | 완료: LSTM 예측 모델(초기) — 데이터·전처리(app/data, app/preprocessing, fetch_training_data), LSTM·학습(lstm_model, train), 서빙(optional series·currentPrice, MODEL_PATH lazy 로드), Spring DTO·AnalysisService 연동(일별 시세·현재가 채움). 00-strategy-registry AI/LSTM 활용 방침, API 개요 예측 optional series 반영. |
+| 1.16 | 2026-01-31 | 완료: 자동투자 현황 파이프라인 실데이터 연동 — PipelineSummaryService·PipelineSummaryDto·OpenPositionItemDto, AutoInvestController 파이프라인 요약 모델, auto-invest 4단계 카드(유니버스·시그널 KR/US·보유 포지션 수)·시그널/보유 포지션 테이블. StrategyPositionRepository.countByAccountNoAndExitDtIsNull. |
+| 1.17 | 2026-01-31 | 완료: 시장·기간별 전략 로직 — TB_STRATEGY_POSITION STRATEGY_TYPE(V8), ExitRuleService 기간별 청산(-3%/-10%/장기 스텁), PositionSizingService strategyType·RSI/MACD·상위 10% 필터, PipelineExecutor strategyType·allocatedCapital, PipelineExecutionScheduler·MediumTermRebalanceScheduler(스텁), 00-strategy-registry v1.1 반영. |
+| 1.18 | 2026-01-31 | 완료: ATR Trailing Stop 장중 연동 및 체결 확인 후 포지션 등록 — ExitRuleService todayHighBySymbol 오버로드, PipelineExitScheduler(실시간 현재가·당일 고가→청산 평가·매도 실행), TB_ORDERS 포지션 컨텍스트(V9), FillConfirmationScheduler, OrderService.executeOrderForPipeline, 00-strategy-registry v1.2 반영. |
+| 1.19 | 2026-02-01 | 완료: 백테스팅 — ExitRuleEvaluator·ExitRuleInput/Result, BacktestService·BacktestRunRequest/Result/TradeDto, POST /api/v1/backtest, /backtest 메뉴·화면, MDD/CAGR/Sharpe/Sortino/Calmar·승률·손익비 노출. |
+| 1.20 | 2026-02-01 | 완료: 모의계좌 자동투자 실행 가능화 — PipelineExecutor 스케줄러 경로 executeOrderForPipeline·userId(TradingSetting 조회), PipelineExecutionScheduler 대상 계좌 TradingSetting 기준, TradingSettingRepository.findDistinctAccountNos. |
+| 1.21 | 2026-02-01 | 완료: 대시보드·UX 1차 — 계좌 요약(국내·미국 구분) AccountPositionDto.market·excg_dvsn_cd 매핑·시장별 집계·보유 테이블 시장 컬럼; 자동투자 상태 카드 PipelineSummaryService 연동·설정 링크 /settings. |
+| 1.22 | 2026-02-01 | 완료: 해외(미국) 잔고·보유 조회 API — inquire-present-balance(GET+query), inquireOverseasBalance·parseOverseasPositionsOutput, getBalanceAndPositions에서 국내+해외 병합. |
+| 1.23 | 2026-02-01 | 자동투자 프로세스·활성화 체크리스트 문단 추가(§1 직후). 모의계좌 자동투자 실행 가능화 항목에 실제 주문 활성화 조건(auto-execute=true 필요, 기본값 false) 보강. 12-auto-investment-strategy §6.2 참조. |
+| 1.24 | 2026-02-01 | 완료: 모의계좌 투자 실제 실행 준비 — 토큰 서버 타입별 저장(V12), getAccessToken(userId, serverType), 주문 경로 계좌별 API 키·토큰, allow-real-execution 가드, 문서·체크리스트 보강. |
+| 1.25 | 2026-02-01 | 완료: 4단계 파이프라인 확장(데이터 수집 후 실제 구현) — 미국 듀얼 모멘텀(TB_DAILY_STOCK), Half-Kelly p·b 백테스트 연동(전략별 설정), Sector RS·Post-Earnings Drift(TB_SECTOR_RETURN·TB_SYMBOL_SECTOR·TB_EARNINGS_SURPRISE V13/V14), 수급 강도·퀄리티-성장(TB_ORDER_FLOW·TB_FUNDAMENTALS V15/V16). 진행예정 항목 체크. |

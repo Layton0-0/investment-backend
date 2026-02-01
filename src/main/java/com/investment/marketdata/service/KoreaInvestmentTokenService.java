@@ -32,10 +32,14 @@ public class KoreaInvestmentTokenService {
     private final EncryptionUtil encryptionUtil;
     private final KoreaInvestmentTokenClient tokenClient;
 
-    // 최근 토큰 발급 이력 추적 (userId -> 발급 시각(밀리초))
+    // 최근 토큰 발급 이력 추적 (userId|serverType -> 발급 시각(밀리초))
     // 최근 5초 내 발급 이력이 있으면 재발급을 방지하기 위함
     private final ConcurrentHashMap<String, Long> recentTokenIssuance = new ConcurrentHashMap<>();
     private static final long RECENT_ISSUANCE_WINDOW_MS = 5000; // 5초
+
+    private static String issuanceKey(String userId, String serverType) {
+        return userId + "|" + (serverType != null ? serverType : "1");
+    }
 
     /**
      * 서버 시작 시 모든 사용자의 토큰 발급
@@ -74,8 +78,9 @@ public class KoreaInvestmentTokenService {
 
         // 발급한 토큰을 복호화하여 반환
         String userId = userApiKey.getUserId();
-        KoreaInvestmentToken token = tokenRepository.findByUserId(userId)
-                .orElseThrow(() -> new RuntimeException("토큰 발급 후 조회 실패: userId=" + userId));
+        String serverType = userApiKey.getServerType() != null ? userApiKey.getServerType() : "1";
+        KoreaInvestmentToken token = tokenRepository.findByUserIdAndServerType(userId, serverType)
+                .orElseThrow(() -> new RuntimeException("토큰 발급 후 조회 실패: userId=" + userId + ", serverType=" + serverType));
 
         return encryptionUtil.decrypt(token.getAccessTokenEncrypted());
     }
@@ -89,27 +94,41 @@ public class KoreaInvestmentTokenService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void savePreIssuedTokenForUser(String userId, String accessToken) {
+        savePreIssuedTokenForUser(userId, "1", accessToken);
+    }
+
+    /**
+     * 계좌인증 시 미리 발급받은 접근 토큰을 저장합니다 (서버 타입 지정).
+     *
+     * @param userId      사용자 ID
+     * @param serverType  서버 타입 ("1": 모의투자, "0": 실거래)
+     * @param accessToken 계좌인증 시 발급받은 한국투자증권 접근 토큰 (평문)
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void savePreIssuedTokenForUser(String userId, String serverType, String accessToken) {
         if (userId == null || accessToken == null || accessToken.isBlank()) {
             throw new IllegalArgumentException("userId와 accessToken은 필수입니다.");
         }
+        String st = serverType != null ? serverType : "1";
         String encryptedToken = encryptionUtil.encrypt(accessToken.trim());
         long expiresAt = System.currentTimeMillis() + (23 * 60 * 60 * 1000); // 23시간
 
-        KoreaInvestmentToken existingToken = tokenRepository.findByUserId(userId).orElse(null);
+        KoreaInvestmentToken existingToken = tokenRepository.findByUserIdAndServerType(userId, st).orElse(null);
         if (existingToken != null) {
             existingToken.updateToken(encryptedToken, expiresAt);
             tokenRepository.save(existingToken);
         } else {
             KoreaInvestmentToken token = KoreaInvestmentToken.builder()
                     .userId(userId)
+                    .serverType(st)
                     .accessTokenEncrypted(encryptedToken)
                     .expiresAt(expiresAt)
                     .issuedAt(LocalDateTime.now())
                     .build();
             tokenRepository.save(token);
         }
-        recentTokenIssuance.put(userId, System.currentTimeMillis());
-        log.info("선발급 토큰 저장 완료: userId={}", userId);
+        recentTokenIssuance.put(issuanceKey(userId, st), System.currentTimeMillis());
+        log.info("선발급 토큰 저장 완료: userId={}, serverType={}", userId, st);
     }
 
     /**
@@ -119,9 +138,10 @@ public class KoreaInvestmentTokenService {
     @Transactional
     public void issueTokenForUser(UserApiKey userApiKey) {
         String userId = userApiKey.getUserId();
+        String serverType = userApiKey.getServerType() != null ? userApiKey.getServerType() : "1";
 
-        // 기존 토큰 확인
-        KoreaInvestmentToken existingToken = tokenRepository.findByUserId(userId).orElse(null);
+        // 기존 토큰 확인 (서버 타입별)
+        KoreaInvestmentToken existingToken = tokenRepository.findByUserIdAndServerType(userId, serverType).orElse(null);
 
         // 토큰이 유효하면 발급하지 않음
         // 단, 복호화 가능 여부도 확인 (암호화 키 변경 시 대비)
@@ -182,16 +202,18 @@ public class KoreaInvestmentTokenService {
         } else {
             KoreaInvestmentToken token = KoreaInvestmentToken.builder()
                     .userId(userId)
+                    .serverType(serverType)
                     .accessTokenEncrypted(encryptedToken)
                     .expiresAt(expiresAt)
+                    .issuedAt(LocalDateTime.now())
                     .build();
             tokenRepository.save(token);
         }
 
         // 최근 발급 이력 기록
-        recentTokenIssuance.put(userId, System.currentTimeMillis());
+        recentTokenIssuance.put(issuanceKey(userId, serverType), System.currentTimeMillis());
 
-        log.info("토큰 발급 및 저장 완료: userId={}", userId);
+        log.info("토큰 발급 및 저장 완료: userId={}, serverType={}", userId, serverType);
     }
 
     /**
@@ -204,93 +226,100 @@ public class KoreaInvestmentTokenService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void issueTokenForUserIfNotExists(UserApiKey userApiKey) {
         String userId = userApiKey.getUserId();
+        String serverType = userApiKey.getServerType() != null ? userApiKey.getServerType() : "1";
 
-        // 기존 토큰 확인
-        boolean tokenExists = tokenRepository.findByUserId(userId).isPresent();
+        // 기존 토큰 확인 (서버 타입별)
+        boolean tokenExists = tokenRepository.findByUserIdAndServerType(userId, serverType).isPresent();
 
         if (tokenExists) {
-            log.debug("토큰이 이미 존재함: userId={}", userId);
+            log.debug("토큰이 이미 존재함: userId={}, serverType={}", userId, serverType);
             return;
         }
 
-        log.info("토큰이 없어서 발급 시작: userId={}", userId);
+        log.info("토큰이 없어서 발급 시작: userId={}, serverType={}", userId, serverType);
         issueTokenForUser(userApiKey);
     }
 
     /**
-     * 사용자 ID로 토큰 조회 (복호화하여 반환)
-     * 토큰이 만료되었거나 복호화에 실패하면 자동으로 재발급합니다.
+     * 사용자 ID로 토큰 조회 (복호화하여 반환).
+     * 서버 타입 미지정 시 모의투자("1") 토큰 사용 (호환용).
+     *
+     * @deprecated 서버 타입별 조회 시 {@link #getAccessToken(String, String)} 사용
      */
+    @Deprecated
     @Transactional
     public String getAccessToken(String userId) {
-        KoreaInvestmentToken token = tokenRepository.findByUserId(userId).orElse(null);
+        return getAccessToken(userId, "1");
+    }
+
+    /**
+     * 사용자 ID와 서버 타입으로 토큰 조회 (복호화하여 반환).
+     * 토큰이 만료되었거나 복호화에 실패하면 자동으로 재발급합니다.
+     *
+     * @param userId     사용자 ID
+     * @param serverType 서버 타입 ("1": 모의투자, "0": 실거래)
+     * @return Access Token (평문)
+     */
+    @Transactional
+    public String getAccessToken(String userId, String serverType) {
+        String st = serverType != null ? serverType : "1";
+        KoreaInvestmentToken token = tokenRepository.findByUserIdAndServerType(userId, st).orElse(null);
 
         // 토큰이 없거나 만료된 경우 재발급
         if (token == null || !token.isValid()) {
-            // 최근 발급 이력 확인 (트랜잭션 격리 수준으로 인해 방금 저장한 토큰을 조회하지 못하는 경우 대비)
-            Long recentIssuanceTime = recentTokenIssuance.get(userId);
+            String key = issuanceKey(userId, st);
+            Long recentIssuanceTime = recentTokenIssuance.get(key);
             if (recentIssuanceTime != null) {
                 long timeSinceIssuance = System.currentTimeMillis() - recentIssuanceTime;
                 if (timeSinceIssuance < RECENT_ISSUANCE_WINDOW_MS) {
-                    // 최근 5초 내에 발급 이력이 있으면 잠시 대기 후 재조회
-                    log.debug("최근 토큰 발급 이력 확인됨, 재조회 시도: userId={}, timeSinceIssuance={}ms", userId, timeSinceIssuance);
+                    log.debug("최근 토큰 발급 이력 확인됨, 재조회 시도: userId={}, serverType={}, timeSinceIssuance={}ms", userId, st, timeSinceIssuance);
                     try {
-                        Thread.sleep(100); // 100ms 대기
+                        Thread.sleep(100);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                     }
 
-                    // 재조회
-                    token = tokenRepository.findByUserId(userId).orElse(null);
+                    token = tokenRepository.findByUserIdAndServerType(userId, st).orElse(null);
                     if (token != null && token.isValid()) {
                         try {
                             return encryptionUtil.decrypt(token.getAccessTokenEncrypted());
                         } catch (RuntimeException e) {
-                            log.warn("토큰 복호화 실패: userId={}, error={}", userId, e.getMessage());
-                            // 복호화 실패 시 아래 재발급 로직으로 진행
+                            log.warn("토큰 복호화 실패: userId={}, serverType={}, error={}", userId, st, e.getMessage());
                         }
                     }
                 } else {
-                    // 5초가 지났으면 발급 이력 제거
-                    recentTokenIssuance.remove(userId);
+                    recentTokenIssuance.remove(key);
                 }
             }
 
-            // 재조회 후에도 토큰이 없거나 만료된 경우 재발급
             if (token == null || !token.isValid()) {
-                log.info("토큰이 없거나 만료됨, 재발급 시도: userId={}", userId);
+                log.info("토큰이 없거나 만료됨, 재발급 시도: userId={}, serverType={}", userId, st);
 
                 UserApiKey userApiKey = userApiKeyRepository
-                        .findByUserIdAndBrokerType(userId, BrokerType.KOREA_INVESTMENT)
-                        .orElseThrow(() -> new RuntimeException("한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
+                        .findByUserIdAndBrokerTypeAndServerType(userId, BrokerType.KOREA_INVESTMENT, st)
+                        .orElseThrow(() -> new RuntimeException("한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId + ", serverType=" + st));
 
-                // 토큰 재발급
                 issueTokenForUser(userApiKey);
 
-                // 재조회
-                token = tokenRepository.findByUserId(userId)
-                        .orElseThrow(() -> new RuntimeException("토큰 발급 후 조회 실패: userId=" + userId));
+                token = tokenRepository.findByUserIdAndServerType(userId, st)
+                        .orElseThrow(() -> new RuntimeException("토큰 발급 후 조회 실패: userId=" + userId + ", serverType=" + st));
             }
         }
 
-        // 복호화 시도 - 실패 시 토큰 삭제 후 재발급
         try {
             return encryptionUtil.decrypt(token.getAccessTokenEncrypted());
         } catch (RuntimeException e) {
-            // 복호화 실패 (암호화 키 불일치 등)
-            log.warn("토큰 복호화 실패, 토큰 삭제 후 재발급 시도: userId={}, error={}", userId, e.getMessage());
+            log.warn("토큰 복호화 실패, 토큰 삭제 후 재발급 시도: userId={}, serverType={}, error={}", userId, st, e.getMessage());
 
-            // 손상된 토큰 삭제
             tokenRepository.delete(token);
 
-            // 재발급
-            UserApiKey userApiKey = userApiKeyRepository.findByUserIdAndBrokerType(userId, BrokerType.KOREA_INVESTMENT)
+            UserApiKey userApiKey = userApiKeyRepository
+                    .findByUserIdAndBrokerTypeAndServerType(userId, BrokerType.KOREA_INVESTMENT, st)
                     .orElseThrow(() -> new RuntimeException("한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
 
             issueTokenForUser(userApiKey);
 
-            // 재조회 및 복호화
-            token = tokenRepository.findByUserId(userId)
+            token = tokenRepository.findByUserIdAndServerType(userId, st)
                     .orElseThrow(() -> new RuntimeException("토큰 발급 후 조회 실패: userId=" + userId));
 
             return encryptionUtil.decrypt(token.getAccessTokenEncrypted());

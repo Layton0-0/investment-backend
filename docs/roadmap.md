@@ -135,7 +135,8 @@
 - [ ] 시장(Market KR/US) 차원 도입 — 전략·유니버스·시그널 시장별 분리
 - [ ] 중기 전략 (MEDIUM_TERM) 구현
 - [ ] 장기 전략 (LONG_TERM) 구현
-- [ ] 4단계 파이프라인 확장 — Sector RS·Post-Earnings Drift·ATR Trailing Stop·체결 후 포지션 등록
+- [x] 4단계 파이프라인 확장 (1차) — 변동성 돌파 k 동적 적용, Half-Kelly 자금 관리, ATR Trailing Stop 청산, 체결 확인 후 포지션 등록 옵션, 유니버스/시그널 필터 스텁 구현. 상세: [개발 진행 현황](09-planning/02-development-status.md)
+- [ ] 4단계 파이프라인 확장 (데이터 수집 후) — Sector RS·Post-Earnings Drift 실제 구현, 수급 강도·듀얼 모멘텀·퀄리티-성장 실제 계산, Half-Kelly 백테스트 연동
 - [ ] 커스텀 전략 생성 기능
 
 **예상 완료일**: 2026년 7월
@@ -150,7 +151,8 @@
 #### 5.3 포트폴리오 최적화
 - [ ] 포트폴리오 리밸런싱 자동화
 - [ ] 리스크 기반 포지션 사이징
-- [ ] 백테스팅 기능
+- [x] 백테스팅 기능 — POST /api/v1/backtest, /backtest 화면, ExitRuleEvaluator·BacktestService, MDD/CAGR/Sharpe/Sortino/Calmar·승률·손익비 노출. Half-Kelly p·b 실전 주입은 별도.
+- [x] **모의계좌 자동투자 실행** — 스케줄러 매수 시 executeOrderForPipeline·userId(TradingSetting 조회), 실행 대상 계좌 거래설정(TradingSetting) 기준. 실계좌 전 **모의 2주 테스트** 권장.
 
 **예상 완료일**: 2026년 7월
 

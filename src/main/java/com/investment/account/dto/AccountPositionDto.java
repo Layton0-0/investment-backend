@@ -52,7 +52,10 @@ public class AccountPositionDto {
     
     @NotNull
     private String currency;
-    
+
+    /** 시장 구분: KR(국내), US(미국). 한국투자증권 API 응답의 거래소 구분 또는 해외 포함 여부로 설정. 미존재 시 KR. */
+    private String market;
+
     private LocalDateTime lastUpdated;
     
     // 한국투자증권 API 응답 필드

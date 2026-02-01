@@ -17,7 +17,8 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "TB_KOREA_INVESTMENT_TOKENS", indexes = {
-    @Index(name = "IDX_KI_TOKEN_USER_ID", columnList = "USER_ID")
+    @Index(name = "IDX_KI_TOKEN_USER_ID", columnList = "USER_ID"),
+    @Index(name = "UK_KI_TOKENS_USER_SERVER", columnList = "USER_ID,SERVER_TYPE", unique = true)
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -29,7 +30,13 @@ public class KoreaInvestmentToken {
     
     @Column(name = "USER_ID", nullable = false, length = 36)
     private String userId;
-    
+
+    /**
+     * 서버 타입 (모의투자: "1", 실거래: "0")
+     */
+    @Column(name = "SERVER_TYPE", nullable = false, length = 1)
+    private String serverType = "1";
+
     /**
      * Access Token (암호화하여 저장)
      */
@@ -72,9 +79,10 @@ public class KoreaInvestmentToken {
     }
     
     @Builder
-    public KoreaInvestmentToken(String userId, String accessTokenEncrypted, 
+    public KoreaInvestmentToken(String userId, String serverType, String accessTokenEncrypted,
                                Long expiresAt, LocalDateTime issuedAt) {
         this.userId = userId;
+        this.serverType = serverType != null ? serverType : "1";
         this.accessTokenEncrypted = accessTokenEncrypted;
         this.expiresAt = expiresAt;
         this.issuedAt = issuedAt != null ? issuedAt : LocalDateTime.now();

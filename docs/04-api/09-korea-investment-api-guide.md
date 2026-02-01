@@ -434,6 +434,16 @@ Java 17을 사용하는 경우 기본적으로 TLS 1.2 이상을 지원하므로
 - **요청 방식**: **GET** + query parameter
 - **기능**: 계좌 잔고 정보 및 보유 종목 목록 조회
 - **사용 클래스**: `KoreaInvestmentAccountClient.inquireBalance()`
+- **시장(KR/US) 구분**: 보유 종목 응답에 거래소 구분 필드(`excg_dvsn_cd` 등)가 있으면 KRX→KR, NASD/NYSE/AMEX→US로 매핑하여 `AccountPositionDto.market`에 설정.
+
+#### 1-2. 해외주식 현재잔고(체결기준) 조회
+- **TR ID**: `CTRP6504R` (실거래) / `VTRP6504R` (모의투자)
+- **엔드포인트**: `/uapi/overseas-stock/v1/trading/inquire-present-balance`
+- **요청 방식**: **GET** + query parameter
+- **기능**: 미국(840) 외화(02) 기준 체결 잔고·보유 종목 목록 조회
+- **사용 클래스**: `KoreaInvestmentAccountClient.inquireOverseasBalance(userId, accountNo)` — 국내 잔고와 별도 호출 후 `AccountService.getBalanceAndPositions`에서 국내·해외 보유를 병합하여 반환
+- **필수 파라미터**: `CANO`, `ACNT_PRDT_CD`, `WCRC_FRCR_DVSN_CD`(02: 외화), `NATN_CD`(840: 미국), `TR_MKET_CD`(00: 전체), `INQR_DVSN_CD`(00: 전체)
+- **응답**: `output1` 배열에 보유 종목(필드명은 KIS 해외 API 스펙·ovrs_* 등). 파싱 후 `AccountPositionDto`에 `market=US`, `currency=USD` 설정
 
 #### 2. 매수가능조회
 - **TR ID**: `TTTC8908R` (실거래) / `VTTC8908R` (모의투자)
@@ -629,6 +639,8 @@ public Mono<OrderResponse> placeBuyOrder(String userId, String accountNo,
    - `KoreaInvestmentRequestBuilder`: 공통 헤더/바디 생성
    - `KoreaInvestmentTokenService`: 토큰 관리
    - Rate Limiter: API 호출 제한
+
+5. **주문 API·계좌별 서버 타입**: 주문 실행 시 계좌번호(accountNo)에 해당하는 서버 타입(모의/실전)으로 API 키·토큰을 사용한다. `KoreaInvestmentOrderClient`는 `UserAccount`에서 accountNo → serverType을 조회한 뒤 `getUserApiKeyForAccount(userId, accountNo)`, `getAccessToken(userId, serverType)`으로 호출한다.
 
 ### 자세한 가이드
 

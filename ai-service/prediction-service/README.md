@@ -30,9 +30,19 @@ docker run -d -p 8000:8000 ai-prediction-service:latest
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
 
-## 다음 단계
+## LSTM 예측 (초기)
 
-1. LSTM 모델 구현 (`app/models/lstm_model.py`)
-2. 데이터 로더 구현 (`app/utils/data_loader.py`)
-3. 예측 서비스 로직 구현 (`app/services/prediction_service.py`)
-4. 모델 학습 파이프라인 구축
+- **모델**: `app/models/lstm_model.py` (PyTorch LSTMPredictor)
+- **전처리**: `app/data/`, `app/preprocessing/` (시계열 로드·정규화·시퀀스)
+- **학습**: `python -m app.train --data-csv path/to/ohlcv.csv --lookback 30 --epochs 10 --output-dir ./models` (프로젝트 루트에서 `cd ai-service/prediction-service` 후 실행)
+- **학습 데이터 수집**: `python scripts/fetch_training_data.py --symbols AAPL,MSFT --start 2020-01-01 --end 2025-01-01 --output data/train.csv` (프로젝트 루트 `scripts/`)
+- **서빙**: `POST /api/v1/predict`에 optional `series`(OHLCV 배열)·`currentPrice` 전달 시 LSTM 추론 사용. 환경변수 `MODEL_PATH` 또는 `LSTM_MODEL_PATH`에 학습된 `.pt` 경로 설정. 미설정 시 Mock 응답.
+
+## 테스트
+
+```bash
+# 가상환경 활성화 후
+pip install -r requirements.txt
+python -m unittest discover -s tests -v
+# 또는: python -m pytest tests/ -v
+```

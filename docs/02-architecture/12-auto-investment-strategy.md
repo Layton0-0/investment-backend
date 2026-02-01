@@ -4,7 +4,7 @@
 
 이 문서는 **헤지펀드형 퀀트(Quant) 트레이딩 엔진** 기반 **최상위 공격형 로보어드바이저**의 전략·알고리즘·데이터 원천·실전 구축 전략을 정의합니다. 일반 자산배분 엔진이 아닌 **4단계 파이프라인**(유니버스 선정 → 시그널 생성 → 자금 관리 → 매매 실행) 안에서 시장별(한국/미국)·분류별로 상이한 수학적 모델을 적용합니다.
 
-**참고**: 상세 수치·파라미터는 [05-quantitative-strategy.md](./05-quantitative-strategy.md)와 연계하며, 본 문서가 단일 소스로 우선합니다.
+**참고**: 상세 수치·파라미터·계산 수식·나라별·기간별 전략은 **[00-strategy-registry.md](./00-strategy-registry.md)** 를 단일 소스로 참조한다. 규칙 엔진 구조는 [05-quantitative-strategy.md](./05-quantitative-strategy.md) 참조.
 
 ---
 
@@ -121,6 +121,97 @@
 
 **상세**: [roadmap.md](../roadmap.md)
 
+### 6.1 구현 상태
+
+**4단계 파이프라인 1차 구현 완료** (2026-01-30):
+- ✅ 1단계 유니버스: 유동성(Liquidity Cut-off) 필터
+- ✅ 2단계 시그널: 이격도·변동성 돌파·유동성 팩터
+- ✅ 3단계 자금 관리: ATR 포지션 사이징·변동성 역가중
+- ✅ 4단계 실행·청산: Time-Cut 청산 규칙
+
+**4단계 파이프라인 확장 1차 완료** (2026-01-30):
+- ✅ 변동성 돌파 k 동적 적용 (한국장 변동성 반영)
+- ✅ Half-Kelly 자금 관리 (기본값 p=0.6, b=2.0)
+- ✅ ATR Trailing Stop 청산 규칙 (장중 고가·현재가 연동)
+- ✅ 체결 확인 후 포지션 등록 옵션
+- ✅ 유니버스 필터 확장 스텁 (한국 Sector RS, 미국 Post-Earnings Drift)
+- ✅ 시그널 확장 스텁 (한국 수급 강도, 미국 듀얼 모멘텀·퀄리티-성장)
+
+**시장·기간별 전략 로직 반영** (2026-01-31):
+- ✅ 단기(SHORT_TERM): -3% Trailing Stop 청산, 시그널 필터 RSI>60 & MACD>Signal(TechnicalIndicatorUtil)
+- ✅ 중기(MEDIUM_TERM): -10% 손절·Time-Cut 청산, 시그널 상위 10% 필터, 월 1회 리밸런싱 스케줄 훅(스텁)
+- ✅ 장기(LONG_TERM): 청산 스텁(매도 시그널 없음), 시그널 전체 사용
+- ✅ 시드 배분 20/40/40, PipelineExecutionScheduler(0.2/0.4/0.4 배분·KR/US×SHORT/MEDIUM/LONG 6회 run)
+- ✅ TB_STRATEGY_POSITION STRATEGY_TYPE, PipelineExecutor·PositionSizingService strategyType 연동
+
+**후속 개발 필요** (데이터 수집 후):
+- ⏳ 유니버스 필터 실제 구현 (업종별 수익률·어닝 서프라이즈 데이터 수집 필요)
+- ⏳ 시그널 실제 계산 (수급 데이터·미국 일별/재무 데이터 수집 필요)
+- ⏳ Half-Kelly 백테스트 연동 (전략별 p·b 값 산출)
+- ⏳ 체결 확인 스케줄러/리스너 구현
+
+**실제 주문 활성화**: 기본값이 `investment.pipeline.auto-execute=false`이므로, 실제 매수/매도가 나가게 하려면 아래 §6.2 체크리스트대로 서버 설정을 켜면 된다.
+
+**상세**: [개발 진행 현황](../09-planning/02-development-status.md), [전략 통합 문서](./00-strategy-registry.md)
+
+### 6.2 자동투자 프로세스 플로우
+
+자동투자는 **데이터 수집 → 팩터 계산 → 파이프라인 실행 → 청산 평가 → 체결 확인** 순으로 스케줄에 따라 동작한다.
+
+**스케줄 요약**
+
+| 단계 | 스케줄 (기본값) | 설명 |
+|------|------------------|------|
+| 데이터 수집 | DART 10분마다, SEC 15분마다, KRX 16:00, US 17:00 | TB_DAILY_STOCK, TB_NEWS_ITEMS 등 |
+| 팩터 계산 | 매일 08:00 KST | 유니버스 → 시그널 (TB_UNIVERSE, TB_SIGNAL_SCORE) |
+| 파이프라인 실행 | 매일 09:10 KST | 자동투자 ON 계좌만, 6회 run; auto-execute 여부에 따라 주문 실행 여부 결정 |
+| 청산 | 장중 5분마다 (09:00~15:59 평일) | Trailing Stop / -10% 손절 / Time-Cut 등; auto-execute=true일 때만 매도 주문 |
+| 체결 확인 | 매분 | 체결된 주문 → 포지션 등록 (register-position-on-execution 옵션) |
+
+```mermaid
+sequenceDiagram
+  participant Data as DataCollectionScheduler
+  participant Factor as FactorCalculationScheduler
+  participant Pipe as PipelineExecutionScheduler
+  participant Exit as PipelineExitScheduler
+  participant Fill as FillConfirmationScheduler
+
+  Note over Data: 매일 16:00 KRX, 17:00 US
+  Data->>Data: KRX/US 일별 시세 to TB_DAILY_STOCK
+  Note over Data: 10분마다 DART, 15분마다 SEC
+  Data->>Data: 공시/뉴스 to TB_NEWS_ITEMS
+
+  Note over Factor: 매일 08:00 KST
+  Factor->>Factor: 유니버스 to TB_UNIVERSE
+  Factor->>Factor: 시그널 to TB_SIGNAL_SCORE
+
+  Note over Pipe: 매일 09:10 KST
+  Pipe->>Pipe: 자동투자 ON 계좌만
+  Pipe->>Pipe: 계좌별 자본/비율로 KR/US x SHORT/MEDIUM/LONG 6회 run
+  alt auto-execute=true
+    Pipe->>Pipe: 실제 매수 주문 executeOrderForPipeline
+  else auto-execute=false
+    Pipe->>Pipe: dry-run 권장만 계산 주문 없음
+  end
+
+  Note over Exit: 장중 5분마다 09:00 to 15:59 평일
+  Exit->>Exit: 보유 포지션 현재가/당일 고가 청산 규칙 평가
+  alt auto-execute=true
+    Exit->>Exit: 매도 주문 실행
+  end
+
+  Note over Fill: 매분
+  Fill->>Fill: EXECUTED 주문 to 포지션 등록 옵션에 따라
+```
+
+**실제 자동 주문을 쓰기 위한 체크리스트**
+
+1. **설정 화면 (/settings)**: 계좌 선택, 거래 설정 저장, **자동 매매 ON** 체크, 최대 투자금액·단기/중기/장기 비율 입력.
+2. **서버 설정**: `investment.pipeline.auto-execute: true` 또는 환경변수 `PIPELINE_AUTO_EXECUTE=true`. (기본값은 false라 설정하지 않으면 dry-run만 동작.)
+3. **모의계좌 권장**: 실전 전 모의 2주 테스트. [로드맵 Phase 7](../roadmap.md) 참조.
+4. **모의계좌 실제 실행**: 모의 앱키·계좌 인증 완료, `PIPELINE_ALLOW_REAL_EXECUTION=false`(기본)로 실전 계좌 자동 실행 미허용. 실전 계좌 자동 실행은 `PIPELINE_ALLOW_REAL_EXECUTION=true`로만 허용.
+5. **모의 Rate Limit**: 한국투자증권 모의투자 1초당 2건 제한 인지. 스케줄(09:10 실행·장중 청산·체결 확인) 확인.
+
 ---
 
 ## 7. 공시/데이터·뉴스/센티멘트 원천 확정 (파이프라인 연결 소스)
@@ -210,3 +301,5 @@ REST API는 호출 제한(초당 횟수)이 있어 공격형 트레이딩에 불
 | 버전 | 일자 | 작성자 | 변경 내용 |
 |------|------|--------|----------|
 | 1.0 | 2026-01-29 | System | 초기 자동투자 전략 명세 작성 — 4단계 파이프라인·시장별 알고리즘·원천·KIS 실전 구축 반영 |
+| 1.1 | 2026-01-31 | System | 전략 통합 문서 분리·기간별 전략 반영 — 상세 수식·파라미터는 [00-strategy-registry.md](./00-strategy-registry.md) 참조로 정리 |
+| 1.2 | 2026-02-01 | System | §6.2 자동투자 프로세스 플로우 추가 — 스케줄 요약·시퀀스 다이어그램·실제 주문 활성화 체크리스트; 후속 개발에 auto-execute 설정 명시 |

@@ -57,8 +57,10 @@
 - `POST /api/v1/auth/logout` - 로그아웃
 
 ### 3.1 계좌 API
-- `GET /api/v1/accounts/{accountNo}/balance` - 계좌 잔고 조회
-- `GET /api/v1/accounts/{accountNo}/positions` - 보유 종목 조회
+- `GET /api/v1/accounts/{accountNo}/balance` - 계좌 잔고 조회 (단일 리소스용 REST)
+- `GET /api/v1/accounts/{accountNo}/positions` - 보유 종목 조회 (단일 리소스용 REST)
+
+잔고와 보유 종목을 동시에 필요로 하는 화면(예: 대시보드)은 내부적으로 `getBalanceAndPositions`를 사용하여 주식잔고조회 API를 1회만 호출한다.
 
 ### 3.2 주문 API
 - `POST /api/v1/orders` - 주문 실행
@@ -75,7 +77,7 @@
 - `POST /api/v1/strategies/{accountNo}/{strategyType}/stop` - 전략 중지 (쿼리: `market` 선택)
 
 ### 3.4 분석 API
-- `POST /api/v1/analysis` - 종목 분석
+- `POST /api/v1/analysis` - 종목 분석. 내부적으로 AI 예측 서비스에 요청 시 **optional** 로 일별 시세(series)·현재가(currentPrice)를 전달하면 LSTM 추론을 사용할 수 있음(미전달 또는 모델 미로드 시 Mock 응답).
 
 ### 3.5 설정 API
 - `GET /api/v1/settings/{accountNo}` - 거래 설정 조회
@@ -88,11 +90,14 @@
 - `GET /api/v1/batch/jobs` - 배치 작업 목록 조회
 
 ### 3.8 뉴스·공시 API
-- `GET /api/v1/news` - 뉴스·공시 목록 조회 (쿼리: `market`, `source`, `symbol`, `from`, `to`, `page`, `size`)
+- `GET /api/v1/news` - 뉴스·공시 목록 조회 (쿼리: `market`, `source`, `itemType`, `symbol`, `title`, `from`, `to`, `page`, `size`). `market`·`source`·`itemType`·`symbol` 빈값이면 전체, `title`은 부분 일치.
 - `POST /api/v1/news/collect` - 뉴스·공시 수집 실행 (DART·SEC EDGAR 즉시 수집, 인증 필요)
 
 ### 3.9 시그널/팩터 API
 - `GET /api/v1/signals` - 시그널/팩터 점수 목록 조회 (쿼리: `basDt`, `market`, `symbol`, `factorType`, `page`, `size`)
+
+### 3.10 백테스트 API
+- `POST /api/v1/backtest` - 백테스트 실행 (body: startDate, endDate, market, strategyType, initialCapital). 응답: 메트릭(MDD·CAGR·Sharpe·Sortino·Calmar·승률·손익비)·수익 곡선·거래 목록. 인증 필요.
 
 ## 4. API 버전 관리
 

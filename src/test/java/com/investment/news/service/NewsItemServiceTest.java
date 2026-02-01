@@ -39,10 +39,10 @@ class NewsItemServiceTest {
         void getNewsItems_withNoFilters_returnsPagedResult() {
                 Page<NewsItem> emptyPage = new PageImpl<>(Collections.emptyList(),
                                 PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "collectedAt")), 0);
-                when(newsItemRepository.findByFilters(isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+                when(newsItemRepository.findByFilters(isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
                                 .thenReturn(emptyPage);
 
-                NewsItemPageResponseDto result = newsItemService.getNewsItems(null, null, null, null, null, 0, 20);
+                NewsItemPageResponseDto result = newsItemService.getNewsItems(null, null, null, null, null, null, null, 0, 20);
 
                 assertNotNull(result);
                 assertNotNull(result.getContent());
@@ -54,14 +54,28 @@ class NewsItemServiceTest {
         }
 
         @Test
+        @DisplayName("getNewsItems market·source·symbol 빈 문자열이면 null로 전체 조회한다")
+        void getNewsItems_blankStrings_normalizedToNullForAll() {
+                Page<NewsItem> emptyPage = new PageImpl<>(Collections.emptyList(),
+                                PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "collectedAt")), 0);
+                when(newsItemRepository.findByFilters(isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
+                                .thenReturn(emptyPage);
+
+                NewsItemPageResponseDto result = newsItemService.getNewsItems("", "  ", "\t", null, null, null, null, 0, 20);
+
+                assertNotNull(result);
+                verify(newsItemRepository).findByFilters(isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any());
+        }
+
+        @Test
         @DisplayName("getNewsItems 시장 필터 적용 시 repository에 전달한다")
         void getNewsItems_withMarketFilter_callsRepositoryWithMarket() {
                 Page<NewsItem> page = new PageImpl<>(Collections.emptyList(),
                                 PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "collectedAt")), 0);
-                when(newsItemRepository.findByFilters(eq("KR"), isNull(), isNull(), isNull(), isNull(), any()))
+                when(newsItemRepository.findByFilters(eq("KR"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any()))
                                 .thenReturn(page);
 
-                NewsItemPageResponseDto result = newsItemService.getNewsItems("KR", null, null, null, null, 0, 20);
+                NewsItemPageResponseDto result = newsItemService.getNewsItems("KR", null, null, null, null, null, null, 0, 20);
 
                 assertNotNull(result);
                 assertEquals(0, result.getContent().size());
@@ -72,9 +86,9 @@ class NewsItemServiceTest {
         void getNewsItems_sizeOver100_capsAt100() {
                 Page<NewsItem> page = new PageImpl<>(Collections.emptyList(),
                                 PageRequest.of(0, 100, Sort.by(Sort.Direction.DESC, "collectedAt")), 0);
-                when(newsItemRepository.findByFilters(any(), any(), any(), any(), any(), any())).thenReturn(page);
+                when(newsItemRepository.findByFilters(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(page);
 
-                NewsItemPageResponseDto result = newsItemService.getNewsItems(null, null, null, null, null, 0, 200);
+                NewsItemPageResponseDto result = newsItemService.getNewsItems(null, null, null, null, null, null, null, 0, 200);
 
                 assertNotNull(result);
                 assertEquals(100, result.getPage().getSize());

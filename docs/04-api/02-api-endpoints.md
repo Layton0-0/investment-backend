@@ -905,6 +905,20 @@ curl -X POST "http://localhost:8080/api/v1/market-data/current-prices" \
 
 ---
 
+## 백테스트 API
+
+### POST /api/v1/backtest
+
+**엔드포인트**: `POST /api/v1/backtest`
+
+**설명**: 기간·시장·전략타입·초기자본으로 4단계 파이프라인을 과거 일봉·시그널로 재생하여 메트릭·수익 곡선·거래 목록을 반환합니다. 인증 필요.
+
+**요청 본문 (BacktestRunRequest)**: startDate, endDate, market (KR/US), strategyType (SHORT_TERM/MEDIUM_TERM/LONG_TERM), initialCapital
+
+**성공 응답 (200 OK, BacktestRunResult)**: startDate, endDate, market, strategyType, initialCapital, finalEquity, totalReturnPct, cagr, mddPct, sharpeRatio, sortinoRatio, calmarRatio, winRate, avgWin, avgLoss, profitFactor, tradeCount, winningTrades, losingTrades, equityCurve, trades
+
+---
+
 ## 문서 변경 이력
 
 | 버전 | 일자 | 작성자 | 변경 내용 |

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>백테스트 - Investment Choi</title>
+    <link rel="stylesheet" th:href="@{/css/common.css}">
+    <style>
+        .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+        .page-title { font-size: 22px; font-weight: 700; margin-bottom: 24px; color: #191F28; }
+        .card { background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 20px; }
+        .card h2 { font-size: 18px; margin-bottom: 16px; color: #191F28; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; align-items: end; margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 13px; color: #8B95A1; margin-bottom: 6px; }
+        .form-group input, .form-group select { width: 100%; padding: 10px 12px; border: 1px solid #e0e0e0; border-radius: 8px; font-size: 14px; }
+        .btn { padding: 10px 20px; background: #3182F6; color: #fff; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
+        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }
+        .metric-item { background: #f8f9fa; padding: 12px; border-radius: 8px; }
+        .metric-item .label { font-size: 12px; color: #8B95A1; margin-bottom: 4px; }
+        .metric-item .value { font-size: 18px; font-weight: 700; color: #191F28; }
+        .data-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        .data-table th, .data-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }
+        .data-table th { color: #8B95A1; font-weight: 600; }
+        .empty-state { text-align: center; padding: 48px 24px; color: #8B95A1; font-size: 14px; }
+        .error-msg { color: #e53935; font-size: 14px; margin-top: 8px; }
+        #result-section { display: none; }
+    </style>
+</head>
+<body>
+    <div th:replace="~{fragments/layout-header :: header}"></div>
+    <nav th:replace="~{fragments/layout-menu :: menu}"></nav>
+
+    <div class="container">
+        <h2 class="page-title">백테스트</h2>
+
+        <div class="card">
+            <h2>실행 조건</h2>
+            <form id="backtest-form">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="startDate">시작일</label>
+                        <input type="date" id="startDate" name="startDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="endDate">종료일</label>
+                        <input type="date" id="endDate" name="endDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="market">시장</label>
+                        <select id="market" name="market">
+                            <option value="KR">KR (한국)</option>
+                            <option value="US">US (미국)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="strategyType">전략</label>
+                        <select id="strategyType" name="strategyType">
+                            <option value="SHORT_TERM">단기 (SHORT_TERM)</option>
+                            <option value="MEDIUM_TERM">중기 (MEDIUM_TERM)</option>
+                            <option value="LONG_TERM">장기 (LONG_TERM)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="initialCapital">초기 자본 (원)</label>
+                        <input type="number" id="initialCapital" name="initialCapital" min="1" step="1000000" value="100000000" required>
+                    </div>
+                    <div class="form-group">
+                        <button type="submit" class="btn" id="run-btn">실행</button>
+                    </div>
+                </div>
+                <div id="form-error" class="error-msg"></div>
+            </form>
+        </div>
+
+        <div id="result-section" class="card">
+            <h2>결과 요약</h2>
+            <div id="metrics-container" class="metrics-grid"></div>
+            <h2 style="margin-top: 24px;">수익 곡선 (일자별 자산)</h2>
+            <div id="equity-container"></div>
+            <h2 style="margin-top: 24px;">거래 목록</h2>
+            <div id="trades-container"></div>
+        </div>
+    </div>
+
+    <script th:inline="javascript">
+        (function() {
+            var form = document.getElementById('backtest-form');
+            var resultSection = document.getElementById('result-section');
+            var runBtn = document.getElementById('run-btn');
+            var formError = document.getElementById('form-error');
+            var metricsContainer = document.getElementById('metrics-container');
+            var equityContainer = document.getElementById('equity-container');
+            var tradesContainer = document.getElementById('trades-container');
+
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                formError.textContent = '';
+                var startDate = document.getElementById('startDate').value;
+                var endDate = document.getElementById('endDate').value;
+                var market = document.getElementById('market').value;
+                var strategyType = document.getElementById('strategyType').value;
+                var initialCapital = document.getElementById('initialCapital').value;
+                if (!startDate || !endDate || !initialCapital || parseFloat(initialCapital) <= 0) {
+                    formError.textContent = '시작일·종료일·초기 자본을 올바르게 입력하세요.';
+                    return;
+                }
+                if (new Date(startDate) > new Date(endDate)) {
+                    formError.textContent = '시작일은 종료일 이전이어야 합니다.';
+                    return;
+                }
+                runBtn.disabled = true;
+                fetch('/api/v1/backtest', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        startDate: startDate,
+                        endDate: endDate,
+                        market: market,
+                        strategyType: strategyType,
+                        initialCapital: parseFloat(initialCapital)
+                    })
+                }).then(function(res) {
+                    if (!res.ok) return res.json().then(function(err) { throw err; }).catch(function() { throw new Error('요청 실패: ' + res.status); });
+                    return res.json();
+                }).then(function(data) {
+                    resultSection.style.display = 'block';
+                    renderMetrics(data);
+                    renderEquity(data.equityCurve);
+                    renderTrades(data.trades);
+                }).catch(function(err) {
+                    formError.textContent = err.message || '백테스트 실행 중 오류가 발생했습니다.';
+                }).finally(function() {
+                    runBtn.disabled = false;
+                });
+            });
+
+            function fmt(v) { return v == null ? '-' : (typeof v === 'number' ? v.toLocaleString() : v); }
+            function fmtPct(v) { return v == null ? '-' : (typeof v === 'number' ? v.toFixed(2) + '%' : v); }
+
+            function renderMetrics(data) {
+                var items = [
+                    { label: '최종 자산', value: fmt(data.finalEquity) },
+                    { label: '총 수익률', value: fmtPct(data.totalReturnPct) },
+                    { label: 'CAGR', value: fmtPct(data.cagr) },
+                    { label: 'MDD', value: fmtPct(data.mddPct) },
+                    { label: 'Sharpe', value: fmt(data.sharpeRatio) },
+                    { label: 'Sortino', value: fmt(data.sortinoRatio) },
+                    { label: 'Calmar', value: fmt(data.calmarRatio) },
+                    { label: '승률 (p)', value: data.winRate != null ? (data.winRate * 100).toFixed(1) + '%' : '-' },
+                    { label: '손익비 (b)', value: fmt(data.profitFactor) },
+                    { label: '거래 수', value: data.tradeCount }
+                ];
+                metricsContainer.innerHTML = items.map(function(i) {
+                    return '<div class="metric-item"><div class="label">' + i.label + '</div><div class="value">' + i.value + '</div></div>';
+                }).join('');
+            }
+
+            function renderEquity(curve) {
+                if (!curve || curve.length === 0) {
+                    equityContainer.innerHTML = '<div class="empty-state">수익 곡선 데이터가 없습니다.</div>';
+                    return;
+                }
+                var maxShow = 100;
+                var rows = curve.length > maxShow ? curve.slice(-maxShow) : curve;
+                var html = '<table class="data-table"><thead><tr><th>일자</th><th>자산</th></tr></thead><tbody>';
+                rows.forEach(function(p) {
+                    html += '<tr><td>' + p.date + '</td><td>' + (p.equity != null ? Number(p.equity).toLocaleString() : '-') + '</td></tr>';
+                });
+                html += '</tbody></table>';
+                if (curve.length > maxShow) html += '<p class="empty-state">최근 ' + maxShow + '일만 표시합니다.</p>';
+                equityContainer.innerHTML = html;
+            }
+
+            function renderTrades(trades) {
+                if (!trades || trades.length === 0) {
+                    tradesContainer.innerHTML = '<div class="empty-state">거래 내역이 없습니다.</div>';
+                    return;
+                }
+                var html = '<table class="data-table"><thead><tr><th>종목</th><th>진입일</th><th>청산일</th><th>진입가</th><th>청산가</th><th>수량</th><th>손익</th><th>손익률</th><th>사유</th></tr></thead><tbody>';
+                trades.forEach(function(t) {
+                    html += '<tr><td>' + (t.symbol || '-') + '</td><td>' + (t.entryDt || '-') + '</td><td>' + (t.exitDt || '-') + '</td><td>' + fmt(t.entryPrice) + '</td><td>' + fmt(t.exitPrice) + '</td><td>' + (t.quantity || '-') + '</td><td>' + fmt(t.pnl) + '</td><td>' + (t.pnlPct != null ? Number(t.pnlPct).toFixed(2) + '%' : '-') + '</td><td>' + (t.exitReason || '-') + '</td></tr>';
+                });
+                html += '</tbody></table>';
+                tradesContainer.innerHTML = html;
+            }
+        })();
+    </script>
+</body>
+</html>

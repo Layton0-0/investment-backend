@@ -51,6 +51,24 @@ public class TradingSetting {
     @Column(name = "RISK_LEVEL", precision = 3, scale = 2)
     private BigDecimal riskLevel;
 
+    /**
+     * 단기 비율 (0~1). NULL이면 스케줄러 기본값 0.2 사용.
+     */
+    @Column(name = "SHORT_TERM_RATIO", precision = 5, scale = 4)
+    private BigDecimal shortTermRatio;
+
+    /**
+     * 중기 비율 (0~1). NULL이면 스케줄러 기본값 0.4 사용.
+     */
+    @Column(name = "MEDIUM_TERM_RATIO", precision = 5, scale = 4)
+    private BigDecimal mediumTermRatio;
+
+    /**
+     * 장기 비율 (0~1). NULL이면 스케줄러 기본값 0.4 사용.
+     */
+    @Column(name = "LONG_TERM_RATIO", precision = 5, scale = 4)
+    private BigDecimal longTermRatio;
+
     @Column(name = "CREATED_AT", nullable = false)
     private LocalDateTime createdAt;
 
@@ -74,7 +92,8 @@ public class TradingSetting {
     @Builder
     public TradingSetting(String accountNo, String userId, BigDecimal maxInvestmentAmount,
             BigDecimal minInvestmentAmount, String defaultCurrency,
-            Boolean autoTradingEnabled, BigDecimal riskLevel) {
+            Boolean autoTradingEnabled, BigDecimal riskLevel,
+            BigDecimal shortTermRatio, BigDecimal mediumTermRatio, BigDecimal longTermRatio) {
         this.accountNo = accountNo;
         this.userId = userId;
         this.maxInvestmentAmount = maxInvestmentAmount;
@@ -82,6 +101,9 @@ public class TradingSetting {
         this.defaultCurrency = defaultCurrency;
         this.autoTradingEnabled = autoTradingEnabled != null ? autoTradingEnabled : false;
         this.riskLevel = riskLevel;
+        this.shortTermRatio = shortTermRatio;
+        this.mediumTermRatio = mediumTermRatio;
+        this.longTermRatio = longTermRatio;
     }
 
     /**
@@ -105,5 +127,11 @@ public class TradingSetting {
 
     public void updateRiskLevel(BigDecimal riskLevel) {
         this.riskLevel = riskLevel;
+    }
+
+    public void updateStrategyRatios(BigDecimal shortTermRatio, BigDecimal mediumTermRatio, BigDecimal longTermRatio) {
+        this.shortTermRatio = shortTermRatio;
+        this.mediumTermRatio = mediumTermRatio;
+        this.longTermRatio = longTermRatio;
     }
 }

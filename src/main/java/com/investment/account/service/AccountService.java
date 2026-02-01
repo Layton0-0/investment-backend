@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -244,6 +245,50 @@ public class AccountService {
     }
 
     /**
+     * 계좌 잔고와 보유 종목을 한 번에 조회
+     * 주식잔고조회 API를 1회만 호출하여 중복 DB/API 호출을 줄인다.
+     * 대시보드 등 잔고·보유종목을 동시에 필요로 하는 화면에서 사용한다.
+     *
+     * @param accountNo 계좌번호
+     * @return 잔고와 보유 종목 (API 실패 시 DB 폴백)
+     */
+    @Transactional(readOnly = true)
+    @Cacheable(value = CacheConfig.CACHE_ACCOUNT, key = "'balanceAndPositions_' + #accountNo")
+    public BalanceAndPositionsDto getBalanceAndPositions(String accountNo) {
+        log.debug("잔고·보유종목 일괄 조회: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo));
+
+        try {
+            String userId = getCurrentUserId();
+
+            try {
+                KoreaInvestmentAccountClient.BalanceAndPositionsResult result =
+                        accountClient.inquireBalance(userId, accountNo);
+                List<AccountPositionDto> allPositions = new ArrayList<>(result.getPositions());
+                List<AccountPositionDto> overseasPositions = accountClient.inquireOverseasBalance(userId, accountNo);
+                if (!overseasPositions.isEmpty()) {
+                    allPositions.addAll(overseasPositions);
+                }
+                return new BalanceAndPositionsDto(result.getBalance(), allPositions);
+            } catch (Exception apiException) {
+                log.warn("한국투자증권 API 호출 실패, DB 폴백 사용: accountNo={}, error={}",
+                        LogMaskingUtil.maskAccountNo(accountNo), apiException.getMessage());
+                return new BalanceAndPositionsDto(
+                        getAccountBalanceFromDb(accountNo),
+                        getPositionsFromDb(accountNo));
+            }
+        } catch (IllegalStateException e) {
+            log.debug("사용자 ID를 찾을 수 없음, DB 폴백 사용: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo));
+            return new BalanceAndPositionsDto(
+                    getAccountBalanceFromDb(accountNo),
+                    getPositionsFromDb(accountNo));
+        } catch (Exception e) {
+            log.error("잔고·보유종목 조회 실패: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo), e);
+            throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
+                    "잔고·보유종목 조회에 실패했습니다: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * DB에서 보유 종목 조회 (폴백용)
      */
     private List<AccountPositionDto> getPositionsFromDb(String accountNo) {
@@ -274,6 +319,7 @@ public class AccountService {
                             .profitLoss(profitLoss)
                             .profitLossRate(profitLossRate)
                             .currency(portfolio.getCurrency() != null ? portfolio.getCurrency() : "KRW")
+                            .market("KR")
                             .lastUpdated(portfolio.getLastUpdated())
                             .build();
                 })

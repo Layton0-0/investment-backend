@@ -1,6 +1,7 @@
 package com.investment.auth.service;
 
 import com.investment.auth.dto.*;
+import com.investment.setting.dto.*;
 import com.investment.common.exception.DomainException;
 import com.investment.common.exception.ErrorCode;
 import com.investment.common.security.EncryptionUtil;
@@ -142,7 +143,7 @@ public class AuthService {
                 // 토큰: 계좌인증 시 미리 발급받은 토큰이 있으면 저장만, 없으면 발급
                 String preIssued = request.getPreIssuedAccessToken();
                 if (preIssued != null && !preIssued.isBlank()) {
-                    tokenService.savePreIssuedTokenForUser(user.getId(), preIssued.trim());
+                    tokenService.savePreIssuedTokenForUser(user.getId(), serverType, preIssued.trim());
                     log.info("한국투자증권 선발급 토큰 저장 완료: userId={}", LogMaskingUtil.maskUserId(user.getId()));
                     if (log.isDebugEnabled()) {
                         log.debug("  [DEBUG] userId(actual)={}", user.getId());
@@ -494,6 +495,164 @@ public class AuthService {
                 .serverTypeName("1".equals(serverType) ? "모의투자" : "실거래")
                 .accountNoMasked(accountNoMasked)
                 .build();
+    }
+
+    /**
+     * 설정 화면용 계좌 정보 한번에 조회 (모의·실 두 블록)
+     */
+    @Transactional(readOnly = true)
+    public SettingsAccountsResponseDto getSettingsAccounts(String userId) {
+        userRepository.findById(userId)
+                .orElseThrow(() -> new DomainException(ErrorCode.USER_NOT_FOUND, "사용자를 찾을 수 없습니다"));
+
+        SettingsAccountBlockDto virtual = buildSettingsBlock(userId, "1");
+        SettingsAccountBlockDto real = buildSettingsBlock(userId, "0");
+
+        return SettingsAccountsResponseDto.builder()
+                .virtual(virtual)
+                .real(real)
+                .build();
+    }
+
+    private SettingsAccountBlockDto buildSettingsBlock(String userId, String serverType) {
+        var apiKeyOpt = userApiKeyRepository.findByUserIdAndBrokerTypeAndServerType(
+                userId, BrokerType.KOREA_INVESTMENT, serverType);
+        if (apiKeyOpt.isEmpty()) {
+            return SettingsAccountBlockDto.builder()
+                    .appKeyMasked(null)
+                    .appSecretMasked(null)
+                    .accountNoMasked(null)
+                    .hasApiKey(false)
+                    .build();
+        }
+        UserApiKey key = apiKeyOpt.get();
+        String appKey = encryptionUtil.decrypt(key.getAppKeyEncrypted());
+        String appSecret = encryptionUtil.decrypt(key.getAppSecretEncrypted());
+        String accountNoMasked = null;
+        var accountOpt = userAccountRepository.findByUserIdAndServerTypeAndIsDefaultTrue(userId, serverType);
+        if (accountOpt.isPresent()) {
+            String accountNo = encryptionUtil.decrypt(accountOpt.get().getAccountNoEncrypted());
+            accountNoMasked = LogMaskingUtil.maskAccountNo(accountNo);
+        }
+        return SettingsAccountBlockDto.builder()
+                .appKeyMasked(LogMaskingUtil.maskApiKey(appKey))
+                .appSecretMasked(LogMaskingUtil.maskSecret(appSecret))
+                .accountNoMasked(accountNoMasked)
+                .hasApiKey(true)
+                .build();
+    }
+
+    /**
+     * 설정 화면용 계좌 정보 한번에 수정 (모의·실 두 블록)
+     */
+    @Transactional
+    public SettingsAccountsResponseDto updateSettingsAccounts(String userId, SettingsAccountsUpdateRequestDto request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new DomainException(ErrorCode.USER_NOT_FOUND, "사용자를 찾을 수 없습니다"));
+
+        boolean anyApiKeyChange = hasApiKeyChange(request.getVirtual()) || hasApiKeyChange(request.getReal());
+        if (anyApiKeyChange) {
+            if (request.getCurrentPassword() == null || request.getCurrentPassword().isEmpty()) {
+                throw new DomainException(ErrorCode.INVALID_PASSWORD, "API 키 변경 시 현재 비밀번호가 필요합니다");
+            }
+            if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
+                securityAuditService.logAuthenticationFailure(user.getUsername(), "REAUTHENTICATION_FAILED", "unknown");
+                throw new DomainException(ErrorCode.INVALID_PASSWORD, "현재 비밀번호가 올바르지 않습니다");
+            }
+        }
+
+        if (request.getVirtual() != null) {
+            applySettingsBlock(userId, "1", request.getVirtual());
+        }
+        if (request.getReal() != null) {
+            applySettingsBlock(userId, "0", request.getReal());
+        }
+
+        return getSettingsAccounts(userId);
+    }
+
+    private boolean hasApiKeyChange(SettingsAccountBlockRequestDto block) {
+        return block != null && ((block.getAppKey() != null && !block.getAppKey().isEmpty())
+                || (block.getAppSecret() != null && !block.getAppSecret().isEmpty()));
+    }
+
+    private void applySettingsBlock(String userId, String serverType, SettingsAccountBlockRequestDto block) {
+        boolean hasKey = (block.getAppKey() != null && !block.getAppKey().trim().isEmpty())
+                || (block.getAppSecret() != null && !block.getAppSecret().trim().isEmpty());
+        boolean hasAccountNo = block.getAccountNo() != null && !block.getAccountNo().trim().isEmpty();
+
+        var apiKeyOpt = userApiKeyRepository.findByUserIdAndBrokerTypeAndServerType(
+                userId, BrokerType.KOREA_INVESTMENT, serverType);
+
+        UserApiKey userApiKey;
+        if (apiKeyOpt.isPresent()) {
+            userApiKey = apiKeyOpt.get();
+            if (block.getAppKey() != null && !block.getAppKey().trim().isEmpty()) {
+                userApiKey.updateApiKeys(
+                        encryptionUtil.encrypt(block.getAppKey().trim()),
+                        userApiKey.getAppSecretEncrypted(),
+                        serverType);
+            }
+            if (block.getAppSecret() != null && !block.getAppSecret().trim().isEmpty()) {
+                userApiKey.updateApiKeys(
+                        userApiKey.getAppKeyEncrypted(),
+                        encryptionUtil.encrypt(block.getAppSecret().trim()),
+                        serverType);
+            }
+            userApiKeyRepository.save(userApiKey);
+        } else if (hasKey) {
+            String appKeyEnc = block.getAppKey() != null && !block.getAppKey().trim().isEmpty()
+                    ? encryptionUtil.encrypt(block.getAppKey().trim()) : null;
+            String appSecretEnc = block.getAppSecret() != null && !block.getAppSecret().trim().isEmpty()
+                    ? encryptionUtil.encrypt(block.getAppSecret().trim()) : null;
+            if (appKeyEnc == null || appSecretEnc == null) {
+                throw new DomainException(ErrorCode.INVALID_INPUT, "모의/실 계좌 신규 등록 시 API Key와 Secret을 모두 입력해야 합니다");
+            }
+            userApiKey = UserApiKey.builder()
+                    .userId(userId)
+                    .brokerType(BrokerType.KOREA_INVESTMENT)
+                    .appKeyEncrypted(appKeyEnc)
+                    .appSecretEncrypted(appSecretEnc)
+                    .serverType(serverType)
+                    .build();
+            userApiKeyRepository.save(userApiKey);
+        } else {
+            if (hasAccountNo) {
+                throw new DomainException(ErrorCode.INVALID_INPUT, "해당 서버타입에 API 키를 먼저 등록한 뒤 계좌번호를 입력하세요");
+            }
+            return;
+        }
+
+        if (hasAccountNo) {
+            String accountNo = block.getAccountNo().trim();
+            if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+                throw new DomainException(ErrorCode.INVALID_INPUT,
+                        "계좌번호 형식이 올바르지 않습니다. 형식: 숫자8자리-숫자2자리 (예: 12345678-12)");
+            }
+            String accountNoEncrypted = encryptionUtil.encrypt(accountNo);
+            var mainOpt = userAccountRepository.findByUserIdAndServerTypeAndIsDefaultTrue(userId, serverType);
+            String accountName = BrokerType.KOREA_INVESTMENT.getName() + " " + LogMaskingUtil.maskAccountNo(accountNo);
+            if (mainOpt.isPresent()) {
+                UserAccount acc = mainOpt.get();
+                acc.updateAccountNo(accountNoEncrypted);
+                acc.updateAccountName(accountName);
+                userAccountRepository.save(acc);
+            } else {
+                UserAccount newAccount = UserAccount.builder()
+                        .userId(userId)
+                        .userApiKeyId(userApiKey.getId())
+                        .accountNoEncrypted(accountNoEncrypted)
+                        .brokerType(BrokerType.KOREA_INVESTMENT)
+                        .serverType(serverType)
+                        .accountName(accountName)
+                        .isDefault(true)
+                        .isActive(true)
+                        .build();
+                userAccountRepository.save(newAccount);
+            }
+            log.info("계좌번호 저장: userId={}, serverType={}, accountNo={}",
+                    LogMaskingUtil.maskUserId(userId), serverType, LogMaskingUtil.maskAccountNo(accountNo));
+        }
     }
 
 }

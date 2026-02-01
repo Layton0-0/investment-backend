@@ -31,13 +31,13 @@
             <div class="pipeline-grid">
                 <div class="pipeline-card">
                     <div class="label">1단계: 유니버스</div>
-                    <div class="value">준비 중</div>
-                    <div class="label">감시 종목 수 (KR/US)</div>
+                    <div class="value" th:text="|KR ${universeCountKr != null ? universeCountKr : 0} · US ${universeCountUs != null ? universeCountUs : 0}|">0</div>
+                    <div class="label">감시 종목 수 (KR · US) 기준일 <span th:text="${signalBasDt}">-</span></div>
                 </div>
                 <div class="pipeline-card">
                     <div class="label">2단계: 시그널</div>
-                    <div class="value" th:text="${signalCount != null ? signalCount : 0">0</div>
-                    <div class="label">기준일 <span th:text="${signalBasDt}">-</span> 시그널 건수 (KR)</div>
+                    <div class="value" th:text="|KR ${signalCountKr != null ? signalCountKr : 0} · US ${signalCountUs != null ? signalCountUs : 0}|">0</div>
+                    <div class="label">기준일 <span th:text="${signalBasDt}">-</span> 시그널 건수 (KR · US)</div>
                 </div>
                 <div class="pipeline-card">
                     <div class="label">3단계: 자금 관리</div>
@@ -46,23 +46,31 @@
                 </div>
                 <div class="pipeline-card">
                     <div class="label">4단계: 매매 실행</div>
-                    <div class="value">준비 중</div>
-                    <div class="label">오늘 체결 건수</div>
+                    <div class="value" th:text="${openPositionCount != null ? openPositionCount : 0}">0</div>
+                    <div class="label">보유 포지션 수</div>
                 </div>
             </div>
             <div class="card">
-                <h2>시그널·체결 요약</h2>
-                <div th:if="${signalList != null and !signalList.isEmpty()}" class="signal-table-wrap">
+                <h2>시그널 요약 (기준일 <span th:text="${signalBasDt}">-</span>, KR · US)</h2>
+                <div th:if="${(signalListKr != null and !signalListKr.isEmpty()) or (signalListUs != null and !signalListUs.isEmpty())}" class="signal-table-wrap">
                     <table class="signal-table">
                         <thead>
                             <tr>
+                                <th>시장</th>
                                 <th>종목</th>
                                 <th>팩터</th>
                                 <th>점수</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr th:each="s : ${signalList}">
+                            <tr th:each="s : ${signalListKr}">
+                                <td>KR</td>
+                                <td th:text="${s.symbol}">-</td>
+                                <td th:text="${s.factorType}">-</td>
+                                <td th:text="${s.score != null ? s.score : '-'}">-</td>
+                            </tr>
+                            <tr th:each="s : ${signalListUs}">
+                                <td>US</td>
                                 <td th:text="${s.symbol}">-</td>
                                 <td th:text="${s.factorType}">-</td>
                                 <td th:text="${s.score != null ? s.score : '-'}">-</td>
@@ -70,7 +78,33 @@
                         </tbody>
                     </table>
                 </div>
-                <div th:if="${signalList == null or signalList.isEmpty()}" class="empty-state">시그널 데이터가 없습니다. 팩터 계산 스케줄(매일 장 시작 전) 후 KR 일별 시세가 수집되면 표시됩니다.</div>
+                <div th:if="${(signalListKr == null or signalListKr.isEmpty()) and (signalListUs == null or signalListUs.isEmpty())}" class="empty-state">시그널 데이터가 없습니다. 팩터 계산 스케줄(매일 장 시작 전) 후 KR/US 일별 시세가 수집되면 표시됩니다.</div>
+            </div>
+            <div class="card" th:if="${hasAccount}">
+                <h2>보유 포지션</h2>
+                <div th:if="${openPositionList != null and !openPositionList.isEmpty()}" class="signal-table-wrap">
+                    <table class="signal-table">
+                        <thead>
+                            <tr>
+                                <th>시장</th>
+                                <th>종목</th>
+                                <th>수량</th>
+                                <th>진입가</th>
+                                <th>진입일</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="p : ${openPositionList}">
+                                <td th:text="${p.market}">-</td>
+                                <td th:text="${p.symbol}">-</td>
+                                <td th:text="${p.quantity}">-</td>
+                                <td th:text="${p.entryPrice}">-</td>
+                                <td th:text="${p.entryDt}">-</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div th:if="${openPositionList == null or openPositionList.isEmpty()}" class="empty-state">보유 포지션이 없습니다.</div>
             </div>
         </div>
         <div th:unless="${hasAccount}" class="card">

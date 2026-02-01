@@ -18,6 +18,8 @@ public final class KoreaInvestmentAccountApiConstants {
     
     // 엔드포인트 경로
     public static final String PATH_INQUIRE_BALANCE = "/uapi/domestic-stock/v1/trading/inquire-balance";
+    /** 해외주식 현재잔고(체결기준) 조회. GET + query. 미국 840, 외화 02. */
+    public static final String PATH_OVERSAS_INQUIRE_PRESENT_BALANCE = "/uapi/overseas-stock/v1/trading/inquire-present-balance";
     public static final String PATH_INQUIRE_PSBL_ORDER = "/uapi/domestic-stock/v1/trading/inquire-psbl-order";
     public static final String PATH_INQUIRE_PSBL_ORDER2 = "/uapi/domestic-stock/v1/trading/inquire-psbl-order2";
     public static final String PATH_INQUIRE_PSBL_ORDER3 = "/uapi/domestic-stock/v1/trading/inquire-psbl-order3";
@@ -29,6 +31,10 @@ public final class KoreaInvestmentAccountApiConstants {
     // 주식잔고조회 TR ID
     public static final String TR_ID_BALANCE_REAL = "TTTC8434R"; // 실거래
     public static final String TR_ID_BALANCE_VIRTUAL = "VTTC8434R"; // 모의투자
+
+    // 해외주식 현재잔고(체결기준) 조회 TR ID
+    public static final String TR_ID_OVERSAS_BALANCE_REAL = "CTRP6504R"; // 실거래
+    public static final String TR_ID_OVERSAS_BALANCE_VIRTUAL = "VTRP6504R"; // 모의투자
     
     // 매수가능조회 TR ID
     public static final String TR_ID_BUYABLE_REAL = "TTTC8908R"; // 실거래
@@ -90,6 +96,19 @@ public final class KoreaInvestmentAccountApiConstants {
             return TR_ID_BALANCE_REAL;
         }
         return TR_ID_BALANCE_VIRTUAL;
+    }
+
+    /**
+     * 서버 타입에 따른 TR ID 반환 (해외주식 현재잔고 조회)
+     *
+     * @param serverType "0": 실거래, "1": 모의투자
+     * @return TR ID
+     */
+    public static String getOverseasBalanceTrId(String serverType) {
+        if ("0".equals(serverType)) {
+            return TR_ID_OVERSAS_BALANCE_REAL;
+        }
+        return TR_ID_OVERSAS_BALANCE_VIRTUAL;
     }
     
     /**

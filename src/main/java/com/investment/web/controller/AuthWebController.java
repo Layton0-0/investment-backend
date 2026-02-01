@@ -34,12 +34,18 @@ public class AuthWebController {
     }
     
     /**
-     * 마이페이지
+     * 마이페이지 (비밀번호·사용자명 등 내 정보)
      */
     @GetMapping("/mypage")
     public String myPagePage(Authentication authentication, Model model) {
-        // 인증 정보는 SecurityContext에서 자동으로 주입됨
-        // 마이페이지 데이터는 JavaScript에서 API로 가져옴
         return "mypage";
+    }
+
+    /**
+     * 설정 전용 화면 (계좌/API·거래 설정)
+     */
+    @GetMapping("/settings")
+    public String settingsPage(Authentication authentication, Model model) {
+        return "settings";
     }
 }

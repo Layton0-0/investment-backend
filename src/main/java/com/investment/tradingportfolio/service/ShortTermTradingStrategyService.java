@@ -3,11 +3,15 @@ package com.investment.tradingportfolio.service;
 import com.investment.marketdata.config.MarketDataProperties;
 import com.investment.domain.entity.TradingPortfolio;
 import com.investment.domain.entity.TradingPortfolioItem;
+import com.investment.factor.dto.PositionRecommendationDto;
+import com.investment.factor.service.PositionSizingService;
+import com.investment.strategy.domain.StrategyType;
 import com.investment.taapi.dto.StockAnalysisDto;
 import com.investment.taapi.service.StockAnalysisService;
 import com.investment.taapi.service.StockScreeningService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -19,40 +23,43 @@ import java.util.List;
 
 /**
  * 단기 트레이딩 전략 서비스
- * 
- * 월가 헤지펀드 퀀트 트레이더 + 기술적 분석 전문가 + 매크로 트레이더 역할 수행
- * 감정적 판단 금지, 데이터 기반 확률 사고만 사용
- * 시장 데이터 API를 사용하여 실제 기술적 지표를 기반으로 분석합니다.
+ *
+ * 1차: 자동투자 파이프라인(TB_SIGNAL_SCORE + TB_DAILY_STOCK) 기반 단기(SHORT_TERM) 권장 종목으로 일별 포트폴리오 생성.
+ * 2차: 시그널이 없으면 StockScreeningService(실시간 API) fallback 후, 없으면 모의 데이터.
+ * 종목 수는 기준 통과한 만큼만 포함(항상 5개 고정 아님), 표시 상한은 max-items로 제한.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ShortTermTradingStrategyService {
-    
+
+    private final PositionSizingService positionSizingService;
     private final StockScreeningService stockScreeningService;
     private final StockAnalysisService stockAnalysisService;
     private final MarketDataProperties marketDataProperties;
-    private java.util.Random random = new java.util.Random();
-    
+    private final java.util.Random random = new java.util.Random();
+
+    @Value("${investment.trading-portfolio.default-capital:100000000}")
+    private BigDecimal defaultCapital = new BigDecimal("100000000");
+
+    @Value("${investment.trading-portfolio.max-items:20}")
+    private int maxItems = 20;
+
     /**
      * 일별 트레이딩 포트폴리오 생성
+     * 1차: 파이프라인 시그널 기반(PositionSizingService). 2차: StockScreeningService fallback 또는 모의 데이터.
      */
     public TradingPortfolio generateDailyPortfolio(LocalDate tradingDate) {
         log.info("일별 트레이딩 포트폴리오 생성 시작: tradingDate={}", tradingDate);
-        
-        // 1. 시장 환경 분석
+
         String marketSummary = analyzeMarketEnvironment();
-        
-        // 2. 유망 섹터 분석
         String[] topSectors = analyzeTopSectors();
-        
-        // 3. 종목 필터링 및 분석
-        List<TradingPortfolioItem> items = filterAndAnalyzeStocks();
-        
-        // 4. 리스크 관리 전략
+
+        List<TradingPortfolioItem> items = buildItemsFromPipelineFirst(tradingDate);
+
         String riskManagementStrategy = generateRiskManagementStrategy();
-        BigDecimal positionSize = new BigDecimal("10000"); // 기본 포지션 사이즈
-        
+        BigDecimal positionSize = new BigDecimal("10000");
+
         TradingPortfolio portfolio = TradingPortfolio.builder()
                 .tradingDate(tradingDate)
                 .marketSummary(marketSummary)
@@ -62,12 +69,90 @@ public class ShortTermTradingStrategyService {
                 .riskManagementStrategy(riskManagementStrategy)
                 .positionSize(positionSize)
                 .build();
-        
-        // 종목 추가
+
         items.forEach(portfolio::addItem);
-        
+
         log.info("일별 트레이딩 포트폴리오 생성 완료: tradingDate={}, items={}", tradingDate, items.size());
         return portfolio;
+    }
+
+    /**
+     * 1차: 파이프라인(TB_SIGNAL_SCORE + TB_DAILY_STOCK) 기반 단기 권장 종목으로 아이템 생성.
+     * 결과가 없으면 2차: StockScreeningService fallback 또는 모의 데이터.
+     */
+    private List<TradingPortfolioItem> buildItemsFromPipelineFirst(LocalDate tradingDate) {
+        if (defaultCapital == null || defaultCapital.compareTo(BigDecimal.ZERO) <= 0) {
+            log.debug("트레이딩 포트폴리오 기본 자본이 없어 파이프라인 스킵, fallback 사용");
+            return filterAndAnalyzeStocks();
+        }
+
+        List<PositionRecommendationDto> recommendations = positionSizingService.getRecommendations(
+                tradingDate, "KR", StrategyType.SHORT_TERM, defaultCapital);
+
+        if (recommendations != null && !recommendations.isEmpty()) {
+            List<TradingPortfolioItem> fromPipeline = new ArrayList<>();
+            int count = Math.min(recommendations.size(), maxItems);
+            for (int i = 0; i < count; i++) {
+                fromPipeline.add(toTradingPortfolioItem(recommendations.get(i), i));
+            }
+            log.info("파이프라인 시그널 기반 포트폴리오 아이템 생성: 기준 통과={}, 표시={}", recommendations.size(), fromPipeline.size());
+            return fromPipeline;
+        }
+
+        log.debug("파이프라인 시그널 없음, StockScreeningService fallback");
+        return filterAndAnalyzeStocks();
+    }
+
+    /**
+     * PositionRecommendationDto → TradingPortfolioItem 변환.
+     * 목표가 R:R 2:1 / 3:1, 진입가 ±1%, 포지션 리스크 1%·ATR 기반 전략 레지스트리와 동일.
+     *
+     * @param index 0-based 순서 (ranking, buyTime 분산에 사용)
+     */
+    private TradingPortfolioItem toTradingPortfolioItem(PositionRecommendationDto rec, int index) {
+        BigDecimal entry = rec.getEntryPrice();
+        BigDecimal stopLoss = rec.getStopLoss();
+        if (entry == null || stopLoss == null || entry.compareTo(stopLoss) <= 0) {
+            throw new IllegalArgumentException("진입가/손절가 유효하지 않음: symbol=" + rec.getSymbol());
+        }
+        BigDecimal risk = entry.subtract(stopLoss);
+        BigDecimal target1 = entry.add(risk.multiply(new BigDecimal("2")));
+        BigDecimal target2 = entry.add(risk.multiply(new BigDecimal("3")));
+        BigDecimal riskRewardRatio = new BigDecimal("2.00");
+        BigDecimal entryMin = entry.multiply(new BigDecimal("0.99"));
+        BigDecimal entryMax = entry.multiply(new BigDecimal("1.01"));
+        BigDecimal avgEntry = entryMin.add(entryMax).divide(new BigDecimal("2"), 2, RoundingMode.HALF_UP);
+        BigDecimal profit1 = target1.subtract(avgEntry);
+        BigDecimal expectedReturnRate = profit1.divide(avgEntry, 4, RoundingMode.HALF_UP)
+                .multiply(new BigDecimal("100"));
+        BigDecimal investmentAmount = rec.getRecommendedAmt() != null ? rec.getRecommendedAmt() : new BigDecimal("10000");
+        BigDecimal expectedProfit = investmentAmount.multiply(expectedReturnRate)
+                .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+
+        int hour = 10 + (index * 30) / 60;
+        int minute = (index * 30) % 60;
+        LocalTime buyTime = LocalTime.of(hour, minute);
+        LocalTime sellTime = buyTime.plusHours(2 + index);
+
+        return TradingPortfolioItem.builder()
+                .symbol(rec.getSymbol())
+                .name(rec.getSymbol())
+                .entryPriceMin(entryMin)
+                .entryPriceMax(entryMax)
+                .stopLossPrice(stopLoss)
+                .targetPrice1(target1)
+                .targetPrice2(target2)
+                .expectedReturnRate(expectedReturnRate)
+                .riskRewardRatio(riskRewardRatio)
+                .technicalBasis("파이프라인 시그널 기반 (단기)")
+                .supplyDemandBasis("파이프라인 시그널 기반 (단기)")
+                .catalystFactor("파이프라인 시그널 기반 (단기)")
+                .buyTime(buyTime)
+                .sellTime(sellTime)
+                .investmentAmount(investmentAmount)
+                .expectedProfit(expectedProfit)
+                .ranking(index + 1)
+                .build();
     }
     
     /**
@@ -124,7 +209,7 @@ public class ShortTermTradingStrategyService {
             List<StockAnalysisDto> screenedStocks;
             try {
                 screenedStocks = stockScreeningService
-                        .screenStocks("1h", 5)
+                        .screenStocks("1h", maxItems)
                         .block();
             } catch (Exception e) {
                 log.error("종목 스크리닝 중 오류 발생", e);
@@ -417,15 +502,16 @@ public class ShortTermTradingStrategyService {
     }
     
     /**
-     * 리스크 관리 전략 생성
+     * 리스크 관리 전략 생성 (전략 레지스트리 §2·§3.3과 동일)
      */
     private String generateRiskManagementStrategy() {
         StringBuilder strategy = new StringBuilder();
-        strategy.append("📌 리스크 관리 전략:\n");
-        strategy.append("- 포지션 사이즈: 종목당 최대 $10,000 (총 자산의 10% 이하)\n");
-        strategy.append("- 분할 진입 전략: 목표가의 50% 지점에서 1차 진입, 돌파 시 2차 진입\n");
-        strategy.append("- 분할 청산 전략: 1차 목표가 도달 시 50% 청산, 2차 목표가 도달 시 전량 청산\n");
-        strategy.append("- 손실 제한 규칙: 손절가 도달 시 즉시 전량 청산, 일일 최대 손실 한도 $2,000");
+        strategy.append("📌 리스크 관리 전략 (자동투자 전략 레지스트리 기준):\n");
+        strategy.append("- 포지션 리스크: 1회 매매당 총자산 1% (position-risk-pct)\n");
+        strategy.append("- 포지션 사이징: ATR 기반 (진입가 − 손절가 = ATR×2.0)\n");
+        strategy.append("- Half-Kelly: 승률 60%, 손익비 2:1 구간에서만 비중 투입, 산출 f*의 50% 적용\n");
+        strategy.append("- 단기 청산: 고점 대비 -3% Trailing Stop 시 기계적 매도\n");
+        strategy.append("- 분할 진입/청산: 목표가 50% 지점 1차 진입·1차 목표가 50% 청산, 2차 목표가 전량 청산");
         return strategy.toString();
     }
 }

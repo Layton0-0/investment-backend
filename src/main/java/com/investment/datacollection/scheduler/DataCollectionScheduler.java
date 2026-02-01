@@ -3,6 +3,7 @@ package com.investment.datacollection.scheduler;
 import com.investment.datacollection.service.DartCollectionService;
 import com.investment.datacollection.service.KrxCollectionService;
 import com.investment.datacollection.service.SecCollectionService;
+import com.investment.datacollection.service.UsMarketCollectionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -12,7 +13,7 @@ import java.time.LocalDate;
 
 /**
  * 데이터 수집 스케줄러
- * DART/KRX/SEC EDGAR/Yahoo 원천별 주기 실행. 원천 장애 시 해당 원천만 스킵(Fallback).
+ * DART/KRX/SEC EDGAR/US 시장/Yahoo 원천별 주기 실행. 원천 장애 시 해당 원천만 스킵(Fallback).
  */
 @Slf4j
 @Component
@@ -22,6 +23,7 @@ public class DataCollectionScheduler {
     private final DartCollectionService dartCollectionService;
     private final KrxCollectionService krxCollectionService;
     private final SecCollectionService secCollectionService;
+    private final UsMarketCollectionService usMarketCollectionService;
 
     /**
      * DART 공시 수집 (10분마다)
@@ -57,6 +59,20 @@ public class DataCollectionScheduler {
             krxCollectionService.collectAndSave(today);
         } catch (Exception e) {
             log.warn("KRX 일별 수집 실패(다음 주기 재시도): {}", e.getMessage());
+        }
+    }
+
+    /**
+     * US 시장 일별 시세 수집 (매일 장 마감 후, 기본 17:00 KST - 미국 장 마감 후)
+     * 현재는 스텁 구현. 실제 데이터 수집은 후속 작업.
+     */
+    @Scheduled(cron = "${investment.data.us.schedule-cron:0 0 17 * * *}")
+    public void collectUsDaily() {
+        try {
+            LocalDate today = LocalDate.now();
+            usMarketCollectionService.collectAndSave(today);
+        } catch (Exception e) {
+            log.warn("US 시장 일별 수집 실패(다음 주기 재시도): {}", e.getMessage());
         }
     }
 }

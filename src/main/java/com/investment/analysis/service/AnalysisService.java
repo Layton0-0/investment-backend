@@ -1,11 +1,16 @@
 package com.investment.analysis.service;
 
 import com.investment.ai.client.AiPredictionClient;
+import com.investment.ai.dto.DailyPricePoint;
 import com.investment.ai.dto.PredictionRequestDto;
 import com.investment.ai.dto.PredictionResponseDto;
 import com.investment.analysis.dto.AnalysisRequestDto;
 import com.investment.analysis.dto.AnalysisResponseDto;
 import com.investment.config.CacheConfig;
+import com.investment.domain.entity.DailyStock;
+import com.investment.domain.repository.DailyStockRepository;
+import com.investment.marketdata.dto.CurrentPriceDto;
+import com.investment.marketdata.service.RealtimeMarketDataService;
 import com.investment.taapi.service.StockAnalysisService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,9 +21,11 @@ import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 종목 분석 서비스
@@ -39,6 +46,8 @@ public class AnalysisService {
 
     private final AiPredictionClient aiPredictionClient;
     private final StockAnalysisService stockAnalysisService;
+    private final DailyStockRepository dailyStockRepository;
+    private final RealtimeMarketDataService realtimeMarketDataService;
 
     @Value("${investment.ai.prediction-service.enabled:true}")
     private boolean aiServiceEnabled;
@@ -76,11 +85,16 @@ public class AnalysisService {
             PredictionResponseDto aiPrediction = null;
             if (aiServiceEnabled) {
                 try {
+                    int lookbackDays = Math.max(1, Math.min(request.getPeriodDays(), 90));
+                    List<DailyPricePoint> series = resolveDailySeries(request.getSymbol(), lookbackDays);
+                    BigDecimal currentPrice = resolveCurrentPrice(request.getSymbol());
                     PredictionRequestDto predictionRequest = PredictionRequestDto.builder()
                             .symbol(request.getSymbol())
                             .predictionMinutes(request.getPeriodDays() * 24 * 60)
-                            .lookbackDays(request.getPeriodDays())
+                            .lookbackDays(lookbackDays)
                             .requestedAt(LocalDateTime.now())
+                            .series(series)
+                            .currentPrice(currentPrice)
                             .build();
                     
                     aiPrediction = aiPredictionClient.predictPrice(predictionRequest)
@@ -105,6 +119,56 @@ public class AnalysisService {
         }
     }
     
+    /**
+     * symbol로 시장 추정 (6자리 숫자 = KR, 그 외 = US)
+     */
+    private String inferMarket(String symbol) {
+        if (symbol == null) {
+            return "US";
+        }
+        return symbol.matches("\\d{6}") ? "KR" : "US";
+    }
+
+    /**
+     * 일별 시세 조회 (LSTM 예측용 series)
+     */
+    private List<DailyPricePoint> resolveDailySeries(String symbol, int lookbackDays) {
+        String market = inferMarket(symbol);
+        LocalDate end = LocalDate.now();
+        LocalDate start = end.minusDays(lookbackDays + 30);
+        List<DailyStock> list = dailyStockRepository.findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(
+                symbol, market, start, end);
+        if (list == null || list.isEmpty()) {
+            return List.of();
+        }
+        int from = Math.max(0, list.size() - lookbackDays);
+        return list.subList(from, list.size()).stream()
+                .map(d -> DailyPricePoint.builder()
+                        .date(d.getBasDt())
+                        .open(d.getOpenPrice())
+                        .high(d.getHighPrice())
+                        .low(d.getLowPrice())
+                        .close(d.getClosePrice())
+                        .volume(d.getVolume() != null ? d.getVolume() : 0L)
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 현재가 조회 (예측 응답 매핑용)
+     */
+    private BigDecimal resolveCurrentPrice(String symbol) {
+        try {
+            CurrentPriceDto dto = realtimeMarketDataService.getCurrentPriceBlocking(symbol);
+            if (dto != null && dto.getCurrentPrice() != null) {
+                return dto.getCurrentPrice();
+            }
+        } catch (Exception e) {
+            log.debug("현재가 조회 실패, LSTM/Mock 기준 사용: symbol={}", symbol, e);
+        }
+        return null;
+    }
+
     /**
      * 종합 분석 결과 생성
      * 

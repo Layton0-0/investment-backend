@@ -22,14 +22,18 @@ public interface NewsItemRepository extends JpaRepository<NewsItem, String> {
         @Query("SELECT n FROM NewsItem n WHERE " +
                         "(:market IS NULL OR n.market = :market) AND " +
                         "(:source IS NULL OR n.source = :source) AND " +
+                        "(:itemType IS NULL OR n.itemType = :itemType) AND " +
                         "(:symbol IS NULL OR n.symbol = :symbol) AND " +
+                        "(:titlePattern IS NULL OR n.title LIKE :titlePattern) AND " +
                         "(:fromAt IS NULL OR n.collectedAt >= :fromAt) AND " +
                         "(:toAt IS NULL OR n.collectedAt <= :toAt) " +
                         "ORDER BY n.collectedAt DESC")
         Page<NewsItem> findByFilters(
                         @Param("market") String market,
                         @Param("source") String source,
+                        @Param("itemType") String itemType,
                         @Param("symbol") String symbol,
+                        @Param("titlePattern") String titlePattern,
                         @Param("fromAt") LocalDateTime fromAt,
                         @Param("toAt") LocalDateTime toAt,
                         Pageable pageable);

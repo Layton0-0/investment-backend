@@ -3,8 +3,8 @@ package com.investment.web.controller;
 import com.investment.account.service.AccountService;
 import com.investment.auth.dto.MyPageResponseDto;
 import com.investment.auth.service.AuthService;
-import com.investment.factor.dto.SignalScorePageResponseDto;
-import com.investment.factor.service.SignalScoreService;
+import com.investment.factor.dto.PipelineSummaryDto;
+import com.investment.factor.service.PipelineSummaryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.time.LocalDate;
-import java.util.Collections;
 
 /**
  * 자동투자 현황 웹 컨트롤러
@@ -29,7 +28,7 @@ public class AutoInvestController {
 
     private final AuthService authService;
     private final AccountService accountService;
-    private final SignalScoreService signalScoreService;
+    private final PipelineSummaryService pipelineSummaryService;
 
     @GetMapping
     @SuppressWarnings("deprecation")
@@ -61,19 +60,17 @@ public class AutoInvestController {
         model.addAttribute("accountNo", accountNo);
         model.addAttribute("hasAccount", accountNo != null && !accountNo.trim().isEmpty());
 
-        try {
-            LocalDate signalBasDt = LocalDate.now().minusDays(1);
-            long signalCount = signalScoreService.countSignals(signalBasDt, "KR");
-            SignalScorePageResponseDto signalPage = signalScoreService.getSignals(signalBasDt, "KR", null, null, 0, 10);
-            model.addAttribute("signalCount", signalCount);
-            model.addAttribute("signalList", signalPage.getContent());
-            model.addAttribute("signalBasDt", signalBasDt);
-        } catch (Exception e) {
-            log.debug("시그널 조회 실패(스킵): {}", e.getMessage());
-            model.addAttribute("signalCount", 0L);
-            model.addAttribute("signalList", Collections.emptyList());
-            model.addAttribute("signalBasDt", LocalDate.now().minusDays(1));
-        }
+        LocalDate basDt = LocalDate.now().minusDays(1);
+        PipelineSummaryDto summary = pipelineSummaryService.getSummary(basDt, accountNo);
+        model.addAttribute("signalBasDt", summary.getBasDt());
+        model.addAttribute("universeCountKr", summary.getUniverseCountKr());
+        model.addAttribute("universeCountUs", summary.getUniverseCountUs());
+        model.addAttribute("signalCountKr", summary.getSignalCountKr());
+        model.addAttribute("signalCountUs", summary.getSignalCountUs());
+        model.addAttribute("signalListKr", summary.getSignalListKr());
+        model.addAttribute("signalListUs", summary.getSignalListUs());
+        model.addAttribute("openPositionCount", summary.getOpenPositionCount());
+        model.addAttribute("openPositionList", summary.getOpenPositionList());
 
         return "auto-invest";
     }

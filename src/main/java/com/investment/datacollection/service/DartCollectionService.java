@@ -74,7 +74,7 @@ public class DartCollectionService {
                 .url(url)
                 .collectedAt(collectedAt)
                 .symbol(dto.getStockCode() != null && !dto.getStockCode().isBlank() ? dto.getStockCode() : null)
-                .eventType(dto.getReportNm())
+                .eventType(NewsItem.truncateEventType(dto.getReportNm()))
                 .build();
     }
 

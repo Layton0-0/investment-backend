@@ -88,10 +88,8 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform()
     finalizedBy jacocoTestReport
-    if (System.getenv('GRADLE_UNIQUE_BUILD_DIR') != null && !System.getenv('GRADLE_UNIQUE_BUILD_DIR').isEmpty()) {
-        maxParallelForks = 1
-        forkEvery = 0
-    }
+    // Gradle worker 프로세스 문제 해결: maxParallelForks와 forkEvery 설정 제거
+    // 한글 경로 환경에서 worker 클래스 로딩 문제가 발생할 수 있으므로 기본 설정 사용
 }
 
 jacoco {

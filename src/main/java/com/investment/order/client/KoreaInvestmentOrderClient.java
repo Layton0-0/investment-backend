@@ -3,7 +3,9 @@ package com.investment.order.client;
 import com.investment.common.security.EncryptionUtil;
 import com.investment.common.security.LogMaskingUtil;
 import com.investment.domain.entity.BrokerType;
+import com.investment.domain.entity.UserAccount;
 import com.investment.domain.entity.UserApiKey;
+import com.investment.domain.repository.UserAccountRepository;
 import com.investment.domain.repository.UserApiKeyRepository;
 import com.investment.marketdata.service.KoreaInvestmentTokenService;
 import com.investment.marketdata.util.KoreaInvestmentHashkeyUtil;
@@ -24,7 +26,9 @@ import reactor.util.retry.Retry;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * 한국투자증권 주문 API 클라이언트
@@ -47,6 +51,7 @@ public class KoreaInvestmentOrderClient {
     private final RateLimiterRegistry rateLimiterRegistry;
     private final KoreaInvestmentTokenService tokenService;
     private final UserApiKeyRepository userApiKeyRepository;
+    private final UserAccountRepository userAccountRepository;
     private final EncryptionUtil encryptionUtil;
     private final Environment environment;
     private final KoreaInvestmentHashkeyUtil hashkeyUtil;
@@ -118,6 +123,42 @@ public class KoreaInvestmentOrderClient {
     }
 
     /**
+     * 계좌번호에 해당하는 서버 타입 조회 (모의/실거래 구분)
+     */
+    private String resolveServerTypeForAccount(String userId, String accountNo) {
+        if (userId == null || accountNo == null || accountNo.trim().isEmpty()) {
+            return null;
+        }
+        List<UserAccount> accounts = userAccountRepository.findByUserIdAndBrokerType(userId, BrokerType.KOREA_INVESTMENT);
+        for (UserAccount account : accounts) {
+            try {
+                String decrypted = encryptionUtil.decrypt(account.getAccountNoEncrypted());
+                if (accountNo.trim().equals(decrypted)) {
+                    return account.getServerType() != null ? account.getServerType() : "1";
+                }
+            } catch (Exception e) {
+                log.trace("계좌번호 복호화 스킵: accountId={}", account.getId());
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 계좌번호에 해당하는 API 키 조회 (모의/실거래 구분하여 올바른 키 반환)
+     */
+    private Optional<UserApiKey> getUserApiKeyForAccount(String userId, String accountNo) {
+        String serverType = resolveServerTypeForAccount(userId, accountNo);
+        if (serverType != null) {
+            Optional<UserApiKey> byServer = userApiKeyRepository.findByUserIdAndBrokerTypeAndServerType(userId,
+                    BrokerType.KOREA_INVESTMENT, serverType);
+            if (byServer.isPresent()) {
+                return byServer;
+            }
+        }
+        return userApiKeyRepository.findByUserIdAndBrokerType(userId, BrokerType.KOREA_INVESTMENT);
+    }
+
+    /**
      * 주식 매수 주문
      * 
      * @param userId    사용자 ID
@@ -137,13 +178,14 @@ public class KoreaInvestmentOrderClient {
         // 종목 코드 변환 (6자리)
         String stockCode = StockCodeConverter.toStockCode(symbol);
 
-        // 사용자 API 키 조회
-        UserApiKey userApiKey = userApiKeyRepository.findByUserIdAndBrokerType(userId, BrokerType.KOREA_INVESTMENT)
-                .orElseThrow(() -> new IllegalStateException("한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
+        // 계좌별 API 키 조회 (모의/실거래 구분)
+        UserApiKey userApiKey = getUserApiKeyForAccount(userId, accountNo)
+                .orElseThrow(() -> new IllegalStateException("한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId + ", accountNo=" + accountNo));
 
-        // 토큰 조회
-        String accessToken = tokenService.getAccessToken(userId);
-        String serverType = userApiKey.getServerType();
+        String serverType = userApiKey.getServerType() != null ? userApiKey.getServerType() : "1";
+
+        // 계좌별 토큰 조회 (서버 타입별)
+        String accessToken = tokenService.getAccessToken(userId, serverType);
 
         // API 키 복호화
         String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
@@ -261,13 +303,14 @@ public class KoreaInvestmentOrderClient {
         // 종목 코드 변환 (6자리)
         String stockCode = StockCodeConverter.toStockCode(symbol);
 
-        // 사용자 API 키 조회
-        UserApiKey userApiKey = userApiKeyRepository.findByUserIdAndBrokerType(userId, BrokerType.KOREA_INVESTMENT)
-                .orElseThrow(() -> new IllegalStateException("한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
+        // 계좌별 API 키 조회 (모의/실거래 구분)
+        UserApiKey userApiKey = getUserApiKeyForAccount(userId, accountNo)
+                .orElseThrow(() -> new IllegalStateException("한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId + ", accountNo=" + accountNo));
 
-        // 토큰 조회
-        String accessToken = tokenService.getAccessToken(userId);
-        String serverType = userApiKey.getServerType();
+        String serverType = userApiKey.getServerType() != null ? userApiKey.getServerType() : "1";
+
+        // 계좌별 토큰 조회 (서버 타입별)
+        String accessToken = tokenService.getAccessToken(userId, serverType);
 
         // API 키 복호화
         String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());

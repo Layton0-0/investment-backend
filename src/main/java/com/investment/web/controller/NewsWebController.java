@@ -28,7 +28,9 @@ public class NewsWebController {
     @GetMapping
     public String news(@RequestParam(required = false) String market,
             @RequestParam(required = false) String source,
+            @RequestParam(required = false) String itemType,
             @RequestParam(required = false) String symbol,
+            @RequestParam(required = false) String title,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false, defaultValue = "0") int page,
@@ -45,11 +47,13 @@ public class NewsWebController {
             log.warn("사용자 정보 조회 실패: {}", e.getMessage());
         }
 
-        NewsItemPageResponseDto newsPage = newsItemService.getNewsItems(market, source, symbol, from, to, page, size);
+        NewsItemPageResponseDto newsPage = newsItemService.getNewsItems(market, source, itemType, symbol, title, from, to, page, size);
         model.addAttribute("newsPage", newsPage);
         model.addAttribute("market", market);
         model.addAttribute("source", source);
+        model.addAttribute("itemType", itemType);
         model.addAttribute("symbol", symbol);
+        model.addAttribute("title", title);
         model.addAttribute("from", from);
         model.addAttribute("to", to);
         model.addAttribute("page", page);
