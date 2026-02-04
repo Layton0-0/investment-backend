@@ -1,4 +1,0 @@
--- V5 롤백: TB_SIGNAL_SCORE 테이블 삭제
--- 실행 전 DB 백업 권장.
-
-DROP TABLE IF EXISTS TB_SIGNAL_SCORE;

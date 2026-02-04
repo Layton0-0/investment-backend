@@ -85,6 +85,7 @@
 
 - [Windows 로컬 개발 환경 구축](./08-setup-guides/01-local-windows-setup.md) 🔧
 - [로컬 Docker 인프라 설정](./08-setup-guides/02-local-docker-setup.md) 🔧
+- [테스트 실행 가이드](./08-setup-guides/03-test-execution.md) ✅ — 표준 명령: `.\gradlew.bat test --no-daemon`
 - [local-maria 설정](./08-setup-guides/03-local-maria-setup.md) 🔧
 - [Windows MariaDB → Docker 마이그레이션](./08-setup-guides/04-mariadb-migration-to-docker.md) 🔧
 - [인코딩 문제 해결](./08-setup-guides/05-encoding-fix-guide.md) 🔧

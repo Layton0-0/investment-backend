@@ -97,7 +97,9 @@
 - `GET /api/v1/signals` - 시그널/팩터 점수 목록 조회 (쿼리: `basDt`, `market`, `symbol`, `factorType`, `page`, `size`)
 
 ### 3.10 백테스트 API
-- `POST /api/v1/backtest` - 백테스트 실행 (body: startDate, endDate, market, strategyType, initialCapital). 응답: 메트릭(MDD·CAGR·Sharpe·Sortino·Calmar·승률·손익비)·수익 곡선·거래 목록. 인증 필요.
+- `POST /api/v1/backtest` - 백테스트 실행 (body: startDate, endDate, market, strategyType, initialCapital). 응답: 메트릭(MDD·CAGR·Sharpe·Sortino·Calmar·승률·손익비)·수익 곡선·거래 목록(거래별 totalFrictionCost 포함). 마찰 비용은 `investment.fees` 설정 적용. 인증 필요.
+- `POST /api/v1/backtest/robo` - 로보 어드바이저 백테스트 실행 (body: startDate, endDate, initialCapital, optional: assetSymbols, momentumMonths, maWindowDays, topN, rebalanceFrequency, commPct, slipPct 등). 요청에 commPct/slipPct가 없으면 `investment.fees`(미국 ETF round-trip·TAF) 적용, 있으면 해당 값으로 오버라이드. 응답: 메트릭(CAGR·MDD·Sharpe·Calmar·Turnover)·수익 곡선·벤치마크 곡선·리밸런싱 이력. 인증 필요.
+- `GET /api/v1/backtest/robo/last-pre-execution?accountNo=xxx` - 실행 전 백테스트 최근 결과 조회 (통과/미통과·MDD·Sharpe·runAt). 인증 필요.
 
 ## 4. API 버전 관리
 

@@ -23,4 +23,9 @@ public interface TradingSettingRepository extends JpaRepository<TradingSetting, 
      * 자동투자 ON인 거래설정 목록 (모의·실 구분 없이 실행 대상).
      */
     List<TradingSetting> findAllByAutoTradingEnabledTrue();
+
+    /**
+     * 자동투자 ON + 로보 어드바이저 ON인 거래설정 목록 (로보 리밸런싱 스케줄러 대상).
+     */
+    List<TradingSetting> findAllByAutoTradingEnabledTrueAndRoboAdvisorEnabledTrue();
 }

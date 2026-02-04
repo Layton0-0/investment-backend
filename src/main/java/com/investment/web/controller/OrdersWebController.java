@@ -28,9 +28,11 @@ public class OrdersWebController {
 
     @GetMapping
     public String orders(@RequestParam(required = false) String accountNo,
+            @RequestParam(required = false) String serverType,
             Authentication authentication,
             Model model) {
         String userId = authentication != null ? authentication.getName() : null;
+        String st = ("0".equals(serverType) || "1".equals(serverType)) ? serverType : "1";
 
         try {
             if (userId != null) {
@@ -44,9 +46,9 @@ public class OrdersWebController {
         if (accountNo == null || accountNo.trim().isEmpty()) {
             if (userId != null) {
                 try {
-                    accountNo = accountService.getMainAccount(userId).getAccountNo();
+                    accountNo = accountService.getMainAccount(userId, st).getAccountNo();
                 } catch (Exception e) {
-                    accountNo = accountService.getUserAccountNo(userId);
+                    accountNo = accountService.getUserAccountNo(userId, st);
                 }
             } else {
                 accountNo = accountService.getDefaultAccountNo();

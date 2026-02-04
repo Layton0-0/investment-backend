@@ -144,14 +144,27 @@ public class OrderService {
         try {
             String orderType = "00";
             KoreaInvestmentOrderClient.OrderResponse apiResponse;
-            if (request.getOrderType() == OrderRequestDto.OrderType.BUY) {
-                apiResponse = orderClient.placeBuyOrder(
-                        userId, request.getAccountNo(), request.getSymbol(),
-                        request.getQuantity(), request.getPrice(), orderType).block(Duration.ofSeconds(10));
+            boolean isOverseas = "US".equalsIgnoreCase(request.getMarketOrKr());
+            if (isOverseas) {
+                if (request.getOrderType() == OrderRequestDto.OrderType.BUY) {
+                    apiResponse = orderClient.placeOverseasBuyOrder(
+                            userId, request.getAccountNo(), request.getSymbol(),
+                            request.getQuantity(), request.getPrice(), orderType).block(Duration.ofSeconds(10));
+                } else {
+                    apiResponse = orderClient.placeOverseasSellOrder(
+                            userId, request.getAccountNo(), request.getSymbol(),
+                            request.getQuantity(), request.getPrice(), orderType).block(Duration.ofSeconds(10));
+                }
             } else {
-                apiResponse = orderClient.placeSellOrder(
-                        userId, request.getAccountNo(), request.getSymbol(),
-                        request.getQuantity(), request.getPrice(), orderType).block(Duration.ofSeconds(10));
+                if (request.getOrderType() == OrderRequestDto.OrderType.BUY) {
+                    apiResponse = orderClient.placeBuyOrder(
+                            userId, request.getAccountNo(), request.getSymbol(),
+                            request.getQuantity(), request.getPrice(), orderType).block(Duration.ofSeconds(10));
+                } else {
+                    apiResponse = orderClient.placeSellOrder(
+                            userId, request.getAccountNo(), request.getSymbol(),
+                            request.getQuantity(), request.getPrice(), orderType).block(Duration.ofSeconds(10));
+                }
             }
 
             if (apiResponse == null || !"SUCCESS".equals(apiResponse.getStatus())) {

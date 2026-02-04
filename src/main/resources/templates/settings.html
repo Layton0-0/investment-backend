@@ -5,96 +5,96 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>설정 - Investment Choi</title>
     <link rel="stylesheet" th:href="@{/css/common.css}">
-    <style>
-        .container { max-width: 900px; margin: 0 auto; padding: 24px; }
-        .page-title { font-size: 22px; font-weight: 700; margin-bottom: 24px; color: #191F28; }
-        .card { background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 20px; }
-        .card h2 { font-size: 18px; margin-bottom: 16px; color: #191F28; }
-        .account-block { border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
-        .account-block h3 { font-size: 15px; margin-bottom: 12px; color: #3182F6; }
-        .form-group { margin-bottom: 12px; }
-        .form-group label { display: block; font-size: 13px; color: #191F28; margin-bottom: 4px; }
-        .form-group input { width: 100%; padding: 8px 12px; border: 1px solid #e0e0e0; border-radius: 6px; }
-        .security-note { font-size: 13px; color: #8B95A1; margin-bottom: 16px; }
-        .trading-section { border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
-        .trading-section h3 { font-size: 14px; margin-bottom: 12px; color: #191F28; }
-        .toggle-switch { margin-bottom: 8px; }
-        .empty-trading { color: #8B95A1; font-size: 14px; padding: 16px 0; }
-    </style>
 </head>
 <body class="page-background">
     <div th:replace="~{fragments/layout-header :: header}"></div>
     <nav th:replace="~{fragments/layout-menu :: menu}"></nav>
 
-    <div class="container">
-        <h2 class="page-title">설정</h2>
+    <main class="settings-container" th:attr="data-initial-server-type=${currentServerType}">
+        <p class="security-note">아래 탭에서 모의계좌·실계좌를 선택한 뒤, 해당 계좌의 API 연결과 자동투자 설정을 할 수 있습니다.</p>
 
-        <!-- 계좌/API 설정 (모의·실 한번에) -->
-        <div class="card">
-            <h2>계좌/API 설정</h2>
-            <div class="security-note">
-                모의계좌와 실계좌를 각각 입력한 뒤 한 번에 저장할 수 있습니다. API 키 변경 시 현재 비밀번호가 필요합니다.
-            </div>
-            <form id="accountsForm">
-                <div class="form-group">
-                    <label for="currentPassword">현재 비밀번호 (API 키 변경 시에만)</label>
-                    <input type="password" id="currentPassword" name="currentPassword" autocomplete="current-password"
-                           placeholder="API 키 변경 시에만 입력">
-                </div>
-
-                <div class="account-block" id="virtualBlock">
-                    <h3>모의계좌</h3>
-                    <div class="form-group">
-                        <label for="virtualAppKey">API Key</label>
-                        <input type="password" id="virtualAppKey" name="virtualAppKey" autocomplete="off"
-                               placeholder="등록된 경우 마스킹 표시 (변경 시에만 입력)">
-                    </div>
-                    <div class="form-group">
-                        <label for="virtualAppSecret">API Secret</label>
-                        <input type="password" id="virtualAppSecret" name="virtualAppSecret" autocomplete="off"
-                               placeholder="등록된 경우 마스킹 표시 (변경 시에만 입력)">
-                    </div>
-                    <div class="form-group">
-                        <label for="virtualAccountNo">계좌번호</label>
-                        <input type="password" id="virtualAccountNo" name="virtualAccountNo" autocomplete="off"
-                               placeholder="형식: 12345678-12 (변경 시에만 입력)">
-                    </div>
-                </div>
-
-                <div class="account-block" id="realBlock">
-                    <h3>실계좌</h3>
-                    <div class="form-group">
-                        <label for="realAppKey">API Key</label>
-                        <input type="password" id="realAppKey" name="realAppKey" autocomplete="off"
-                               placeholder="등록된 경우 마스킹 표시 (변경 시에만 입력)">
-                    </div>
-                    <div class="form-group">
-                        <label for="realAppSecret">API Secret</label>
-                        <input type="password" id="realAppSecret" name="realAppSecret" autocomplete="off"
-                               placeholder="등록된 경우 마스킹 표시 (변경 시에만 입력)">
-                    </div>
-                    <div class="form-group">
-                        <label for="realAccountNo">계좌번호</label>
-                        <input type="password" id="realAccountNo" name="realAccountNo" autocomplete="off"
-                               placeholder="형식: 12345678-12 (변경 시에만 입력)">
-                    </div>
-                </div>
-
-                <div class="error-message" id="accountsError"></div>
-                <div class="success-message" id="accountsSuccess"></div>
-                <button type="submit" id="accountsSaveBtn" class="primary">계좌/API 한번에 저장</button>
-            </form>
-        </div>
-
-        <!-- 거래 설정 (계좌별 단기·중기·장기 비율, 자동투자 ON/OFF) -->
-        <div class="card">
-            <h2>거래 설정 (자동투자)</h2>
-            <div id="tradingSettingsContainer">
-                <div class="empty-trading" id="tradingEmpty">계좌를 등록하면 계좌별 거래 설정을 입력할 수 있습니다.</div>
-                <div id="tradingSections"></div>
+        <!-- 설정 내부: 모의계좌 | 실계좌 탭 -->
+        <div id="settingsTabWrap" class="settings-tab-wrap">
+            <div class="segment-control" role="tablist">
+                <button type="button" class="segment-btn segment-btn-main active" role="tab" data-settings-tab="virtual" aria-selected="true">모의계좌</button>
+                <button type="button" class="segment-btn segment-btn-main" role="tab" data-settings-tab="real" aria-selected="false">실계좌</button>
             </div>
         </div>
-    </div>
+
+        <!-- 모의계좌 패널: 계좌·API 연결 + 자동투자 설정 -->
+        <div id="settingsPanelVirtual" class="settings-panel active">
+            <div class="card" id="accountsCardVirtual">
+                <h2>계좌·API 연결</h2>
+                <form id="accountsFormVirtual">
+                    <div class="form-group">
+                        <label for="currentPasswordVirtual">현재 비밀번호 (API 키 변경 시에만)</label>
+                        <input type="password" id="currentPasswordVirtual" autocomplete="current-password" placeholder="API 키 변경 시에만 입력">
+                    </div>
+                    <div class="account-form-header account-form-header--virtual"><span class="account-form-header-badge">모의계좌</span> API 키·계좌번호</div>
+                    <div class="account-block">
+                        <div class="form-group">
+                            <label for="virtualAppKey">API Key</label>
+                            <input type="password" id="virtualAppKey" autocomplete="off" placeholder="등록된 경우 마스킹 표시 (변경 시에만 입력)">
+                        </div>
+                        <div class="form-group">
+                            <label for="virtualAppSecret">API Secret</label>
+                            <input type="password" id="virtualAppSecret" autocomplete="off" placeholder="등록된 경우 마스킹 표시 (변경 시에만 입력)">
+                        </div>
+                        <div class="form-group">
+                            <label for="virtualAccountNo">계좌번호</label>
+                            <input type="password" id="virtualAccountNo" autocomplete="off" placeholder="형식: 12345678-12 (변경 시에만 입력)">
+                        </div>
+                    </div>
+                    <div class="error-message" id="accountsErrorVirtual"></div>
+                    <div class="success-message" id="accountsSuccessVirtual"></div>
+                    <button type="button" id="accountsSaveBtnVirtual" class="primary">모의계좌 저장</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>자동투자 설정</h2>
+                <div id="tradingFormPanelVirtual" class="trading-form-panel"></div>
+                <div id="tradingLoadingVirtual" class="empty-state" style="display: none;"><p class="empty-state-desc">설정을 불러오는 중...</p></div>
+            </div>
+        </div>
+
+        <!-- 실계좌 패널: 계좌·API 연결 + 자동투자 설정 -->
+        <div id="settingsPanelReal" class="settings-panel">
+            <div class="card" id="accountsCardReal">
+                <h2>계좌·API 연결</h2>
+                <form id="accountsFormReal">
+                    <div class="form-group">
+                        <label for="currentPasswordReal">현재 비밀번호 (API 키 변경 시에만)</label>
+                        <input type="password" id="currentPasswordReal" autocomplete="current-password" placeholder="API 키 변경 시에만 입력">
+                    </div>
+                    <div class="account-form-header account-form-header--real"><span class="account-form-header-badge">실계좌</span> API 키·계좌번호</div>
+                    <div class="account-block">
+                        <div class="form-group">
+                            <label for="realAppKey">API Key</label>
+                            <input type="password" id="realAppKey" autocomplete="off" placeholder="등록된 경우 마스킹 표시 (변경 시에만 입력)">
+                        </div>
+                        <div class="form-group">
+                            <label for="realAppSecret">API Secret</label>
+                            <input type="password" id="realAppSecret" autocomplete="off" placeholder="등록된 경우 마스킹 표시 (변경 시에만 입력)">
+                        </div>
+                        <div class="form-group">
+                            <label for="realAccountNo">계좌번호</label>
+                            <input type="password" id="realAccountNo" autocomplete="off" placeholder="형식: 12345678-12 (변경 시에만 입력)">
+                        </div>
+                    </div>
+                    <div class="error-message" id="accountsErrorReal"></div>
+                    <div class="success-message" id="accountsSuccessReal"></div>
+                    <button type="button" id="accountsSaveBtnReal" class="primary">실계좌 저장</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>자동투자 설정</h2>
+                <div id="tradingFormPanelReal" class="trading-form-panel"></div>
+                <div id="tradingLoadingReal" class="empty-state" style="display: none;"><p class="empty-state-desc">설정을 불러오는 중...</p></div>
+            </div>
+        </div>
+    </main>
 
     <script th:src="@{/js/validation.js}"></script>
     <script>
@@ -105,9 +105,12 @@
                 return;
             }
 
-            const headers = () => ({ 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' });
+            const headers = function() { return { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }; };
 
-            // 계좌/API 설정 로드
+            function safeId(s) {
+                return (s || '').replace(/[^a-zA-Z0-9]/g, '_');
+            }
+
             async function loadSettingsAccounts() {
                 try {
                     const res = await fetch('/api/v1/settings/accounts', { headers: headers() });
@@ -121,132 +124,131 @@
 
             function setBlockPlaceholders(prefix, block) {
                 if (!block) return;
-                const keyEl = document.getElementById(prefix + 'AppKey');
-                const secretEl = document.getElementById(prefix + 'AppSecret');
-                const accEl = document.getElementById(prefix + 'AccountNo');
+                var keyEl = document.getElementById(prefix + 'AppKey');
+                var secretEl = document.getElementById(prefix + 'AppSecret');
+                var accEl = document.getElementById(prefix + 'AccountNo');
                 if (keyEl && block.appKeyMasked) keyEl.placeholder = block.appKeyMasked + ' (변경 시에만 입력)';
                 if (secretEl && block.appSecretMasked) secretEl.placeholder = block.appSecretMasked + ' (변경 시에만 입력)';
                 if (accEl && block.accountNoMasked) accEl.placeholder = block.accountNoMasked + ' (변경 시에만 입력)';
             }
 
-            // 계좌/API 한번에 저장
-            document.getElementById('accountsForm').addEventListener('submit', async function(e) {
-                e.preventDefault();
-                const errEl = document.getElementById('accountsError');
-                const successEl = document.getElementById('accountsSuccess');
-                const btn = document.getElementById('accountsSaveBtn');
-                errEl.textContent = '';
-                errEl.classList.remove('show');
-                successEl.classList.remove('show');
-
-                const body = {
-                    currentPassword: document.getElementById('currentPassword').value || null,
-                    virtual: {
-                        appKey: document.getElementById('virtualAppKey').value.trim() || null,
-                        appSecret: document.getElementById('virtualAppSecret').value.trim() || null,
-                        accountNo: document.getElementById('virtualAccountNo').value.trim() || null
-                    },
-                    real: {
-                        appKey: document.getElementById('realAppKey').value.trim() || null,
-                        appSecret: document.getElementById('realAppSecret').value.trim() || null,
-                        accountNo: document.getElementById('realAccountNo').value.trim() || null
-                    }
-                };
-
-                btn.disabled = true;
-                try {
-                    const res = await fetch('/api/v1/settings/accounts', {
-                        method: 'PUT',
-                        headers: headers(),
-                        body: JSON.stringify(body)
-                    });
-                    const data = await res.json().catch(() => ({}));
-                    if (res.ok) {
-                        successEl.textContent = '저장되었습니다.';
-                        successEl.classList.add('show');
-                        loadSettingsAccounts();
-                        loadTradingSettings();
-                        document.getElementById('currentPassword').value = '';
-                        document.getElementById('virtualAppKey').value = '';
-                        document.getElementById('virtualAppSecret').value = '';
-                        document.getElementById('virtualAccountNo').value = '';
-                        document.getElementById('realAppKey').value = '';
-                        document.getElementById('realAppSecret').value = '';
-                        document.getElementById('realAccountNo').value = '';
-                    } else {
-                        errEl.textContent = data.message || '저장에 실패했습니다.';
-                        errEl.classList.add('show');
-                    }
-                } catch (e) {
-                    errEl.textContent = '네트워크 오류가 발생했습니다.';
-                    errEl.classList.add('show');
-                }
-                btn.disabled = false;
-            });
-
-            // 거래 설정 로드 (메인 계좌 모의/실 각각)
-            async function loadTradingSettings() {
-                const container = document.getElementById('tradingSections');
-                const emptyEl = document.getElementById('tradingEmpty');
-                container.innerHTML = '';
-                const accounts = [];
-                for (const serverType of ['1', '0']) {
-                    try {
-                        const res = await fetch('/api/v1/user/accounts/main?serverType=' + serverType, { headers: headers() });
-                        if (res.ok) {
-                            const main = await res.json();
-                            if (main && main.accountNo) accounts.push({ serverType, label: serverType === '1' ? '모의계좌' : '실계좌', accountNo: main.accountNo });
-                        }
-                    } catch (e) { /* ignore */ }
-                }
-                if (accounts.length === 0) {
-                    emptyEl.style.display = 'block';
-                    return;
-                }
-                emptyEl.style.display = 'none';
-                for (const acc of accounts) {
-                    try {
-                        const setRes = await fetch('/api/v1/settings/' + encodeURIComponent(acc.accountNo), { headers: headers() });
-                        let setting = null;
-                        if (setRes.ok) setting = await setRes.json();
-                        const section = document.createElement('div');
-                        section.className = 'trading-section';
-                        const shortR = (setting && setting.shortTermRatio != null) ? setting.shortTermRatio : '';
-                        const midR = (setting && setting.mediumTermRatio != null) ? setting.mediumTermRatio : '';
-                        const longR = (setting && setting.longTermRatio != null) ? setting.longTermRatio : '';
-                        section.innerHTML = '<h3>' + acc.label + '</h3>' +
-                            '<div class="form-group"><label>최대 투자금액</label><input type="number" min="0" step="1" data-account-no="' + acc.accountNo + '" data-field="maxInvestmentAmount" value="' + (setting && setting.maxInvestmentAmount ? setting.maxInvestmentAmount : '') + '"></div>' +
-                            '<div class="form-group"><label>최소 투자금액</label><input type="number" min="0" step="1" data-account-no="' + acc.accountNo + '" data-field="minInvestmentAmount" value="' + (setting && setting.minInvestmentAmount ? setting.minInvestmentAmount : '') + '"></div>' +
-                            '<div class="form-group"><label>단기 비율 (0~1, 합=1)</label><input type="number" min="0" max="1" step="0.01" data-account-no="' + acc.accountNo + '" data-field="shortTermRatio" placeholder="0.2" value="' + shortR + '"></div>' +
-                            '<div class="form-group"><label>중기 비율</label><input type="number" min="0" max="1" step="0.01" data-account-no="' + acc.accountNo + '" data-field="mediumTermRatio" placeholder="0.4" value="' + midR + '"></div>' +
-                            '<div class="form-group"><label>장기 비율</label><input type="number" min="0" max="1" step="0.01" data-account-no="' + acc.accountNo + '" data-field="longTermRatio" placeholder="0.4" value="' + longR + '"></div>' +
-                            '<div class="form-group"><label>자동투자</label><div class="toggle-switch"><input type="checkbox" data-account-no="' + acc.accountNo + '" data-field="autoTradingEnabled" ' + (setting && setting.autoTradingEnabled ? 'checked' : '') + '><label>ON / OFF</label></div></div>' +
-                            '<button type="button" class="primary save-trading-btn" data-account-no="' + acc.accountNo + '">거래 설정 저장</button>';
-                        container.appendChild(section);
-                    } catch (e) { /* skip */ }
-                }
-                container.querySelectorAll('.save-trading-btn').forEach(function(btn) {
-                    btn.onclick = function() { saveTradingSetting({ target: btn, currentTarget: btn }); };
-                });
+            function showTradingLoading(serverType, show) {
+                var loadingId = serverType === '1' ? 'tradingLoadingVirtual' : 'tradingLoadingReal';
+                var panelId = serverType === '1' ? 'tradingFormPanelVirtual' : 'tradingFormPanelReal';
+                document.getElementById(loadingId).style.display = show ? 'block' : 'none';
+                document.getElementById(panelId).classList.toggle('loading', show);
             }
 
-            function saveTradingSetting(e) {
-                const accountNo = e.target.getAttribute('data-account-no');
-                const section = e.target.closest('.trading-section');
-                const maxEl = section.querySelector('input[data-field="maxInvestmentAmount"]');
-                const minEl = section.querySelector('input[data-field="minInvestmentAmount"]');
-                const shortEl = section.querySelector('input[data-field="shortTermRatio"]');
-                const midEl = section.querySelector('input[data-field="mediumTermRatio"]');
-                const longEl = section.querySelector('input[data-field="longTermRatio"]');
-                const autoEl = section.querySelector('input[data-field="autoTradingEnabled"]');
-                const shortR = shortEl && shortEl.value ? parseFloat(shortEl.value) : null;
-                const midR = midEl && midEl.value ? parseFloat(midEl.value) : null;
-                const longR = longEl && longEl.value ? parseFloat(longEl.value) : null;
-                const body = {
+            function buildToggleHtml(fieldName, labelLeft, labelRight, accountNo, checked) {
+                var id = fieldName + '-' + safeId(accountNo);
+                var title = fieldName === 'autoTradingEnabled' ? '자동투자' : '로보 어드바이저';
+                var desc = fieldName === 'autoTradingEnabled'
+                    ? '시그널 기반 4단계 파이프라인(유니버스→시그널→자금관리→매매)이 실행됩니다. 로보 어드바이저를 쓰려면 아래 로보 어드바이저도 ON으로 두세요.'
+                    : '자동투자 ON인 상태에서 동적 자산배분 리밸런싱(월 1회 등)이 추가로 실행됩니다. 로보 어드바이저로 자동투자하려면 위 자동투자와 여기 로보 어드바이저 둘 다 ON으로 두세요. (로보를 켜면 자동투자도 함께 켜집니다.)';
+                return '<div class="form-group" data-toggle-group="' + fieldName + '">' +
+                    '<label>' + title + '</label>' +
+                    '<p class="info-text">' + desc + '</p>' +
+                    '<div class="toggle-switch">' +
+                    '<input type="checkbox" id="' + id + '" data-account-no="' + accountNo.replace(/"/g, '&quot;') + '" data-field="' + fieldName + '" ' + (checked ? 'checked' : '') + '>' +
+                    '<label for="' + id + '" class="toggle-label">' +
+                    '<span class="toggle-text-left">' + labelLeft + '</span>' +
+                    '<span class="toggle-slider"></span>' +
+                    '<span class="toggle-text-right">' + labelRight + '</span>' +
+                    '</label></div></div>';
+            }
+
+            function renderTradingForm(accountNo, label, setting, serverType) {
+                var shortR = (setting && setting.shortTermRatio != null) ? setting.shortTermRatio : '';
+                var midR = (setting && setting.mediumTermRatio != null) ? setting.mediumTermRatio : '';
+                var longR = (setting && setting.longTermRatio != null) ? setting.longTermRatio : '';
+                var maxAmt = (setting && setting.maxInvestmentAmount != null) ? setting.maxInvestmentAmount : '';
+                var minAmt = (setting && setting.minInvestmentAmount != null) ? setting.minInvestmentAmount : '';
+                var autoOn = setting && setting.autoTradingEnabled;
+                var roboOn = setting && setting.roboAdvisorEnabled;
+                var headerClass = serverType === '1' ? 'trading-form-header trading-form-header--virtual' : 'trading-form-header trading-form-header--real';
+
+                return '<div class="trading-form-inner" data-account-no="' + accountNo.replace(/"/g, '&quot;') + '" data-server-type="' + (serverType || '') + '">' +
+                    '<div class="' + headerClass + '"><span class="trading-form-header-badge">' + label + '</span> 거래 설정</div>' +
+                    '<div class="form-group"><label for="maxAmt-' + safeId(accountNo) + '">최대 투자금액</label>' +
+                    '<input type="number" id="maxAmt-' + safeId(accountNo) + '" min="0" step="1" data-field="maxInvestmentAmount" value="' + maxAmt + '"></div>' +
+                    '<div class="form-group"><label for="minAmt-' + safeId(accountNo) + '">최소 투자금액</label>' +
+                    '<input type="number" id="minAmt-' + safeId(accountNo) + '" min="0" step="1" data-field="minInvestmentAmount" value="' + minAmt + '"></div>' +
+                    '<div class="form-group"><label>단기 비율 (0~1, 합=1)</label>' +
+                    '<input type="number" min="0" max="1" step="0.01" data-field="shortTermRatio" placeholder="0.2" value="' + shortR + '"></div>' +
+                    '<div class="form-group"><label>중기 비율</label>' +
+                    '<input type="number" min="0" max="1" step="0.01" data-field="mediumTermRatio" placeholder="0.4" value="' + midR + '"></div>' +
+                    '<div class="form-group"><label>장기 비율</label>' +
+                    '<input type="number" min="0" max="1" step="0.01" data-field="longTermRatio" placeholder="0.4" value="' + longR + '"></div>' +
+                    buildToggleHtml('autoTradingEnabled', 'OFF', 'ON', accountNo, autoOn) +
+                    buildToggleHtml('roboAdvisorEnabled', 'OFF', 'ON', accountNo, roboOn) +
+                    '<div class="trading-success" id="tradingSuccessMsg"></div>' +
+                    '<button type="button" class="primary save-trading-btn" data-account-no="' + accountNo.replace(/"/g, '&quot;') + '">' + label + ' 거래 설정 저장</button>' +
+                    '</div>';
+            }
+
+            async function loadTradingFormForType(serverType) {
+                var panelId = serverType === '1' ? 'tradingFormPanelVirtual' : 'tradingFormPanelReal';
+                var panel = document.getElementById(panelId);
+                var label = serverType === '1' ? '모의계좌' : '실계좌';
+                var emptyMsg = '<div class="empty-state"><p class="empty-state-title">' + label + '가 등록되지 않았어요</p><p class="empty-state-desc">위 \'계좌·API 연결\'에서 ' + label + '를 등록한 뒤, 여기서 자동투자 설정을 할 수 있어요.</p><a href="#accountsCard' + (serverType === '1' ? 'Virtual' : 'Real') + '" class="btn-secondary empty-state-cta">계좌 설정으로 가기</a></div>';
+
+                showTradingLoading(serverType, true);
+                panel.innerHTML = '';
+
+                try {
+                    var res = await fetch('/api/v1/user/accounts/main?serverType=' + serverType, { headers: headers() });
+                    if (!res.ok) {
+                        panel.innerHTML = emptyMsg;
+                        showTradingLoading(serverType, false);
+                        return;
+                    }
+                    var main = await res.json();
+                    if (!main || !main.accountNo) {
+                        panel.innerHTML = emptyMsg;
+                        showTradingLoading(serverType, false);
+                        return;
+                    }
+                    var accountNo = main.accountNo;
+
+                    var setRes = await fetch('/api/v1/settings/' + encodeURIComponent(accountNo), { headers: headers() });
+                    var setting = null;
+                    if (setRes.ok) setting = await setRes.json();
+
+                    panel.innerHTML = renderTradingForm(accountNo, label, setting, serverType);
+                    var saveBtn = panel.querySelector('.save-trading-btn');
+                    if (saveBtn) {
+                        saveBtn.addEventListener('click', function() { saveTradingSetting(panel); });
+                    }
+                    var autoEl = panel.querySelector('input[data-field="autoTradingEnabled"]');
+                    var roboEl = panel.querySelector('input[data-field="roboAdvisorEnabled"]');
+                    if (roboEl) roboEl.addEventListener('change', function() { if (roboEl.checked && autoEl) autoEl.checked = true; });
+                    if (autoEl) autoEl.addEventListener('change', function() { if (!autoEl.checked && roboEl) roboEl.checked = false; });
+                } catch (e) {
+                    panel.innerHTML = '<div class="empty-state"><p class="empty-state-desc">설정을 불러오는데 실패했어요. 잠시 후 다시 시도해주세요.</p></div>';
+                }
+                showTradingLoading(serverType, false);
+            }
+
+            function saveTradingSetting(panelEl) {
+                var inner = panelEl && panelEl.querySelector('.trading-form-inner');
+                if (!inner) return;
+                var accountNo = inner.getAttribute('data-account-no');
+                var maxEl = inner.querySelector('input[data-field="maxInvestmentAmount"]');
+                var minEl = inner.querySelector('input[data-field="minInvestmentAmount"]');
+                var shortEl = inner.querySelector('input[data-field="shortTermRatio"]');
+                var midEl = inner.querySelector('input[data-field="mediumTermRatio"]');
+                var longEl = inner.querySelector('input[data-field="longTermRatio"]');
+                var autoEl = inner.querySelector('input[data-field="autoTradingEnabled"]');
+                var roboEl = inner.querySelector('input[data-field="roboAdvisorEnabled"]');
+                var shortR = shortEl && shortEl.value ? parseFloat(shortEl.value) : null;
+                var midR = midEl && midEl.value ? parseFloat(midEl.value) : null;
+                var longR = longEl && longEl.value ? parseFloat(longEl.value) : null;
+                var body = {
                     maxInvestmentAmount: maxEl && maxEl.value ? parseFloat(maxEl.value) : null,
                     minInvestmentAmount: minEl && minEl.value ? parseFloat(minEl.value) : null,
                     defaultCurrency: 'KRW',
                     autoTradingEnabled: autoEl ? autoEl.checked : false,
+                    roboAdvisorEnabled: roboEl ? roboEl.checked : false,
                     shortTermRatio: shortR,
                     mediumTermRatio: midR,
                     longTermRatio: longR
@@ -255,25 +257,151 @@
                     alert('최대/최소 투자금액을 입력하세요.');
                     return;
                 }
-                if ((shortR != null || midR != null || longR != null)) {
-                    const s = shortR != null ? shortR : 0, m = midR != null ? midR : 0, l = longR != null ? longR : 0;
+                if (shortR != null || midR != null || longR != null) {
+                    var s = shortR != null ? shortR : 0, m = midR != null ? midR : 0, l = longR != null ? longR : 0;
                     if (Math.abs(s + m + l - 1) > 0.001) {
                         alert('단기·중기·장기 비율의 합은 1이어야 합니다.');
                         return;
                     }
                 }
-                fetch('/api/v1/settings/' + encodeURIComponent(accountNo), {
-                    method: 'PUT',
-                    headers: headers(),
-                    body: JSON.stringify(body)
-                }).then(function(res) {
-                    if (res.ok) alert('거래 설정이 저장되었습니다.');
-                    else res.json().then(function(d) { alert(d.message || '저장 실패'); });
-                }).catch(function() { alert('네트워크 오류'); });
+                var saveBtn = inner.querySelector('.save-trading-btn');
+                if (saveBtn) saveBtn.disabled = true;
+                var successMsg = inner.querySelector('.trading-success');
+                if (successMsg) { successMsg.textContent = ''; successMsg.classList.remove('show'); }
+
+                fetch('/api/v1/settings/' + encodeURIComponent(accountNo), { method: 'PUT', headers: headers(), body: JSON.stringify(body) })
+                    .then(function(res) {
+                        if (saveBtn) saveBtn.disabled = false;
+                        if (res.ok) {
+                            if (successMsg) { successMsg.textContent = '저장되었습니다.'; successMsg.classList.add('show'); }
+                            setTimeout(function() { if (successMsg) successMsg.classList.remove('show'); }, 2500);
+                        } else {
+                            res.json().then(function(d) { alert(d.message || '저장에 실패했어요.'); }).catch(function() { alert('저장에 실패했어요.'); });
+                        }
+                    })
+                    .catch(function() {
+                        if (saveBtn) saveBtn.disabled = false;
+                        alert('네트워크 오류가 발생했어요.');
+                    });
             }
 
+            function saveAccountsBlock(block) {
+                var isVirtual = block === 'virtual';
+                var body = {
+                    currentPassword: document.getElementById(isVirtual ? 'currentPasswordVirtual' : 'currentPasswordReal').value || null,
+                    virtual: null,
+                    real: null
+                };
+                var errId = isVirtual ? 'accountsErrorVirtual' : 'accountsErrorReal';
+                var successId = isVirtual ? 'accountsSuccessVirtual' : 'accountsSuccessReal';
+                var btnId = isVirtual ? 'accountsSaveBtnVirtual' : 'accountsSaveBtnReal';
+                var errEl = document.getElementById(errId);
+                var successEl = document.getElementById(successId);
+                var btn = document.getElementById(btnId);
+                errEl.textContent = '';
+                errEl.classList.remove('show');
+                successEl.textContent = '';
+                successEl.classList.remove('show');
+
+                if (isVirtual) {
+                    body.virtual = {
+                        appKey: document.getElementById('virtualAppKey').value.trim() || null,
+                        appSecret: document.getElementById('virtualAppSecret').value.trim() || null,
+                        accountNo: document.getElementById('virtualAccountNo').value.trim() || null
+                    };
+                } else {
+                    body.real = {
+                        appKey: document.getElementById('realAppKey').value.trim() || null,
+                        appSecret: document.getElementById('realAppSecret').value.trim() || null,
+                        accountNo: document.getElementById('realAccountNo').value.trim() || null
+                    };
+                }
+
+                btn.disabled = true;
+                fetch('/api/v1/settings/accounts', { method: 'PUT', headers: headers(), body: JSON.stringify(body) })
+                    .then(function(res) { return res.json().catch(function() { return {}; }).then(function(data) {
+                        if (res.ok) {
+                            successEl.textContent = '저장되었습니다.';
+                            successEl.classList.add('show');
+                            loadSettingsAccounts();
+                            loadTradingFormForType(isVirtual ? '1' : '0');
+                            document.getElementById(isVirtual ? 'currentPasswordVirtual' : 'currentPasswordReal').value = '';
+                            if (isVirtual) {
+                                document.getElementById('virtualAppKey').value = '';
+                                document.getElementById('virtualAppSecret').value = '';
+                                document.getElementById('virtualAccountNo').value = '';
+                            } else {
+                                document.getElementById('realAppKey').value = '';
+                                document.getElementById('realAppSecret').value = '';
+                                document.getElementById('realAccountNo').value = '';
+                            }
+                        } else {
+                            errEl.textContent = data.message || '저장에 실패했습니다.';
+                            errEl.classList.add('show');
+                        }
+                    }); })
+                    .catch(function() {
+                        errEl.textContent = '네트워크 오류가 발생했습니다.';
+                        errEl.classList.add('show');
+                    })
+                    .finally(function() { btn.disabled = false; });
+            }
+
+            document.getElementById('accountsSaveBtnVirtual').addEventListener('click', function(e) { e.preventDefault(); saveAccountsBlock('virtual'); });
+            document.getElementById('accountsSaveBtnReal').addEventListener('click', function(e) { e.preventDefault(); saveAccountsBlock('real'); });
+
+            // 설정 내부 탭 전환 (모의계좌 | 실계좌)
+            var tabWrap = document.getElementById('settingsTabWrap');
+            if (tabWrap) {
+                tabWrap.querySelectorAll('.segment-btn-main').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        tabWrap.querySelectorAll('.segment-btn-main').forEach(function(b) {
+                            b.classList.remove('active');
+                            b.setAttribute('aria-selected', 'false');
+                        });
+                        btn.classList.add('active');
+                        btn.setAttribute('aria-selected', 'true');
+                        var tab = btn.getAttribute('data-settings-tab');
+                        document.getElementById('settingsPanelVirtual').classList.toggle('active', tab === 'virtual');
+                        document.getElementById('settingsPanelReal').classList.toggle('active', tab === 'real');
+                        if (tab === 'real') loadTradingFormForType('0');
+                        else loadTradingFormForType('1');
+                    });
+                });
+            }
+
+            // 빈 상태 CTA 클릭 시 해당 계좌 API 카드로 스크롤
+            document.querySelector('.settings-container').addEventListener('click', function(e) {
+                var link = e.target && e.target.closest ? e.target.closest('a.empty-state-cta') : null;
+                if (link && link.getAttribute('href') && link.getAttribute('href').indexOf('#accountsCard') === 0) {
+                    e.preventDefault();
+                    var id = link.getAttribute('href').replace('#', '');
+                    var target = document.getElementById(id);
+                    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+
             loadSettingsAccounts();
-            loadTradingSettings();
+            var initialSt = document.querySelector('.settings-container') && document.querySelector('.settings-container').getAttribute('data-initial-server-type');
+            if (initialSt === '0') {
+                if (tabWrap) {
+                    tabWrap.querySelectorAll('.segment-btn-main').forEach(function(b) {
+                        b.classList.remove('active');
+                        b.setAttribute('aria-selected', 'false');
+                        if (b.getAttribute('data-settings-tab') === 'real') {
+                            b.classList.add('active');
+                            b.setAttribute('aria-selected', 'true');
+                        }
+                    });
+                }
+                document.getElementById('settingsPanelVirtual').classList.remove('active');
+                document.getElementById('settingsPanelReal').classList.add('active');
+                loadTradingFormForType('0');
+            } else {
+                document.getElementById('settingsPanelVirtual').classList.add('active');
+                document.getElementById('settingsPanelReal').classList.remove('active');
+                loadTradingFormForType('1');
+            }
         })();
     </script>
 </body>

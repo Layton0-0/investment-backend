@@ -1,0 +1,5 @@
+# 테스트 실행 시 사용. Flyway 검증 비활성화(이미 적용된 마이그레이션 체크섬 변경 시 실패 방지).
+# 통합 테스트(@SpringBootTest) 실행 시 MariaDB·Redis 접속 필요.
+spring:
+  flyway:
+    validate-on-migrate: false

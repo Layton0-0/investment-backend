@@ -1,4 +1,0 @@
--- V4 롤백: TB_DAILY_STOCK 테이블 삭제
--- 실행 전 DB 백업 권장.
-
-DROP TABLE IF EXISTS TB_DAILY_STOCK;

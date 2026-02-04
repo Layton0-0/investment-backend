@@ -5,38 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>스케줄 현황 - Investment Choi</title>
     <link rel="stylesheet" th:href="@{/css/common.css}">
-    <style>
-        .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
-        .page-title { font-size: 22px; font-weight: 700; margin-bottom: 24px; color: #191F28; }
-        .jobs-grid { display: grid; gap: 20px; }
-        .job-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-        .job-card:hover { box-shadow: 0 6px 12px rgba(0,0,0,0.08); }
-        .job-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px; }
-        .job-title h3 { font-size: 18px; color: #191F28; margin-bottom: 6px; }
-        .job-title .description { font-size: 13px; color: #8B95A1; }
-        .job-status { padding: 6px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; }
-        .job-status.active { background: #27ae60; color: white; }
-        .job-status.paused { background: #f39c12; color: white; }
-        .job-status.disabled { background: #95a5a6; color: white; }
-        .job-info { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-top: 15px; }
-        .info-item { background: #f8f9fa; padding: 12px; border-radius: 8px; border-left: 4px solid #3182F6; }
-        .info-item label { display: block; font-size: 11px; color: #8B95A1; margin-bottom: 4px; text-transform: uppercase; }
-        .info-item .value { font-size: 14px; font-weight: 600; color: #191F28; }
-        .info-item.cron .value { font-family: 'Courier New', monospace; }
-        .stats { display: flex; gap: 12px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; }
-        .stat-item { flex: 1; text-align: center; padding: 10px; background: #f8f9fa; border-radius: 8px; }
-        .stat-item label { display: block; font-size: 11px; color: #8B95A1; margin-bottom: 4px; }
-        .stat-item .value { font-size: 16px; font-weight: 700; color: #3182F6; }
-        .empty-state { text-align: center; padding: 48px 24px; color: #8B95A1; }
-    </style>
 </head>
 <body class="page-background">
     <div th:replace="~{fragments/layout-header :: header}"></div>
     <nav th:replace="~{fragments/layout-menu :: menu}"></nav>
 
-    <div class="container">
-        <h2 class="page-title">스케줄 현황</h2>
-
+    <main class="container">
         <div th:if="${jobs != null and !jobs.isEmpty()}">
             <div class="jobs-grid">
                 <div class="job-card" th:each="job : ${jobs}">
@@ -51,8 +25,8 @@
                     </div>
                     <div class="job-info">
                         <div class="info-item cron">
-                            <label>Cron 표현식</label>
-                            <div class="value" th:text="${job.cronExpression}"></div>
+                            <label>실행 주기</label>
+                            <div class="value" th:attr="title=${job.cronExpression}" th:text="${job.cronDescription != null and !job.cronDescription.isEmpty() ? job.cronDescription : job.cronExpression}"></div>
                         </div>
                         <div class="info-item">
                             <label>시간대</label>
@@ -81,6 +55,10 @@
                             <div class="value" style="color: #e74c3c;" th:text="${job.failureCount != null ? job.failureCount : 0}"></div>
                         </div>
                     </div>
+                    <div class="job-actions" th:if="${job.triggerPath}">
+                        <button type="button" class="btn btn-secondary trigger-run-btn" th:attr="data-trigger-path=${job.triggerPath}" th:data-job-id="${job.id}">지금 실행</button>
+                        <span class="trigger-message" th:attr="data-job-id=${job.id}" aria-live="polite" style="margin-left: 8px; font-size: 0.9em;"></span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -88,6 +66,34 @@
         <div th:if="${jobs == null or jobs.isEmpty()}" class="empty-state">
             <h2>등록된 스케줄 작업이 없습니다.</h2>
         </div>
-    </div>
+    </main>
+    <script th:inline="javascript">
+        (function() {
+            document.querySelectorAll('.trigger-run-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var path = this.getAttribute('data-trigger-path');
+                    var jobId = this.getAttribute('data-job-id');
+                    if (!path) return;
+                    var msgEl = document.querySelector('.trigger-message[data-job-id="' + jobId + '"]');
+                    if (msgEl) msgEl.textContent = '실행 중...';
+                    this.disabled = true;
+                    var url = path;
+                    if ((path.indexOf('pipeline-execution') !== -1 || path.indexOf('robo-rebalance') !== -1) && path.indexOf('dryRun') === -1) {
+                        url = path + (path.indexOf('?') !== -1 ? '&' : '?') + 'dryRun=true';
+                    }
+                    fetch(url, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' } })
+                        .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
+                        .then(function(result) {
+                            if (msgEl) msgEl.textContent = result.data && result.data.message ? result.data.message : (result.ok ? '완료' : '실패');
+                            if (!result.ok && result.data && result.data.message) msgEl.style.color = '#e74c3c';
+                        })
+                        .catch(function(err) {
+                            if (msgEl) { msgEl.textContent = err.message || '요청 실패'; msgEl.style.color = '#e74c3c'; }
+                        })
+                        .finally(function() { btn.disabled = false; });
+                });
+            });
+        })();
+    </script>
 </body>
 </html>

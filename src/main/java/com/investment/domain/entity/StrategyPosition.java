@@ -56,6 +56,9 @@ public class StrategyPosition {
     @Column(name = "TRAILING_HIGH", precision = 20, scale = 4)
     private BigDecimal trailingHigh;
 
+    @Column(name = "PRIOR_LOW", precision = 20, scale = 4)
+    private BigDecimal priorLow;
+
     @Column(name = "ATR_MULTIPLIER", nullable = false, precision = 10, scale = 4)
     private BigDecimal atrMultiplier;
 
@@ -84,7 +87,8 @@ public class StrategyPosition {
     @Builder
     public StrategyPosition(Long id, String accountNo, String symbol, String market,
             StrategyType strategyType, LocalDate entryDt, BigDecimal entryPrice, int quantity,
-            BigDecimal trailingHigh, BigDecimal atrMultiplier, int timeCutDays, BigDecimal targetReturnPct,
+            BigDecimal trailingHigh, BigDecimal priorLow, BigDecimal atrMultiplier, int timeCutDays,
+            BigDecimal targetReturnPct,
             LocalDateTime createdAt, LocalDate exitDt, BigDecimal exitPrice) {
         this.id = id;
         this.accountNo = accountNo;
@@ -95,6 +99,7 @@ public class StrategyPosition {
         this.entryPrice = entryPrice;
         this.quantity = quantity;
         this.trailingHigh = trailingHigh;
+        this.priorLow = priorLow;
         this.atrMultiplier = atrMultiplier != null ? atrMultiplier : new BigDecimal("2.0");
         this.timeCutDays = timeCutDays;
         this.targetReturnPct = targetReturnPct;
@@ -115,6 +120,16 @@ public class StrategyPosition {
     public void updateTrailingHigh(BigDecimal high) {
         if (high != null && (trailingHigh == null || high.compareTo(trailingHigh) > 0)) {
             this.trailingHigh = high;
+        }
+    }
+
+    /**
+     * 전저점(진입 후 최저가) 갱신. 현재가·당일 저가가 기존 priorLow보다 낮으면 갱신.
+     */
+    public void updatePriorLow(BigDecimal low) {
+        if (low != null && low.compareTo(BigDecimal.ZERO) > 0
+                && (priorLow == null || low.compareTo(priorLow) < 0)) {
+            this.priorLow = low;
         }
     }
 }

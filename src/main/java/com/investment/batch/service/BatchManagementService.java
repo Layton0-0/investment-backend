@@ -1,10 +1,12 @@
 package com.investment.batch.service;
 
 import com.investment.batch.dto.BatchJobDto;
+import com.investment.batch.registry.BatchJobDefinition;
+import com.investment.batch.registry.BatchJobRegistry;
+import com.investment.batch.util.CronDescriptionUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.TaskScheduler;
-import org.springframework.scheduling.support.CronTrigger;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -14,318 +16,208 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 배치 관리 서비스
+ * 배치 관리 서비스.
+ * 레지스트리에서 Job 목록을 가져오고, JobRepository 메타데이터(BATCH_* 테이블)에서 실행 횟수·마지막 실행 시각을 조회.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class BatchManagementService {
-    
+
+    private static final String SQL_EXECUTION_COUNT = "SELECT COUNT(*) FROM BATCH_JOB_EXECUTION e INNER JOIN BATCH_JOB_INSTANCE i ON e.JOB_INSTANCE_ID = i.JOB_INSTANCE_ID WHERE i.JOB_NAME = ?";
+    private static final String SQL_SUCCESS_COUNT = "SELECT COUNT(*) FROM BATCH_JOB_EXECUTION e INNER JOIN BATCH_JOB_INSTANCE i ON e.JOB_INSTANCE_ID = i.JOB_INSTANCE_ID WHERE i.JOB_NAME = ? AND e.STATUS = 'COMPLETED'";
+    private static final String SQL_FAILURE_COUNT = "SELECT COUNT(*) FROM BATCH_JOB_EXECUTION e INNER JOIN BATCH_JOB_INSTANCE i ON e.JOB_INSTANCE_ID = i.JOB_INSTANCE_ID WHERE i.JOB_NAME = ? AND e.STATUS = 'FAILED'";
+    private static final String SQL_LAST_END_TIME = "SELECT MAX(e.END_TIME) FROM BATCH_JOB_EXECUTION e INNER JOIN BATCH_JOB_INSTANCE i ON e.JOB_INSTANCE_ID = i.JOB_INSTANCE_ID WHERE i.JOB_NAME = ?";
+
+    private final BatchJobRegistry batchJobRegistry;
+    private final JdbcTemplate jdbcTemplate;
+
     /**
-     * 모든 배치 작업 목록 조회
+     * 모든 배치 작업 목록 조회 (레지스트리 + JobRepository 집계).
      */
     public List<BatchJobDto> getAllBatchJobs() {
         List<BatchJobDto> jobs = new ArrayList<>();
-        
-        // 1. 트레이딩 포트폴리오 생성 스케줄러
-        jobs.add(BatchJobDto.builder()
-                .id("trading-portfolio-generator")
-                .name("트레이딩 포트폴리오 생성")
-                .description("매일 한국 시간 오전 6시에 오늘의 트레이딩 포트폴리오를 자동 생성합니다.")
-                .cronExpression("0 0 6 * * *")
-                .timeZone("Asia/Seoul")
-                .status("ACTIVE")
-                .executionCount(0L)
-                .successCount(0L)
-                .failureCount(0L)
-                .build());
-        
-        // 2. 단기 전략 실행 스케줄러
-        jobs.add(BatchJobDto.builder()
-                .id("short-term-strategy-executor")
-                .name("단기 전략 실행")
-                .description("매 1시간마다 활성화된 단기 전략을 실행합니다.")
-                .cronExpression("0 0 * * * *")
-                .timeZone("Asia/Seoul")
-                .status("ACTIVE")
-                .executionCount(0L)
-                .successCount(0L)
-                .failureCount(0L)
-                .build());
-        
-        // 3. 중기 전략 실행 스케줄러
-        jobs.add(BatchJobDto.builder()
-                .id("medium-term-strategy-executor")
-                .name("중기 전략 실행")
-                .description("매일 오전 9시에 활성화된 중기 전략을 실행합니다.")
-                .cronExpression("0 0 9 * * *")
-                .timeZone("Asia/Seoul")
-                .status("ACTIVE")
-                .executionCount(0L)
-                .successCount(0L)
-                .failureCount(0L)
-                .build());
-        
-        // 4. 장기 전략 실행 스케줄러
-        jobs.add(BatchJobDto.builder()
-                .id("long-term-strategy-executor")
-                .name("장기 전략 실행")
-                .description("매주 월요일 오전 9시에 활성화된 장기 전략을 실행합니다.")
-                .cronExpression("0 0 9 * * MON")
-                .timeZone("Asia/Seoul")
-                .status("ACTIVE")
-                .executionCount(0L)
-                .successCount(0L)
-                .failureCount(0L)
-                .build());
-
-        // 5. DART 공시 수집
-        jobs.add(BatchJobDto.builder()
-                .id("dart-disclosure-collector")
-                .name("DART 공시 수집")
-                .description("10분마다 Open DART 공시 목록을 수집하여 TB_NEWS_ITEMS에 저장합니다.")
-                .cronExpression("0 */10 * * * *")
-                .timeZone("Asia/Seoul")
-                .status("ACTIVE")
-                .executionCount(0L)
-                .successCount(0L)
-                .failureCount(0L)
-                .build());
-
-        // 6. SEC EDGAR 공시 수집
-        jobs.add(BatchJobDto.builder()
-                .id("sec-disclosure-collector")
-                .name("SEC EDGAR 공시 수집")
-                .description("15분마다 SEC EDGAR 공시 목록을 수집합니다.")
-                .cronExpression("0 */15 * * * *")
-                .timeZone("Asia/Seoul")
-                .status("ACTIVE")
-                .executionCount(0L)
-                .successCount(0L)
-                .failureCount(0L)
-                .build());
-
-        // 7. KRX 일별 시세 수집
-        jobs.add(BatchJobDto.builder()
-                .id("krx-daily-collector")
-                .name("KRX 일별 시세 수집")
-                .description("매일 장 마감 후(16:00 KST) KRX 일별 시세를 수집합니다.")
-                .cronExpression("0 0 16 * * *")
-                .timeZone("Asia/Seoul")
-                .status("ACTIVE")
-                .executionCount(0L)
-                .successCount(0L)
-                .failureCount(0L)
-                .build());
-
-        // 8. US 시장 일별 시세 수집
-        jobs.add(BatchJobDto.builder()
-                .id("us-daily-collector")
-                .name("US 시장 일별 시세 수집")
-                .description("매일 미국 장 마감 후(17:00 KST) US 일별 시세를 수집합니다.")
-                .cronExpression("0 0 17 * * *")
-                .timeZone("Asia/Seoul")
-                .status("ACTIVE")
-                .executionCount(0L)
-                .successCount(0L)
-                .failureCount(0L)
-                .build());
-
-        // 9. 팩터 계산 (유니버스·시그널)
-        jobs.add(BatchJobDto.builder()
-                .id("factor-calculation")
-                .name("팩터 계산")
-                .description("매일 장 시작 전(08:00 KST) 유니버스 필터 및 팩터(시그널) 계산을 실행합니다.")
-                .cronExpression("0 0 8 * * *")
-                .timeZone("Asia/Seoul")
-                .status("ACTIVE")
-                .executionCount(0L)
-                .successCount(0L)
-                .failureCount(0L)
-                .build());
-
-        // 10. 파이프라인 실행
-        jobs.add(BatchJobDto.builder()
-                .id("pipeline-execution")
-                .name("파이프라인 실행")
-                .description("장 시작 후(09:10 KST) 4단계 파이프라인(단/중/장기 배분)을 실행합니다.")
-                .cronExpression("0 10 9 * * *")
-                .timeZone("Asia/Seoul")
-                .status("ACTIVE")
-                .executionCount(0L)
-                .successCount(0L)
-                .failureCount(0L)
-                .build());
-
-        // 11. 파이프라인 청산 평가
-        jobs.add(BatchJobDto.builder()
-                .id("pipeline-exit")
-                .name("파이프라인 청산 평가")
-                .description("장중 평일 5분마다 보유 포지션 청산 규칙을 평가하고 매도 시그널 시 주문 실행합니다.")
-                .cronExpression("0 */5 9-15 * * MON-FRI")
-                .timeZone("Asia/Seoul")
-                .status("ACTIVE")
-                .executionCount(0L)
-                .successCount(0L)
-                .failureCount(0L)
-                .build());
-
-        // 12. 체결 확인 후 포지션 등록
-        jobs.add(BatchJobDto.builder()
-                .id("fill-confirmation")
-                .name("체결 확인 후 포지션 등록")
-                .description("매분 체결된 주문에 대해 포지션 등록을 수행합니다.")
-                .cronExpression("0 * * * * *")
-                .timeZone("Asia/Seoul")
-                .status("ACTIVE")
-                .executionCount(0L)
-                .successCount(0L)
-                .failureCount(0L)
-                .build());
-
-        // 13. 중기 리밸런스
-        jobs.add(BatchJobDto.builder()
-                .id("medium-term-rebalance")
-                .name("중기 리밸런스")
-                .description("매월 1일 08:30 KST에 중기 전략 리밸런스를 실행합니다(스텁).")
-                .cronExpression("0 30 8 1 * *")
-                .timeZone("Asia/Seoul")
-                .status("ACTIVE")
-                .executionCount(0L)
-                .successCount(0L)
-                .failureCount(0L)
-                .build());
-
-        // 다음 실행 시간 계산
-        jobs.forEach(job -> {
+        for (BatchJobDefinition def : batchJobRegistry.getDefinitions()) {
+            BatchJobDto dto = BatchJobDto.builder()
+                    .id(def.getId())
+                    .name(def.getName())
+                    .description(def.getDescription())
+                    .cronExpression(def.getCronExpression())
+                    .cronDescription(CronDescriptionUtil.toKoreanDescription(def.getCronExpression()))
+                    .timeZone(def.getTimeZone())
+                    .status("ACTIVE")
+                    .triggerPath(def.getTriggerPath())
+                    .executionCount(getExecutionCount(def.getId()))
+                    .successCount(getSuccessCount(def.getId()))
+                    .failureCount(getFailureCount(def.getId()))
+                    .lastExecutionTime(getLastExecutionTime(def.getId()))
+                    .build();
             try {
-                CronTrigger trigger = new CronTrigger(job.getCronExpression(), 
-                        ZoneId.of(job.getTimeZone()));
-                ZonedDateTime now = ZonedDateTime.now(ZoneId.of(job.getTimeZone()));
-                // 간단한 다음 실행 시간 계산 (실제로는 TaskScheduler를 사용해야 함)
-                job.setNextExecutionTime(calculateNextExecution(job.getCronExpression(), now));
+                ZonedDateTime now = ZonedDateTime.now(ZoneId.of(def.getTimeZone()));
+                dto.setNextExecutionTime(calculateNextExecution(def.getCronExpression(), now));
             } catch (Exception e) {
-                log.warn("다음 실행 시간 계산 실패: jobId={}", job.getId(), e);
+                log.warn("다음 실행 시간 계산 실패: jobId={}", def.getId(), e);
             }
-        });
-        
+            jobs.add(dto);
+        }
         return jobs;
     }
-    
+
+    private Long getExecutionCount(String jobName) {
+        try {
+            Long v = jdbcTemplate.queryForObject(SQL_EXECUTION_COUNT, Long.class, jobName);
+            return v != null ? v : 0L;
+        } catch (Exception e) {
+            log.trace("Execution count query failed for job={}: {}", jobName, e.getMessage());
+            return 0L;
+        }
+    }
+
+    private Long getSuccessCount(String jobName) {
+        try {
+            Long v = jdbcTemplate.queryForObject(SQL_SUCCESS_COUNT, Long.class, jobName);
+            return v != null ? v : 0L;
+        } catch (Exception e) {
+            log.trace("Success count query failed for job={}: {}", jobName, e.getMessage());
+            return 0L;
+        }
+    }
+
+    private Long getFailureCount(String jobName) {
+        try {
+            Long v = jdbcTemplate.queryForObject(SQL_FAILURE_COUNT, Long.class, jobName);
+            return v != null ? v : 0L;
+        } catch (Exception e) {
+            log.trace("Failure count query failed for job={}: {}", jobName, e.getMessage());
+            return 0L;
+        }
+    }
+
+    private LocalDateTime getLastExecutionTime(String jobName) {
+        try {
+            var row = jdbcTemplate.queryForObject(SQL_LAST_END_TIME, java.sql.Timestamp.class, jobName);
+            return row != null ? row.toLocalDateTime() : null;
+        } catch (Exception e) {
+            log.trace("Last execution time query failed for job={}: {}", jobName, e.getMessage());
+            return null;
+        }
+    }
+
     /**
-     * 다음 실행 시간 계산 (간단한 버전)
+     * 다음 실행 시간 계산 (간단한 버전).
      */
     private LocalDateTime calculateNextExecution(String cronExpression, ZonedDateTime now) {
-        // 실제로는 CronExpression을 파싱하여 정확히 계산해야 하지만,
-        // 여기서는 간단한 예시만 제공
         try {
-            // cron: "0 0 6 * * *" -> 매일 6시
-            if (cronExpression.equals("0 0 6 * * *")) {
-                ZonedDateTime next = now.withHour(6).withMinute(0).withSecond(0);
-                if (next.isBefore(now) || next.equals(now)) {
+            if ("0 0 9 * * *".equals(cronExpression)) {
+                ZonedDateTime next = now.withHour(9).withMinute(0).withSecond(0);
+                if (next.isBefore(now) || next.equals(now))
                     next = next.plusDays(1);
-                }
                 return next.toLocalDateTime();
             }
-            // cron: "0 0 * * * *" -> 매 시간
-            else if (cronExpression.equals("0 0 * * * *")) {
+            if ("0 0 * * * *".equals(cronExpression)) {
                 return now.plusHours(1).withMinute(0).withSecond(0).toLocalDateTime();
             }
-            // cron: "0 0 9 * * *" -> 매일 9시
-            else if (cronExpression.equals("0 0 9 * * *")) {
-                ZonedDateTime next = now.withHour(9).withMinute(0).withSecond(0);
-                if (next.isBefore(now) || next.equals(now)) {
+            if ("0 0 8 * * *".equals(cronExpression)) {
+                ZonedDateTime next = now.withHour(8).withMinute(0).withSecond(0);
+                if (next.isBefore(now) || next.equals(now))
                     next = next.plusDays(1);
-                }
                 return next.toLocalDateTime();
             }
-            // cron: "0 */10 * * * *" -> 10분마다
-            else if (cronExpression.startsWith("0 */10")) {
+            if (cronExpression != null && cronExpression.startsWith("0 */10")) {
                 int minute = now.getMinute();
                 int nextMin = ((minute / 10) + 1) * 10;
-                if (nextMin >= 60) {
+                if (nextMin >= 60)
                     return now.plusHours(1).withMinute(0).withSecond(0).toLocalDateTime();
-                }
                 return now.withMinute(nextMin).withSecond(0).toLocalDateTime();
             }
-            // cron: "0 0 9 * * MON" -> 매주 월요일 9시
-            else if (cronExpression.equals("0 0 9 * * MON")) {
+            if ("0 0 9 * * MON".equals(cronExpression)) {
                 ZonedDateTime next = now.withHour(9).withMinute(0).withSecond(0);
                 while (next.getDayOfWeek().getValue() != 1 || next.isBefore(now) || next.equals(now)) {
                     next = next.plusDays(1);
                 }
                 return next.toLocalDateTime();
             }
-            // cron: "0 */15 * * * *" -> 15분마다
-            else if (cronExpression.startsWith("0 */15")) {
+            if (cronExpression != null && cronExpression.startsWith("0 */15")) {
                 int minute = now.getMinute();
                 int nextMin = ((minute / 15) + 1) * 15;
-                if (nextMin >= 60) {
+                if (nextMin >= 60)
                     return now.plusHours(1).withMinute(0).withSecond(0).toLocalDateTime();
-                }
                 return now.withMinute(nextMin).withSecond(0).toLocalDateTime();
             }
-            // cron: "0 0 16 * * *" -> 매일 16시
-            else if (cronExpression.equals("0 0 16 * * *")) {
+            if ("0 0 16 * * *".equals(cronExpression)) {
                 ZonedDateTime next = now.withHour(16).withMinute(0).withSecond(0);
-                if (next.isBefore(now) || next.equals(now)) {
+                if (next.isBefore(now) || next.equals(now))
                     next = next.plusDays(1);
-                }
                 return next.toLocalDateTime();
             }
-            // cron: "0 0 17 * * *" -> 매일 17시
-            else if (cronExpression.equals("0 0 17 * * *")) {
+            if ("0 0 17 * * *".equals(cronExpression)) {
                 ZonedDateTime next = now.withHour(17).withMinute(0).withSecond(0);
-                if (next.isBefore(now) || next.equals(now)) {
+                if (next.isBefore(now) || next.equals(now))
                     next = next.plusDays(1);
-                }
                 return next.toLocalDateTime();
             }
-            // cron: "0 0 8 * * *" -> 매일 8시
-            else if (cronExpression.equals("0 0 8 * * *")) {
-                ZonedDateTime next = now.withHour(8).withMinute(0).withSecond(0);
-                if (next.isBefore(now) || next.equals(now)) {
-                    next = next.plusDays(1);
-                }
-                return next.toLocalDateTime();
-            }
-            // cron: "0 10 9 * * *" -> 매일 09:10
-            else if (cronExpression.equals("0 10 9 * * *")) {
+            if ("0 10 9 * * *".equals(cronExpression)) {
                 ZonedDateTime next = now.withHour(9).withMinute(10).withSecond(0);
-                if (next.isBefore(now) || next.equals(now)) {
+                if (next.isBefore(now) || next.equals(now))
                     next = next.plusDays(1);
-                }
                 return next.toLocalDateTime();
             }
-            // cron: "0 */5 9-15 * * MON-FRI" -> 평일 장중 5분마다 (다음 분 5의 배수)
-            else if (cronExpression.contains("*/5") && cronExpression.contains("9-15")) {
+            if (cronExpression != null && cronExpression.contains("*/5") && cronExpression.contains("9-15")) {
                 int minute = now.getMinute();
                 int nextMin = ((minute / 5) + 1) * 5;
                 ZonedDateTime next = nextMin >= 60 ? now.plusHours(1).withMinute(0) : now.withMinute(nextMin);
                 next = next.withSecond(0);
-                if (next.getHour() < 9) next = next.withHour(9).withMinute(0);
-                if (next.getHour() > 15) next = next.plusDays(1).withHour(9).withMinute(0);
+                if (next.getHour() < 9)
+                    next = next.withHour(9).withMinute(0);
+                if (next.getHour() > 15)
+                    next = next.plusDays(1).withHour(9).withMinute(0);
                 if (next.getDayOfWeek().getValue() >= 6) {
                     next = next.plusDays(8 - next.getDayOfWeek().getValue()).withHour(9).withMinute(0);
                 }
                 return next.toLocalDateTime();
             }
-            // cron: "0 * * * * *" -> 매분
-            else if (cronExpression.equals("0 * * * * *")) {
+            if ("0 * * * * *".equals(cronExpression)) {
                 return now.plusMinutes(1).withSecond(0).toLocalDateTime();
             }
-            // cron: "0 30 8 1 * *" -> 매월 1일 08:30
-            else if (cronExpression.equals("0 30 8 1 * *")) {
+            if ("0 30 8 1 * *".equals(cronExpression)) {
                 ZonedDateTime next = now.withDayOfMonth(1).withHour(8).withMinute(30).withSecond(0);
                 if (next.isBefore(now) || next.equals(now)) {
                     next = now.plusMonths(1).withDayOfMonth(1).withHour(8).withMinute(30).withSecond(0);
                 }
                 return next.toLocalDateTime();
             }
+            if ("0 0 9 L * *".equals(cronExpression)) {
+                ZonedDateTime next = now.withDayOfMonth(now.toLocalDate().lengthOfMonth()).withHour(9).withMinute(0)
+                        .withSecond(0);
+                if (next.isBefore(now) || next.equals(now)) {
+                    next = now.plusMonths(1).withDayOfMonth(now.plusMonths(1).toLocalDate().lengthOfMonth()).withHour(9)
+                            .withMinute(0).withSecond(0);
+                }
+                return next.toLocalDateTime();
+            }
+            if ("0 5 16 * * MON-FRI".equals(cronExpression)) {
+                ZonedDateTime next = now.withHour(16).withMinute(5).withSecond(0);
+                if (next.getDayOfWeek().getValue() >= 6)
+                    next = next.plusDays(8 - next.getDayOfWeek().getValue());
+                if (next.isBefore(now) || next.equals(now))
+                    next = next.plusDays(1);
+                while (next.getDayOfWeek().getValue() >= 6)
+                    next = next.plusDays(1);
+                return next.toLocalDateTime();
+            }
+            if ("0 10,40 9 * * MON-FRI".equals(cronExpression)) {
+                ZonedDateTime next = now.withHour(9).withMinute(10).withSecond(0);
+                if (next.isBefore(now))
+                    next = next.withMinute(40);
+                if (next.isBefore(now))
+                    next = next.plusDays(1).withMinute(10);
+                if (next.getDayOfWeek().getValue() >= 6)
+                    next = next.plusDays(8 - next.getDayOfWeek().getValue()).withHour(9).withMinute(10);
+                return next.toLocalDateTime();
+            }
         } catch (Exception e) {
             log.warn("다음 실행 시간 계산 실패: cron={}", cronExpression, e);
         }
-
         return now.plusHours(1).toLocalDateTime();
     }
 }

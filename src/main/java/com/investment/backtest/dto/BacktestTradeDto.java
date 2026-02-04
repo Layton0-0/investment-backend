@@ -27,5 +27,7 @@ public class BacktestTradeDto {
     private int quantity;
     private BigDecimal pnl;
     private BigDecimal pnlPct;
+    /** 거래당 마찰 비용 합계 (수수료+세금+슬리피지+TAF 등) */
+    private BigDecimal totalFrictionCost;
     private String exitReason;
 }

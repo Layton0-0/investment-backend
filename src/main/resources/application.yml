@@ -16,6 +16,15 @@ spring:
       idle-timeout: 600000
       max-lifetime: 1800000
   
+  batch:
+    jdbc:
+      initialize-schema: never
+
+  flyway:
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 20
+
   jpa:
     hibernate:
       ddl-auto: validate
@@ -89,6 +98,25 @@ management:
         enabled: true
 
 investment:
+  # 마찰 비용 (한국투자증권 KIS 실전 수수료·세금·슬리피지). 백테스트 PnL 반영용.
+  fees:
+    korea:
+      stock:
+        commission: 0.000140527   # 0.0140527% (은행제휴/Ban-joo)
+        tax: 0.0018               # 0.18% (증권거래세, 매도 시)
+        slippage: 0.001           # 0.1%
+      etf:
+        commission: 0.000140527
+        tax: 0.0                  # 거래세 면제
+        slippage: 0.0005
+    usa:
+      stock:
+        commission: 0.0025        # 0.25% (표준)
+        sec-fee: 0.0000278       # 매도 시 (SEC Fee)
+        taf-per-share-usd: 0.000166  # 매도 시 TAF, 최대 8.30 USD
+        slippage: 0.0005
+      currency:
+        exchange-rate-spread: 0.001  # 0.1% (환전 우대 가정)
   # 데이터 수집 (DART/KRX API 키는 로그 마스킹 대상)
   data:
     dart:
@@ -98,13 +126,15 @@ investment:
       schedule-cron: ${DART_SCHEDULE_CRON:0 */10 * * * *}
     krx:
       auth-key: ${KRX_AUTH_KEY:}
-      base-url: ${KRX_BASE_URL:https://openapi.krx.co.kr}
+      base-url: ${KRX_BASE_URL:https://data-dbg.krx.co.kr}
       schedule-cron: ${KRX_SCHEDULE_CRON:0 0 16 * * *}
     us:
       schedule-cron: ${US_SCHEDULE_CRON:0 0 17 * * *}  # US 시장 일별 시세 수집 (미국 장 마감 후, 기본 17:00 KST)
-      # yfinance 스크립트 경로. 설정 시 US 일별 시세 수집 활성화 (미설정 시 스텁)
-      yfinance-script-path: ${US_YFINANCE_SCRIPT_PATH:}
-      symbols: ${US_SYMBOLS:AAPL,MSFT,GOOGL,AMZN,META,TSLA,NVDA,JPM,V,JNJ}
+      # yfinance: Docker Compose 서비스 URL 설정 시 HTTP 호출, 미설정 시 스크립트 경로 사용
+      collector-url: ${US_COLLECTOR_URL:}
+      # yfinance 스크립트 경로. collector-url 미설정일 때만 사용. 프로젝트 루트 기준 상대/절대 경로
+      yfinance-script-path: ${US_YFINANCE_SCRIPT_PATH:scripts/us_daily_collector.py}
+      symbols: ${US_SYMBOLS:AAPL,MSFT,GOOGL,AMZN,META,TSLA,NVDA,JPM,V,JNJ,SPY,IEF,TLT,GLD,DBC,BIL}
       python-command: ${US_PYTHON_COMMAND:python}
     sec:
       api-key: ${SEC_API_KEY:}
@@ -122,17 +152,30 @@ investment:
     volatility-breakout-k-min: ${FACTOR_VOLATILITY_BREAKOUT_K_MIN:0.3}  # 동적 조정 최소 k
     volatility-breakout-k-max: ${FACTOR_VOLATILITY_BREAKOUT_K_MAX:0.7}  # 동적 조정 최대 k
     liquidity-min-trd-val: ${FACTOR_LIQUIDITY_MIN_TRD_VAL:1000000000}
+    # 시초가/변동성 돌파 시 유동성 임계(전일 거래대금, 원). KR 단기 09:00~10:00 시 슬리피지 방어용 (기본 300억)
+    liquidity-min-trd-val-opening: ${FACTOR_LIQUIDITY_MIN_TRD_VAL_OPENING:30000000000}
     # Sector RS(한국): 상위 N개 업종만 유니버스 포함. TB_SECTOR_RETURN·TB_SYMBOL_SECTOR 데이터 수집 후 적용
     sector-rs-top-n: ${FACTOR_SECTOR_RS_TOP_N:5}
     # Post-Earnings Drift(미국): 최근 N일 실적 발표 대상, 상위 N% 종목만 유니버스 포함. TB_EARNINGS_SURPRISE 수집 후 적용
     earnings-surprise-lookback-days: ${FACTOR_EARNINGS_SURPRISE_LOOKBACK_DAYS:90}
     earnings-surprise-top-pct: ${FACTOR_EARNINGS_SURPRISE_TOP_PCT:0.2}
+    # 미국(US): 갭 상승 N% 이상 시 진입 스킵 (전일 종가 대비, 기본 5%)
+    us-gap-up-skip-pct: ${FACTOR_US_GAP_UP_SKIP_PCT:5}
     # 미국 듀얼 모멘텀: 기간(거래일 수) 및 가중치 (최근 1개월 가중치 높게). 쉼표 구분.
     dual-momentum-period-days: ${FACTOR_DUAL_MOMENTUM_PERIOD_DAYS:21,63,126}
     dual-momentum-weights: ${FACTOR_DUAL_MOMENTUM_WEIGHTS:0.5,0.3,0.2}
     # 수급 강도(한국): 순매수/시총 비율 임계값 (0.5% 초과 시 시그널). TB_ORDER_FLOW 수집 후 적용
     smart-money-intensity-threshold-pct: ${FACTOR_SMART_MONEY_INTENSITY_THRESHOLD_PCT:0.005}
+    # 한국(KR) 역발상 RSI: RSI(14) < 이 값이면 과매도 매수 시그널 가중 (기본 40)
+    contrarian-rsi-threshold: ${FACTOR_CONTRARIAN_RSI_THRESHOLD:40}
+    # 한국(KR) 저평가 P/B 구간 (바닥 0.8~0.9). 데이터 소스 확정 후 유니버스/시그널 필터 적용
+    pb-value-min: ${FACTOR_PB_VALUE_MIN:0.8}
+    pb-value-max: ${FACTOR_PB_VALUE_MAX:0.9}
     position-risk-pct: ${FACTOR_POSITION_RISK_PCT:0.01}  # 1회 매매당 총자산 1% 리스크
+    # 초기 운용: 켈리 비활성화 시 고정 비율만 사용 (기본 true=Half-Kelly 사용, false=고정 비율만)
+    kelly-enabled: ${FACTOR_KELLY_ENABLED:false}
+    # 켈리 비활성 시 1종목당 자산 대비 최대 비율 (%)
+    kelly-fixed-allocation-pct: ${FACTOR_KELLY_FIXED_ALLOCATION_PCT:2}
     kelly-p: ${FACTOR_KELLY_P:0.6}  # Half-Kelly 승률 (기본값 60%). 백테스트 winRate 연동 시 전략별로 덮어씀
     kelly-b: ${FACTOR_KELLY_B:2.0}  # Half-Kelly 손익비 (기본값 2:1). 백테스트 profitFactor 연동 시 전략별로 덮어씀
     # 전략별 Half-Kelly p·b (미설정 시 위 kelly-p, kelly-b 사용). 백테스트 결과(winRate, profitFactor) 반영용
@@ -142,9 +185,21 @@ investment:
     kelly-b-medium-term: ${FACTOR_KELLY_B_MEDIUM_TERM:}
     kelly-p-long-term: ${FACTOR_KELLY_P_LONG_TERM:}
     kelly-b-long-term: ${FACTOR_KELLY_B_LONG_TERM:}
+    # 종목당 최대 비중 (%). 0이면 미적용
+    position-cap-per-symbol-pct: ${FACTOR_POSITION_CAP_PER_SYMBOL_PCT:10}
+    # 일일 최대 신규 매수 종목 수 (0이면 미적용). 파이프라인에서 권장 목록 자르기
+    max-new-positions-per-day: ${FACTOR_MAX_NEW_POSITIONS_PER_DAY:10}
+  # 리스크 게이트·일일 손실 한도 (전문 투자자 흐름 P0)
+  risk:
+    regime-gate-enabled: ${INVESTMENT_RISK_REGIME_GATE_ENABLED:false}
+    vix-threshold: ${INVESTMENT_RISK_VIX_THRESHOLD:30}
+    reduce-size-on-high-vol-pct: ${INVESTMENT_RISK_REDUCE_SIZE_ON_HIGH_VOL_PCT:50}
+    daily-loss-limit-pct: ${INVESTMENT_RISK_DAILY_LOSS_LIMIT_PCT:5}
+    # 거시경제 지표 API URL (선택). GET JSON 예: {"vix": 18.5}. 미설정 시 VIX 미제공.
+    macro-indicator-url: ${INVESTMENT_RISK_MACRO_INDICATOR_URL:}
   # 4단계 파이프라인 실행. auto-execute=false 시 주문 생성 없이 dry-run만.
   pipeline:
-    auto-execute: ${PIPELINE_AUTO_EXECUTE:false}
+    auto-execute: ${PIPELINE_AUTO_EXECUTE:true}
     # 실전 계좌(serverType=0) 자동 실행 허용. false면 모의계좌만 실제 주문 실행.
     allow-real-execution: ${PIPELINE_ALLOW_REAL_EXECUTION:false}
     execution-schedule-cron: ${PIPELINE_EXECUTION_SCHEDULE_CRON:0 10 9 * * *}  # 장 시작 후 1회 (09:10 KST)
@@ -155,8 +210,56 @@ investment:
       default-capital: ${PIPELINE_SCHEDULER_DEFAULT_CAPITAL:0}  # 스케줄러용 총자산(원), 0이면 실행 스킵
     atr-trailing-stop-multiplier: ${PIPELINE_ATR_TRAILING_STOP_MULTIPLIER:2.0}  # ATR Trailing Stop 배수 (2.0~2.5 권장)
     short-term-trailing-pct: ${PIPELINE_SHORT_TERM_TRAILING_PCT:3}   # 단기 고점 대비 Trailing Stop 하락률 (%)
+    short-term-kr-stop-loss-pct: ${PIPELINE_SHORT_TERM_KR_STOP_LOSS_PCT:5}  # 한국(KR) 단기/스윙 진입가 대비 -5% 고정 손절 (%)
+    prior-low-stop-kr-enabled: ${PIPELINE_PRIOR_LOW_STOP_KR_ENABLED:true}  # 한국(KR) 전저점 이탈 손절 사용 여부
+    rsi-exit-threshold: ${PIPELINE_RSI_EXIT_THRESHOLD:70}  # 한국(KR) RSI≥N 익절 임계값 (0~100)
     medium-term-stop-loss-pct: ${PIPELINE_MEDIUM_TERM_STOP_LOSS_PCT:10}  # 중기 개별 손절 하락률 (%)
     register-position-on-execution: ${PIPELINE_REGISTER_POSITION_ON_EXECUTION:false}  # true면 체결 확인 후 포지션 등록, false면 주문 성공 시 즉시 등록
+    # 미체결 N분 경과 시 Discord 긴급 알림 (Webhook URL, env PIPELINE_ALERT_DISCORD_WEBHOOK_URL 권장)
+    alert-discord-webhook-url: ${PIPELINE_ALERT_DISCORD_WEBHOOK_URL:}
+    # 긴급 알림 시 앱 내 주문/계좌 화면 base URL (env 권장)
+    alert-base-url: ${PIPELINE_ALERT_BASE_URL:}
+    # 미체결 확인 대기 분 (기본 1분)
+    unfilled-check-minutes: ${PIPELINE_UNFILLED_CHECK_MINUTES:1}
+  # 장중 변동성 돌파 (P2). 09:00~10:00 구간에서 돌파 종목 1회 매수
+  intraday:
+    breakout-enabled: ${INVESTMENT_INTRADAY_BREAKOUT_ENABLED:false}
+    breakout-schedule-cron: ${INVESTMENT_INTRADAY_BREAKOUT_CRON:0 10,40 9 * * MON-FRI}
+    breakout-max-positions: ${INVESTMENT_INTRADAY_BREAKOUT_MAX_POSITIONS:3}
+    breakout-position-pct: ${INVESTMENT_INTRADAY_BREAKOUT_POSITION_PCT:0.005}
+  # 일일 PnL 집계·리뷰 (P3). 장 마감 후 계좌별 당일 수익률 기록
+  daily-pnl:
+    schedule-cron: ${INVESTMENT_DAILY_PNL_SCHEDULE_CRON:0 5 16 * * MON-FRI}
+  # 로보어드바이저 동적 자산배분 백테스트·실행 전 검증
+  backtest:
+    robo:
+      asset-symbols: ${ROBO_ASSET_SYMBOLS:SPY,IEF,TLT,GLD,DBC,BIL}
+      momentum-months: ${ROBO_MOMENTUM_MONTHS:12}
+      ma-window-days: ${ROBO_MA_WINDOW_DAYS:200}
+      top-n: ${ROBO_TOP_N:4}
+      rebalance-frequency: ${ROBO_REBALANCE_FREQUENCY:MONTHLY}
+      drift-threshold-pct: ${ROBO_DRIFT_THRESHOLD_PCT:5}
+      comm-pct: ${ROBO_COMM_PCT:0.1}
+      slip-pct: ${ROBO_SLIP_PCT:0.2}
+      risk-free-rate-pct: ${ROBO_RISK_FREE_RATE_PCT:0}
+      benchmark-weights: ${ROBO_BENCHMARK_WEIGHTS:SPY=0.6,TLT=0.4}
+      volatility-lookback-days: ${ROBO_VOLATILITY_LOOKBACK_DAYS:60}
+      # 실행 전 백테스트 (리밸런싱 직전 Go/No-Go)
+      pre-execution-lookback-months: ${ROBO_PRE_EXECUTION_LOOKBACK_MONTHS:12}
+      pre-execution-max-mdd-pct: ${ROBO_PRE_EXECUTION_MAX_MDD_PCT:15}
+      pre-execution-min-sharpe: ${ROBO_PRE_EXECUTION_MIN_SHARPE:0.5}
+      rebalance-schedule-cron: ${ROBO_REBALANCE_SCHEDULE_CRON:0 0 9 L * *}  # 매월 말일 09:00 KST
+      # 듀얼 모멘텀(노트) 모드: MULTI_ASSET(기존), DUAL_MOMENTUM_NOTE(절대 SPY 12M vs T-bill + 상대 섹터 6M 상위 2개)
+      dual-momentum-mode: ${ROBO_DUAL_MOMENTUM_MODE:MULTI_ASSET}
+      sector-etf-symbols: ${ROBO_SECTOR_ETF_SYMBOLS:XLK,XLE,XLF,XLV,XLI,XLY,XLP,XLB}
+      momentum-months-relative: ${ROBO_MOMENTUM_MONTHS_RELATIVE:6}
+      top-n-sector: ${ROBO_TOP_N_SECTOR:2}
+      absolute-momentum-symbol: ${ROBO_ABSOLUTE_MOMENTUM_SYMBOL:SPY}
+      risk-free-symbol: ${ROBO_RISK_FREE_SYMBOL:BIL}
+      rebalance-execution-price: ${ROBO_REBALANCE_EXECUTION_PRICE:CLOSE}
+      # 실제 ETF 주문 실행 여부. false면 목표 비중 로깅만
+      execute-orders: ${ROBO_EXECUTE_ORDERS:false}
+      min-order-amount-usd: ${ROBO_MIN_ORDER_AMOUNT_USD:50}
   # 트레이딩 포트폴리오 (일별 추천 목록). 파이프라인 시그널 기반 생성 시 사용하는 기본 자본(원).
   trading-portfolio:
     default-capital: ${TRADING_PORTFOLIO_DEFAULT_CAPITAL:100000000}  # 1억 원

@@ -20,8 +20,8 @@ import java.util.Map;
 
 /**
  * KRX Open API 클라이언트 (일별 시세/지수 등)
- * AUTH_KEY 헤더로 인증. 1단계: 연동·조회만, 저장은 별도 테이블 검토 시 진행.
- * 스펙: https://openapi.krx.co.kr
+ * AUTH_KEY 헤더로 인증. 유가증권 일별매매정보: GET /svc/apis/sto/stk_bydd_trd?basDd=yyyyMMdd
+ * 스펙: Server endpoint https://data-dbg.krx.co.kr/svc/apis/sto/stk_bydd_trd
  */
 @Slf4j
 @Component
@@ -29,8 +29,8 @@ import java.util.Map;
 public class KrxApiClient {
 
     private static final DateTimeFormatter KRX_DATE = DateTimeFormatter.ofPattern("yyyyMMdd");
-    /** 유가증권 일별매매정보 BO_ID (서비스별 이용신청 필요) */
-    private static final String BO_ID_STOCK_KOSPI = "JvJFzlAENzZlPBDNGAWC";
+    /** 유가증권 일별매매정보 API 경로 (Host: data-dbg.krx.co.kr, AUTH_KEY 헤더) */
+    private static final String PATH_DAILY_STOCK = "/svc/apis/sto/stk_bydd_trd";
 
     private final RestTemplate restTemplate = new RestTemplate();
     private final DataCollectionProperties dataCollectionProperties;
@@ -51,16 +51,17 @@ public class KrxApiClient {
 
         String baseUrl = dataCollectionProperties.getKrx().getBaseUrl();
         if (baseUrl == null || baseUrl.isBlank()) {
-            baseUrl = "https://openapi.krx.co.kr";
+            baseUrl = "https://data-dbg.krx.co.kr";
         }
-        String url = UriComponentsBuilder.fromHttpUrl(baseUrl + "/contents/OPP/USES/service/OPPUSES002_S2.cmd")
-                .queryParam("BO_ID", BO_ID_STOCK_KOSPI)
-                .queryParam("basDt", basDt.format(KRX_DATE))
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl + PATH_DAILY_STOCK)
+                .queryParam("basDd", basDt.format(KRX_DATE))
                 .build()
                 .toUriString();
 
         HttpHeaders headers = new HttpHeaders();
+        // Request 헤더에 인증키 값을 AUTH_KEY 필드에 추가하여 전달 (KRX 스펙)
         headers.set("AUTH_KEY", authKey);
+        headers.set(HttpHeaders.ACCEPT, "application/json");
 
         try {
             ResponseEntity<KrxDailyStockResponseDto> response = restTemplate.exchange(
@@ -74,7 +75,13 @@ public class KrxApiClient {
             }
             return body.getOutBlock1();
         } catch (Exception e) {
-            log.warn("KRX API 호출 실패: basDt={}, error={}", basDt, e.getMessage());
+            String msg = e.getMessage() != null ? e.getMessage() : "";
+            if (msg.contains("text/html")) {
+                log.warn("KRX API가 HTML을 반환했습니다. basDt={}. AUTH_KEY 유효성 및 '유가증권 일별매매정보' 서비스 이용신청 여부를 확인하세요. (원인: {})",
+                        basDt, msg);
+            } else {
+                log.warn("KRX API 호출 실패: basDt={}, error={}", basDt, msg);
+            }
             return Collections.emptyList();
         }
     }

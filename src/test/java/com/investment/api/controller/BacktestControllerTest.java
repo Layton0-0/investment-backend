@@ -3,9 +3,13 @@ package com.investment.api.controller;
 import com.investment.backtest.BacktestService;
 import com.investment.backtest.dto.BacktestRunRequest;
 import com.investment.backtest.dto.BacktestRunResult;
+import com.investment.backtest.robo.RoboBacktestService;
+import com.investment.backtest.robo.RoboPreExecutionResultStore;
 import com.investment.common.security.JwtAuthenticationFilter;
 import com.investment.common.security.RateLimitFilter;
+import com.investment.config.RoboBacktestProperties;
 import com.investment.config.SecurityHeadersConfig;
+import com.investment.datacollection.service.UsMarketCollectionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,55 +34,63 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("BacktestController")
 class BacktestControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+        @Autowired
+        private MockMvc mockMvc;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+        @Autowired
+        private ObjectMapper objectMapper;
 
-    @MockBean
-    private BacktestService backtestService;
-    @MockBean
-    private JwtAuthenticationFilter jwtAuthenticationFilter;
-    @MockBean
-    private RateLimitFilter rateLimitFilter;
-    @MockBean
-    private SecurityHeadersConfig securityHeadersConfig;
+        @MockBean
+        private BacktestService backtestService;
+        @MockBean
+        private RoboBacktestService roboBacktestService;
+        @MockBean
+        private RoboPreExecutionResultStore roboPreExecutionResultStore;
+        @MockBean
+        private UsMarketCollectionService usMarketCollectionService;
+        @MockBean
+        private RoboBacktestProperties roboBacktestProperties;
+        @MockBean
+        private JwtAuthenticationFilter jwtAuthenticationFilter;
+        @MockBean
+        private RateLimitFilter rateLimitFilter;
+        @MockBean
+        private SecurityHeadersConfig securityHeadersConfig;
 
-    @Test
-    @DisplayName("POST /api/v1/backtest 성공 시 200 및 결과 필드 반환")
-    void run_returnsOkWithResult() throws Exception {
-        BacktestRunRequest request = BacktestRunRequest.builder()
-                .startDate(LocalDate.of(2025, 1, 6))
-                .endDate(LocalDate.of(2025, 1, 10))
-                .market("KR")
-                .strategyType("SHORT_TERM")
-                .initialCapital(new BigDecimal("100000000"))
-                .build();
+        @Test
+        @DisplayName("POST /api/v1/backtest 성공 시 200 및 결과 필드 반환")
+        void run_returnsOkWithResult() throws Exception {
+                BacktestRunRequest request = BacktestRunRequest.builder()
+                                .startDate(LocalDate.of(2025, 1, 6))
+                                .endDate(LocalDate.of(2025, 1, 10))
+                                .market("KR")
+                                .strategyType("SHORT_TERM")
+                                .initialCapital(new BigDecimal("100000000"))
+                                .build();
 
-        BacktestRunResult result = BacktestRunResult.builder()
-                .startDate(request.getStartDate())
-                .endDate(request.getEndDate())
-                .market(request.getMarket())
-                .strategyType(request.getStrategyType())
-                .initialCapital(request.getInitialCapital())
-                .finalEquity(new BigDecimal("105000000"))
-                .totalReturnPct(new BigDecimal("5.0"))
-                .tradeCount(2)
-                .equityCurve(Collections.emptyList())
-                .trades(Collections.emptyList())
-                .build();
+                BacktestRunResult result = BacktestRunResult.builder()
+                                .startDate(request.getStartDate())
+                                .endDate(request.getEndDate())
+                                .market(request.getMarket())
+                                .strategyType(request.getStrategyType())
+                                .initialCapital(request.getInitialCapital())
+                                .finalEquity(new BigDecimal("105000000"))
+                                .totalReturnPct(new BigDecimal("5.0"))
+                                .tradeCount(2)
+                                .equityCurve(Collections.emptyList())
+                                .trades(Collections.emptyList())
+                                .build();
 
-        when(backtestService.run(any(BacktestRunRequest.class))).thenReturn(result);
+                when(backtestService.run(any(BacktestRunRequest.class))).thenReturn(result);
 
-        mockMvc.perform(post("/api/v1/backtest")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.startDate").value("2025-01-06"))
-                .andExpect(jsonPath("$.endDate").value("2025-01-10"))
-                .andExpect(jsonPath("$.market").value("KR"))
-                .andExpect(jsonPath("$.finalEquity").value(105000000))
-                .andExpect(jsonPath("$.tradeCount").value(2));
-    }
+                mockMvc.perform(post("/api/v1/backtest")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.startDate").value("2025-01-06"))
+                                .andExpect(jsonPath("$.endDate").value("2025-01-10"))
+                                .andExpect(jsonPath("$.market").value("KR"))
+                                .andExpect(jsonPath("$.finalEquity").value(105000000))
+                                .andExpect(jsonPath("$.tradeCount").value(2));
+        }
 }

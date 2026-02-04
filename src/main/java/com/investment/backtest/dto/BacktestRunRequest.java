@@ -1,5 +1,6 @@
 package com.investment.backtest.dto;
 
+import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -34,5 +35,6 @@ public class BacktestRunRequest {
 
     @NotNull
     @DecimalMin(value = "0", inclusive = false)
+    @DecimalMax(value = "1000000000000")
     private BigDecimal initialCapital;
 }

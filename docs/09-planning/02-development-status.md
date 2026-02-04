@@ -9,16 +9,24 @@
 ## 1. 완료 (Completed)
 
 ### 도메인·DB·API
+- [x] **Friction cost(수수료/세금/슬리피지) 설정 및 백테스트 반영**  
+  한국투자증권(KIS) 실전 수수료·세금·슬리피지 테이블을 `application.yml`(`investment.fees`) 및 `FrictionCostProperties`에 반영. 일반 백테스트(`BacktestService`)는 매수/매도 시 마찰 비용 차감·PnL 반영·`BacktestTradeDto.totalFrictionCost` 노출. 로보 백테스트(`RoboBacktestService`)는 `FrictionCostProperties` 기반 round-trip·TAF 적용, 요청 `commPct`/`slipPct` 오버라이드 시 하위 호환. [전략 레지스트리 2.9 Friction cost](../02-architecture/00-strategy-registry.md#29-friction-cost-마찰-비용) 참조.
+- [x] **로보 백테스트 데이터 부재·평평한 곡선 안내**  
+  `RoboBacktestService.run()` 진입 후 요청 구간·자산/벤치마크 심볼에 대해 US 일봉 1건 이상 존재 여부 검사(`hasAnyUsDailyDataInRange`). 없으면 `RoboBacktestResult.warningMessage`에 "선택 기간에 US 일봉 데이터가 없습니다. 데이터 수집 후 다시 시도하세요." 설정. 결과의 `equityCurve`가 전 구간 동일 값이면 "수익 곡선이 평평합니다. US 일봉 데이터 구간을 확인하세요." 추가. `/backtest` 로보 결과 수신 시 `warningMessage`가 있으면 결과 요약 위 경고 문구 표시. API 응답에 `warningMessage` 필드 문서화(02-api-endpoints.md).
+- [x] **데이터 수집·백테스트·할당 엔진 로깅 상세화**  
+  어떤 시점에서 어떤 원인으로 데이터를 못 받거나 오류가 나는지 바로 알 수 있도록 로깅 보강. **UsMarketCollectionService**: 수집 시작/완료(기간·심볼), collector-url/스크립트 미설정·파일 없음·HTTP 비정상 응답·본문 없음·JSON 파싱 실패·스크립트 비정상 종료 시 WARN/ERROR에 원인·URL·basDt·bodyPreview 등 포함. **RoboBacktestService**: 백테스트 시작/완료·파라미터(DEBUG), 구간 내 US 일봉 없음·평평한 곡선·리밸런싱 전액 현금 시 WARN/DEBUG, getClose/getOpen null 시 TRACE. **RoboAllocationEngine**: 일반/듀얼 모멘텀 진입(DEBUG), 심볼 일봉 없음·종가 부족·SPY/섹터 일봉 부족(TRACE), 전액 현금 반환 사유(WARN).
 - [x] **Strategy 시장(MARKET)**  
   Strategy 엔티티 `market` 필드, Repository 시장 조건 조회, Service/API `market` 파라미터(선택), DTO 반영. DB V3(ACCOUNT_NO,MARKET,STRATEGY_TYPE UK) 반영.
 - [x] **뉴스·공시 도메인 및 API**  
   NewsItem 엔티티, NewsItemRepository, NewsItemService, GET `/api/v1/news` (필터·페이징). API 개요 문서 반영.
 - [x] **TB_NEWS_ITEMS EVENT_TYPE 확장 (V11)**  
-  DART report_nm 등 긴 보고서명 저장 시 50자 초과 오류 방지. DB V11(EVENT_TYPE VARCHAR(500)), NewsItem.MAX_EVENT_TYPE_LENGTH·truncateEventType, DartCollectionService·SecCollectionService·InternalDataCollectionController에서 eventType 500자 truncate 적용. 롤백: db/migration/rollback/V11_rollback.sql.
+  DART report_nm 등 긴 보고서명 저장 시 50자 초과 오류 방지. DB V11(EVENT_TYPE VARCHAR(500)), NewsItem.MAX_EVENT_TYPE_LENGTH·truncateEventType, DartCollectionService·SecCollectionService·InternalDataCollectionController에서 eventType 500자 truncate 적용. (V11 롤백 스크립트는 Flyway·마이그레이션 정리로 제거됨. 필요 시 git history 참조.)
 - [x] **캐시 키 정리**  
   CacheConfig에 CACHE_CURRENT_PRICE 정의, RealtimeMarketDataService에서 상수 사용.
 
 ### 화면·메뉴
+- [x] **전체 UI/UX 리팩터링 (디자인 시스템·레이아웃·페이지 스타일 통일)**  
+  common.css에 디자인 토큰(CSS 변수)·container 1200px·`.data-table`·카드 변형·대시보드/전략/포트폴리오/백테스트 등 공통 유틸리티 추가. 모든 인증 페이지에 layout-header + layout-menu 적용(portfolio, mypage 포함). dashboard/strategies 인라인 스타일 제거·common 클래스 사용. portfolio·error 페이지 common 기반 통일. 접근성·반응형(미디어 쿼리·포커스) 점검. [07-frontend-simplification.md](../02-architecture/07-frontend-simplification.md), [08-frontend-architecture.md](../02-architecture/08-frontend-architecture.md) 반영.
 - [x] **메뉴 설정 및 공통 레이아웃**  
   MenuConfig(appMenuItems), MenuModelAdvice, layout-header·layout-menu fragment, common.css 앱 헤더·네비 스타일.
 - [x] **대시보드 보강**  
@@ -27,14 +35,20 @@
   `/auto-invest`, AutoInvestController, auto-invest.html (4단계 파이프라인·시그널 건수/목록 GET /api/v1/signals 연동).
 - [x] **국내/미국 전략 분리**  
   `/strategies/kr`, `/strategies/us`, WebStrategyController 시장별 조회·폼 market 전달.
+- [x] **국내/미국 전략 계좌 자동 사용 및 로고·네비게이션 정리**  
+  국내 전략 = 모의계좌(serverType=1), 미국 전략 = 실계좌(serverType=0) 자동 사용. 계좌번호 입력 폼 제거, 계좌 미등록 시 안내 및 설정 링크. 전략 페이지 내 대시보드/국내/미국 중복 링크 제거. 헤더 로고 클릭 시 대시보드(`/`) 이동. 화면·메뉴 기획서 §3.3·§3.4·§4 반영.
 - [x] **뉴스·이벤트**  
   `/news`, NewsWebController, news.html, GET /api/v1/news 연동.
 - [x] **주문·체결**  
   `/orders`, OrdersWebController, orders.html, 주문 목록 연동.
 - [x] **설정**  
   메뉴 "설정" → `/mypage` (기존 마이페이지).
+- [x] **설정 UI/UX 리팩토링 (모의/실계좌 선택·토글·빈 상태)**  
+  설정 페이지: 카드 제목 "계좌·API 연결", "자동투자 설정" 통일. 등록된 계좌 수(0/1/2)에 따라 거래 설정 분기 — 0개면 빈 상태 + [계좌 설정으로 가기] CTA, 1개면 해당 타입 폼만, 2개면 세그먼트 "모의계좌 | 실계좌" + 선택한 타입 단일 폼. 자동투자·로보 어드바이저를 common.css 토글 마크업(toggle-label·toggle-text-left·toggle-slider·toggle-text-right)으로 스위치 형태 표시. common.css에 .empty-state, .segment-control, .segment-btn 추가. 화면·메뉴 기획서 §3.8 반영.
 
 ### 인프라·운영
+- [x] **Flyway 도입 및 기존 마이그레이션 SQL 정리**  
+  spring-boot-starter-flyway 추가, baseline-on-migrate=true·baseline-version=20. 현재 DB는 이미 생성된 상태로 간주하고 V1~V20 마이그레이션·롤백 파일 제거. 신규 스키마 변경은 db/migration/V21__*.sql 형식으로 추가 시 앱 기동 시 자동 적용. schema.sql은 참고/신규 환경 1회 생성용 유지. [01-database-schema.md §8.2](../05-database/01-database-schema.md), [01-local-setup-complete.md §문제 해결](../08-setup-guides/01-local-setup-complete.md) 참조.
 - [x] **Redis 캐싱**  
   CacheConfig(Redis), @Cacheable(AccountService, AnalysisService, RealtimeMarketDataService). application-no-redis.yml(캐시 타입 simple) 및 캐시 무효화 주석.
 - [x] **OpenAPI 문서화**  
@@ -49,6 +63,8 @@
   prediction-service: /api/v1/predict, /api/v1/health, Mock 응답. Dockerfile·docker-compose prediction-service 서비스 추가.
 
 ### 기타
+- [x] **스케줄 작업 Spring Batch 전환**  
+  모든 스케줄 작업을 Spring Batch Job + Tasklet으로 실행. `BatchJobRegistry`로 Job 정의(이름, cron, 트리거 경로) 단일 관리, `BatchJobScheduler`가 cron별 `JobLauncher.run` 등록. 실행 이력은 JobRepository(BATCH_* 테이블)에 자동 저장되며, 스케줄 현황 UI는 총 실행/성공/실패 횟수·마지막 실행 시각을 DB 조회로 표시. Cron 표현식은 `CronDescriptionUtil`로 한국어 실행 주기 표시. 트리거 API·트레이딩 포트폴리오 생성은 Job 실행으로 통일. 기존 스케줄러 클래스에서 `@Scheduled` 제거(공개 메서드는 Tasklet에서 호출). [02-api-endpoints.md](../04-api/02-api-endpoints.md) 트리거 API 동일 경로·응답 유지.
 - [x] **Security**  
   새 경로(/auto-invest, /strategies/kr, /strategies/us, /news, /orders) 기존 anyRequest().authenticated()로 인증 적용.
 - [x] **JWT 인증 시 사용자 존재 여부 검증(방어코드)**  
@@ -85,6 +101,8 @@
   **데이터·전처리**: app/data(시계열 로드·SeriesDataset), app/preprocessing(정규화·시퀀스 생성), scripts/fetch_training_data.py(yfinance OHLCV CSV). **LSTM·학습**: app/models/lstm_model.py(LSTMPredictor), app/train.py(학습 진입점, state_dict 저장). **서빙**: POST /api/v1/predict에 optional series·currentPrice 추가, MODEL_PATH에서 LSTM lazy 로드, series·모델 있으면 LSTM 추론·없으면 Mock. **Spring 연동**: PredictionRequestDto에 optional series·currentPrice, DailyPricePoint DTO, AnalysisService에서 일별 시세(DailyStockRepository)·현재가(RealtimeMarketDataService) 조회 후 예측 요청에 설정. AI는 분석 정보 제공용, 매매는 규칙 엔진 유지.
 - [x] **자동투자 현황 파이프라인 실데이터 연동**  
   **서비스·DTO**: PipelineSummaryService(기준일·계좌별 유니버스 수 KR/US·시그널 건수 KR/US·보유 포지션 수·목록 한 번에 조회), PipelineSummaryDto·OpenPositionItemDto. **컨트롤러·화면**: AutoInvestController에서 pipelineSummaryService.getSummary 호출 후 모델에 반영. **auto-invest.html**: 1단계 카드 유니버스 수(KR·US), 2단계 카드 시그널 건수(KR·US), 4단계 카드 보유 포지션 수 실데이터 표시; 시그널 테이블 시장(KR/US) 컬럼·보유 포지션 테이블 추가. StrategyPositionRepository.countByAccountNoAndExitDtIsNull 추가.
+- [x] **자동투자 현황 3단계 자금 배분 요약 표시**  
+  PipelineSummaryDto에 allocationSummary 필드 추가. PipelineSummaryService에서 계좌별 TradingSetting(최대 투자금·단기/중기/장기 비율) 기반 예상 배분 금액 계산(단기·중기·장기 만/억 포맷), allocationSummary로 반환. AutoInvestController·auto-invest.html 3단계 카드에 배분 요약 표시(설정 없으면 "준비 중"). [01-screen-menu-spec.md](01-screen-menu-spec.md) §3.2 반영.
 - [x] **시장·기간별 전략 로직**  
   **DB**: TB_STRATEGY_POSITION에 STRATEGY_TYPE 추가(V8), StrategyPosition 엔티티·Builder 반영. **청산**: ExitRuleService 기간별 분기 — 단기 -3% Trailing Stop(short-term-trailing-pct), 중기 -10% 손절(medium-term-stop-loss-pct)·Time-Cut, 장기 스텁. **자금관리**: PositionSizingService getRecommendations(basDt, market, strategyType, totalCapital), 단기 RSI>60 & MACD>Signal(TechnicalIndicatorUtil), 중기 시그널 상위 10%, 장기 전체. **실행**: PipelineExecutor run(..., strategyType, allocatedCapital), 포지션 저장 시 strategyType. **스케줄러**: PipelineExecutionScheduler(09:10, 0.2/0.4/0.4 배분·6회 run), MediumTermRebalanceScheduler(매월 1일 스텁). application.yml pipeline.short-term-trailing-pct, medium-term-stop-loss-pct, execution-schedule-cron, scheduler.default-capital, medium-term-rebalance-cron. [00-strategy-registry.md](../02-architecture/00-strategy-registry.md) 기간별 청산·시드 배분·버전 스택 v1.1 반영.
 - [x] **ATR Trailing Stop 장중 연동 및 체결 확인 후 포지션 등록**  
@@ -95,6 +113,8 @@
   **스케줄러 매수 시 사용자 컨텍스트**: PipelineExecutor에서 actuallyExecute 시 accountNo → TradingSettingRepository로 userId 조회 후 `OrderService.executeOrderForPipeline(request, userId)` 호출(스케줄러는 SecurityContext 없음). **실행 대상 계좌**: PipelineExecutionScheduler가 `TradingSettingRepository.findAllByAutoTradingEnabledTrue()`로 자동투자 ON 계좌만 대상. **실제 주문 활성화 조건**: 실제 매수/매도가 나가려면 `investment.pipeline.auto-execute=true`(또는 환경변수 `PIPELINE_AUTO_EXECUTE=true`) 필요. 기본값은 `false`라 설정하지 않으면 dry-run만 동작(주문 생성 없음). 실계좌 자동투자 전 조건: 모의 2주 테스트 권장, KIS 실전 URL·Throttling·토큰 갱신 등은 [12-auto-investment-strategy](../02-architecture/12-auto-investment-strategy.md) §8 및 [로드맵](../roadmap.md) Phase 7 참조.
 - [x] **스케줄 현황 메뉴 및 설정 전용 화면**  
   **스케줄 현황**: MenuConfig에 "스케줄 현황"(/batch) 메뉴 추가. BatchManagementService에 데이터 수집(DART/SEC/KRX/US)·팩터 계산·파이프라인 실행/청산/체결확인·중기 리밸런스 등 전체 스케줄 작업 목록 반영. batch-management.html 공통 레이아웃(layout-header·layout-menu) 적용, 제목 "스케줄 현황". **설정 전용 화면**: "설정" 메뉴 경로를 /settings로 변경. GET /settings → settings.html. **계좌/API 한번에**: GET/PUT /api/v1/settings/accounts — 모의·실 계좌 블록 한번에 조회·수정. AuthService getSettingsAccounts/updateSettingsAccounts, SettingsAccountsResponseDto·SettingsAccountBlockDto·SettingsAccountsUpdateRequestDto. **거래 설정**: TB_TRADING_SETTINGS에 단기/중기/장기 비율 컬럼 추가(V10). TradingSetting·TradingSettingDto·TradingSettingService 비율 필드·검증(합=1). settings.html에서 계좌/API 한번에 저장·거래 설정(비율·자동투자 ON/OFF) 계좌별 저장. **모의계좌 자동투자 설정 반영**: PipelineExecutionScheduler가 findAllByAutoTradingEnabledTrue()로 자동투자 ON 계좌만 대상, 계좌별 maxInvestmentAmount·shortTermRatio/mediumTermRatio/longTermRatio 사용(NULL이면 기본 0.2/0.4/0.4). [00-strategy-registry.md](../02-architecture/00-strategy-registry.md) 버전 스택 v1.3 반영.
+- [x] **모의/실계좌 전역 탭·대시보드 구역 분리·URL 정합성·메뉴 순서·page-title 제거**  
+  **전역 탭**: layout-menu에 모의계좌 | 실계좌 탭 추가(로그인 사용자만). URL 쿼리 `serverType=1`/`0` 유지, MenuModelAdvice에서 `currentServerType`·`currentPath` 주입. **대시보드**: 모의·실 계좌를 각각 조회해 한 화면에 "모의계좌"·"실계좌" 두 구역으로 표시(DashboardController·dashboard.html). **URL 정합성**: 메뉴 링크·빠른 액션·설정·전략 등 내부 링크에 serverType 포함. Orders/AutoInvest/전략 컨트롤러에 serverType 파라미터 반영·getMainAccount(userId, serverType) 사용. **메뉴 순서**: 설정을 맨 끝으로(MenuConfig·01-screen-menu-spec 백테스트 9, 설정 10). **page-title 제거**: 모든 메뉴 템플릿에서 `<h1 class="page-title">` 제거. 설정·마이페이지·백테스트·포트폴리오에 userInfo 주입(탭·헤더 표시). [01-screen-menu-spec.md](01-screen-menu-spec.md)·[08-frontend-architecture.md](../02-architecture/08-frontend-architecture.md) 반영.
 - [x] **대시보드·UX 1차**  
   **계좌 요약(국내·미국 구분)**: AccountPositionDto에 market(KR/US) 필드 추가. KoreaInvestmentAccountClient.parsePositionsOutput에서 응답의 excg_dvsn_cd로 KR/US 매핑(KRX→KR, NASD/NYSE/AMEX→US). DashboardController에서 시장별 보유 종목 수(positionCountKr/Us) 집계, dashboard.html에 "계좌 요약 (국내·미국)" 카드·보유 종목 테이블 시장 컬럼 추가. **자동투자 상태 카드**: PipelineSummaryService.getSummary(오늘, accountNo) 연동, 자동 매매 ON/OFF·유니버스·시그널(KR/US)·보유 포지션 수 표시, "자동투자 현황 자세히 보기" 링크. 설정 링크를 /settings로 통일. [01-screen-menu-spec.md](01-screen-menu-spec.md) §3.1·[09-korea-investment-api-guide.md](../04-api/09-korea-investment-api-guide.md) 잔고·보유 시장 구분 반영.
 - [x] **트레이딩 포트폴리오 생성 로직을 파이프라인 기반으로 통합**  
@@ -102,9 +122,21 @@
 - [x] **해외(미국) 잔고·보유 조회 API 연동**  
   **상수**: KoreaInvestmentAccountApiConstants에 PATH_OVERSAS_INQUIRE_PRESENT_BALANCE, TR_ID_OVERSAS_BALANCE_REAL/VIRTUAL(CTRP6504R/VTRP6504R), getOverseasBalanceTrId. **클라이언트**: KoreaInvestmentAccountClient.inquireOverseasBalance(userId, accountNo) — GET+query(CANO, ACNT_PRDT_CD, WCRC_FRCR_DVSN_CD=02, NATN_CD=840, TR_MKET_CD=00, INQR_DVSN_CD=00), output1 파싱·parseOverseasPositionsOutput·parseOverseasPositionItem(ovrs_* 등 필드 대응), market=US·currency=USD. **서비스**: AccountService.getBalanceAndPositions에서 국내 inquireBalance 후 inquireOverseasBalance 호출해 US 보유 목록 병합. 실패 시 해외만 스킵·국내만 반환. [09-korea-investment-api-guide.md](../04-api/09-korea-investment-api-guide.md) 해외주식 현재잔고 조회 섹션 추가.
 - [x] **모의계좌 투자 실제 실행 준비**  
-  **토큰 서버 타입별 저장**: TB_KOREA_INVESTMENT_TOKENS에 SERVER_TYPE 추가(V12), UK(USER_ID, SERVER_TYPE). KoreaInvestmentToken 엔티티·KoreaInvestmentTokenRepository.findByUserIdAndServerType. **TokenService**: getAccessToken(userId, serverType) 추가, 발급/저장 시 serverType 반영, getAccessToken(userId)는 serverType="1" 위임(호환). **주문 경로 계좌별 키·토큰**: KoreaInvestmentOrderClient에서 accountNo → resolveServerTypeForAccount, getUserApiKeyForAccount(userId, accountNo), getAccessToken(userId, serverType) 사용. **실전 계좌 실행 가드**: investment.pipeline.allow-real-execution(false 기본). PipelineExecutor·PipelineExitScheduler에서 serverType='0' 계좌는 allow-real-execution=false 시 주문 스킵(로그 경고). application.yml pipeline.allow-real-execution, PIPELINE_ALLOW_REAL_EXECUTION. 롤백: db/migration/rollback/V12_rollback.sql.
+  **토큰 서버 타입별 저장**: TB_KOREA_INVESTMENT_TOKENS에 SERVER_TYPE 추가(V12), UK(USER_ID, SERVER_TYPE). KoreaInvestmentToken 엔티티·KoreaInvestmentTokenRepository.findByUserIdAndServerType. **TokenService**: getAccessToken(userId, serverType) 추가, 발급/저장 시 serverType 반영, getAccessToken(userId)는 serverType="1" 위임(호환). **주문 경로 계좌별 키·토큰**: KoreaInvestmentOrderClient에서 accountNo → resolveServerTypeForAccount, getUserApiKeyForAccount(userId, accountNo), getAccessToken(userId, serverType) 사용. **실전 계좌 실행 가드**: investment.pipeline.allow-real-execution(false 기본). PipelineExecutor·PipelineExitScheduler에서 serverType='0' 계좌는 allow-real-execution=false 시 주문 스킵(로그 경고). application.yml pipeline.allow-real-execution, PIPELINE_ALLOW_REAL_EXECUTION. (V12 롤백 스크립트는 Flyway·마이그레이션 정리로 제거됨. 필요 시 git history 참조.)
 - [x] **4단계 파이프라인 확장 (데이터 수집 후 실제 구현)**  
   **1) 미국 듀얼 모멘텀**: FactorCalculationService — TB_DAILY_STOCK(US) 기간별 수익률 가중합(dual-momentum-period-days/weights), 시장 모멘텀=유니버스 평균, score=종목 모멘텀−시장 모멘텀(%). **2) Half-Kelly p·b 백테스트 연동**: PositionSizingService.applyHalfKelly(전략별 p·b), application.yml kelly-p/kelly-b + kelly-p-short-term 등 전략별 키(백테스트 winRate·profitFactor 반영용). **3) 유니버스**: TB_SECTOR_RETURN·TB_SYMBOL_SECTOR(V13), TB_EARNINGS_SURPRISE(V14). UniverseFilterService — Sector RS(상위 N개 업종 내 종목), Post-Earnings Drift(최근 N일 실적 발표 상위 20%), 데이터 없으면 유동성만. sector-rs-top-n, earnings-surprise-lookback-days, earnings-surprise-top-pct. **4) 시그널**: TB_ORDER_FLOW(V15), TB_FUNDAMENTALS(V16). FactorCalculationService — 수급 강도(KR) TB_ORDER_FLOW 기반 순매수/시총 비율(%), 퀄리티-성장(US) TB_FUNDAMENTALS 기반 PEG·Rule of 40 합산 점수, 데이터 없으면 0. smart-money-intensity-threshold-pct. [00-strategy-registry.md](../02-architecture/00-strategy-registry.md) 버전 스택 v1.5 반영.
+- [x] **로보 어드바이저 백테스트·자동투자 연동**  
+  **백테스트 엔진**: RoboAllocationEngine(공통 스코어링·비중), RoboBacktestService(과거 일봉 재생·CAGR·MDD·Sharpe·Calmar·Turnover·벤치마크·리밸런싱 이력). **API**: POST /api/v1/backtest/robo, GET /api/v1/backtest/robo/last-pre-execution. **UI**: /backtest 모드 선택(4단계 파이프라인 | 로보어드바이저), 로보 간단/고급 폼·해석 문구·메트릭 카드·수익 곡선 vs 벤치마크·리밸런싱 이력. **자동투자 연동**: TB_TRADING_SETTINGS ROBO_ADVISOR_ENABLED(V17), RoboRebalanceScheduler(월/분기 말 실행), 실행 전 백테스트(최근 N개월)·정책(MDD·Sharpe) 통과 시에만 RoboRebalanceExecutor 호출(목표 비중 로깅, ETF 주문 연동 추후). RoboPreExecutionResultStore(실행 전 결과 저장)·설정 화면 로보 어드바이저 ON/OFF. [00-strategy-registry.md](../02-architecture/00-strategy-registry.md) v1.6 반영.
+- [x] **월스트리트 정렬(한국·미국)**  
+  **한국(KR)**: 청산 -5% 고정 손절·전저점 이탈·RSI≥70 익절(ExitRuleEvaluator·ExitRuleService·StrategyPosition PRIOR_LOW V18); 진입 5일 연속 수급 메타(TB_ORDER_FLOW NET_BUY_AMT_1D V19)·역발상 RSI(CONTRARIAN_RSI)·P/B 필터 스텁(UniverseFilterService). **미국(US)**: 듀얼 모멘텀(노트) 모드 — 절대 SPY 12M vs T-bill·상대 섹터 ETF 6M 상위 2개(RoboAllocationEngine.computeTargetWeightsDualMomentumNote·RoboBacktestService·RoboRebalanceExecutor 모드 분기). application.yml pipeline.short-term-kr-stop-loss-pct·prior-low-stop-kr-enabled·rsi-exit-threshold·factor.contrarian-rsi-threshold·pb-value-min/max·backtest.robo.dual-momentum-mode·sector-etf-symbols 등. [00-strategy-registry.md](../02-architecture/00-strategy-registry.md)·[12-auto-investment-strategy.md](../02-architecture/12-auto-investment-strategy.md) v1.7 반영.
+- [x] **자동매매 직전 점검 보완 (Go/No-Go)**  
+  **Time-Cut 단기 전용**: ExitRuleEvaluator에서 Time-Cut을 SHORT_TERM에만 적용, MEDIUM_TERM/LONG_TERM 제거. PipelineExecutor·BacktestService 포지션 생성 시 SHORT_TERM만 timeCutDays/targetReturnPct 설정. **Hunter 분기(KR 단기)**: PositionSizingService.filterSymbolsKrShortTerm — Case A(수급 강함 → RSI&gt;60 &amp; MACD) ∪ Case B(역발상 RSI&lt;40). **시초가 유동성**: liquidity-min-trd-val-opening(300억), KR 단기 getRecommendations에서 적용. **켈리 초기 고정 비율**: kelly-enabled(false)·kelly-fixed-allocation-pct(2), applyHalfKelly에서 비활성 시 고정 비율만 적용. **미국 갭 스킵**: us-gap-up-skip-pct(5), US 파이프라인에서 전일 대비 갭 N% 이상 종목 제외. **Discord 긴급 알림**: EmergencyAlertService·DiscordEmergencyAlertService(알림에 userId·계좌 마스킹·모의/실전·증권사·URL 포함), UnfilledOrderCheckScheduler(PENDING N분 경과 시 알림), alert-discord-webhook-url·alert-base-url·unfilled-check-minutes. OrderRepository.findByStatusAndOrderTimeBefore. [00-strategy-registry.md](../02-architecture/00-strategy-registry.md) v1.8·[12-auto-investment-strategy.md](../02-architecture/12-auto-investment-strategy.md) §6.2 체크리스트 반영.
+- [x] **자동매매 실제 API 연동(KR/US)**  
+  **국내 주문 MCP 검증**: 한국투자증권 MCP search_domestic_stock_api(order_cash)로 국내 주문 API 스펙 확인 — 엔드포인트·TR_ID·필수 파라미터·Hashkey 일치. **해외 주문 API 연동**: MCP search_overseas_stock_api(order) 기반 해외주식 주문(/uapi/overseas-stock/v1/trading/order, TTTT1002U/VTTT1002U 매수, TTTT1006U/VTTT1006U 매도) 구현. KoreaInvestmentOrderClient에 placeOverseasBuyOrder·placeOverseasSellOrder 추가(미국 NASD, 지정가 00). **시장 분기**: OrderRequestDto에 market(KR/US) 추가·getMarketOrKr(), OrderService.executeOrderInternal에서 market=US 시 해외 주문 호출. **파이프라인·청산**: PipelineExecutor OrderRequestDto 생성 시 rec.getMarket() 설정, PipelineExitScheduler 매도 요청에 position.getMarket() 설정·시세 없을 때 해당 건 스킵. [09-korea-investment-api-guide.md](../04-api/09-korea-investment-api-guide.md) 국내/해외 주문 API 섹션 추가.
+- [x] **전문 투자자 흐름 P0~P3**  
+  **P0 리스크 게이트·일일 손실 한도**: RiskProperties·RiskGateService(레짐·VIX·MacroEconomicStrategyEngine 연동), DailyLossLimitService(시초 평가액 기록·isNewBuyAllowed), PipelineExecutionScheduler 실행 전 검사·비중 배율 적용. AccountService.getBalanceAndPositionsWithUserId(파이프라인용). **P1 실행가·상한**: RoboBacktestService rebalanceExecutionPrice(CLOSE/NEXT_OPEN), getOpen·getExecutionPrice. PositionSizingService position-cap-per-symbol-pct·max-new-positions-per-day. **P2 장중 변동성 돌파**: IntradayBreakoutService(전일 유니버스·시가+Range×k·실시간 시세), IntradayBreakoutScheduler(09:10·09:40), BreakoutCandidateDto. **P3 일일 PnL 리뷰**: DailyPnlService·DailyPnlScheduler(16:05), DailyLossLimitService.getOpeningBalance. application.yml investment.risk.*, investment.intraday.*, investment.daily-pnl.*. [00-strategy-registry.md](../02-architecture/00-strategy-registry.md) §2.9·§3.2.1, [12-auto-investment-strategy.md](../02-architecture/12-auto-investment-strategy.md) §6.2 반영.
+- [x] **P0~P3 후속: 테스트·VIX·로보 ETF 주문**  
+  **테스트**: RiskGateService·DailyLossLimitService·IntradayBreakoutService·DailyPnlService 단위 테스트, PipelineExecutionScheduler·IntradayBreakoutScheduler·DailyPnlScheduler 테스트 추가. **VIX·거시 지표 연동**: MacroIndicatorProvider 인터페이스·DefaultMacroIndicatorProvider(설정 URL GET JSON 파싱 vix/interestRate 등), PipelineExecutionScheduler에 주입·getCurrentIndicators() → evaluateWithIndicators/evaluate(vix). investment.risk.macro-indicator-url(선택). **로보 ETF 주문 실행**: RoboRebalanceExecutor에서 AccountService.getBalanceAndPositionsWithUserId·US 보유 비중 조회 후 목표 비중과 비교해 매수/매도 OrderRequestDto(market=US) 생성·OrderService.executeOrderForPipeline 호출. execute-orders(false 기본)·min-order-amount-usd(50). [00-strategy-registry.md](../02-architecture/00-strategy-registry.md)·[12-auto-investment-strategy.md](../02-architecture/12-auto-investment-strategy.md) 반영.
 
 ### 자동투자 프로세스·활성화 체크리스트
 
@@ -114,7 +146,7 @@
 
 ## 2. 진행중 (In progress)
 
-- *(현재 진행중인 스프린트/태스크가 있으면 여기에 항목을 추가한다.)*
+- **로보·파이프라인 통합 복합 로직**: 자동매수 = 파이프라인+로보 통합 복합 로직(한 오케스트레이션)으로 문서·설계 목표 반영. 트리거 API·스케줄 현황 "지금 실행" 버튼·백테스트 기본 기간(최근 1개월) 구현 진행.
 
 ---
 
@@ -211,3 +243,6 @@
 | 1.23 | 2026-02-01 | 자동투자 프로세스·활성화 체크리스트 문단 추가(§1 직후). 모의계좌 자동투자 실행 가능화 항목에 실제 주문 활성화 조건(auto-execute=true 필요, 기본값 false) 보강. 12-auto-investment-strategy §6.2 참조. |
 | 1.24 | 2026-02-01 | 완료: 모의계좌 투자 실제 실행 준비 — 토큰 서버 타입별 저장(V12), getAccessToken(userId, serverType), 주문 경로 계좌별 API 키·토큰, allow-real-execution 가드, 문서·체크리스트 보강. |
 | 1.25 | 2026-02-01 | 완료: 4단계 파이프라인 확장(데이터 수집 후 실제 구현) — 미국 듀얼 모멘텀(TB_DAILY_STOCK), Half-Kelly p·b 백테스트 연동(전략별 설정), Sector RS·Post-Earnings Drift(TB_SECTOR_RETURN·TB_SYMBOL_SECTOR·TB_EARNINGS_SURPRISE V13/V14), 수급 강도·퀄리티-성장(TB_ORDER_FLOW·TB_FUNDAMENTALS V15/V16). 진행예정 항목 체크. |
+| 1.26 | 2026-02-02 | 완료: 로보 어드바이저 백테스트·자동투자 연동 — RoboAllocationEngine·RoboBacktestService·POST/GET backtest/robo API·/backtest 모드·설정 로보 ON/OFF·RoboRebalanceScheduler·실행 전 백테스트·TB_TRADING_SETTINGS ROBO_ADVISOR_ENABLED(V17). |
+| 1.27 | 2026-02-02 | 완료: 월스트리트 정렬(한국·미국) — **한국(KR)**: 청산 -5% 고정·전저점 이탈·RSI≥70 익절(ExitRuleEvaluator·ExitRuleService·StrategyPosition PRIOR_LOW V18); 진입 5일 연속 수급 메타( TB_ORDER_FLOW NET_BUY_AMT_1D V19)·역발상 RSI(CONTRARIAN_RSI)·P/B 필터 스텁(UniverseFilterService). **미국(US)**: 듀얼 모멘텀(노트) 모드 — 절대 SPY 12M vs T-bill·상대 섹터 ETF 6M 상위 2개(RoboAllocationEngine.computeTargetWeightsDualMomentumNote·RoboBacktestService·RoboRebalanceExecutor 모드 분기). application.yml pipeline.short-term-kr-stop-loss-pct·prior-low-stop-kr-enabled·rsi-exit-threshold·factor.contrarian-rsi-threshold·pb-value-min/max·backtest.robo.dual-momentum-mode·sector-etf-symbols 등. 00-strategy-registry·12-auto-investment-strategy v1.7 반영. |
+| 1.28 | 2026-02-03 | 완료: 자동투자 현황 3단계 자금 배분 요약 표시 — PipelineSummaryDto.allocationSummary, PipelineSummaryService 거래 설정 기반 단기·중기·장기 예상 배분 계산·포맷, auto-invest 3단계 카드 실데이터 표시. KRX Open API 필요 목록 문서 추가(08-setup-guides/04-krx-api-required.md). |

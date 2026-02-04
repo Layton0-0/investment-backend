@@ -202,4 +202,86 @@ class OrderServiceTest {
 
                 assertEquals(ErrorCode.ORDER_NOT_FOUND, exception.getErrorCode());
         }
+
+        @Test
+        void executeOrderForPipeline_marketKR_callsDomesticOrder() {
+                // given: market KR (or null) → domestic placeBuyOrder
+                when(tradingSettingRepository.findByAccountNo("1234567890"))
+                                .thenReturn(Optional.of(tradingSetting));
+                when(orderClient.placeBuyOrder(eq(TEST_USER_ID), anyString(), eq("005930"), anyInt(), any(),
+                                anyString()))
+                                .thenReturn(Mono.just(KoreaInvestmentOrderClient.OrderResponse.builder()
+                                                .orderNo("ORD-KR-1")
+                                                .status("SUCCESS")
+                                                .build()));
+                Order savedOrder = Order.builder()
+                                .accountNo(orderRequest.getAccountNo())
+                                .symbol(orderRequest.getSymbol())
+                                .orderType(Order.OrderType.BUY)
+                                .quantity(orderRequest.getQuantity())
+                                .price(orderRequest.getPrice())
+                                .status(Order.OrderStatus.PENDING)
+                                .build();
+                try {
+                        java.lang.reflect.Field idField = Order.class.getDeclaredField("id");
+                        idField.setAccessible(true);
+                        idField.set(savedOrder, java.util.UUID.randomUUID().toString());
+                } catch (Exception e) {
+                        throw new RuntimeException(e);
+                }
+                when(orderRepository.save(any(Order.class))).thenReturn(savedOrder);
+
+                // when
+                orderService.executeOrderForPipeline(orderRequest, TEST_USER_ID);
+
+                // then
+                verify(orderClient).placeBuyOrder(eq(TEST_USER_ID), eq("1234567890"), eq("005930"), eq(10), any(),
+                                anyString());
+                verify(orderClient, never()).placeOverseasBuyOrder(any(), any(), any(), anyInt(), any(), any());
+        }
+
+        @Test
+        void executeOrderForPipeline_marketUS_callsOverseasOrder() {
+                // given: market US → overseas placeOverseasBuyOrder (금액이 최소/최대 투자금액 내여야 함)
+                OrderRequestDto usRequest = OrderRequestDto.builder()
+                                .accountNo("1234567890")
+                                .symbol("AAPL")
+                                .orderType(OrderRequestDto.OrderType.BUY)
+                                .quantity(100)
+                                .price(new BigDecimal("150.00"))
+                                .market("US")
+                                .build();
+                when(tradingSettingRepository.findByAccountNo("1234567890"))
+                                .thenReturn(Optional.of(tradingSetting));
+                when(orderClient.placeOverseasBuyOrder(eq(TEST_USER_ID), anyString(), eq("AAPL"), eq(100), any(),
+                                anyString()))
+                                .thenReturn(Mono.just(KoreaInvestmentOrderClient.OrderResponse.builder()
+                                                .orderNo("ORD-US-1")
+                                                .status("SUCCESS")
+                                                .build()));
+                Order savedOrder = Order.builder()
+                                .accountNo(usRequest.getAccountNo())
+                                .symbol(usRequest.getSymbol())
+                                .orderType(Order.OrderType.BUY)
+                                .quantity(100)
+                                .price(usRequest.getPrice())
+                                .status(Order.OrderStatus.PENDING)
+                                .build();
+                try {
+                        java.lang.reflect.Field idField = Order.class.getDeclaredField("id");
+                        idField.setAccessible(true);
+                        idField.set(savedOrder, java.util.UUID.randomUUID().toString());
+                } catch (Exception e) {
+                        throw new RuntimeException(e);
+                }
+                when(orderRepository.save(any(Order.class))).thenReturn(savedOrder);
+
+                // when
+                orderService.executeOrderForPipeline(usRequest, TEST_USER_ID);
+
+                // then
+                verify(orderClient).placeOverseasBuyOrder(eq(TEST_USER_ID), eq("1234567890"), eq("AAPL"), eq(100),
+                                any(), anyString());
+                verify(orderClient, never()).placeBuyOrder(any(), any(), any(), anyInt(), any(), any());
+        }
 }

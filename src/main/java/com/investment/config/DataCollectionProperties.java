@@ -61,11 +61,16 @@ public class DataCollectionProperties {
     public static class Us {
         /** US 시장 일별 시세 수집 cron. 기본 매일 17:00 KST (미국 장 마감 후) */
         private String scheduleCron = "0 0 17 * * *";
-        /** yfinance 스크립트 절대/상대 경로. 미설정 시 US 일별 수집 스킵(스텁) */
+        /** yfinance 스크립트 절대/상대 경로. 미설정 시 US 일별 수집 스킵(스텁). collector-url 설정 시 무시 */
         private String yfinanceScriptPath = "";
+        /**
+         * Docker Compose us-daily-collector 서비스 URL (예: http://localhost:8001,
+         * http://us-daily-collector:8001). 설정 시 스크립트 대신 HTTP 호출
+         */
+        private String collectorUrl = "";
         /** 수집 대상 종목 코드 (쉼표 구분). 스크립트에 --symbols 로 전달 */
         private String symbols = "AAPL,MSFT,GOOGL,AMZN,META,TSLA,NVDA,JPM,V,JNJ";
-        /** Python 실행 명령 (예: python, python3, py). 기본 python */
+        /** Python 실행 명령 (예: python, python3, py). 기본 python. collector-url 사용 시 무시 */
         private String pythonCommand = "python";
     }
 }

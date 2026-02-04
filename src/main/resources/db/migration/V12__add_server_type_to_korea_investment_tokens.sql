@@ -1,9 +1,0 @@
--- V12: TB_KOREA_INVESTMENT_TOKENS에 SERVER_TYPE 추가 (모의/실전 토큰 분리)
--- 적용 전 DB 백업 권장. 롤백: db/migration/rollback/V12_rollback.sql 참고.
--- 1=모의투자, 0=실거래. 동일 사용자가 모의·실전 각각 토큰 보관 가능.
-
-ALTER TABLE TB_KOREA_INVESTMENT_TOKENS
-    ADD COLUMN SERVER_TYPE VARCHAR(1) NOT NULL DEFAULT '1' COMMENT '1: 모의투자, 0: 실거래';
-
-ALTER TABLE TB_KOREA_INVESTMENT_TOKENS
-    ADD CONSTRAINT UK_KI_TOKENS_USER_SERVER UNIQUE (USER_ID, SERVER_TYPE);

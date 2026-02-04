@@ -37,6 +37,9 @@ public class OrderFlow {
     @Column(name = "NET_BUY_AMT_5D")
     private Long netBuyAmt5d;
 
+    @Column(name = "NET_BUY_AMT_1D")
+    private Long netBuyAmt1d;
+
     @Column(name = "MARKET_CAP")
     private Long marketCap;
 
@@ -51,11 +54,13 @@ public class OrderFlow {
     }
 
     @Builder
-    public OrderFlow(LocalDate basDt, String symbol, String market, Long netBuyAmt5d, Long marketCap, LocalDateTime createdAt) {
+    public OrderFlow(LocalDate basDt, String symbol, String market, Long netBuyAmt5d, Long netBuyAmt1d, Long marketCap,
+            LocalDateTime createdAt) {
         this.basDt = basDt;
         this.symbol = symbol;
         this.market = market;
         this.netBuyAmt5d = netBuyAmt5d;
+        this.netBuyAmt1d = netBuyAmt1d;
         this.marketCap = marketCap;
         this.createdAt = createdAt != null ? createdAt : LocalDateTime.now();
     }

@@ -905,17 +905,83 @@ curl -X POST "http://localhost:8080/api/v1/market-data/current-prices" \
 
 ---
 
+## 트리거 API (수동 실행)
+
+스케줄 작업을 수동으로 한 번 실행할 때 사용합니다. 스케줄 현황(`/batch`) 화면의 "지금 실행" 버튼 및 자동투자 현황의 "파이프라인 수동 실행 (dry-run)" 등에서 호출합니다. **인증 필요**. 구현은 Spring Batch Job을 `JobLauncher.run`으로 실행하며, 경로·요청 파라미터·응답 형식(`success`, `message` 등)은 기존과 동일합니다.
+
+**공통 응답**: `200 OK` 시 JSON `{ "success": true|false, "message": "..." }` 및 작업별 추가 필드. 실패 시에도 200으로 반환하고 `success: false`, `message`에 사유.
+
+| 엔드포인트 | 설명 | 쿼리/비고 |
+|------------|------|-----------|
+| `POST /api/v1/trigger/dart-collect` | DART 공시 수집 즉시 실행 | - |
+| `POST /api/v1/trigger/sec-collect` | SEC EDGAR 공시 수집 즉시 실행 | - |
+| `POST /api/v1/trigger/krx-daily` | KRX 일별 시세 수집 즉시 실행 | `basDt` (optional, yyyy-MM-dd). 미입력 시 오늘 |
+| `POST /api/v1/trigger/us-daily` | US 시장 일별 시세 수집 즉시 실행 | `basDt` (optional). 미입력 시 오늘. 응답에 `saved` 포함 |
+| `POST /api/v1/trigger/factor-calculation` | 유니버스 필터 및 팩터(시그널) 계산 즉시 실행 | - |
+| `POST /api/v1/trigger/pipeline-execution` | 4단계 파이프라인 실행 | `dryRun` (optional, boolean). true면 실제 주문 없이 실행. 응답에 `dryRun` 포함 |
+| `POST /api/v1/trigger/pipeline-exit` | 보유 포지션 청산 규칙 평가 및 매도 시그널 시 주문 실행 | - |
+| `POST /api/v1/trigger/fill-confirmation` | 체결된 주문에 대해 포지션 등록 | - |
+| `POST /api/v1/trigger/unfilled-check` | PENDING N분 경과 주문에 대해 Discord 긴급 알림 | - |
+| `POST /api/v1/trigger/robo-rebalance` | 로보 어드바이저 리밸런싱 | `dryRun` (optional, boolean). true면 백테스트만 실행·저장, ETF 주문 없음. 응답에 `dryRun` 포함 |
+| `POST /api/v1/trigger/daily-pnl` | 장 마감 후 계좌별 당일 수익률 기록 | - |
+| `POST /api/v1/trigger/intraday-breakout` | 장중 변동성 돌파(09:00~10:00 구간) 실행 | 설정 시에만 유효 |
+| `POST /api/v1/trigger/medium-term-rebalance` | 중기(MEDIUM_TERM) 월 1회 리밸런싱 훅 (스텁) | - |
+
+**요청 예시**:
+```bash
+curl -X POST "http://localhost:8080/api/v1/trigger/dart-collect" -H "Content-Type: application/json" --cookie "token=..."
+curl -X POST "http://localhost:8080/api/v1/trigger/pipeline-execution?dryRun=true" -H "Content-Type: application/json" --cookie "token=..."
+```
+
+---
+
 ## 백테스트 API
 
 ### POST /api/v1/backtest
 
 **엔드포인트**: `POST /api/v1/backtest`
 
-**설명**: 기간·시장·전략타입·초기자본으로 4단계 파이프라인을 과거 일봉·시그널로 재생하여 메트릭·수익 곡선·거래 목록을 반환합니다. 인증 필요.
+**설명**: 기간·시장·전략타입·초기자본으로 4단계 파이프라인을 과거 일봉·시그널로 재생하여 메트릭·수익 곡선·거래 목록을 반환합니다. 마찰 비용(수수료·세금·슬리피지)은 `application.yml`의 `investment.fees` 설정을 적용합니다. 인증 필요.
 
 **요청 본문 (BacktestRunRequest)**: startDate, endDate, market (KR/US), strategyType (SHORT_TERM/MEDIUM_TERM/LONG_TERM), initialCapital
 
-**성공 응답 (200 OK, BacktestRunResult)**: startDate, endDate, market, strategyType, initialCapital, finalEquity, totalReturnPct, cagr, mddPct, sharpeRatio, sortinoRatio, calmarRatio, winRate, avgWin, avgLoss, profitFactor, tradeCount, winningTrades, losingTrades, equityCurve, trades
+**성공 응답 (200 OK, BacktestRunResult)**: startDate, endDate, market, strategyType, initialCapital, finalEquity, totalReturnPct, cagr, mddPct, sharpeRatio, sortinoRatio, calmarRatio, winRate, avgWin, avgLoss, profitFactor, tradeCount, winningTrades, losingTrades, equityCurve, trades (각 거래에 totalFrictionCost 포함)
+
+---
+
+### POST /api/v1/backtest/robo
+
+**엔드포인트**: `POST /api/v1/backtest/robo`
+
+**설명**: 로보 어드바이저 동적 자산배분(모멘텀·변동성 역가중) 백테스트. 기간·초기자본·선택 파라미터로 실행 후 메트릭·수익 곡선·벤치마크 곡선·리밸런싱 이력을 반환합니다. 요청에 commPct/slipPct가 없으면 `investment.fees`(미국 ETF round-trip·TAF)를 적용하고, 있으면 해당 값으로 오버라이드(하위 호환)합니다. 인증 필요.
+
+**요청 본문 (RoboBacktestRequest)**: startDate, endDate, initialCapital (필수). optional: assetSymbols, momentumMonths, maWindowDays, topN, rebalanceFrequency (MONTHLY/QUARTERLY), driftThresholdPct, commPct, slipPct, riskFreeRatePct, benchmarkWeights, volatilityLookbackDays
+
+**성공 응답 (200 OK, RoboBacktestResult)**: startDate, endDate, initialCapital, finalEquity, totalReturnPct, cagr, mddPct, sharpeRatio, calmarRatio, turnover, benchmarkCagr, benchmarkMddPct, equityCurve, benchmarkCurve, rebalanceHistory, warningMessage (선택, 데이터 부재·평평한 곡선 안내)
+
+---
+
+### GET /api/v1/backtest/robo/last-pre-execution
+
+**엔드포인트**: `GET /api/v1/backtest/robo/last-pre-execution?accountNo=xxx`
+
+**설명**: 로보 리밸런싱 스케줄러가 마지막으로 실행한 실행 전 백테스트 결과(통과/미통과·MDD·Sharpe·실행 시각)를 조회합니다. 인증 필요.
+
+**쿼리**: accountNo (필수)
+
+**성공 응답 (200 OK, LastPreExecutionResultDto)**: accountNo, passed, mddPct, sharpeRatio, runAt. 결과 없으면 204 No Content.
+
+---
+
+### POST /api/v1/backtest/robo/collect-us-daily
+
+**엔드포인트**: `POST /api/v1/backtest/robo/collect-us-daily`
+
+**설명**: 로보 백테스트에 필요한 US 일봉(SPY, TLT, 섹터 ETF 등)을 yfinance 스크립트로 수집합니다. `investment.data.us.yfinance-script-path`가 설정되어 있어야 합니다. startDate/endDate 미입력 시 최근 30일 수집. 인증 필요.
+
+**요청 본문 (CollectUsDailyRequest, 선택)**: startDate, endDate (둘 다 optional. null이면 endDate=오늘, startDate=30일 전)
+
+**성공 응답 (200 OK, CollectUsDailyResponse)**: collectedDays (수집한 일수), savedTotal (총 저장 건수), message (안내, 스크립트 미설정 등)
 
 ---
 
@@ -925,3 +991,4 @@ curl -X POST "http://localhost:8080/api/v1/market-data/current-prices" \
 |------|------|--------|----------|
 | 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 - 계좌 API 상세 내용 통합 |
 | 1.1 | 2026-01-28 | System | 시장 데이터 API 섹션 추가 (현재가 조회) |
+| 1.2 | 2026-02-03 | System | 트리거 API(수동 실행) 섹션 추가 - DART/SEC/KRX/US 수집·팩터 계산·파이프라인 실행/청산·체결 확인·미체결 확인·로보 리밸런싱·일일 PnL·장중 변동성 돌파·중기 리밸런스 |

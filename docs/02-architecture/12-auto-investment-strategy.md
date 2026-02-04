@@ -85,17 +85,20 @@
 
 **질문**: "언제, 무엇을 살 것인가?"
 
-#### 미국 (효율적 시장, 추세 지속성 강함)
+#### 미국 (효율적 시장, 추세 지속성 강함) — "Surfer" 월스트리트 정렬
 
-- **듀얼 모멘텀 스코어링**: 기간별 수익률 가중합(최근 1개월 가중치 권장). 조건: 종목 모멘텀 > 시장 모멘텀 (시장보다 강한 종목만 매수).
+- **듀얼 모멘텀(노트) 모드**: **절대 모멘텀** — S&P500(SPY) 12개월 수익률 &gt; 무위험(T-bill/BIL) 시에만 주식 보유, 미충족 시 전액 현금 또는 TLT. **상대 모멘텀** — 섹터 ETF(XLK, XLE, XLF 등) 지난 **6개월** 수익률 상위 **2개** 매수. 리밸런싱 월 1회 말일.
+- **듀얼 모멘텀 스코어링**(종목): 기간별 수익률 가중합(최근 1개월 가중치 권장). 조건: 종목 모멘텀 > 시장 모멘텀 (시장보다 강한 종목만 매수).
 - **퀄리티-성장 팩터**: PEG & Rule of 40 합산 점수 상위 10% (빅테크·성장주).
 - **VAA(Vigilant Asset Allocation) 변형**: SPY/EFA/EEM/BND 중 모멘텀 스코어 최고 1개 자산에 100% 배분, 하락 시 현금/채권 100% 이탈.
 
-#### 한국 (비효율적 시장, 수급·사이클 위주)
+#### 한국 (비효율적 시장, 수급·사이클 위주) — "Hunter" 월스트리트 정렬
 
+- **진입 분기(Branch)**: **Case A(모멘텀)**: 수급 강함(5일 연속 순매수·Smart Money 임계 초과) → RSI&gt;60 &amp; MACD 필터. **Case B(역발상)**: 수급 없어도 P/B 0.8 이하 + RSI(14)&lt;40 → 기술적 반등 진입. 최종 유니버스 = A ∪ B (둘을 AND로 섞지 않음).
 - **수급 강도 (Smart Money Intensity)**: 최근 5일 누적 순매수 금액이 시총의 일정 비율(예: 0.5%) 초과 시 매수 시그널.
 - **이격도 과열/침체 (Disparity Ratio Reversion)**: Disparity = (현재가 / 이동평균) × 100. 공격형: 105 돌파 후 102로 눌릴 때 매수(눌림목); 역발상: 85 이하 분할 매수(과매도).
-- **변동성 돌파 (한국형 튜닝)**: Target = Open + (Range × k). 한국장 9:00~10:00 변동성 반영해 k 값 동적 적용 (데이트레이딩/단기 스윙).
+- **변동성 돌파 (한국형 튜닝)**: Target = Open + (Range × k). 한국장 9:00~10:00 변동성 반영해 k 값 동적 적용. 시초가 매매 시 **최유리 지정가 또는 IOC** 사용 권장, 유동성 **300억 원 이상** (`liquidity-min-trd-val-opening`) 적용.
+- **청산**: 수익 실현 RSI ≥ 70 또는 외국인 3일 연속 순매도; 손절 **진입가 대비 -5%** 또는 **전저점 이탈**. (상세: [00-strategy-registry.md](./00-strategy-registry.md) §3.3)
 
 ### 5.3 3단계: 자금 관리 및 베팅 비율 (Position Sizing)
 
@@ -109,7 +112,7 @@
 **질문**: "언제 팔 것인가?"
 
 - **ATR Trailing Stop (추적 손절)**: 익절 라인이 상승을 따라 이동. 공격형은 Multiplier 2.0~2.5로 설정 — 흔들림은 견디되 추세 꺾이면 즉시 매도.
-- **Time-Cut (시간 청산)**: 매수 후 N일(예: 5일) 내 목표 수익률(예: 3%) 미도달 시 기회비용으로 간주하고 전량 매도.
+- **Time-Cut (시간 청산)**: **단기(SHORT_TERM) 전용**. 매수 후 N일(예: 5일) 내 목표 수익률(예: 3%) 미도달 시 전량 매도. 중기/장기 듀얼 모멘텀은 **추세 훼손(-10% 손절·이평선 이탈 등)만** 청산.
 
 ---
 
@@ -154,9 +157,19 @@
 
 **상세**: [개발 진행 현황](../09-planning/02-development-status.md), [전략 통합 문서](./00-strategy-registry.md)
 
+### 6.1.1 자동매수 = 통합 복합 로직 (설계 목표)
+
+- **자동매수(자동투자)** = 단일 제품.
+- **실행 로직** = **파이프라인과 로보가 통합된 하나의 복합 로직**. 한 번의 자동매수 실행이 내부에서 다음을 한 흐름으로 수행한다:
+  1. **공통 전처리**: 리스크 게이트·일일 손실 한도 검사, (필요 시) 데이터/팩터 준비.
+  2. **로보(ETF) 단계**: 로보 어드바이저 ON 계좌에 대해 실행 전 백테스트 통과 시 ETF 동적 자산배분 리밸런싱(매수/매도).
+  3. **파이프라인(개별종목) 단계**: 자동매수 ON 계좌에 대해 유니버스 → 시그널 → 자금관리 → 개별 종목 매매 실행·청산 평가.
+
+**설계 목표**: 기존 `PipelineExecutionScheduler` / `RoboRebalanceScheduler`를 별도 스케줄로 두지 않고, **통합 자동매수 오케스트레이터** 한 번 호출로 위 순서(공통 전처리 → 로보 → 파이프라인)를 실행하는 방향으로 통합한다. 설정에서는 "자동매수 ON" 하나로 이 통합 로직을 켜고, 세부에서 "로보 포함 여부"만 옵션으로 둘 수 있다. 수동 트리거 API(`/api/v1/trigger/...`) 및 스케줄 현황 화면의 "지금 실행" 버튼으로 각 단계를 수동 실행할 수 있다.
+
 ### 6.2 자동투자 프로세스 플로우
 
-자동투자는 **데이터 수집 → 팩터 계산 → 파이프라인 실행 → 청산 평가 → 체결 확인** 순으로 스케줄에 따라 동작한다.
+자동투자는 **리스크 게이트·일일 손실 한도 검사 → 데이터 수집 → 팩터 계산 → 파이프라인 실행 → 청산 평가 → 체결 확인 → 일일 PnL 리뷰** 순으로 스케줄에 따라 동작한다. 전문 투자자 흐름(P0~P3): 파이프라인 실행 전 `RiskGateService`·`DailyLossLimitService` 검사, 장중 변동성 돌파(`IntradayBreakoutScheduler`), 장 마감 후 `DailyPnlScheduler`로 일일 수익률 기록.
 
 **스케줄 요약**
 
@@ -204,13 +217,20 @@ sequenceDiagram
   Fill->>Fill: EXECUTED 주문 to 포지션 등록 옵션에 따라
 ```
 
-**실제 자동 주문을 쓰기 위한 체크리스트**
+**실제 자동 주문을 쓰기 위한 체크리스트 (Go/No-Go)**
 
-1. **설정 화면 (/settings)**: 계좌 선택, 거래 설정 저장, **자동 매매 ON** 체크, 최대 투자금액·단기/중기/장기 비율 입력.
-2. **서버 설정**: `investment.pipeline.auto-execute: true` 또는 환경변수 `PIPELINE_AUTO_EXECUTE=true`. (기본값은 false라 설정하지 않으면 dry-run만 동작.)
-3. **모의계좌 권장**: 실전 전 모의 2주 테스트. [로드맵 Phase 7](../roadmap.md) 참조.
-4. **모의계좌 실제 실행**: 모의 앱키·계좌 인증 완료, `PIPELINE_ALLOW_REAL_EXECUTION=false`(기본)로 실전 계좌 자동 실행 미허용. 실전 계좌 자동 실행은 `PIPELINE_ALLOW_REAL_EXECUTION=true`로만 허용.
-5. **모의 Rate Limit**: 한국투자증권 모의투자 1초당 2건 제한 인지. 스케줄(09:10 실행·장중 청산·체결 확인) 확인.
+1. **[Execution·시장]** **국내(KR)** 주문은 국내주식 주문 API(`/uapi/domestic-stock/v1/trading/order-cash`) 사용, **해외(US)** 주문은 해외주식 주문 API(`/uapi/overseas-stock/v1/trading/order`) 사용. `OrderRequestDto.market`에 따라 자동 분기.
+2. **[Logic]** 한국 전략에서 "외국인 매수"와 "RSI 과매도" 동시 미발생 시 **우선순위(분기)** 적용: Case A(모멘텀) ∪ Case B(역발상). (§5.2 Hunter)
+3. **[Execution]** 9:00 개장 직후 슬리피지 방어: 시초가/변동성 돌파 시 **유동성 300억 원 이상** (`liquidity-min-trd-val-opening`), **최유리 지정가 또는 IOC** 사용.
+4. **[Strategy]** 미국 듀얼 모멘텀(중/장기)이 **Time-Cut에 의해 청산되지 않도록** 파이프라인 분리 (Time-Cut은 단기 전용).
+5. **[Risk]** 초기 운용 기간 **켈리 비활성** (`kelly-enabled: false`), **고정 자산 비율**만 사용 (`kelly-fixed-allocation-pct`).
+6. **[Fail-safe]** 매수/매도 주문 후 **체결 미확인 시 Discord 긴급 알림** (`alert-discord-webhook-url`, `unfilled-check-minutes`). 알림에 userId·계좌(마스킹)·모의/실전·증권사·URL 포함.
+7. **설정 화면 (/settings)**: 계좌 선택, 거래 설정 저장, **자동 매매 ON** 체크, 최대 투자금액·단기/중기/장기 비율 입력.
+8. **서버 설정**: `investment.pipeline.auto-execute: true` 또는 환경변수 `PIPELINE_AUTO_EXECUTE=true`. (기본값은 false라 설정하지 않으면 dry-run만 동작.)
+9. **모의계좌 권장**: 실전 전 모의 2주 테스트. [로드맵 Phase 7](../roadmap.md) 참조.
+10. **모의계좌 실제 실행**: 모의 앱키·계좌 인증 완료, `PIPELINE_ALLOW_REAL_EXECUTION=false`(기본)로 실전 계좌 자동 실행 미허용. 실전 계좌 자동 실행은 `PIPELINE_ALLOW_REAL_EXECUTION=true`로만 허용.
+11. **모의 Rate Limit**: 한국투자증권 모의투자 1초당 2건 제한 인지. 스케줄(09:10 실행·장중 청산·체결 확인) 확인.
+12. **로보 ETF 주문**: 로보 리밸런싱 시 `RoboRebalanceExecutor`가 해외(US) 보유 비중 조회 후 목표 비중과 비교해 ETF 매수/매도 주문 생성·`OrderService.executeOrderForPipeline` 호출. `investment.backtest.robo.execute-orders`(false 기본)·`min-order-amount-usd`(50). VIX·거시 지표는 `MacroIndicatorProvider`·`investment.risk.macro-indicator-url`(선택)로 파이프라인 실행 전 레짐 게이트에 반영.
 
 ---
 

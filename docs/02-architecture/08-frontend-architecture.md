@@ -57,6 +57,9 @@
 - **파일 크기**: 약 8KB (HTML + CSS)
 - **로딩 시간**: 0.5-1초
 - **외부 의존성**: 없음
+- **디자인 토큰**: `common.css`에 `:root` CSS 변수(색상·간격·radius·타이포) 정의. 통일된 container 최대 너비 **1200px** (`--container-max`).
+- **레이아웃 필수**: 모든 메뉴 화면은 **layout-header** + **layout-menu** fragment 사용. 본문은 `<main class="container">` 또는 `.settings-container`(900px) 사용.
+- **계좌 타입 탭**: layout-menu 내에 **모의계좌 | 실계좌** 탭을 두며, 로그인 사용자만 노출. URL 쿼리 `serverType=1`(모의) / `serverType=0`(실계좌)로 상태 유지. 메뉴·내부 링크에는 `serverType` 쿼리를 포함해 이동 시 계좌 타입이 유지되도록 함.
 
 ### 2. 핵심 기능만
 - 계좌 조회

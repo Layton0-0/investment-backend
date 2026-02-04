@@ -53,18 +53,25 @@ public class UniverseFilterService {
     @Value("${investment.factor.earnings-surprise-top-pct:0.2}")
     private double earningsSurpriseTopPct = 0.2;
 
+    /** 한국(KR) 저평가 P/B 구간 (바닥). 데이터 소스 확정 후 유니버스/시그널 필터 적용. 현재 스텁 */
+    @Value("${investment.factor.pb-value-min:0.8}")
+    private double pbValueMin = 0.8;
+
+    @Value("${investment.factor.pb-value-max:0.9}")
+    private double pbValueMax = 0.9;
+
     /**
      * 기준일·시장에 대해 유니버스 필터 실행.
      * 유동성 필터 + (한국) Sector Relative Strength 필터 적용.
      *
-     * @param basDt   기준일
+     * @param basDt  기준일
      * @param market 시장 (KR, US)
      * @return 저장된 유니버스 종목 수
      */
     @Transactional
     public int run(LocalDate basDt, String market) {
         universeRepository.deleteByBasDtAndMarket(basDt, market);
-        
+
         // 1. 유동성 필터
         List<DailyStock> liquidityPassed = dailyStockRepository.findByBasDtAndMarketAndTrdValGreaterThanEqual(
                 basDt, market, liquidityMinTrdVal);
@@ -77,7 +84,9 @@ public class UniverseFilterService {
         List<String> finalSymbols;
         if ("KR".equals(market)) {
             // 한국: Sector Relative Strength 필터 (현재 스텁)
-            finalSymbols = filterBySectorRelativeStrength(basDt, market, liquidityPassed);
+            List<String> sectorPassed = filterBySectorRelativeStrength(basDt, market, liquidityPassed);
+            // P/B 저평가 필터 (0.8~0.9): 데이터 소스 확정 후 적용. 현재 스텁(통과)
+            finalSymbols = filterByPbValue(basDt, market, sectorPassed);
         } else if ("US".equals(market)) {
             // 미국: Post-Earnings Drift 필터 (현재 스텁)
             finalSymbols = filterByPostEarningsDrift(basDt, market, liquidityPassed);
@@ -111,14 +120,17 @@ public class UniverseFilterService {
      * TB_SECTOR_RETURN·TB_SYMBOL_SECTOR에 데이터가 있으면 상위 N개 업종 내 종목만 반환.
      * 데이터가 없으면 유동성 통과 종목만 반환 (fallback).
      *
-     * @param basDt 기준일
-     * @param market 시장 (KR)
+     * @param basDt           기준일
+     * @param market          시장 (KR)
      * @param liquidityPassed 유동성 통과 종목 목록
      * @return Sector RS 통과 종목 코드 목록
      */
-    private List<String> filterBySectorRelativeStrength(LocalDate basDt, String market, List<DailyStock> liquidityPassed) {
-        List<String> liquiditySymbols = liquidityPassed.stream().map(DailyStock::getSymbol).distinct().collect(Collectors.toList());
-        List<SectorReturn> sectorReturns = sectorReturnRepository.findByBasDtAndMarketOrderByReturnPctDesc(basDt, market);
+    private List<String> filterBySectorRelativeStrength(LocalDate basDt, String market,
+            List<DailyStock> liquidityPassed) {
+        List<String> liquiditySymbols = liquidityPassed.stream().map(DailyStock::getSymbol).distinct()
+                .collect(Collectors.toList());
+        List<SectorReturn> sectorReturns = sectorReturnRepository.findByBasDtAndMarketOrderByReturnPctDesc(basDt,
+                market);
         if (sectorReturns.isEmpty()) {
             log.debug("Sector Relative Strength 필터: 데이터 없음, 유동성 통과 종목만 반환. basDt={}, market={}, count={}",
                     basDt, market, liquiditySymbols.size());
@@ -130,7 +142,8 @@ public class UniverseFilterService {
                 .map(SectorReturn::getSectorCode)
                 .collect(Collectors.toList());
         List<SymbolSector> symbolSectors = symbolSectorRepository.findByMarketAndSectorCodeIn(market, topSectorCodes);
-        Set<String> symbolsInTopSectors = symbolSectors.stream().map(SymbolSector::getSymbol).collect(Collectors.toSet());
+        Set<String> symbolsInTopSectors = symbolSectors.stream().map(SymbolSector::getSymbol)
+                .collect(Collectors.toSet());
         List<String> filtered = liquiditySymbols.stream()
                 .filter(symbolsInTopSectors::contains)
                 .collect(Collectors.toList());
@@ -148,15 +161,17 @@ public class UniverseFilterService {
      * TB_EARNINGS_SURPRISE에 데이터가 있으면 최근 N일 이내 실적 발표 중 상위 N% 종목만 반환.
      * 데이터가 없으면 유동성 통과 종목만 반환 (fallback).
      *
-     * @param basDt 기준일
-     * @param market 시장 (US)
+     * @param basDt           기준일
+     * @param market          시장 (US)
      * @param liquidityPassed 유동성 통과 종목 목록
      * @return Post-Earnings Drift 통과 종목 코드 목록
      */
     private List<String> filterByPostEarningsDrift(LocalDate basDt, String market, List<DailyStock> liquidityPassed) {
-        List<String> liquiditySymbols = liquidityPassed.stream().map(DailyStock::getSymbol).distinct().collect(Collectors.toList());
+        List<String> liquiditySymbols = liquidityPassed.stream().map(DailyStock::getSymbol).distinct()
+                .collect(Collectors.toList());
         LocalDate fromDt = basDt.minusDays(earningsSurpriseLookbackDays);
-        List<EarningsSurprise> surprises = earningsSurpriseRepository.findByMarketAndReportDtGreaterThanEqualOrderBySurpriseScoreDesc(market, fromDt);
+        List<EarningsSurprise> surprises = earningsSurpriseRepository
+                .findByMarketAndReportDtGreaterThanEqualOrderBySurpriseScoreDesc(market, fromDt);
         if (surprises.isEmpty()) {
             log.debug("Post-Earnings Drift 필터: 데이터 없음, 유동성 통과 종목만 반환. basDt={}, market={}, count={}",
                     basDt, market, liquiditySymbols.size());
@@ -180,9 +195,24 @@ public class UniverseFilterService {
     }
 
     /**
-     * 기준일·시장의 유니버스 종목 코드 목록 조회.
+     * 한국(KR) 저평가 P/B 필터. P/B가 pbValueMin~pbValueMax(0.8~0.9) 구간인 종목만 통과.
+     * TODO: KOSPI/종목 P/B 데이터 소스 확정 후 TB 또는 외부 API 연동. 현재는 데이터 없음 시 입력 그대로 반환(스텁).
      *
      * @param basDt   기준일
+     * @param market  시장 (KR)
+     * @param symbols Sector RS 통과 종목 목록
+     * @return P/B 구간 통과 종목 (데이터 없으면 입력 그대로)
+     */
+    private List<String> filterByPbValue(LocalDate basDt, String market, List<String> symbols) {
+        // P/B 데이터 소스 미연동 시 필터 없이 통과
+        log.debug("P/B 필터: 데이터 소스 미연동(스텁), basDt={}, market={}, count={}", basDt, market, symbols.size());
+        return symbols;
+    }
+
+    /**
+     * 기준일·시장의 유니버스 종목 코드 목록 조회.
+     *
+     * @param basDt  기준일
      * @param market 시장
      * @return 종목 코드 목록 (비어 있으면 전체 DailyStock 대상으로 할 수 있도록 호출부에서 fallback)
      */

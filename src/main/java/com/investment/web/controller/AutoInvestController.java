@@ -33,9 +33,11 @@ public class AutoInvestController {
     @GetMapping
     @SuppressWarnings("deprecation")
     public String autoInvest(@RequestParam(required = false) String accountNo,
+            @RequestParam(required = false) String serverType,
             Authentication authentication,
             Model model) {
         String userId = authentication != null ? authentication.getName() : null;
+        String st = ("0".equals(serverType) || "1".equals(serverType)) ? serverType : "1";
 
         try {
             if (userId != null) {
@@ -46,11 +48,11 @@ public class AutoInvestController {
             log.warn("사용자 정보 조회 실패: {}", e.getMessage());
         }
 
-        if (accountNo == null || accountNo.trim().isEmpty() && userId != null) {
+        if ((accountNo == null || accountNo.trim().isEmpty()) && userId != null) {
             try {
-                accountNo = accountService.getMainAccount(userId).getAccountNo();
+                accountNo = accountService.getMainAccount(userId, st).getAccountNo();
             } catch (Exception e) {
-                accountNo = accountService.getUserAccountNo(userId);
+                accountNo = accountService.getUserAccountNo(userId, st);
             }
         }
         if (accountNo == null || accountNo.trim().isEmpty()) {
@@ -71,6 +73,7 @@ public class AutoInvestController {
         model.addAttribute("signalListUs", summary.getSignalListUs());
         model.addAttribute("openPositionCount", summary.getOpenPositionCount());
         model.addAttribute("openPositionList", summary.getOpenPositionList());
+        model.addAttribute("allocationSummary", summary.getAllocationSummary());
 
         return "auto-invest";
     }

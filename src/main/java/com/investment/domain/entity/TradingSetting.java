@@ -1,9 +1,6 @@
 package com.investment.domain.entity;
 
-import lombok.AccessLevel;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import jakarta.persistence.*;
 import java.math.BigDecimal;
@@ -32,7 +29,11 @@ public class TradingSetting {
     /**
      * 사용자 ID (사용자별 설정 관리용)
      * 하위 호환성을 위해 NULL 허용
+     * -- SETTER --
+     *  사용자 ID 설정
+
      */
+    @Setter
     @Column(name = "USER_ID", length = 36)
     private String userId;
 
@@ -47,6 +48,12 @@ public class TradingSetting {
 
     @Column(name = "AUTO_TRADING_ENABLED", nullable = false)
     private Boolean autoTradingEnabled;
+
+    /**
+     * 로보 어드바이저 사용 여부. true면 로보 리밸런싱 스케줄러 대상 (V17).
+     */
+    @Column(name = "ROBO_ADVISOR_ENABLED", nullable = false)
+    private Boolean roboAdvisorEnabled = false;
 
     @Column(name = "RISK_LEVEL", precision = 3, scale = 2)
     private BigDecimal riskLevel;
@@ -92,7 +99,7 @@ public class TradingSetting {
     @Builder
     public TradingSetting(String accountNo, String userId, BigDecimal maxInvestmentAmount,
             BigDecimal minInvestmentAmount, String defaultCurrency,
-            Boolean autoTradingEnabled, BigDecimal riskLevel,
+            Boolean autoTradingEnabled, Boolean roboAdvisorEnabled, BigDecimal riskLevel,
             BigDecimal shortTermRatio, BigDecimal mediumTermRatio, BigDecimal longTermRatio) {
         this.accountNo = accountNo;
         this.userId = userId;
@@ -100,17 +107,11 @@ public class TradingSetting {
         this.minInvestmentAmount = minInvestmentAmount;
         this.defaultCurrency = defaultCurrency;
         this.autoTradingEnabled = autoTradingEnabled != null ? autoTradingEnabled : false;
+        this.roboAdvisorEnabled = Boolean.TRUE.equals(roboAdvisorEnabled);
         this.riskLevel = riskLevel;
         this.shortTermRatio = shortTermRatio;
         this.mediumTermRatio = mediumTermRatio;
         this.longTermRatio = longTermRatio;
-    }
-
-    /**
-     * 사용자 ID 설정
-     */
-    public void setUserId(String userId) {
-        this.userId = userId;
     }
 
     public void updateMaxInvestmentAmount(BigDecimal maxInvestmentAmount) {
@@ -123,6 +124,10 @@ public class TradingSetting {
 
     public void updateAutoTradingEnabled(Boolean enabled) {
         this.autoTradingEnabled = enabled;
+    }
+
+    public void updateRoboAdvisorEnabled(Boolean enabled) {
+        this.roboAdvisorEnabled = Boolean.TRUE.equals(enabled);
     }
 
     public void updateRiskLevel(BigDecimal riskLevel) {
