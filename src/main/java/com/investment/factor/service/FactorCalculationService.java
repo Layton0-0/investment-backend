@@ -8,6 +8,7 @@ import com.investment.domain.repository.DailyStockRepository;
 import com.investment.domain.repository.FundamentalsRepository;
 import com.investment.domain.repository.OrderFlowRepository;
 import com.investment.domain.repository.SignalScoreRepository;
+import com.investment.factor.util.TechnicalIndicatorUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,7 +26,8 @@ import org.springframework.util.StringUtils;
 
 /**
  * 팩터(시그널) 계산 엔진.
- * 이격도(Disparity), 변동성 돌파(Volatility Breakout), 유동성(Liquidity) 산출 후 TB_SIGNAL_SCORE 저장.
+ * 이격도(Disparity), 변동성 돌파(Volatility Breakout), 유동성(Liquidity) 산출 후
+ * TB_SIGNAL_SCORE 저장.
  */
 @Slf4j
 @Service
@@ -38,6 +40,8 @@ public class FactorCalculationService {
     public static final String FACTOR_SMART_MONEY_INTENSITY = "SMART_MONEY_INTENSITY";
     public static final String FACTOR_DUAL_MOMENTUM = "DUAL_MOMENTUM";
     public static final String FACTOR_QUALITY_GROWTH = "QUALITY_GROWTH";
+    /** 한국(KR) 역발상: RSI(14) &lt; threshold 시 매수 시그널 가중 */
+    public static final String FACTOR_CONTRARIAN_RSI = "CONTRARIAN_RSI";
     private static final String MARKET_KR = "KR";
 
     private final DailyStockRepository dailyStockRepository;
@@ -81,6 +85,10 @@ public class FactorCalculationService {
     @Value("${investment.factor.smart-money-intensity-threshold-pct:0.005}")
     private double smartMoneyIntensityThresholdPct = 0.005;
 
+    /** 한국(KR) 역발상 RSI 임계값. RSI(14) &lt; 이 값이면 과매도로 매수 시그널 가중 (기본 40) */
+    @Value("${investment.factor.contrarian-rsi-threshold:40}")
+    private BigDecimal contrarianRsiThreshold = new BigDecimal("40");
+
     /**
      * 기준일 시장(KR) 종목에 대해 팩터 계산 후 저장.
      * 매일 장 시작 전 호출 시 basDt는 전일(또는 최근 거래일)로 두고, 해당 일의 일별 데이터가 이미 수집되어 있어야 함.
@@ -96,7 +104,7 @@ public class FactorCalculationService {
     /**
      * 기준일·시장에 대해 팩터 계산 후 저장.
      *
-     * @param basDt   기준일
+     * @param basDt  기준일
      * @param market 시장 (KR, US)
      * @return 저장된 시그널 건수
      */
@@ -144,7 +152,8 @@ public class FactorCalculationService {
                 marketMomentumUs = momentums.stream()
                         .reduce(BigDecimal.ZERO, BigDecimal::add)
                         .divide(BigDecimal.valueOf(momentums.size()), 6, RoundingMode.HALF_UP);
-                log.debug("듀얼 모멘텀 시장 평균: basDt={}, symbols={}, marketMomentum={}%", basDt, momentums.size(), marketMomentumUs);
+                log.debug("듀얼 모멘텀 시장 평균: basDt={}, symbols={}, marketMomentum={}%", basDt, momentums.size(),
+                        marketMomentumUs);
             }
         }
         List<SignalScore> toSave = new ArrayList<>();
@@ -156,10 +165,11 @@ public class FactorCalculationService {
             addDisparity(basDt, market, symbol, history, toSave);
             addVolatilityBreakout(basDt, market, symbol, history, toSave);
             addLiquidity(basDt, market, symbol, history, toSave);
-            
+
             // 시장별 추가 팩터
             if (MARKET_KR.equals(market)) {
                 addSmartMoneyIntensity(basDt, market, symbol, history, toSave);
+                addContrarianRsiSignal(basDt, market, symbol, history, toSave);
             } else if ("US".equals(market)) {
                 addDualMomentum(basDt, market, symbol, history, marketMomentumUs, toSave);
                 addQualityGrowth(basDt, market, symbol, history, toSave);
@@ -172,7 +182,8 @@ public class FactorCalculationService {
         return toSave.size();
     }
 
-    private void addDisparity(LocalDate basDt, String market, String symbol, List<DailyStock> history, List<SignalScore> out) {
+    private void addDisparity(LocalDate basDt, String market, String symbol, List<DailyStock> history,
+            List<SignalScore> out) {
         if (history.size() < disparityMaDays) {
             return;
         }
@@ -195,7 +206,8 @@ public class FactorCalculationService {
         if (latest.getClosePrice() == null || ma.compareTo(BigDecimal.ZERO) == 0) {
             return;
         }
-        BigDecimal disparity = latest.getClosePrice().multiply(BigDecimal.valueOf(100)).divide(ma, 6, RoundingMode.HALF_UP);
+        BigDecimal disparity = latest.getClosePrice().multiply(BigDecimal.valueOf(100)).divide(ma, 6,
+                RoundingMode.HALF_UP);
         out.add(SignalScore.builder()
                 .basDt(basDt)
                 .symbol(symbol)
@@ -206,23 +218,26 @@ public class FactorCalculationService {
                 .build());
     }
 
-    private void addVolatilityBreakout(LocalDate basDt, String market, String symbol, List<DailyStock> history, List<SignalScore> out) {
+    private void addVolatilityBreakout(LocalDate basDt, String market, String symbol, List<DailyStock> history,
+            List<SignalScore> out) {
         if (history.size() < 2) {
             return;
         }
         DailyStock today = history.stream().filter(d -> d.getBasDt().equals(basDt)).findFirst().orElse(null);
-        DailyStock prev = history.stream().filter(d -> d.getBasDt().isBefore(basDt)).max((a, b) -> a.getBasDt().compareTo(b.getBasDt())).orElse(null);
-        if (today == null || prev == null || today.getOpenPrice() == null || prev.getHighPrice() == null || prev.getLowPrice() == null) {
+        DailyStock prev = history.stream().filter(d -> d.getBasDt().isBefore(basDt))
+                .max((a, b) -> a.getBasDt().compareTo(b.getBasDt())).orElse(null);
+        if (today == null || prev == null || today.getOpenPrice() == null || prev.getHighPrice() == null
+                || prev.getLowPrice() == null) {
             return;
         }
         BigDecimal range = prev.getHighPrice().subtract(prev.getLowPrice());
-        
+
         // k 값 동적 적용 (변동성에 따라 조정)
         BigDecimal k = volatilityBreakoutK;
         if (volatilityBreakoutKDynamic && MARKET_KR.equals(market)) {
             k = calculateDynamicK(symbol, history, basDt);
         }
-        
+
         BigDecimal target = today.getOpenPrice().add(range.multiply(k));
         out.add(SignalScore.builder()
                 .basDt(basDt)
@@ -241,9 +256,9 @@ public class FactorCalculationService {
      * TODO: 한국장 9:00~10:00 시간대별 변동성 분석은 장중 데이터 수집 후 구현 예정.
      * 현재는 일봉 데이터 기반 평균 변동성으로 근사합니다.
      *
-     * @param symbol 종목 코드
+     * @param symbol  종목 코드
      * @param history 일별 시세 이력
-     * @param basDt 기준일
+     * @param basDt   기준일
      * @return 동적 조정된 k 값
      */
     private BigDecimal calculateDynamicK(String symbol, List<DailyStock> history, LocalDate basDt) {
@@ -253,7 +268,7 @@ public class FactorCalculationService {
                 .sorted((a, b) -> b.getBasDt().compareTo(a.getBasDt()))
                 .limit(5)
                 .collect(Collectors.toList());
-        
+
         if (recent.size() < 3) {
             return volatilityBreakoutK; // 데이터 부족 시 기본값
         }
@@ -277,12 +292,12 @@ public class FactorCalculationService {
         }
 
         BigDecimal avgVolatility = sumRange.divide(BigDecimal.valueOf(count), 6, RoundingMode.HALF_UP);
-        
+
         // 변동성에 따라 k 조정: 높은 변동성 → 낮은 k, 낮은 변동성 → 높은 k
         // 변동성 임계값: 평균 0.02(2%) 이상이면 높은 변동성, 0.01(1%) 이하면 낮은 변동성
         BigDecimal highVolThreshold = new BigDecimal("0.02");
         BigDecimal lowVolThreshold = new BigDecimal("0.01");
-        
+
         BigDecimal adjustedK;
         if (avgVolatility.compareTo(highVolThreshold) >= 0) {
             // 높은 변동성: k를 최소값으로
@@ -298,9 +313,9 @@ public class FactorCalculationService {
                     volatilityBreakoutKMax.subtract(volatilityBreakoutKMin).multiply(ratio));
         }
 
-        log.debug("변동성 돌파 k 동적 조정: symbol={}, avgVolatility={}, k={} -> {}", 
+        log.debug("변동성 돌파 k 동적 조정: symbol={}, avgVolatility={}, k={} -> {}",
                 symbol, avgVolatility, volatilityBreakoutK, adjustedK);
-        
+
         return adjustedK;
     }
 
@@ -309,13 +324,14 @@ public class FactorCalculationService {
      * TB_ORDER_FLOW에 데이터가 있으면 (5일 누적 순매수/시총) 비율(%)을 점수로 저장. 임계값 초과 시 양수 시그널.
      * 데이터가 없으면 0 저장 (fallback).
      *
-     * @param basDt 기준일
-     * @param market 시장 (KR)
-     * @param symbol 종목 코드
+     * @param basDt   기준일
+     * @param market  시장 (KR)
+     * @param symbol  종목 코드
      * @param history 일별 시세 이력 (미사용, TB_ORDER_FLOW 사용)
-     * @param out 시그널 점수 목록 (추가될)
+     * @param out     시그널 점수 목록 (추가될)
      */
-    private void addSmartMoneyIntensity(LocalDate basDt, String market, String symbol, List<DailyStock> history, List<SignalScore> out) {
+    private void addSmartMoneyIntensity(LocalDate basDt, String market, String symbol, List<DailyStock> history,
+            List<SignalScore> out) {
         var opt = orderFlowRepository.findByBasDtAndSymbolAndMarket(basDt, symbol, market);
         if (opt.isEmpty()) {
             log.debug("Smart Money Intensity: basDt={}, symbol={}, 수급 데이터 없음", basDt, symbol);
@@ -343,31 +359,85 @@ public class FactorCalculationService {
         }
         double ratio = (double) of.getNetBuyAmt5d() / of.getMarketCap();
         BigDecimal scorePct = BigDecimal.valueOf(ratio * 100).setScale(4, RoundingMode.HALF_UP);
+        // 5일 연속 순매수 여부: 일별 NET_BUY_AMT_1D가 있으면 최근 5일 모두 > 0인지 검사
+        boolean consecutive5d = false;
+        List<OrderFlow> last5 = orderFlowRepository.findBySymbolAndMarketAndBasDtBetweenOrderByBasDtDesc(
+                symbol, market, basDt.minusDays(10), basDt);
+        if (last5.size() >= 5) {
+            List<OrderFlow> five = last5.stream().limit(5).collect(Collectors.toList());
+            consecutive5d = five.stream().allMatch(o -> o.getNetBuyAmt1d() != null && o.getNetBuyAmt1d() > 0);
+        }
+        String metadata = "netBuy5d=" + of.getNetBuyAmt5d() + ",marketCap=" + of.getMarketCap()
+                + ",thresholdPct=" + smartMoneyIntensityThresholdPct * 100
+                + (consecutive5d ? ",consecutive5d=true" : ",consecutive5d=false");
         out.add(SignalScore.builder()
                 .basDt(basDt)
                 .symbol(symbol)
                 .factorType(FACTOR_SMART_MONEY_INTENSITY)
                 .market(market)
                 .score(scorePct)
-                .metadata("netBuy5d=" + of.getNetBuyAmt5d() + ",marketCap=" + of.getMarketCap() + ",thresholdPct=" + smartMoneyIntensityThresholdPct * 100)
+                .metadata(metadata)
                 .build());
     }
 
     /**
+     * 한국(KR) 역발상 RSI 시그널. RSI(14) &lt; threshold(기본 40) 시 과매도로 매수 시그널 가중.
+     * score = (threshold - RSI), RSI &lt; threshold일 때만 양수 저장. 데이터 부족 시 0 저장.
+     */
+    private void addContrarianRsiSignal(LocalDate basDt, String market, String symbol, List<DailyStock> history,
+            List<SignalScore> out) {
+        var rsiOpt = TechnicalIndicatorUtil.computeRsi(history);
+        if (rsiOpt.isEmpty()) {
+            out.add(SignalScore.builder()
+                    .basDt(basDt)
+                    .symbol(symbol)
+                    .factorType(FACTOR_CONTRARIAN_RSI)
+                    .market(market)
+                    .score(BigDecimal.ZERO)
+                    .metadata("insufficientData")
+                    .build());
+            return;
+        }
+        BigDecimal rsi = rsiOpt.get();
+        if (rsi.compareTo(contrarianRsiThreshold) < 0) {
+            BigDecimal score = contrarianRsiThreshold.subtract(rsi).setScale(4, RoundingMode.HALF_UP);
+            out.add(SignalScore.builder()
+                    .basDt(basDt)
+                    .symbol(symbol)
+                    .factorType(FACTOR_CONTRARIAN_RSI)
+                    .market(market)
+                    .score(score)
+                    .metadata("rsi=" + rsi + ",threshold=" + contrarianRsiThreshold)
+                    .build());
+        } else {
+            out.add(SignalScore.builder()
+                    .basDt(basDt)
+                    .symbol(symbol)
+                    .factorType(FACTOR_CONTRARIAN_RSI)
+                    .market(market)
+                    .score(BigDecimal.ZERO)
+                    .metadata("rsi=" + rsi + ",aboveThreshold")
+                    .build());
+        }
+    }
+
+    /**
      * 기간별 수익률 가중합으로 모멘텀 스코어 산출 (TB_DAILY_STOCK 기반).
-     * config: dual-momentum-period-days (예: 21,63,126), dual-momentum-weights (예: 0.5,0.3,0.2).
-     * 각 기간 수익률 = (close_at_basDt - close_at_basDt_minus_days) / close_at_basDt_minus_days * 100 (%).
+     * config: dual-momentum-period-days (예: 21,63,126), dual-momentum-weights (예:
+     * 0.5,0.3,0.2).
+     * 각 기간 수익률 = (close_at_basDt - close_at_basDt_minus_days) /
+     * close_at_basDt_minus_days * 100 (%).
      *
      * @param history basDt 포함 과거 일별 시세 (basDt 기준 이전 거래일 포함)
-     * @param basDt 기준일
+     * @param basDt   기준일
      * @return 가중 모멘텀 (% 단위), 데이터 부족 시 null
      */
     private BigDecimal computeWeightedMomentum(List<DailyStock> history, LocalDate basDt) {
         if (history == null || history.isEmpty()) {
             return null;
         }
-        int[] periodDays = parseIntArray(dualMomentumPeriodDays, new int[]{21, 63, 126});
-        double[] weights = parseDoubleArray(dualMomentumWeights, new double[]{0.5, 0.3, 0.2});
+        int[] periodDays = parseIntArray(dualMomentumPeriodDays, new int[] { 21, 63, 126 });
+        double[] weights = parseDoubleArray(dualMomentumWeights, new double[] { 0.5, 0.3, 0.2 });
         if (periodDays.length != weights.length || periodDays.length == 0) {
             return null;
         }
@@ -442,15 +512,15 @@ public class FactorCalculationService {
      * 기간별 수익률 가중합으로 모멘텀 스코어 산출, 종목 모멘텀 > 시장 모멘텀 시 양수 점수(매수 시그널).
      * 시장 모멘텀 = 유니버스 종목들의 가중 수익률 평균. score = 종목 모멘텀 − 시장 모멘텀 (%).
      *
-     * @param basDt 기준일
-     * @param market 시장 (US)
-     * @param symbol 종목 코드
-     * @param history 일별 시세 이력
+     * @param basDt            기준일
+     * @param market           시장 (US)
+     * @param symbol           종목 코드
+     * @param history          일별 시세 이력
      * @param marketMomentumUs 시장 모멘텀 (% 단위), null이면 0으로 간주
-     * @param out 시그널 점수 목록 (추가될)
+     * @param out              시그널 점수 목록 (추가될)
      */
     private void addDualMomentum(LocalDate basDt, String market, String symbol, List<DailyStock> history,
-                                 BigDecimal marketMomentumUs, List<SignalScore> out) {
+            BigDecimal marketMomentumUs, List<SignalScore> out) {
         BigDecimal momentum = computeWeightedMomentum(history, basDt);
         if (momentum == null) {
             log.debug("듀얼 모멘텀: basDt={}, symbol={}, 데이터 부족으로 스킵", basDt, symbol);
@@ -481,13 +551,14 @@ public class FactorCalculationService {
      * TB_FUNDAMENTALS에 데이터가 있으면 PEG 점수(낮을수록 좋음) + Rule of 40(매출증가율+영업이익률) 합산 점수 저장.
      * 데이터가 없으면 0 저장 (fallback).
      *
-     * @param basDt 기준일
-     * @param market 시장 (US)
-     * @param symbol 종목 코드
+     * @param basDt   기준일
+     * @param market  시장 (US)
+     * @param symbol  종목 코드
      * @param history 일별 시세 이력 (미사용, TB_FUNDAMENTALS 사용)
-     * @param out 시그널 점수 목록 (추가될)
+     * @param out     시그널 점수 목록 (추가될)
      */
-    private void addQualityGrowth(LocalDate basDt, String market, String symbol, List<DailyStock> history, List<SignalScore> out) {
+    private void addQualityGrowth(LocalDate basDt, String market, String symbol, List<DailyStock> history,
+            List<SignalScore> out) {
         var opt = fundamentalsRepository.findByBasDtAndSymbolAndMarket(basDt, symbol, market);
         if (opt.isEmpty()) {
             log.debug("퀄리티-성장: basDt={}, symbol={}, 재무 데이터 없음", basDt, symbol);
@@ -525,7 +596,8 @@ public class FactorCalculationService {
                 .build());
     }
 
-    private void addLiquidity(LocalDate basDt, String market, String symbol, List<DailyStock> history, List<SignalScore> out) {
+    private void addLiquidity(LocalDate basDt, String market, String symbol, List<DailyStock> history,
+            List<SignalScore> out) {
         DailyStock onBasDt = history.stream().filter(d -> d.getBasDt().equals(basDt)).findFirst().orElse(null);
         if (onBasDt == null || onBasDt.getTrdVal() == null) {
             return;

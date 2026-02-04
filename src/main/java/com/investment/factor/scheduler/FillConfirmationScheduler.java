@@ -5,7 +5,6 @@ import com.investment.domain.repository.OrderRepository;
 import com.investment.factor.execution.PipelineExecutor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,7 +23,7 @@ public class FillConfirmationScheduler {
     private final OrderRepository orderRepository;
     private final PipelineExecutor pipelineExecutor;
 
-    @Scheduled(cron = "${investment.pipeline.fill-confirmation-cron:0 * * * * *}")
+    /** Spring Batch Job에서 호출. */
     @Transactional
     public void registerPositionsOnExecution() {
         List<Order> pending = orderRepository.findByStatusAndPositionBasDtIsNotNull(Order.OrderStatus.EXECUTED);

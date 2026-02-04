@@ -5,290 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title th:text="${marketLabel != null ? (marketLabel + ' 전략 - Investment Choi') : '투자 전략 관리 - Investment Choi'}">전략 관리</title>
     <link rel="stylesheet" th:href="@{/css/common.css}">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background-color: #f5f5f5;
-            color: #333;
-            line-height: 1.6;
-        }
-        
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            border-radius: 10px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        
-        .header h1 {
-            font-size: 2em;
-            margin-bottom: 10px;
-        }
-        
-        .search-box {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 30px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .search-box form {
-            display: flex;
-            gap: 10px;
-        }
-        
-        .search-box input {
-            flex: 1;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 16px;
-        }
-        
-        .search-box button {
-            padding: 12px 30px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: bold;
-        }
-        
-        .search-box button:hover {
-            background: #5568d3;
-        }
-        
-        .nav-links {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        
-        .nav-links a {
-            padding: 10px 20px;
-            background: white;
-            color: #667eea;
-            text-decoration: none;
-            border-radius: 5px;
-            font-weight: bold;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .nav-links a:hover {
-            background: #667eea;
-            color: white;
-        }
-        
-        .error {
-            background: #fee;
-            color: #c33;
-            padding: 15px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            border-left: 4px solid #c33;
-        }
-        
-        .strategies-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 30px;
-            margin-bottom: 30px;
-        }
-        
-        .strategy-card {
-            background: white;
-            padding: 25px;
-            border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .strategy-card h2 {
-            color: #667eea;
-            margin-bottom: 20px;
-            font-size: 1.5em;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .status-badge {
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 0.85em;
-            font-weight: bold;
-        }
-        
-        .status-badge.active {
-            background: #28a745;
-            color: white;
-        }
-        
-        .status-badge.stopped {
-            background: #dc3545;
-            color: white;
-        }
-        
-        .status-badge.paused {
-            background: #ffc107;
-            color: #856404;
-        }
-        
-        .strategy-info {
-            display: grid;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        
-        .info-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 5px;
-        }
-        
-        .info-item label {
-            color: #666;
-            font-weight: 600;
-        }
-        
-        .info-item .value {
-            color: #333;
-            font-weight: bold;
-        }
-        
-        .strategy-actions {
-            display: flex;
-            gap: 10px;
-        }
-        
-        .btn {
-            flex: 1;
-            padding: 12px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: bold;
-            transition: all 0.3s;
-        }
-        
-        .btn-activate {
-            background: #28a745;
-            color: white;
-        }
-        
-        .btn-activate:hover {
-            background: #218838;
-        }
-        
-        .btn-stop {
-            background: #dc3545;
-            color: white;
-        }
-        
-        .btn-stop:hover {
-            background: #c82333;
-        }
-        
-        .btn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-        
-        .empty-state {
-            text-align: center;
-            padding: 40px;
-            color: #999;
-            background: white;
-            border-radius: 10px;
-        }
-        
-        .performance-stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin-top: 15px;
-            padding-top: 15px;
-            border-top: 1px solid #eee;
-        }
-        
-        .stat-item {
-            text-align: center;
-        }
-        
-        .stat-item .label {
-            font-size: 0.85em;
-            color: #666;
-            margin-bottom: 5px;
-        }
-        
-        .stat-item .value {
-            font-size: 1.2em;
-            font-weight: bold;
-            color: #333;
-        }
-        
-        .stat-item .value.positive {
-            color: #28a745;
-        }
-        
-        .stat-item .value.negative {
-            color: #dc3545;
-        }
-    </style>
 </head>
-<body>
+<body class="page-background">
     <div th:replace="~{fragments/layout-header :: header}"></div>
     <nav th:replace="~{fragments/layout-menu :: menu}"></nav>
 
-    <div class="container">
-        <div class="header">
-            <h1 th:text="${marketLabel != null and !marketLabel.isEmpty()} ? ('📊 ' + ${marketLabel} + ' 전략') : '📊 투자 전략 관리'">전략 관리</h1>
-            <p>단기/중기/장기 전략 현황 및 제어</p>
-        </div>
+    <main class="container">
+        <p class="info-text" style="margin-bottom: var(--space-lg);">단기/중기/장기 전략 현황 및 제어</p>
 
-        <div class="nav-links">
-            <a th:href="@{/(accountNo=${accountNo})}">대시보드</a>
-            <a th:href="@{/strategies/kr(accountNo=${accountNo})}" th:styleappend="${market == 'KR'} ? 'background: #667eea; color: white;' : ''">국내 전략</a>
-            <a th:href="@{/strategies/us(accountNo=${accountNo})}" th:styleappend="${market == 'US'} ? 'background: #667eea; color: white;' : ''">미국 전략</a>
-        </div>
-
-        <div class="search-box">
-            <form method="get" th:action="@{/strategies}" th:if="${market == null || #strings.isEmpty(market)}">
-                <input type="text" name="accountNo" th:value="${accountNo}" placeholder="계좌번호를 입력하세요">
-                <button type="submit">조회</button>
-            </form>
-            <form method="get" th:action="@{/strategies/kr}" th:if="${market == 'KR'}">
-                <input type="text" name="accountNo" th:value="${accountNo}" placeholder="계좌번호를 입력하세요">
-                <button type="submit">조회</button>
-            </form>
-            <form method="get" th:action="@{/strategies/us}" th:if="${market == 'US'}">
-                <input type="text" name="accountNo" th:value="${accountNo}" placeholder="계좌번호를 입력하세요">
-                <button type="submit">조회</button>
-            </form>
-        </div>
-        
-        <div th:if="${error}" class="error">
-            <strong>오류:</strong> <span th:text="${error}"></span>
-        </div>
+        <div th:if="${error}" class="error-box" th:text="${'오류: ' + error}"></div>
         
         <div th:if="${accountNo != null and !accountNo.isEmpty()}">
             <div class="strategies-grid">
@@ -347,12 +72,16 @@
                             <form method="post" th:action="@{/strategies/activate}" style="flex: 1;">
                                 <input type="hidden" name="accountNo" th:value="${accountNo}">
                                 <input type="hidden" name="market" th:value="${market}">
+                                <input type="hidden" name="serverType" th:value="${currentServerType}">
+                                <input type="hidden" name="market" th:value="${market}">
                                 <input type="hidden" name="strategyType" value="SHORT_TERM">
                                 <button type="submit" class="btn btn-activate" 
                                         th:disabled="${shortTerm.status == T(com.investment.strategy.domain.StrategyStatus).ACTIVE}">시작</button>
                             </form>
                             <form method="post" th:action="@{/strategies/stop}" style="flex: 1;">
                                 <input type="hidden" name="accountNo" th:value="${accountNo}">
+                                <input type="hidden" name="market" th:value="${market}">
+                                <input type="hidden" name="serverType" th:value="${currentServerType}">
                                 <input type="hidden" name="market" th:value="${market}">
                                 <input type="hidden" name="strategyType" value="SHORT_TERM">
                                 <button type="submit" class="btn btn-stop"
@@ -421,12 +150,16 @@
                             <form method="post" th:action="@{/strategies/activate}" style="flex: 1;">
                                 <input type="hidden" name="accountNo" th:value="${accountNo}">
                                 <input type="hidden" name="market" th:value="${market}">
+                                <input type="hidden" name="serverType" th:value="${currentServerType}">
+                                <input type="hidden" name="market" th:value="${market}">
                                 <input type="hidden" name="strategyType" value="MEDIUM_TERM">
                                 <button type="submit" class="btn btn-activate" 
                                         th:disabled="${mediumTerm.status == T(com.investment.strategy.domain.StrategyStatus).ACTIVE}">시작</button>
                             </form>
                             <form method="post" th:action="@{/strategies/stop}" style="flex: 1;">
                                 <input type="hidden" name="accountNo" th:value="${accountNo}">
+                                <input type="hidden" name="market" th:value="${market}">
+                                <input type="hidden" name="serverType" th:value="${currentServerType}">
                                 <input type="hidden" name="market" th:value="${market}">
                                 <input type="hidden" name="strategyType" value="MEDIUM_TERM">
                                 <button type="submit" class="btn btn-stop"
@@ -495,12 +228,16 @@
                             <form method="post" th:action="@{/strategies/activate}" style="flex: 1;">
                                 <input type="hidden" name="accountNo" th:value="${accountNo}">
                                 <input type="hidden" name="market" th:value="${market}">
+                                <input type="hidden" name="serverType" th:value="${currentServerType}">
+                                <input type="hidden" name="market" th:value="${market}">
                                 <input type="hidden" name="strategyType" value="LONG_TERM">
                                 <button type="submit" class="btn btn-activate" 
                                         th:disabled="${longTerm.status == T(com.investment.strategy.domain.StrategyStatus).ACTIVE}">시작</button>
                             </form>
                             <form method="post" th:action="@{/strategies/stop}" style="flex: 1;">
                                 <input type="hidden" name="accountNo" th:value="${accountNo}">
+                                <input type="hidden" name="market" th:value="${market}">
+                                <input type="hidden" name="serverType" th:value="${currentServerType}">
                                 <input type="hidden" name="market" th:value="${market}">
                                 <input type="hidden" name="strategyType" value="LONG_TERM">
                                 <button type="submit" class="btn btn-stop"
@@ -518,10 +255,11 @@
         
         <div th:if="${accountNo == null or accountNo.isEmpty()}">
             <div class="empty-state">
-                <h2>계좌번호를 입력하여 조회하세요</h2>
-                <p>위의 검색창에 계좌번호를 입력하고 조회 버튼을 클릭하세요.</p>
+                <h2 th:text="${accountMessage != null ? accountMessage : (market == 'KR' ? '모의계좌를 등록해주세요' : (market == 'US' ? '실계좌를 등록해주세요' : '국내 전략은 모의계좌, 미국 전략은 실계좌를 자동으로 사용합니다. 메뉴에서 국내 전략 또는 미국 전략을 선택하세요.'))}">계좌를 등록해주세요</h2>
+                <p th:if="${accountMessage != null}">설정에서 API 키와 계좌를 등록할 수 있습니다.</p>
+                <a th:if="${accountMessage != null}" th:href="@{/settings(serverType=${currentServerType})}" class="action-button">설정에서 계좌 등록</a>
             </div>
         </div>
-    </div>
+    </main>
 </body>
 </html>

@@ -1,7 +1,9 @@
-# 테스트 실행 (Agent 전용: 임시 빌드 폴더 사용, build 폴더는 IntelliJ용)
+# 테스트 실행 (표준 명령: .\gradlew.bat test --no-daemon — 문서: docs/08-setup-guides/03-test-execution.md)
+# 이 스크립트: Agent 전용 임시 빌드 폴더 사용 시 동일한 --no-daemon 으로 실행.
 # 임시 빌드: agent-build-<timestamp> → Gradle이 .agent-build-dir에 경로 기록 → 실행 후 삭제
 # 사용법: .\scripts\run-tests.ps1  또는  .\scripts\run-tests.ps1 -NoUniqueDir (IntelliJ build 사용)
 # 주의: 8084 포트 사용 중이면 반드시 종료 후 실행. Windows에서 "Unable to delete directory test-results\test\binary" 발생 시 -NoUniqueDir 사용.
+# Agent 실행 시 터미널 타임아웃 300000ms(5분) 이상 권장 — .cursor/rules/script-run-timeouts.mdc
 
 param(
     [switch]$NoUniqueDir

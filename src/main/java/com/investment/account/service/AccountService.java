@@ -261,8 +261,8 @@ public class AccountService {
             String userId = getCurrentUserId();
 
             try {
-                KoreaInvestmentAccountClient.BalanceAndPositionsResult result =
-                        accountClient.inquireBalance(userId, accountNo);
+                KoreaInvestmentAccountClient.BalanceAndPositionsResult result = accountClient.inquireBalance(userId,
+                        accountNo);
                 List<AccountPositionDto> allPositions = new ArrayList<>(result.getPositions());
                 List<AccountPositionDto> overseasPositions = accountClient.inquireOverseasBalance(userId, accountNo);
                 if (!overseasPositions.isEmpty()) {
@@ -285,6 +285,46 @@ public class AccountService {
             log.error("잔고·보유종목 조회 실패: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo), e);
             throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                     "잔고·보유종목 조회에 실패했습니다: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * userId 지정으로 잔고·보유종목 조회 (파이프라인·스케줄러 전용).
+     * SecurityContext 없이 호출 가능. 캐시 미사용.
+     *
+     * @param userId    사용자 ID
+     * @param accountNo 계좌번호
+     * @return 잔고·보유종목 (API 실패 시 DB 폴백), 실패 시 null
+     */
+    @Transactional(readOnly = true)
+    public BalanceAndPositionsDto getBalanceAndPositionsWithUserId(String userId, String accountNo) {
+        if (userId == null || accountNo == null) {
+            return null;
+        }
+        try {
+            KoreaInvestmentAccountClient.BalanceAndPositionsResult result = accountClient.inquireBalance(userId,
+                    accountNo);
+            List<AccountPositionDto> allPositions = new ArrayList<>(result.getPositions());
+            try {
+                List<AccountPositionDto> overseasPositions = accountClient.inquireOverseasBalance(userId, accountNo);
+                if (!overseasPositions.isEmpty()) {
+                    allPositions.addAll(overseasPositions);
+                }
+            } catch (Exception e) {
+                log.debug("해외 잔고 조회 스킵: accountNo={}, error={}",
+                        LogMaskingUtil.maskAccountNo(accountNo), e.getMessage());
+            }
+            return new BalanceAndPositionsDto(result.getBalance(), allPositions);
+        } catch (Exception e) {
+            log.warn("잔고·보유종목 조회 실패(파이프라인): accountNo={}, error={}",
+                    LogMaskingUtil.maskAccountNo(accountNo), e.getMessage());
+            try {
+                return new BalanceAndPositionsDto(
+                        getAccountBalanceFromDb(accountNo),
+                        getPositionsFromDb(accountNo));
+            } catch (Exception dbEx) {
+                return null;
+            }
         }
     }
 

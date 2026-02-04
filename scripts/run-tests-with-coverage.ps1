@@ -1,8 +1,10 @@
-# 테스트 + JaCoCo 커버리지 (Agent 전용: 임시 빌드 사용, 실행 후 삭제)
+# 테스트 + JaCoCo 커버리지 (표준 테스트 명령: .\gradlew.bat test --no-daemon — 문서: docs/08-setup-guides/03-test-execution.md)
+# 이 스크립트: Agent 전용 임시 빌드 사용, jacocoTestReport 포함, 동일한 --no-daemon 으로 실행.
 # 임시 빌드: agent-build-<timestamp> → Gradle이 .agent-build-dir에 경로 기록 → 리포트 복사 후 삭제
 # 리포트 복사: coverage-report/ (프로젝트 루트, build 폴더는 IntelliJ용으로 건드리지 않음)
 # 사용법: .\scripts\run-tests-with-coverage.ps1  또는  -NoUniqueDir (IntelliJ build 사용)
 # 주의: 8084 포트 사용 중이면 반드시 종료 후 실행. Windows에서 삭제 오류 발생 시 -NoUniqueDir 로 커버리지 생성.
+# Agent 실행 시 터미널 타임아웃 360000ms(6분) 이상 권장 — .cursor/rules/script-run-timeouts.mdc
 
 param(
     [switch]$NoUniqueDir

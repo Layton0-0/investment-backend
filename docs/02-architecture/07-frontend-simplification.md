@@ -11,6 +11,9 @@
 - **핵심 정보 중심**: 중요한 정보만 표시
 - **빠른 로딩**: 가벼운 CSS, 외부 라이브러리 제거
 - **반응형**: 모바일 친화적
+- **디자인 토큰**: `common.css`에 CSS 변수로 색상(`--color-primary`, `--color-text`, `--color-text-muted` 등), 간격(`--space-*`), border-radius(`--radius-*`), 타이포(`--font-*`) 정의. 단일 소스로 일관된 스타일 유지.
+- **공통 테이블/카드 클래스**: `.data-table`, `.card`, `.card--pipeline`, `.card--summary` 등 공통 클래스 사용. 페이지별 인라인 스타일 최소화.
+- **공통 레이아웃**: 모든 인증 필요 페이지는 `layout-header` + `layout-menu` fragment 사용. 본문은 `<main class="container">`(최대 1200px) 안에 배치.
 
 ### 2. 대시보드 구성
 

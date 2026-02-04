@@ -5,29 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>자동투자 현황 - Investment Choi</title>
     <link rel="stylesheet" th:href="@{/css/common.css}">
-    <style>
-        .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
-        .page-title { font-size: 22px; font-weight: 700; margin-bottom: 24px; color: #191F28; }
-        .pipeline-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
-        .pipeline-card { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-left: 4px solid #3182F6; }
-        .pipeline-card .label { font-size: 13px; color: #8B95A1; margin-bottom: 8px; }
-        .pipeline-card .value { font-size: 24px; font-weight: 700; color: #191F28; }
-        .card { background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 20px; }
-        .card h2 { font-size: 18px; margin-bottom: 16px; color: #191F28; }
-        .signal-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-        .signal-table th, .signal-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }
-        .signal-table th { color: #8B95A1; font-weight: 600; }
-        .empty-state { text-align: center; padding: 48px 24px; color: #8B95A1; font-size: 14px; }
-    </style>
 </head>
-<body>
+<body class="page-background">
     <div th:replace="~{fragments/layout-header :: header}"></div>
     <nav th:replace="~{fragments/layout-menu :: menu}"></nav>
 
-    <div class="container">
-        <h2 class="page-title">자동투자 현황</h2>
-
+    <main class="container">
         <div th:if="${hasAccount}">
+            <div class="card" style="margin-bottom: 16px;">
+                <h3 style="margin-top: 0;">수동 트리거</h3>
+                <p class="help-text" style="margin-bottom: 8px;">파이프라인을 실제 주문 없이(dry-run) 한 번 실행합니다. 스케줄 현황에서 다른 작업도 수동 실행할 수 있습니다.</p>
+                <button type="button" class="btn btn-secondary" id="trigger-pipeline-dry-run">파이프라인 수동 실행 (dry-run)</button>
+                <span id="trigger-pipeline-message" aria-live="polite" style="margin-left: 8px; font-size: 0.9em;"></span>
+            </div>
             <div class="pipeline-grid">
                 <div class="pipeline-card">
                     <div class="label">1단계: 유니버스</div>
@@ -41,7 +31,7 @@
                 </div>
                 <div class="pipeline-card">
                     <div class="label">3단계: 자금 관리</div>
-                    <div class="value">준비 중</div>
+                    <div class="value" th:text="${allocationSummary != null && !#strings.isEmpty(allocationSummary)} ? ${allocationSummary} : '준비 중'">준비 중</div>
                     <div class="label">배분 요약</div>
                 </div>
                 <div class="pipeline-card">
@@ -53,7 +43,7 @@
             <div class="card">
                 <h2>시그널 요약 (기준일 <span th:text="${signalBasDt}">-</span>, KR · US)</h2>
                 <div th:if="${(signalListKr != null and !signalListKr.isEmpty()) or (signalListUs != null and !signalListUs.isEmpty())}" class="signal-table-wrap">
-                    <table class="signal-table">
+                    <table class="data-table">
                         <thead>
                             <tr>
                                 <th>시장</th>
@@ -83,7 +73,7 @@
             <div class="card" th:if="${hasAccount}">
                 <h2>보유 포지션</h2>
                 <div th:if="${openPositionList != null and !openPositionList.isEmpty()}" class="signal-table-wrap">
-                    <table class="signal-table">
+                    <table class="data-table">
                         <thead>
                             <tr>
                                 <th>시장</th>
@@ -108,8 +98,29 @@
             </div>
         </div>
         <div th:unless="${hasAccount}" class="card">
-            <div class="empty-state">계좌를 등록하면 자동투자 현황을 확인할 수 있습니다. <a th:href="@{/mypage}">설정</a>에서 API 키를 등록하세요.</div>
+            <div class="empty-state">계좌를 등록하면 자동투자 현황을 확인할 수 있습니다. <a th:href="@{/settings(serverType=${currentServerType})}">설정</a>에서 API 키를 등록하세요.</div>
         </div>
-    </div>
+    </main>
+    <script th:inline="javascript">
+        (function() {
+            var btn = document.getElementById('trigger-pipeline-dry-run');
+            var msgEl = document.getElementById('trigger-pipeline-message');
+            if (btn && msgEl) {
+                btn.addEventListener('click', function() {
+                    btn.disabled = true;
+                    msgEl.textContent = '실행 중...';
+                    msgEl.style.color = '';
+                    fetch('/api/v1/trigger/pipeline-execution?dryRun=true', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' } })
+                        .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
+                        .then(function(result) {
+                            msgEl.textContent = result.data && result.data.message ? result.data.message : (result.ok ? '완료' : '실패');
+                            if (!result.ok) msgEl.style.color = '#e74c3c';
+                        })
+                        .catch(function(err) { msgEl.textContent = err.message || '요청 실패'; msgEl.style.color = '#e74c3c'; })
+                        .finally(function() { btn.disabled = false; });
+                });
+            }
+        })();
+    </script>
 </body>
 </html>

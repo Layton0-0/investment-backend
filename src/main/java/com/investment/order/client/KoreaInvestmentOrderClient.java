@@ -32,15 +32,18 @@ import java.util.Optional;
 
 /**
  * 한국투자증권 주문 API 클라이언트
- * 
+ *
  * 한국투자증권 Open API를 사용하여 주문을 실행합니다.
- * - 주식 매수 주문
- * - 주식 매도 주문
- * - 주문 취소
- * 
- * TR ID:
+ * - 국내주식: 주식주문(현금) /uapi/domestic-stock/v1/trading/order-cash
+ * - 해외주식: 해외주식 주문 /uapi/overseas-stock/v1/trading/order (미국 NASD/NYSE/AMEX)
+ *
+ * TR ID (국내):
  * - 실거래: TTTC0012U (매수), TTTC0011U (매도)
  * - 모의투자: VTTC0012U (매수), VTTC0011U (매도)
+ *
+ * TR ID (해외 미국):
+ * - 실거래: TTTT1002U (매수), TTTT1006U (매도)
+ * - 모의투자: VTTT1002U (매수), VTTT1006U (매도)
  */
 @Slf4j
 @Component
@@ -129,7 +132,8 @@ public class KoreaInvestmentOrderClient {
         if (userId == null || accountNo == null || accountNo.trim().isEmpty()) {
             return null;
         }
-        List<UserAccount> accounts = userAccountRepository.findByUserIdAndBrokerType(userId, BrokerType.KOREA_INVESTMENT);
+        List<UserAccount> accounts = userAccountRepository.findByUserIdAndBrokerType(userId,
+                BrokerType.KOREA_INVESTMENT);
         for (UserAccount account : accounts) {
             try {
                 String decrypted = encryptionUtil.decrypt(account.getAccountNoEncrypted());
@@ -180,7 +184,8 @@ public class KoreaInvestmentOrderClient {
 
         // 계좌별 API 키 조회 (모의/실거래 구분)
         UserApiKey userApiKey = getUserApiKeyForAccount(userId, accountNo)
-                .orElseThrow(() -> new IllegalStateException("한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId + ", accountNo=" + accountNo));
+                .orElseThrow(() -> new IllegalStateException(
+                        "한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId + ", accountNo=" + accountNo));
 
         String serverType = userApiKey.getServerType() != null ? userApiKey.getServerType() : "1";
 
@@ -305,7 +310,8 @@ public class KoreaInvestmentOrderClient {
 
         // 계좌별 API 키 조회 (모의/실거래 구분)
         UserApiKey userApiKey = getUserApiKeyForAccount(userId, accountNo)
-                .orElseThrow(() -> new IllegalStateException("한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId + ", accountNo=" + accountNo));
+                .orElseThrow(() -> new IllegalStateException(
+                        "한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId + ", accountNo=" + accountNo));
 
         String serverType = userApiKey.getServerType() != null ? userApiKey.getServerType() : "1";
 
@@ -407,6 +413,214 @@ public class KoreaInvestmentOrderClient {
                                     throwable);
                             return new RuntimeException("주문 실행 실패: " + throwable.getMessage(), throwable);
                         }));
+    }
+
+    /** 해외(미국) 매수 TR_ID 실거래 */
+    private static final String OVERSEAS_BUY_TR_ID = "TTTT1002U";
+    /** 해외(미국) 매도 TR_ID 실거래 */
+    private static final String OVERSEAS_SELL_TR_ID = "TTTT1006U";
+    /** 미국 거래소 코드 (나스닥) */
+    private static final String OVRS_EXCG_CD_US = "NASD";
+
+    /**
+     * 해외주식 매수 주문 (미국: NASD/NYSE/AMEX).
+     * MCP 스펙: /uapi/overseas-stock/v1/trading/order, TR_ID
+     * TTTT1002U(실거래)/VTTT1002U(모의).
+     *
+     * @param userId    사용자 ID
+     * @param accountNo 계좌번호 (8-2 체계)
+     * @param symbol    종목 티커 (예: AAPL, TSLA)
+     * @param quantity  주문 수량
+     * @param price     주문 단가 (지정가). 시장가 시 "0" 전달
+     * @param orderDvsn 주문구분 ("00": 지정가, 모의투자는 00만 가능)
+     * @return 주문 응답 (주문번호 포함)
+     */
+    @SuppressWarnings("unchecked")
+    public Mono<OrderResponse> placeOverseasBuyOrder(String userId, String accountNo, String symbol,
+            Integer quantity, BigDecimal price, String orderDvsn) {
+        log.info("해외주식 매수 주문: userId={}, accountNo={}, symbol={}, quantity={}, price={}",
+                LogMaskingUtil.maskUserId(userId), LogMaskingUtil.maskAccountNo(accountNo), symbol, quantity, price);
+
+        UserApiKey userApiKey = getUserApiKeyForAccount(userId, accountNo)
+                .orElseThrow(() -> new IllegalStateException(
+                        "한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId + ", accountNo=" + accountNo));
+        String serverType = userApiKey.getServerType() != null ? userApiKey.getServerType() : "1";
+        String accessToken = tokenService.getAccessToken(userId, serverType);
+        String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
+        String appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
+
+        String baseUrl = getBaseUrl(serverType);
+        String trId = getTrId(OVERSEAS_BUY_TR_ID, serverType);
+        URI uri = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/uapi/overseas-stock/v1/trading/order")
+                .build()
+                .toUri();
+
+        String ovrsOrdUnpr = (price != null && price.compareTo(BigDecimal.ZERO) > 0)
+                ? price.toPlainString()
+                : "0";
+        Map<String, String> requestBody = KoreaInvestmentRequestBuilder.createAccountRequestBody(
+                accountNo,
+                Map.of(
+                        "OVRS_EXCG_CD", OVRS_EXCG_CD_US,
+                        "PDNO", symbol,
+                        "ORD_QTY", String.valueOf(quantity),
+                        "OVRS_ORD_UNPR", ovrsOrdUnpr,
+                        "CTAC_TLNO", "",
+                        "MGCO_APTM_ODNO", "",
+                        "SLL_TYPE", "",
+                        "ORD_SVR_DVSN_CD", "0",
+                        "ORD_DVSN", orderDvsn != null ? orderDvsn : "00"));
+
+        HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
+                accessToken, appKey, appSecret, trId);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> requestBodyForHash = (Map<String, Object>) (Map<?, ?>) requestBody;
+        String hashkey = hashkeyUtil.generateHashkey(requestBodyForHash, appSecret);
+        headers.set("hashkey", hashkey);
+
+        logApiRequest("해외주식 매수 주문", uri, headers, requestBody);
+        RateLimiter rateLimiter = getApiRateLimiter(serverType);
+
+        return Mono.fromCallable(() -> {
+            rateLimiter.acquirePermission();
+            return null;
+        })
+                .flatMap(ignored -> webClient.post()
+                        .uri(uri)
+                        .headers(h -> h.addAll(headers))
+                        .bodyValue(requestBody)
+                        .retrieve()
+                        .bodyToMono(Map.class)
+                        .timeout(Duration.ofSeconds(10))
+                        .retryWhen(Retry.backoff(2, Duration.ofSeconds(1))
+                                .filter(throwable -> {
+                                    if (throwable instanceof org.springframework.web.reactive.function.client.WebClientResponseException) {
+                                        org.springframework.web.reactive.function.client.WebClientResponseException ex = (org.springframework.web.reactive.function.client.WebClientResponseException) throwable;
+                                        return ex.getStatusCode().is5xxServerError();
+                                    }
+                                    return false;
+                                }))
+                        .map(response -> parseOverseasOrderResponse((Map<String, Object>) response, symbol, quantity,
+                                price, "BUY"))
+                        .onErrorMap(throwable -> {
+                            log.error("해외주식 매수 주문 실패: userId={}, accountNo={}, symbol={}",
+                                    LogMaskingUtil.maskUserId(userId), LogMaskingUtil.maskAccountNo(accountNo), symbol,
+                                    throwable);
+                            return new RuntimeException("주문 실행 실패: " + throwable.getMessage(), throwable);
+                        }));
+    }
+
+    /**
+     * 해외주식 매도 주문 (미국).
+     * MCP 스펙: /uapi/overseas-stock/v1/trading/order, TR_ID
+     * TTTT1006U(실거래)/VTTT1006U(모의).
+     */
+    @SuppressWarnings("unchecked")
+    public Mono<OrderResponse> placeOverseasSellOrder(String userId, String accountNo, String symbol,
+            Integer quantity, BigDecimal price, String orderDvsn) {
+        log.info("해외주식 매도 주문: userId={}, accountNo={}, symbol={}, quantity={}, price={}",
+                LogMaskingUtil.maskUserId(userId), LogMaskingUtil.maskAccountNo(accountNo), symbol, quantity, price);
+
+        UserApiKey userApiKey = getUserApiKeyForAccount(userId, accountNo)
+                .orElseThrow(() -> new IllegalStateException(
+                        "한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId + ", accountNo=" + accountNo));
+        String serverType = userApiKey.getServerType() != null ? userApiKey.getServerType() : "1";
+        String accessToken = tokenService.getAccessToken(userId, serverType);
+        String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
+        String appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
+
+        String baseUrl = getBaseUrl(serverType);
+        String trId = getTrId(OVERSEAS_SELL_TR_ID, serverType);
+        URI uri = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/uapi/overseas-stock/v1/trading/order")
+                .build()
+                .toUri();
+
+        String ovrsOrdUnpr = (price != null && price.compareTo(BigDecimal.ZERO) > 0)
+                ? price.toPlainString()
+                : "0";
+        Map<String, String> requestBody = KoreaInvestmentRequestBuilder.createAccountRequestBody(
+                accountNo,
+                Map.of(
+                        "OVRS_EXCG_CD", OVRS_EXCG_CD_US,
+                        "PDNO", symbol,
+                        "ORD_QTY", String.valueOf(quantity),
+                        "OVRS_ORD_UNPR", ovrsOrdUnpr,
+                        "CTAC_TLNO", "",
+                        "MGCO_APTM_ODNO", "",
+                        "SLL_TYPE", "00",
+                        "ORD_SVR_DVSN_CD", "0",
+                        "ORD_DVSN", orderDvsn != null ? orderDvsn : "00"));
+
+        HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
+                accessToken, appKey, appSecret, trId);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> requestBodyForHash = (Map<String, Object>) (Map<?, ?>) requestBody;
+        String hashkey = hashkeyUtil.generateHashkey(requestBodyForHash, appSecret);
+        headers.set("hashkey", hashkey);
+
+        logApiRequest("해외주식 매도 주문", uri, headers, requestBody);
+        RateLimiter rateLimiter = getApiRateLimiter(serverType);
+
+        return Mono.fromCallable(() -> {
+            rateLimiter.acquirePermission();
+            return null;
+        })
+                .flatMap(ignored -> webClient.post()
+                        .uri(uri)
+                        .headers(h -> h.addAll(headers))
+                        .bodyValue(requestBody)
+                        .retrieve()
+                        .bodyToMono(Map.class)
+                        .timeout(Duration.ofSeconds(10))
+                        .retryWhen(Retry.backoff(2, Duration.ofSeconds(1))
+                                .filter(throwable -> {
+                                    if (throwable instanceof org.springframework.web.reactive.function.client.WebClientResponseException) {
+                                        org.springframework.web.reactive.function.client.WebClientResponseException ex = (org.springframework.web.reactive.function.client.WebClientResponseException) throwable;
+                                        return ex.getStatusCode().is5xxServerError();
+                                    }
+                                    return false;
+                                }))
+                        .map(response -> parseOverseasOrderResponse((Map<String, Object>) response, symbol, quantity,
+                                price, "SELL"))
+                        .onErrorMap(throwable -> {
+                            log.error("해외주식 매도 주문 실패: userId={}, accountNo={}, symbol={}",
+                                    LogMaskingUtil.maskUserId(userId), LogMaskingUtil.maskAccountNo(accountNo), symbol,
+                                    throwable);
+                            return new RuntimeException("주문 실행 실패: " + throwable.getMessage(), throwable);
+                        }));
+    }
+
+    @SuppressWarnings("unchecked")
+    private OrderResponse parseOverseasOrderResponse(Map<String, Object> responseMap, String symbol,
+            Integer quantity, BigDecimal price, String orderType) {
+        String rtCd = (String) responseMap.get("rt_cd");
+        if (rtCd == null || !"0".equals(rtCd)) {
+            String msg1 = (String) responseMap.get("msg1");
+            String msgCd = (String) responseMap.get("msg_cd");
+            throw new RuntimeException(
+                    "한국투자증권 해외주문 API 오류: rt_cd=" + rtCd + ", msg_cd=" + msgCd + ", msg1=" + msg1);
+        }
+        Map<String, Object> output = (Map<String, Object>) responseMap.get("output");
+        if (output == null) {
+            throw new RuntimeException("한국투자증권 해외주문 API 응답에 output이 없습니다");
+        }
+        String orderNo = (String) output.get("ODNO");
+        if (orderNo == null) {
+            orderNo = (String) output.get("odno");
+        }
+        if (orderNo == null && !output.isEmpty()) {
+            orderNo = String.valueOf(output.getOrDefault("ORD_NO", output.values().iterator().next()));
+        }
+        return OrderResponse.builder()
+                .orderNo(orderNo != null ? orderNo : "")
+                .symbol(symbol)
+                .quantity(quantity)
+                .price(price)
+                .orderType(orderType)
+                .status("SUCCESS")
+                .build();
     }
 
     /**

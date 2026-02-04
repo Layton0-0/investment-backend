@@ -52,7 +52,32 @@ public class PositionSizingService {
     @Value("${investment.factor.kelly-b:2.0}")
     private BigDecimal kellyB = new BigDecimal("2.0");
 
-    /** 전략별 Half-Kelly p·b (백테스트 winRate·profitFactor 연동용). 빈 문자열이면 기본 kelly-p/kelly-b 사용 */
+    /**
+     * 한국(KR) Hunter: 수급(Smart Money) 임계값 초과 시 모멘텀 경로. 점수는 비율×100 저장됨 (0.5% = 0.5)
+     */
+    @Value("${investment.factor.smart-money-intensity-threshold-pct:0.005}")
+    private double smartMoneyIntensityThresholdPct = 0.005;
+
+    /** 시초가/변동성 돌파 시 최소 거래대금(원). KR 단기 09:00~10:00 슬리피지 방어용 (기본 300억) */
+    @Value("${investment.factor.liquidity-min-trd-val-opening:30000000000}")
+    private long liquidityMinTrdValOpening = 30_000_000_000L;
+
+    /** 켈리 비활성 시 사용. true면 Half-Kelly, false면 고정 비율만 */
+    @Value("${investment.factor.kelly-enabled:false}")
+    private boolean kellyEnabled = false;
+
+    /** 켈리 비활성 시 1종목당 자산 대비 최대 비율 (%) */
+    @Value("${investment.factor.kelly-fixed-allocation-pct:2}")
+    private BigDecimal kellyFixedAllocationPct = new BigDecimal("2");
+
+    /** 미국(US): 갭 상승 N% 이상 시 진입 스킵 (기본 5) */
+    @Value("${investment.factor.us-gap-up-skip-pct:5}")
+    private BigDecimal usGapUpSkipPct = new BigDecimal("5");
+
+    /**
+     * 전략별 Half-Kelly p·b (백테스트 winRate·profitFactor 연동용). 빈 문자열이면 기본
+     * kelly-p/kelly-b 사용
+     */
     @Value("${investment.factor.kelly-p-short-term:}")
     private String kellyPShortTerm = "";
     @Value("${investment.factor.kelly-b-short-term:}")
@@ -66,6 +91,14 @@ public class PositionSizingService {
     @Value("${investment.factor.kelly-b-long-term:}")
     private String kellyBLongTerm = "";
 
+    /** 종목당 최대 비중 (%, 0이면 미적용) */
+    @Value("${investment.factor.position-cap-per-symbol-pct:10}")
+    private BigDecimal positionCapPerSymbolPct = new BigDecimal("10");
+
+    /** 일일 최대 신규 매수 종목 수 (0이면 미적용) */
+    @Value("${investment.factor.max-new-positions-per-day:10}")
+    private int maxNewPositionsPerDay = 10;
+
     /**
      * 기준일·시장에 대한 포지션 권장 목록 산출 (기본 SHORT_TERM).
      */
@@ -75,7 +108,8 @@ public class PositionSizingService {
 
     /**
      * 기준일·시장·기간별 포지션 권장 목록 산출.
-     * SHORT_TERM: RSI&gt;60 &amp; MACD&gt;Signal 필터. MEDIUM_TERM: 시그널 점수 상위 10%. LONG_TERM: 전체.
+     * SHORT_TERM: RSI&gt;60 &amp; MACD&gt;Signal 필터. MEDIUM_TERM: 시그널 점수 상위 10%.
+     * LONG_TERM: 전체.
      *
      * @param basDt        기준일
      * @param market       시장 (KR, US)
@@ -96,6 +130,24 @@ public class PositionSizingService {
         Set<String> symbols = filterSymbolsByStrategyType(signals, basDt, market, strategyType);
         if (symbols.isEmpty()) {
             return List.of();
+        }
+        // KR 단기: 시초가/변동성 돌파 시 유동성 opening 임계 적용 (슬리피지 방어)
+        if ("KR".equalsIgnoreCase(market) && strategyType == StrategyType.SHORT_TERM) {
+            List<DailyStock> openingLiquidity = dailyStockRepository.findByBasDtAndMarketAndTrdValGreaterThanEqual(
+                    basDt, market, liquidityMinTrdValOpening);
+            Set<String> openingSymbols = openingLiquidity.stream().map(DailyStock::getSymbol)
+                    .collect(Collectors.toSet());
+            symbols = symbols.stream().filter(openingSymbols::contains).collect(Collectors.toSet());
+            if (symbols.isEmpty()) {
+                return List.of();
+            }
+        }
+        // 미국(US): 갭 상승 N% 이상 시 진입 스킵 (Look-ahead 완화)
+        if ("US".equalsIgnoreCase(market) && usGapUpSkipPct != null && usGapUpSkipPct.compareTo(BigDecimal.ZERO) > 0) {
+            symbols = filterByUsGapUpSkip(symbols, basDt, market);
+            if (symbols.isEmpty()) {
+                return List.of();
+            }
         }
         List<String> symbolList = new ArrayList<>(symbols);
 
@@ -140,6 +192,38 @@ public class PositionSizingService {
             out = applyHalfKelly(out, totalCapital, strategyType);
             // 변동성 역가중 적용
             out = applyInverseVolatilityWeighting(out, totalCapital, fromDt, market);
+            // 일일 최대 신규 매수 종목 수 상한
+            if (maxNewPositionsPerDay > 0 && out.size() > maxNewPositionsPerDay) {
+                out = new ArrayList<>(out.subList(0, maxNewPositionsPerDay));
+            }
+            // 종목당 최대 비중 상한
+            if (positionCapPerSymbolPct != null && positionCapPerSymbolPct.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal capAmt = totalCapital.multiply(positionCapPerSymbolPct)
+                        .divide(BigDecimal.valueOf(100), 2, RoundingMode.DOWN);
+                List<PositionRecommendationDto> capped = new ArrayList<>();
+                for (PositionRecommendationDto rec : out) {
+                    BigDecimal amt = rec.getRecommendedAmt().min(capAmt);
+                    if (rec.getEntryPrice() == null || rec.getEntryPrice().compareTo(BigDecimal.ZERO) <= 0) {
+                        capped.add(rec);
+                        continue;
+                    }
+                    long qty = amt.divide(rec.getEntryPrice(), 0, RoundingMode.DOWN).longValue();
+                    if (qty <= 0) {
+                        continue;
+                    }
+                    capped.add(PositionRecommendationDto.builder()
+                            .basDt(rec.getBasDt())
+                            .symbol(rec.getSymbol())
+                            .market(rec.getMarket())
+                            .recommendedAmt(amt)
+                            .recommendedQty(qty)
+                            .method(rec.getMethod())
+                            .entryPrice(rec.getEntryPrice())
+                            .stopLoss(rec.getStopLoss())
+                            .build());
+                }
+                out = capped;
+            }
         }
         return out;
     }
@@ -175,7 +259,8 @@ public class PositionSizingService {
     }
 
     private String resolveKellyPString(StrategyType strategyType) {
-        if (strategyType == null) return null;
+        if (strategyType == null)
+            return null;
         return switch (strategyType) {
             case SHORT_TERM -> kellyPShortTerm;
             case MEDIUM_TERM -> kellyPMediumTerm;
@@ -184,7 +269,8 @@ public class PositionSizingService {
     }
 
     private String resolveKellyBString(StrategyType strategyType) {
-        if (strategyType == null) return null;
+        if (strategyType == null)
+            return null;
         return switch (strategyType) {
             case SHORT_TERM -> kellyBShortTerm;
             case MEDIUM_TERM -> kellyBMediumTerm;
@@ -192,8 +278,13 @@ public class PositionSizingService {
         };
     }
 
+    /** 한국(KR) Hunter 시그널 팩터 타입 상수 (FactorCalculationService와 동일) */
+    private static final String FACTOR_SMART_MONEY_INTENSITY = "SMART_MONEY_INTENSITY";
+    private static final String FACTOR_CONTRARIAN_RSI = "CONTRARIAN_RSI";
+
     /**
      * 기간별 시그널 필터: 통과한 종목 심볼만 반환.
+     * 한국(KR) SHORT_TERM: Case A(모멘텀) ∪ Case B(역발상) 분기 적용.
      */
     private Set<String> filterSymbolsByStrategyType(List<SignalScore> signals, LocalDate basDt, String market,
             StrategyType strategyType) {
@@ -202,11 +293,15 @@ public class PositionSizingService {
             return allSymbols;
         }
         if (strategyType == StrategyType.SHORT_TERM) {
+            if ("KR".equalsIgnoreCase(market)) {
+                return filterSymbolsKrShortTerm(signals, basDt, market);
+            }
             LocalDate fromDt = basDt.minusDays(30);
             return allSymbols.stream()
                     .filter(symbol -> {
-                        List<DailyStock> history = dailyStockRepository.findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(
-                                symbol, market, fromDt, basDt);
+                        List<DailyStock> history = dailyStockRepository
+                                .findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(
+                                        symbol, market, fromDt, basDt);
                         if (history.size() < 20) {
                             return false;
                         }
@@ -232,19 +327,124 @@ public class PositionSizingService {
     }
 
     /**
+     * 한국(KR) 단기: Hunter 분기 — Case A(모멘텀) ∪ Case B(역발상).
+     * Case A: 수급 강함(Smart Money 임계 초과) → RSI&gt;60 &amp; MACD 필터.
+     * Case B: 역발상(RSI&lt;40, CONTRARIAN_RSI 점수 양수). P/B 데이터 없으면 RSI만 적용.
+     */
+    private Set<String> filterSymbolsKrShortTerm(List<SignalScore> signals, LocalDate basDt, String market) {
+        BigDecimal smartMoneyThreshold = BigDecimal.valueOf(smartMoneyIntensityThresholdPct * 100); // 0.5% → 0.5
+        Set<String> caseASymbols = new java.util.HashSet<>();
+        Set<String> caseBSymbols = new java.util.HashSet<>();
+
+        Map<String, BigDecimal> smartMoneyBySymbol = signals.stream()
+                .filter(s -> FACTOR_SMART_MONEY_INTENSITY.equals(s.getFactorType()) && s.getScore() != null)
+                .collect(Collectors.toMap(SignalScore::getSymbol, SignalScore::getScore, (a, b) -> a.max(b)));
+        Map<String, BigDecimal> contrarianRsiBySymbol = signals.stream()
+                .filter(s -> FACTOR_CONTRARIAN_RSI.equals(s.getFactorType()) && s.getScore() != null)
+                .collect(Collectors.toMap(SignalScore::getSymbol, SignalScore::getScore, (a, b) -> a.max(b)));
+
+        // Case A: 수급 임계 초과 종목에 대해 모멘텀 필터(RSI>60 & MACD)
+        for (Map.Entry<String, BigDecimal> e : smartMoneyBySymbol.entrySet()) {
+            if (e.getValue().compareTo(smartMoneyThreshold) > 0) {
+                caseASymbols.add(e.getKey());
+            }
+        }
+        LocalDate fromDt = basDt.minusDays(30);
+        Set<String> momentumPass = new java.util.HashSet<>();
+        for (String symbol : caseASymbols) {
+            List<DailyStock> history = dailyStockRepository.findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(
+                    symbol, market, fromDt, basDt);
+            if (history.size() >= 20) {
+                boolean rsiOk = TechnicalIndicatorUtil.isRsiAbove(history, 14, new BigDecimal("60"));
+                boolean macdOk = TechnicalIndicatorUtil.isMacdAboveSignal(history);
+                if (rsiOk && macdOk) {
+                    momentumPass.add(symbol);
+                }
+            }
+        }
+
+        // Case B: 역발상(RSI<40) — CONTRARIAN_RSI 점수 양수. P/B는 데이터 확보 후 적용.
+        for (Map.Entry<String, BigDecimal> e : contrarianRsiBySymbol.entrySet()) {
+            if (e.getValue().compareTo(BigDecimal.ZERO) > 0) {
+                caseBSymbols.add(e.getKey());
+            }
+        }
+
+        Set<String> union = new java.util.HashSet<>(momentumPass);
+        union.addAll(caseBSymbols);
+        return union;
+    }
+
+    /**
+     * 미국(US): 전일 종가 대비 갭 상승 N% 이상 종목 제외 (진입 스킵).
+     */
+    private Set<String> filterByUsGapUpSkip(Set<String> symbols, LocalDate basDt, String market) {
+        if (symbols.isEmpty() || usGapUpSkipPct == null || usGapUpSkipPct.compareTo(BigDecimal.ZERO) <= 0) {
+            return symbols;
+        }
+        LocalDate prev = basDt.minusDays(1);
+        return symbols.stream()
+                .filter(symbol -> {
+                    List<DailyStock> two = dailyStockRepository.findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(
+                            symbol, market, prev, basDt);
+                    if (two.size() < 2) {
+                        return true; // 데이터 부족 시 포함
+                    }
+                    BigDecimal prevClose = two.get(0).getClosePrice();
+                    BigDecimal todayClose = two.get(two.size() - 1).getClosePrice();
+                    if (prevClose == null || todayClose == null || prevClose.compareTo(BigDecimal.ZERO) <= 0) {
+                        return true;
+                    }
+                    BigDecimal gapPct = todayClose.subtract(prevClose).divide(prevClose, 4, RoundingMode.HALF_UP)
+                            .multiply(BigDecimal.valueOf(100));
+                    return gapPct.compareTo(usGapUpSkipPct) < 0; // 갭 < N% 만 포함
+                })
+                .collect(Collectors.toSet());
+    }
+
+    /**
      * Half-Kelly 공식으로 포지션 사이징 조정.
-     * 켈리 공식: f* = (bp - q) / b. p·b는 전략별 설정(백테스트 winRate·profitFactor 연동) 또는 기본값 사용.
+     * 켈리 공식: f* = (bp - q) / b. p·b는 전략별 설정(백테스트 winRate·profitFactor 연동) 또는 기본값
+     * 사용.
      * Half-Kelly: f*의 50%만 사용하여 파산 위험 방지.
      *
      * @param recommendations 기존 권장 포지션 목록
-     * @param totalCapital 총 투자 가능 자산
-     * @param strategyType 기간별 전략 (전략별 p·b 적용)
+     * @param totalCapital    총 투자 가능 자산
+     * @param strategyType    기간별 전략 (전략별 p·b 적용)
      * @return Half-Kelly 조정된 포지션 목록
      */
     private List<PositionRecommendationDto> applyHalfKelly(
             List<PositionRecommendationDto> recommendations, BigDecimal totalCapital, StrategyType strategyType) {
         if (recommendations.isEmpty()) {
             return recommendations;
+        }
+
+        // 초기 운용: 켈리 비활성 시 고정 자산 비율만 적용 (kelly-enabled=false)
+        if (!kellyEnabled && kellyFixedAllocationPct != null
+                && kellyFixedAllocationPct.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal fixedAmt = totalCapital.multiply(kellyFixedAllocationPct.movePointLeft(2));
+            return recommendations.stream()
+                    .map(dto -> {
+                        if (dto.getEntryPrice().compareTo(BigDecimal.ZERO) <= 0) {
+                            return dto;
+                        }
+                        BigDecimal capAmt = dto.getRecommendedAmt().min(fixedAmt);
+                        long qty = capAmt.divide(dto.getEntryPrice(), 0, RoundingMode.DOWN).longValue();
+                        if (qty <= 0) {
+                            return dto;
+                        }
+                        return PositionRecommendationDto.builder()
+                                .basDt(dto.getBasDt())
+                                .symbol(dto.getSymbol())
+                                .market(dto.getMarket())
+                                .recommendedAmt(dto.getEntryPrice().multiply(BigDecimal.valueOf(qty)))
+                                .recommendedQty(qty)
+                                .method(METHOD_ATR + "+FIXED")
+                                .entryPrice(dto.getEntryPrice())
+                                .stopLoss(dto.getStopLoss())
+                                .build();
+                    })
+                    .collect(Collectors.toList());
         }
 
         BigDecimal p = getKellyP(strategyType);
@@ -278,19 +478,19 @@ public class PositionSizingService {
                     BigDecimal kellyAmt = totalCapital.multiply(effectiveFraction);
                     // 기존 ATR 기반 금액과 Kelly 기반 금액 중 작은 값 사용
                     BigDecimal finalAmt = dto.getRecommendedAmt().min(kellyAmt);
-                    
+
                     if (dto.getEntryPrice().compareTo(BigDecimal.ZERO) <= 0) {
                         return dto;
                     }
-                    
+
                     long qty = finalAmt.divide(dto.getEntryPrice(), 0, RoundingMode.DOWN).longValue();
                     if (qty <= 0) {
                         return dto;
                     }
 
                     // Kelly가 적용되었는지 메서드에 표시
-                    String method = finalAmt.compareTo(dto.getRecommendedAmt()) < 0 
-                            ? METHOD_KELLY + "+" + METHOD_ATR 
+                    String method = finalAmt.compareTo(dto.getRecommendedAmt()) < 0
+                            ? METHOD_KELLY + "+" + METHOD_ATR
                             : dto.getMethod();
 
                     return PositionRecommendationDto.builder()
@@ -329,8 +529,10 @@ public class PositionSizingService {
             BigDecimal tr = high.subtract(low);
             BigDecimal tr2 = high.subtract(prevClose).abs();
             BigDecimal tr3 = low.subtract(prevClose).abs();
-            if (tr2.compareTo(tr) > 0) tr = tr2;
-            if (tr3.compareTo(tr) > 0) tr = tr3;
+            if (tr2.compareTo(tr) > 0)
+                tr = tr2;
+            if (tr3.compareTo(tr) > 0)
+                tr = tr3;
             sum = sum.add(tr);
         }
         int count = sorted.size() - start;
@@ -360,9 +562,11 @@ public class PositionSizingService {
         return recommendations.stream()
                 .map(dto -> {
                     BigDecimal sigma = sigmaMap.getOrDefault(dto.getSymbol(), BigDecimal.ONE);
-                    BigDecimal weight = BigDecimal.ONE.divide(sigma, 6, RoundingMode.HALF_UP).divide(weightSum, 6, RoundingMode.HALF_UP);
+                    BigDecimal weight = BigDecimal.ONE.divide(sigma, 6, RoundingMode.HALF_UP).divide(weightSum, 6,
+                            RoundingMode.HALF_UP);
                     BigDecimal cappedAmt = totalCapital.multiply(weight).min(maxAllocation);
-                    if (dto.getEntryPrice().compareTo(BigDecimal.ZERO) <= 0) return dto;
+                    if (dto.getEntryPrice().compareTo(BigDecimal.ZERO) <= 0)
+                        return dto;
                     long qty = cappedAmt.divide(dto.getEntryPrice(), 0, RoundingMode.DOWN).longValue();
                     return PositionRecommendationDto.builder()
                             .basDt(dto.getBasDt())
@@ -380,7 +584,8 @@ public class PositionSizingService {
     }
 
     private BigDecimal computeReturnStdDev(List<DailyStock> history) {
-        if (history.size() < 2) return BigDecimal.ZERO;
+        if (history.size() < 2)
+            return BigDecimal.ZERO;
         List<DailyStock> sorted = history.stream()
                 .sorted((a, b) -> a.getBasDt().compareTo(b.getBasDt()))
                 .collect(Collectors.toList());
@@ -388,11 +593,14 @@ public class PositionSizingService {
         for (int i = 1; i < sorted.size(); i++) {
             BigDecimal prev = sorted.get(i - 1).getClosePrice();
             BigDecimal curr = sorted.get(i).getClosePrice();
-            if (prev == null || curr == null || prev.compareTo(BigDecimal.ZERO) == 0) continue;
+            if (prev == null || curr == null || prev.compareTo(BigDecimal.ZERO) == 0)
+                continue;
             returns.add(curr.subtract(prev).divide(prev, 6, RoundingMode.HALF_UP));
         }
-        if (returns.isEmpty()) return BigDecimal.ZERO;
-        BigDecimal mean = returns.stream().reduce(BigDecimal.ZERO, BigDecimal::add).divide(BigDecimal.valueOf(returns.size()), 6, RoundingMode.HALF_UP);
+        if (returns.isEmpty())
+            return BigDecimal.ZERO;
+        BigDecimal mean = returns.stream().reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(BigDecimal.valueOf(returns.size()), 6, RoundingMode.HALF_UP);
         BigDecimal variance = returns.stream()
                 .map(r -> r.subtract(mean).pow(2))
                 .reduce(BigDecimal.ZERO, BigDecimal::add)

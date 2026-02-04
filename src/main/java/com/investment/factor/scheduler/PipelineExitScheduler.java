@@ -16,7 +16,6 @@ import com.investment.order.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -58,7 +57,8 @@ public class PipelineExitScheduler {
         if (userId == null || accountNo == null || accountNo.trim().isEmpty()) {
             return "1";
         }
-        List<UserAccount> accounts = userAccountRepository.findByUserIdAndBrokerType(userId, BrokerType.KOREA_INVESTMENT);
+        List<UserAccount> accounts = userAccountRepository.findByUserIdAndBrokerType(userId,
+                BrokerType.KOREA_INVESTMENT);
         for (UserAccount account : accounts) {
             try {
                 String decrypted = encryptionUtil.decrypt(account.getAccountNoEncrypted());
@@ -73,9 +73,9 @@ public class PipelineExitScheduler {
     }
 
     /**
-     * 보유 포지션이 있는 계좌별로 실시간 시세를 조회해 청산 시그널을 평가하고, 설정 시 매도 주문 실행.
+     * 보유 포지션이 있는 계좌별로 실시간 시세를 조회해 청산 시그널을 평가하고, 설정 시 매도 주문 실행. Spring Batch Job에서
+     * 호출.
      */
-    @Scheduled(cron = "${investment.pipeline.exit-schedule-cron:0 */5 9-15 * * MON-FRI}")
     @Transactional
     public void evaluateAndExecuteExits() {
         List<String> accountNos = strategyPositionRepository.findDistinctAccountNosWithOpenPositions();
@@ -112,10 +112,12 @@ public class PipelineExitScheduler {
         Map<String, BigDecimal> currentPriceBySymbol = new HashMap<>();
         Map<String, BigDecimal> todayHighBySymbol = new HashMap<>();
         for (CurrentPriceDto dto : priceDtos) {
-            if (dto.getSymbol() != null && dto.getCurrentPrice() != null && dto.getCurrentPrice().compareTo(BigDecimal.ZERO) > 0) {
+            if (dto.getSymbol() != null && dto.getCurrentPrice() != null
+                    && dto.getCurrentPrice().compareTo(BigDecimal.ZERO) > 0) {
                 currentPriceBySymbol.put(dto.getSymbol(), dto.getCurrentPrice());
             }
-            if (dto.getSymbol() != null && dto.getHighPrice() != null && dto.getHighPrice().compareTo(BigDecimal.ZERO) > 0) {
+            if (dto.getSymbol() != null && dto.getHighPrice() != null
+                    && dto.getHighPrice().compareTo(BigDecimal.ZERO) > 0) {
                 todayHighBySymbol.put(dto.getSymbol(), dto.getHighPrice());
             }
         }
@@ -142,7 +144,8 @@ public class PipelineExitScheduler {
         if (!autoExecute) {
             log.info("청산 시그널 발생 (auto-execute=false, 주문 미실행): accountNo={}, count={}, reasons={}",
                     accountNo, signals.size(),
-                    signals.stream().map(ExitRuleService.ExitSignal::getReason).distinct().collect(Collectors.joining(", ")));
+                    signals.stream().map(ExitRuleService.ExitSignal::getReason).distinct()
+                            .collect(Collectors.joining(", ")));
             return;
         }
 
@@ -157,12 +160,22 @@ public class PipelineExitScheduler {
         LocalDate today = LocalDate.now();
         for (ExitRuleService.ExitSignal signal : signals) {
             try {
+                // US 포지션은 해외 현재가 미연동 시 시세 없을 수 있음 — 시세 없으면 해당 건 스킵
+                if (signal.getCurrentPrice() == null || signal.getCurrentPrice().compareTo(BigDecimal.ZERO) <= 0) {
+                    log.debug("청산 스킵: 시세 없음, positionId={}, symbol={}, market={}",
+                            signal.getPositionId(), signal.getSymbol(), signal.getMarket());
+                    continue;
+                }
+                String positionMarket = (signal.getMarket() != null && !signal.getMarket().isBlank())
+                        ? signal.getMarket()
+                        : "KR";
                 OrderRequestDto sellRequest = OrderRequestDto.builder()
                         .accountNo(accountNo)
                         .symbol(signal.getSymbol())
                         .orderType(OrderRequestDto.OrderType.SELL)
                         .quantity(signal.getQuantity())
-                        .price(signal.getCurrentPrice() != null ? signal.getCurrentPrice() : BigDecimal.ZERO)
+                        .price(signal.getCurrentPrice())
+                        .market(positionMarket)
                         .build();
                 orderService.executeOrderForPipeline(sellRequest, userId);
 

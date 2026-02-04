@@ -642,6 +642,24 @@ public Mono<OrderResponse> placeBuyOrder(String userId, String accountNo,
 
 5. **주문 API·계좌별 서버 타입**: 주문 실행 시 계좌번호(accountNo)에 해당하는 서버 타입(모의/실전)으로 API 키·토큰을 사용한다. `KoreaInvestmentOrderClient`는 `UserAccount`에서 accountNo → serverType을 조회한 뒤 `getUserApiKeyForAccount(userId, accountNo)`, `getAccessToken(userId, serverType)`으로 호출한다.
 
+## 국내주식 주문 API (MCP 검증 반영)
+
+- **엔드포인트**: `/uapi/domestic-stock/v1/trading/order-cash`
+- **요청 방식**: **POST** + JSON body (key 대문자: CANO, ACNT_PRDT_CD, PDNO, ORD_DVSN, ORD_QTY, ORD_UNPR, EXCG_ID_DVSN_CD 등)
+- **TR ID**: 실거래 매수 `TTTC0012U` / 매도 `TTTC0011U`, 모의투자 매수 `VTTC0012U` / 매도 `VTTC0011U`
+- **Hashkey**: 필수. `KoreaInvestmentHashkeyUtil.generateHashkey(requestBody, appSecret)` 사용
+- **사용 클래스**: `KoreaInvestmentOrderClient.placeBuyOrder`, `placeSellOrder`
+
+## 해외주식 주문 API (미국)
+
+- **엔드포인트**: `/uapi/overseas-stock/v1/trading/order`
+- **요청 방식**: **POST** + JSON body
+- **TR ID (미국 NASD/NYSE/AMEX)**: 실거래 매수 `TTTT1002U` / 매도 `TTTT1006U`, 모의투자 매수 `VTTT1002U` / 매도 `VTTT1006U`
+- **필수 파라미터**: CANO, ACNT_PRDT_CD, OVRS_EXCG_CD(미국: NASD), PDNO(티커 예: AAPL), ORD_QTY, OVRS_ORD_UNPR(지정가 단가, 시장가 시 "0"), CTAC_TLNO(공란 가능), MGCO_APTM_ODNO(공란 가능), SLL_TYPE(매도 시 "00"), ORD_SVR_DVSN_CD("0"), ORD_DVSN("00": 지정가, 모의투자는 00만 가능)
+- **Hashkey**: 필수
+- **사용 클래스**: `KoreaInvestmentOrderClient.placeOverseasBuyOrder`, `placeOverseasSellOrder`
+- **시장 분기**: `OrderRequestDto.market`이 "US"일 때 해외 주문 API 호출, 그 외 국내 주문 API 호출
+
 ### 자세한 가이드
 
 MCP 통합에 대한 자세한 내용은 [MCP 통합 가이드](../08-setup-guides/06-mcp-integration-guide.md)를 참고하세요.

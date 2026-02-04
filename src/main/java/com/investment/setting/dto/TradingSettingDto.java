@@ -17,19 +17,22 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 public class TradingSettingDto {
-    
+
     @NotNull(message = "최대 투자금액은 필수입니다")
     @Positive(message = "최대 투자금액은 양수여야 합니다")
     private BigDecimal maxInvestmentAmount;
-    
+
     @NotNull(message = "최소 투자금액은 필수입니다")
     @Positive(message = "최소 투자금액은 양수여야 합니다")
     private BigDecimal minInvestmentAmount;
-    
+
     @NotNull(message = "기본 통화는 필수입니다")
     private String defaultCurrency;
-    
+
     private Boolean autoTradingEnabled;
+
+    /** 로보 어드바이저 사용 여부. true면 로보 리밸런싱 스케줄러 대상 */
+    private Boolean roboAdvisorEnabled;
 
     private BigDecimal riskLevel; // 0.0 ~ 1.0
 

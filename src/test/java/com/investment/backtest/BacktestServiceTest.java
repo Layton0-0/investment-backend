@@ -2,6 +2,7 @@ package com.investment.backtest;
 
 import com.investment.backtest.dto.BacktestRunRequest;
 import com.investment.backtest.dto.BacktestRunResult;
+import com.investment.config.FrictionCostProperties;
 import com.investment.domain.repository.DailyStockRepository;
 import com.investment.factor.dto.PositionRecommendationDto;
 import com.investment.factor.execution.ExitRuleEvaluator;
@@ -32,6 +33,8 @@ class BacktestServiceTest {
     private ExitRuleEvaluator exitRuleEvaluator;
     @Mock
     private DailyStockRepository dailyStockRepository;
+    @Mock
+    private FrictionCostProperties frictionCostProperties;
 
     @InjectMocks
     private BacktestService backtestService;

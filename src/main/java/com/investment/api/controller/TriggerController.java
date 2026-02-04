@@ -1,0 +1,180 @@
+package com.investment.api.controller;
+
+import com.investment.batch.registry.BatchJobRegistry;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.batch.core.BatchStatus;
+import org.springframework.batch.core.Job;
+import org.springframework.batch.core.JobExecution;
+import org.springframework.batch.core.JobParametersBuilder;
+import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.context.ApplicationContext;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.time.LocalDate;
+import java.util.Map;
+
+/**
+ * 스케줄 작업 수동 트리거 API.
+ * Spring Batch Job을 JobLauncher로 실행하며, 스케줄 현황 화면 "지금 실행"에서 호출.
+ */
+@Tag(name = "Trigger", description = "스케줄 작업 수동 트리거 API")
+@Slf4j
+@RestController
+@RequestMapping("/api/v1/trigger")
+@RequiredArgsConstructor
+public class TriggerController {
+
+    private static final String TRIGGER_PATH_PREFIX = "/api/v1/trigger";
+
+    private final BatchJobRegistry batchJobRegistry;
+    private final JobLauncher jobLauncher;
+    private final ApplicationContext applicationContext;
+
+    private ResponseEntity<Map<String, Object>> runTrigger(String pathSuffix, String successMessage,
+            String failureMessage,
+            JobParametersBuilder paramsBuilder) {
+        String triggerPath = TRIGGER_PATH_PREFIX + pathSuffix;
+        String jobId = batchJobRegistry.getJobIdByTriggerPath(triggerPath);
+        if (jobId == null) {
+            log.warn("No job registered for trigger path: {}", triggerPath);
+            return ResponseEntity.ok(Map.of("success", false, "message", failureMessage + " (job not found)"));
+        }
+        paramsBuilder.addLong("run.id", System.currentTimeMillis());
+        try {
+            Job job = applicationContext.getBean(jobId, Job.class);
+            JobExecution execution = jobLauncher.run(job, paramsBuilder.toJobParameters());
+            boolean success = execution.getStatus() == BatchStatus.COMPLETED;
+            String message = success ? successMessage
+                    : (execution.getExitStatus().getExitDescription() != null
+                            ? execution.getExitStatus().getExitDescription()
+                            : failureMessage);
+            return ResponseEntity.ok(Map.of("success", success, "message", message));
+        } catch (Exception e) {
+            log.warn("Trigger failed: jobId={}, error={}", jobId, e.getMessage());
+            return ResponseEntity.ok(Map.of("success", false, "message", failureMessage + ": " + e.getMessage()));
+        }
+    }
+
+    @Operation(summary = "DART 공시 수집", description = "DART 공시 수집을 즉시 실행")
+    @PostMapping("/dart-collect")
+    public ResponseEntity<Map<String, Object>> triggerDartCollect() {
+        return runTrigger("/dart-collect", "DART 공시 수집 완료", "DART 수집 실패",
+                new JobParametersBuilder());
+    }
+
+    @Operation(summary = "SEC EDGAR 공시 수집", description = "SEC EDGAR 공시 수집을 즉시 실행")
+    @PostMapping("/sec-collect")
+    public ResponseEntity<Map<String, Object>> triggerSecCollect() {
+        return runTrigger("/sec-collect", "SEC 공시 수집 완료", "SEC 수집 실패",
+                new JobParametersBuilder());
+    }
+
+    @Operation(summary = "KRX 일별 시세 수집", description = "KRX 일별 시세 수집을 즉시 실행. basDt 미입력 시 오늘")
+    @PostMapping("/krx-daily")
+    public ResponseEntity<Map<String, Object>> triggerKrxDaily(
+            @Parameter(description = "기준일 (yyyy-MM-dd)") @RequestParam(required = false) LocalDate basDt) {
+        LocalDate target = basDt != null ? basDt : LocalDate.now();
+        JobParametersBuilder params = new JobParametersBuilder();
+        params.addString("basDt", target.toString());
+        ResponseEntity<Map<String, Object>> result = runTrigger("/krx-daily", "KRX 일별 수집 완료", "KRX 일별 수집 실패", params);
+        if (result.getBody() != null && result.getBody().get("success") == Boolean.TRUE) {
+            return ResponseEntity.ok(Map.of("success", true, "message", "KRX 일별 수집 완료", "basDt", target.toString()));
+        }
+        return result;
+    }
+
+    @Operation(summary = "US 일별 시세 수집", description = "US 시장 일별 시세 수집을 즉시 실행. basDt 미입력 시 오늘")
+    @PostMapping("/us-daily")
+    public ResponseEntity<Map<String, Object>> triggerUsDaily(
+            @Parameter(description = "기준일 (yyyy-MM-dd)") @RequestParam(required = false) LocalDate basDt) {
+        LocalDate target = basDt != null ? basDt : LocalDate.now();
+        JobParametersBuilder params = new JobParametersBuilder();
+        params.addString("basDt", target.toString());
+        ResponseEntity<Map<String, Object>> result = runTrigger("/us-daily", "US 일별 수집 완료", "US 일별 수집 실패", params);
+        if (result.getBody() != null && result.getBody().get("success") == Boolean.TRUE) {
+            return ResponseEntity.ok(Map.of("success", true, "message", "US 일별 수집 완료", "basDt", target.toString()));
+        }
+        return result;
+    }
+
+    @Operation(summary = "팩터 계산", description = "유니버스 필터 및 팩터(시그널) 계산을 즉시 실행")
+    @PostMapping("/factor-calculation")
+    public ResponseEntity<Map<String, Object>> triggerFactorCalculation() {
+        return runTrigger("/factor-calculation", "팩터 계산 완료", "팩터 계산 실패", new JobParametersBuilder());
+    }
+
+    @Operation(summary = "파이프라인 실행", description = "4단계 파이프라인 실행. dryRun=true면 주문 미실행")
+    @PostMapping("/pipeline-execution")
+    public ResponseEntity<Map<String, Object>> triggerPipelineExecution(
+            @Parameter(description = "true면 실제 주문 없이 실행") @RequestParam(required = false) Boolean dryRun) {
+        JobParametersBuilder params = new JobParametersBuilder();
+        if (dryRun != null)
+            params.addString("dryRun", dryRun.toString());
+        ResponseEntity<Map<String, Object>> result = runTrigger("/pipeline-execution", "파이프라인 실행 완료", "파이프라인 실행 실패",
+                params);
+        if (result.getBody() != null && result.getBody().get("success") == Boolean.TRUE) {
+            return ResponseEntity
+                    .ok(Map.of("success", true, "message", "파이프라인 실행 완료", "dryRun", Boolean.TRUE.equals(dryRun)));
+        }
+        return result;
+    }
+
+    @Operation(summary = "파이프라인 청산 평가", description = "보유 포지션 청산 규칙 평가 및 매도 시그널 시 주문 실행")
+    @PostMapping("/pipeline-exit")
+    public ResponseEntity<Map<String, Object>> triggerPipelineExit() {
+        return runTrigger("/pipeline-exit", "파이프라인 청산 평가 완료", "파이프라인 청산 실패", new JobParametersBuilder());
+    }
+
+    @Operation(summary = "체결 확인 후 포지션 등록", description = "체결된 주문에 대해 포지션 등록")
+    @PostMapping("/fill-confirmation")
+    public ResponseEntity<Map<String, Object>> triggerFillConfirmation() {
+        return runTrigger("/fill-confirmation", "체결 확인 완료", "체결 확인 실패", new JobParametersBuilder());
+    }
+
+    @Operation(summary = "미체결 확인", description = "PENDING N분 경과 주문에 대해 Discord 긴급 알림")
+    @PostMapping("/unfilled-check")
+    public ResponseEntity<Map<String, Object>> triggerUnfilledCheck() {
+        return runTrigger("/unfilled-check", "미체결 확인 완료", "미체결 확인 실패", new JobParametersBuilder());
+    }
+
+    @Operation(summary = "로보 리밸런싱", description = "로보 어드바이저 리밸런싱. dryRun=true면 백테스트만 실행·저장")
+    @PostMapping("/robo-rebalance")
+    public ResponseEntity<Map<String, Object>> triggerRoboRebalance(
+            @Parameter(description = "true면 실제 ETF 주문 없이 백테스트만 실행") @RequestParam(required = false) Boolean dryRun) {
+        JobParametersBuilder params = new JobParametersBuilder();
+        if (dryRun != null)
+            params.addString("dryRun", dryRun.toString());
+        ResponseEntity<Map<String, Object>> result = runTrigger("/robo-rebalance", "로보 리밸런싱 완료", "로보 리밸런싱 실패", params);
+        if (result.getBody() != null && result.getBody().get("success") == Boolean.TRUE) {
+            return ResponseEntity
+                    .ok(Map.of("success", true, "message", "로보 리밸런싱 완료", "dryRun", Boolean.TRUE.equals(dryRun)));
+        }
+        return result;
+    }
+
+    @Operation(summary = "일일 PnL 기록", description = "장 마감 후 계좌별 당일 수익률 기록")
+    @PostMapping("/daily-pnl")
+    public ResponseEntity<Map<String, Object>> triggerDailyPnl() {
+        return runTrigger("/daily-pnl", "일일 PnL 기록 완료", "일일 PnL 실패", new JobParametersBuilder());
+    }
+
+    @Operation(summary = "장중 변동성 돌파", description = "09:00~10:00 구간 돌파 종목 매수 (설정 시)")
+    @PostMapping("/intraday-breakout")
+    public ResponseEntity<Map<String, Object>> triggerIntradayBreakout() {
+        return runTrigger("/intraday-breakout", "장중 변동성 돌파 실행 완료", "장중 변동성 돌파 실패", new JobParametersBuilder());
+    }
+
+    @Operation(summary = "중기 리밸런스", description = "MEDIUM_TERM 월 1회 리밸런싱 훅 (스텁)")
+    @PostMapping("/medium-term-rebalance")
+    public ResponseEntity<Map<String, Object>> triggerMediumTermRebalance() {
+        return runTrigger("/medium-term-rebalance", "중기 리밸런스 완료", "중기 리밸런스 실패", new JobParametersBuilder());
+    }
+}

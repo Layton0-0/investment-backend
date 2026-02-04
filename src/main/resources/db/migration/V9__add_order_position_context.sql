@@ -1,7 +1,0 @@
--- V9: TB_ORDERS에 체결 확인 후 포지션 등록용 컨텍스트 컬럼 추가
--- 적용 전 DB 백업 권장. 롤백: db/migration/rollback/V9_rollback.sql 참고.
-
-ALTER TABLE TB_ORDERS
-    ADD COLUMN POSITION_BAS_DT DATE NULL COMMENT '포지션 등록 기준일 (체결 확인 후 등록 시 사용)' AFTER MESSAGE,
-    ADD COLUMN POSITION_MARKET VARCHAR(10) NULL COMMENT '포지션 시장 (KR/US)' AFTER POSITION_BAS_DT,
-    ADD COLUMN POSITION_STRATEGY_TYPE VARCHAR(20) NULL COMMENT '포지션 전략 타입 (SHORT_TERM 등)' AFTER POSITION_MARKET;

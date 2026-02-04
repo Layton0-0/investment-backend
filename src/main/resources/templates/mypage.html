@@ -7,20 +7,10 @@
     <link rel="stylesheet" th:href="@{/css/common.css}">
 </head>
 <body class="page-background">
-    <div class="container">
-        <div class="header">
-            <h1>마이페이지</h1>
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <span id="usernameDisplay" style="color: #191F28; font-size: 15px; font-weight: 600;"></span>
-                <button onclick="logout()" class="danger">로그아웃</button>
-            </div>
-        </div>
-        
-        <div class="nav">
-            <a href="/dashboard">대시보드</a>
-            <a href="/mypage">마이페이지</a>
-        </div>
-        
+    <div th:replace="~{fragments/layout-header :: header}"></div>
+    <nav th:replace="~{fragments/layout-menu :: menu}"></nav>
+
+    <main class="container">
         <!-- 사용자 정보 조회 -->
         <div class="card">
             <h2>사용자 정보</h2>
@@ -135,8 +125,8 @@
                 <button type="submit" id="updateButton">정보 수정</button>
             </form>
         </div>
-    </div>
-    
+    </main>
+
     <script th:src="@{/js/validation.js}"></script>
     <script>
         // 페이지 로드 시 사용자 정보 조회

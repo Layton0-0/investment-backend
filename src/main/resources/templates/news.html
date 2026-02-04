@@ -5,31 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>뉴스·이벤트 - Investment Choi</title>
     <link rel="stylesheet" th:href="@{/css/common.css}">
-    <style>
-        .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
-        .page-title { font-size: 22px; font-weight: 700; margin-bottom: 24px; color: #191F28; }
-        .filters { background: #fff; padding: 16px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-        .filters input, .filters select { padding: 8px 12px; border: 1px solid #E5E8EB; border-radius: 8px; }
-        .card { background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 20px; }
-        table { width: 100%; border-collapse: collapse; font-size: 14px; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #E5E8EB; }
-        th { background: #f8f9fa; font-weight: 600; color: #8B95A1; }
-        .empty-state { text-align: center; padding: 48px; color: #8B95A1; }
-        .pagination { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-        .pagination a, .pagination span { padding: 6px 12px; border-radius: 8px; text-decoration: none; color: #333; border: 1px solid #E5E8EB; font-size: 14px; }
-        .pagination a:hover { background: #f0f4f8; }
-        .pagination .current { background: #191F28; color: #fff; border-color: #191F28; }
-        .pagination .disabled { color: #8B95A1; pointer-events: none; }
-        .pagination-ellipsis { padding: 6px 4px; color: #8B95A1; }
-    </style>
 </head>
-<body>
+<body class="page-background">
     <div th:replace="~{fragments/layout-header :: header}"></div>
     <nav th:replace="~{fragments/layout-menu :: menu}"></nav>
 
-    <div class="container">
-        <h2 class="page-title">뉴스·이벤트</h2>
-
+    <main class="container">
         <div class="filters">
             <form method="get" th:action="@{/news}" class="filter-form" style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
                 <input type="hidden" name="page" value="0">
@@ -62,7 +43,8 @@
         </div>
 
         <div class="card">
-            <table th:if="${newsPage != null and newsPage.content != null and !newsPage.content.isEmpty()}">
+            <div class="table-responsive" th:if="${newsPage != null and newsPage.content != null and !newsPage.content.isEmpty()}">
+            <table class="data-table">
                 <thead>
                     <tr>
                         <th>수집 시각</th>
@@ -84,6 +66,7 @@
                     </tr>
                 </tbody>
             </table>
+            </div>
             <div th:if="${newsPage == null or newsPage.content == null or newsPage.content.isEmpty()}" class="empty-state">
                 뉴스·공시 항목이 없습니다. 수집 파이프라인 연동 후 목록이 표시됩니다.
             </div>
@@ -92,26 +75,26 @@
                            startP=${T(java.lang.Math).max(0, cur - 2)}, endP=${T(java.lang.Math).min(totalP - 1, cur + 2)}">
                 <span class="pagination-total" th:text="${'총 ' + totalE + '건'}"></span>
                 <th:block th:if="${totalP > 1}">
-                    <a th:if="${cur > 0}" th:href="@{/news(market=${market}, source=${source}, itemType=${itemType}, symbol=${symbol}, title=${title}, from=${from}, to=${to}, page=${cur - 1}, size=${size})}" rel="prev">이전</a>
+                    <a th:if="${cur > 0}" th:href="@{/news(market=${market}, source=${source}, itemType=${itemType}, symbol=${symbol}, title=${title}, from=${from}, to=${to}, page=${cur - 1}, size=${size}, serverType=${currentServerType})}" rel="prev">이전</a>
                     <span th:if="${cur <= 0}" class="disabled">이전</span>
                     <th:block th:if="${startP > 0}">
-                        <a th:href="@{/news(market=${market}, source=${source}, itemType=${itemType}, symbol=${symbol}, title=${title}, from=${from}, to=${to}, page=0, size=${size})}" th:text="1"></a>
+                        <a th:href="@{/news(market=${market}, source=${source}, itemType=${itemType}, symbol=${symbol}, title=${title}, from=${from}, to=${to}, page=0, size=${size}, serverType=${currentServerType})}" th:text="1"></a>
                         <span th:if="${startP > 1}" class="pagination-ellipsis">…</span>
                     </th:block>
                     <th:block th:each="p : ${#numbers.sequence(startP, endP)}" th:with="oneBased=${p + 1}">
-                        <a th:if="${p != cur}" th:href="@{/news(market=${market}, source=${source}, itemType=${itemType}, symbol=${symbol}, title=${title}, from=${from}, to=${to}, page=${p}, size=${size})}" th:text="${oneBased}"></a>
+                        <a th:if="${p != cur}" th:href="@{/news(market=${market}, source=${source}, itemType=${itemType}, symbol=${symbol}, title=${title}, from=${from}, to=${to}, page=${p}, size=${size}, serverType=${currentServerType})}" th:text="${oneBased}"></a>
                         <span th:if="${p == cur}" class="current" th:text="${oneBased}"></span>
                     </th:block>
                     <th:block th:if="${endP < totalP - 1}">
                         <span th:if="${endP < totalP - 2}" class="pagination-ellipsis">…</span>
-                        <a th:href="@{/news(market=${market}, source=${source}, itemType=${itemType}, symbol=${symbol}, title=${title}, from=${from}, to=${to}, page=${totalP - 1}, size=${size})}" th:text="${totalP}"></a>
+                        <a th:href="@{/news(market=${market}, source=${source}, itemType=${itemType}, symbol=${symbol}, title=${title}, from=${from}, to=${to}, page=${totalP - 1}, size=${size}, serverType=${currentServerType})}" th:text="${totalP}"></a>
                     </th:block>
-                    <a th:if="${cur < totalP - 1}" th:href="@{/news(market=${market}, source=${source}, itemType=${itemType}, symbol=${symbol}, title=${title}, from=${from}, to=${to}, page=${cur + 1}, size=${size})}" rel="next">다음</a>
+                    <a th:if="${cur < totalP - 1}" th:href="@{/news(market=${market}, source=${source}, itemType=${itemType}, symbol=${symbol}, title=${title}, from=${from}, to=${to}, page=${cur + 1}, size=${size}, serverType=${currentServerType})}" rel="next">다음</a>
                     <span th:if="${cur >= totalP - 1}" class="disabled">다음</span>
                 </th:block>
             </div>
         </div>
-    </div>
+    </main>
     <script>
         (function() {
             var btn = document.getElementById('triggerCollectBtn');

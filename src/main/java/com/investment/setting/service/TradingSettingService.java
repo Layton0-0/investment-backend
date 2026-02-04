@@ -63,6 +63,7 @@ public class TradingSettingService {
                         .minInvestmentAmount(dto.getMinInvestmentAmount())
                         .defaultCurrency(dto.getDefaultCurrency())
                         .autoTradingEnabled(dto.getAutoTradingEnabled() != null ? dto.getAutoTradingEnabled() : false)
+                        .roboAdvisorEnabled(dto.getRoboAdvisorEnabled())
                         .riskLevel(dto.getRiskLevel())
                         .shortTermRatio(dto.getShortTermRatio())
                         .mediumTermRatio(dto.getMediumTermRatio())
@@ -73,6 +74,9 @@ public class TradingSettingService {
             setting.updateMaxInvestmentAmount(dto.getMaxInvestmentAmount());
             setting.updateMinInvestmentAmount(dto.getMinInvestmentAmount());
             setting.updateAutoTradingEnabled(dto.getAutoTradingEnabled() != null ? dto.getAutoTradingEnabled() : false);
+            if (dto.getRoboAdvisorEnabled() != null) {
+                setting.updateRoboAdvisorEnabled(dto.getRoboAdvisorEnabled());
+            }
             if (dto.getRiskLevel() != null) {
                 setting.updateRiskLevel(dto.getRiskLevel());
             }
@@ -126,6 +130,7 @@ public class TradingSettingService {
                 .minInvestmentAmount(setting.getMinInvestmentAmount())
                 .defaultCurrency(setting.getDefaultCurrency())
                 .autoTradingEnabled(setting.getAutoTradingEnabled())
+                .roboAdvisorEnabled(setting.getRoboAdvisorEnabled())
                 .riskLevel(setting.getRiskLevel())
                 .shortTermRatio(setting.getShortTermRatio())
                 .mediumTermRatio(setting.getMediumTermRatio())

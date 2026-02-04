@@ -10,7 +10,6 @@ import com.investment.strategy.domain.StrategyType;
 import com.investment.strategy.service.StrategyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,9 +31,8 @@ public class StrategyScheduler {
     private final OrderService orderService;
 
     /**
-     * 단기 전략 실행 (매 1시간마다)
+     * 단기 전략 실행 (매 1시간마다). Spring Batch Job에서 호출.
      */
-    @Scheduled(cron = "0 0 * * * *")
     @Transactional
     public void executeShortTermStrategies() {
         log.info("단기 전략 실행 시작");
@@ -42,9 +40,8 @@ public class StrategyScheduler {
     }
 
     /**
-     * 중기 전략 실행 (매일 오전 9시)
+     * 중기 전략 실행 (매일 오전 9시). Spring Batch Job에서 호출.
      */
-    @Scheduled(cron = "0 0 9 * * *")
     @Transactional
     public void executeMediumTermStrategies() {
         log.info("중기 전략 실행 시작");
@@ -52,9 +49,8 @@ public class StrategyScheduler {
     }
 
     /**
-     * 장기 전략 실행 (매주 월요일 오전 9시)
+     * 장기 전략 실행 (매주 월요일 오전 9시). Spring Batch Job에서 호출.
      */
-    @Scheduled(cron = "0 0 9 * * MON")
     @Transactional
     public void executeLongTermStrategies() {
         log.info("장기 전략 실행 시작");

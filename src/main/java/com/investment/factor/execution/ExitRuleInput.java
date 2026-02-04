@@ -17,12 +17,16 @@ public class ExitRuleInput {
 
     private final BigDecimal entryPrice;
     private final BigDecimal trailingHigh;
+    private final BigDecimal priorLow;
     private final LocalDate entryDt;
     private final StrategyType strategyType;
+    private final String market;
     private final BigDecimal currentPrice;
     private final BigDecimal todayHigh;
     private final LocalDate today;
     private final int timeCutDays;
     private final BigDecimal targetReturnPct;
     private final BigDecimal atrMultiplier;
+    /** RSI(14). 한국 KR 단기/스윙 RSI≥70 익절 시 사용. */
+    private final BigDecimal rsi;
 }

@@ -3,299 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>트레이딩 포트폴리오</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            padding: 30px;
-        }
-        
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 2px solid #e0e0e0;
-        }
-        
-        .header h1 {
-            color: #333;
-            font-size: 28px;
-        }
-        
-        .date-selector {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-        
-        .date-selector input {
-            padding: 8px 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 14px;
-        }
-        
-        .date-selector button {
-            padding: 8px 16px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background 0.3s;
-        }
-        
-        .date-selector button:hover {
-            background: #5568d3;
-        }
-        
-        .market-summary {
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 30px;
-            white-space: pre-line;
-            line-height: 1.8;
-            font-size: 14px;
-        }
-        
-        .sectors {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-        
-        .sector-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        
-        .sector-card h3 {
-            font-size: 16px;
-            margin-bottom: 10px;
-        }
-        
-        .sector-card p {
-            font-size: 14px;
-            opacity: 0.9;
-        }
-        
-        .stocks-grid {
-            display: grid;
-            gap: 20px;
-        }
-        
-        .stock-card {
-            background: #f8f9fa;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 20px;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        
-        .stock-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(0,0,0,0.1);
-        }
-        
-        .stock-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-        
-        .stock-title {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .stock-title h3 {
-            font-size: 20px;
-            color: #333;
-        }
-        
-        .stock-title .rank {
-            background: #667eea;
-            color: white;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-        
-        .stock-title .name {
-            color: #666;
-            font-size: 14px;
-        }
-        
-        .price-info {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-        
-        .price-item {
-            background: white;
-            padding: 12px;
-            border-radius: 6px;
-            border-left: 4px solid #667eea;
-        }
-        
-        .price-item label {
-            display: block;
-            font-size: 11px;
-            color: #999;
-            margin-bottom: 5px;
-            text-transform: uppercase;
-        }
-        
-        .price-item .value {
-            font-size: 16px;
-            font-weight: bold;
-            color: #333;
-        }
-        
-        .price-item.entry .value {
-            color: #667eea;
-        }
-        
-        .price-item.stop-loss .value {
-            color: #e74c3c;
-        }
-        
-        .price-item.target .value {
-            color: #27ae60;
-        }
-        
-        .price-item.profit .value {
-            color: #f39c12;
-        }
-        
-        .analysis {
-            margin-top: 15px;
-        }
-        
-        .analysis-section {
-            margin-bottom: 15px;
-        }
-        
-        .analysis-section h4 {
-            font-size: 13px;
-            color: #667eea;
-            margin-bottom: 8px;
-            text-transform: uppercase;
-        }
-        
-        .analysis-section p {
-            font-size: 13px;
-            color: #666;
-            line-height: 1.6;
-        }
-        
-        .time-info {
-            display: flex;
-            gap: 20px;
-            margin-top: 15px;
-            padding-top: 15px;
-            border-top: 1px solid #e0e0e0;
-        }
-        
-        .time-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .time-item label {
-            font-size: 12px;
-            color: #999;
-        }
-        
-        .time-item .value {
-            font-size: 14px;
-            font-weight: bold;
-            color: #333;
-        }
-        
-        .risk-management {
-            background: #fff3cd;
-            border-left: 4px solid #ffc107;
-            padding: 20px;
-            border-radius: 8px;
-            margin-top: 30px;
-            white-space: pre-line;
-            line-height: 1.8;
-            font-size: 14px;
-        }
-        
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }
-        
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #666;
-        }
-    </style>
+    <title>트레이딩 포트폴리오 - Investment Choi</title>
+    <link rel="stylesheet" th:href="@{/css/common.css}">
 </head>
-<body>
-    <div class="container">
+<body class="page-background">
+    <div th:replace="~{fragments/layout-header :: header}"></div>
+    <nav th:replace="~{fragments/layout-menu :: menu}"></nav>
+
+    <main class="container">
         <div class="header">
-            <h1>📊 트레이딩 포트폴리오</h1>
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <div class="date-selector">
-                    <input type="date" id="dateInput" th:value="${portfolio?.tradingDate}">
-                    <button onclick="loadPortfolio()">조회</button>
-                    <button onclick="loadToday()" style="background: #27ae60;">오늘</button>
-                    <button onclick="generatePortfolio()" style="background: #f39c12;">수동 생성</button>
-                </div>
-                <div style="display: flex; gap: 10px;">
-                    <a href="/" style="padding: 8px 16px; background: #667eea; color: white; text-decoration: none; border-radius: 6px; font-size: 14px;">대시보드</a>
-                    <a href="/batch" style="padding: 8px 16px; background: #9b59b6; color: white; text-decoration: none; border-radius: 6px; font-size: 14px;">배치 관리</a>
-                </div>
+            <div class="date-selector">
+                <input type="date" id="dateInput" th:value="${portfolio?.tradingDate}">
+                <button type="button" onclick="loadPortfolio()">조회</button>
+                <button type="button" onclick="loadToday()" style="background: #20D26D;">오늘</button>
+                <button type="button" onclick="generatePortfolio()" style="background: #f39c12;">수동 생성</button>
             </div>
         </div>
         
-        <div th:if="${error}" class="error">
-            <strong>오류:</strong> <span th:text="${error}"></span>
-        </div>
+        <div th:if="${error}" class="error-box" th:text="${'오류: ' + error}"></div>
         
         <div th:if="${portfolio}">
             <div class="market-summary" th:text="${portfolio.marketSummary}"></div>
             
-            <h2 style="margin-bottom: 15px; color: #333;">📌 단기 유망 섹터 TOP3</h2>
+            <h2>단기 유망 섹터 TOP3</h2>
             <div class="sectors">
                 <div class="sector-card">
                     <h3>1위</h3>
@@ -311,7 +41,7 @@
                 </div>
             </div>
             
-            <h2 style="margin-bottom: 20px; color: #333;">📌 단기 매매 후보 종목 TOP5</h2>
+            <h2>단기 매매 후보 종목 TOP5</h2>
             <div class="stocks-grid">
                 <div class="stock-card" th:each="item : ${portfolio.items}">
                     <div class="stock-header">
@@ -381,8 +111,8 @@
             
             <div class="risk-management" th:text="${portfolio.riskManagementStrategy}"></div>
         </div>
-    </div>
-    
+    </main>
+
     <script>
         function loadPortfolio() {
             const date = document.getElementById('dateInput').value;
@@ -404,6 +134,7 @@
             if (confirm('포트폴리오를 생성하시겠습니까? (날짜: ' + targetDate + ')')) {
                 fetch('/api/v1/trading-portfolios/generate?date=' + targetDate, {
                     method: 'POST',
+                    credentials: 'include',
                     headers: {
                         'Content-Type': 'application/json'
                     }

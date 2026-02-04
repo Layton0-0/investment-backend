@@ -194,6 +194,7 @@ FLUSH PRIVILEGES;
 ```bash
 mysql -u investment -p investment < src/main/resources/db/schema.sql
 ```
+schema.sql로 1회 생성한 DB에 앱을 기동하면 Flyway가 **baseline 20**을 적용합니다. 이후 스키마 변경은 `db/migration/V21__*.sql` 형식으로 추가 시 자동 적용됩니다.
 
 ## 8. 로그 설정
 

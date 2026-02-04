@@ -29,168 +29,170 @@ import static org.mockito.Mockito.*;
 @DisplayName("ExitRuleService")
 class ExitRuleServiceTest {
 
-    @Mock
-    private StrategyPositionRepository strategyPositionRepository;
-    @Mock
-    private DailyStockRepository dailyStockRepository;
-    @Mock
-    private ExitRuleEvaluator exitRuleEvaluator;
+        @Mock
+        private StrategyPositionRepository strategyPositionRepository;
+        @Mock
+        private DailyStockRepository dailyStockRepository;
+        @Mock
+        private ExitRuleEvaluator exitRuleEvaluator;
 
-    @InjectMocks
-    private ExitRuleService exitRuleService;
+        @InjectMocks
+        private ExitRuleService exitRuleService;
 
-    @BeforeEach
-    void setUp() {
-        ReflectionTestUtils.setField(exitRuleService, "atrTrailingStopMultiplier", new BigDecimal("2.0"));
-    }
-
-    @Test
-    @DisplayName("ATR Trailing Stop 시그널 생성 - trailing_high 대비 현재가 하락이 ATR × multiplier 이상")
-    void getSellSignals_atrTrailingStop_createsSignal() {
-        // given
-        LocalDate today = LocalDate.of(2026, 1, 30);
-        String accountNo = "1234567890";
-        String symbol = "005930";
-
-        StrategyPosition position = StrategyPosition.builder()
-                .id(1L)
-                .accountNo(accountNo)
-                .symbol(symbol)
-                .market("KR")
-                .strategyType(StrategyType.SHORT_TERM)
-                .entryDt(today.minusDays(10))
-                .entryPrice(new BigDecimal("70000"))
-                .quantity(10)
-                .trailingHigh(new BigDecimal("80000")) // 최고가
-                .atrMultiplier(new BigDecimal("2.0"))
-                .timeCutDays(5)
-                .targetReturnPct(new BigDecimal("3.0"))
-                .build();
-
-        when(strategyPositionRepository.findByAccountNoAndExitDtIsNullOrderByEntryDtAsc(accountNo))
-                .thenReturn(List.of(position));
-
-        // ATR 계산용 일별 데이터 (14일 + 여유)
-        List<DailyStock> history = new ArrayList<>();
-        for (int i = 0; i < 20; i++) {
-            LocalDate d = today.minusDays(19 - i);
-            history.add(DailyStock.builder()
-                    .basDt(d)
-                    .symbol(symbol)
-                    .market("KR")
-                    .highPrice(new BigDecimal("75000"))
-                    .lowPrice(new BigDecimal("70000"))
-                    .closePrice(new BigDecimal("72000"))
-                    .build());
+        @BeforeEach
+        void setUp() {
+                ReflectionTestUtils.setField(exitRuleService, "atrTrailingStopMultiplier", new BigDecimal("2.0"));
         }
-        when(dailyStockRepository.findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(
-                eq(symbol), eq("KR"), any(LocalDate.class), any(LocalDate.class)))
-                .thenReturn(history);
 
-        when(exitRuleEvaluator.evaluate(any(ExitRuleInput.class)))
-                .thenReturn(ExitRuleResult.exit("SHORT_TERM_TRAILING_STOP"));
+        @Test
+        @DisplayName("ATR Trailing Stop 시그널 생성 - trailing_high 대비 현재가 하락이 ATR × multiplier 이상")
+        void getSellSignals_atrTrailingStop_createsSignal() {
+                // given
+                LocalDate today = LocalDate.of(2026, 1, 30);
+                String accountNo = "1234567890";
+                String symbol = "005930";
 
-        BigDecimal currentPrice = new BigDecimal("69000");
-        Map<String, BigDecimal> currentPriceBySymbol = new HashMap<>();
-        currentPriceBySymbol.put(symbol, currentPrice);
+                StrategyPosition position = StrategyPosition.builder()
+                                .id(1L)
+                                .accountNo(accountNo)
+                                .symbol(symbol)
+                                .market("KR")
+                                .strategyType(StrategyType.SHORT_TERM)
+                                .entryDt(today.minusDays(10))
+                                .entryPrice(new BigDecimal("70000"))
+                                .quantity(10)
+                                .trailingHigh(new BigDecimal("80000")) // 최고가
+                                .atrMultiplier(new BigDecimal("2.0"))
+                                .timeCutDays(5)
+                                .targetReturnPct(new BigDecimal("3.0"))
+                                .build();
 
-        // when
-        List<ExitRuleService.ExitSignal> signals = exitRuleService.getSellSignals(accountNo, currentPriceBySymbol);
+                when(strategyPositionRepository.findByAccountNoAndExitDtIsNullOrderByEntryDtAsc(accountNo))
+                                .thenReturn(List.of(position));
 
-        // then — SHORT_TERM: -3% Trailing Stop (현재가 69000 ≤ 80000×0.97=77600)
-        assertThat(signals).hasSize(1);
-        assertThat(signals.get(0).getReason()).isEqualTo("SHORT_TERM_TRAILING_STOP");
-        assertThat(signals.get(0).getSymbol()).isEqualTo(symbol);
-        assertThat(signals.get(0).getCurrentPrice()).isEqualByComparingTo(currentPrice);
-        verify(strategyPositionRepository).save(any(StrategyPosition.class)); // trailingHigh 갱신
-    }
+                // ATR 계산용 일별 데이터 (14일 + 여유)
+                List<DailyStock> history = new ArrayList<>();
+                for (int i = 0; i < 20; i++) {
+                        LocalDate d = today.minusDays(19 - i);
+                        history.add(DailyStock.builder()
+                                        .basDt(d)
+                                        .symbol(symbol)
+                                        .market("KR")
+                                        .highPrice(new BigDecimal("75000"))
+                                        .lowPrice(new BigDecimal("70000"))
+                                        .closePrice(new BigDecimal("72000"))
+                                        .build());
+                }
+                when(dailyStockRepository.findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(
+                                eq(symbol), eq("KR"), any(LocalDate.class), any(LocalDate.class)))
+                                .thenReturn(history);
 
-    @Test
-    @DisplayName("Time-Cut 시그널 생성 - 목표 수익률 미도달")
-    void getSellSignals_timeCut_createsSignal() {
-        // given
-        LocalDate today = LocalDate.of(2026, 1, 30);
-        String accountNo = "1234567890";
-        String symbol = "005930";
+                when(exitRuleEvaluator.evaluate(any(ExitRuleInput.class)))
+                                .thenReturn(ExitRuleResult.exit("SHORT_TERM_TRAILING_STOP"));
 
-        StrategyPosition position = StrategyPosition.builder()
-                .id(1L)
-                .accountNo(accountNo)
-                .symbol(symbol)
-                .market("KR")
-                .strategyType(StrategyType.MEDIUM_TERM)
-                .entryDt(today.minusDays(6)) // 6일 경과 (timeCutDays=5 초과)
-                .entryPrice(new BigDecimal("70000"))
-                .quantity(10)
-                .trailingHigh(new BigDecimal("71000"))
-                .atrMultiplier(new BigDecimal("2.0"))
-                .timeCutDays(5)
-                .targetReturnPct(new BigDecimal("3.0")) // 목표 3%
-                .build();
+                BigDecimal currentPrice = new BigDecimal("69000");
+                Map<String, BigDecimal> currentPriceBySymbol = new HashMap<>();
+                currentPriceBySymbol.put(symbol, currentPrice);
 
-        when(strategyPositionRepository.findByAccountNoAndExitDtIsNullOrderByEntryDtAsc(accountNo))
-                .thenReturn(List.of(position));
+                // when
+                List<ExitRuleService.ExitSignal> signals = exitRuleService.getSellSignals(accountNo,
+                                currentPriceBySymbol);
 
-        // ATR Trailing Stop 조건 미충족 (현재가가 trailing_high 근처)
-        BigDecimal currentPrice = new BigDecimal("70500"); // 수익률 약 0.7% (목표 3% 미달)
-        Map<String, BigDecimal> currentPriceBySymbol = new HashMap<>();
-        currentPriceBySymbol.put(symbol, currentPrice);
-
-        // ATR 계산용 데이터
-        List<DailyStock> history = new ArrayList<>();
-        for (int i = 0; i < 20; i++) {
-            LocalDate d = today.minusDays(19 - i);
-            history.add(DailyStock.builder()
-                    .basDt(d)
-                    .symbol(symbol)
-                    .market("KR")
-                    .highPrice(new BigDecimal("75000"))
-                    .lowPrice(new BigDecimal("70000"))
-                    .closePrice(new BigDecimal("72000"))
-                    .build());
+                // then — SHORT_TERM: -3% Trailing Stop (현재가 69000 ≤ 80000×0.97=77600)
+                assertThat(signals).hasSize(1);
+                assertThat(signals.get(0).getReason()).isEqualTo("SHORT_TERM_TRAILING_STOP");
+                assertThat(signals.get(0).getSymbol()).isEqualTo(symbol);
+                assertThat(signals.get(0).getCurrentPrice()).isEqualByComparingTo(currentPrice);
+                verify(strategyPositionRepository).save(any(StrategyPosition.class)); // trailingHigh 갱신
         }
-        when(dailyStockRepository.findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(
-                eq(symbol), eq("KR"), any(LocalDate.class), any(LocalDate.class)))
-                .thenReturn(history);
 
-        when(exitRuleEvaluator.evaluate(any(ExitRuleInput.class)))
-                .thenReturn(ExitRuleResult.exit("TIME_CUT"));
+        @Test
+        @DisplayName("Time-Cut 시그널 생성 - 목표 수익률 미도달 (SHORT_TERM 전용)")
+        void getSellSignals_timeCut_createsSignal() {
+                // given — Time-Cut은 SHORT_TERM에만 적용
+                LocalDate today = LocalDate.of(2026, 1, 30);
+                String accountNo = "1234567890";
+                String symbol = "005930";
 
-        // when
-        List<ExitRuleService.ExitSignal> signals = exitRuleService.getSellSignals(accountNo, currentPriceBySymbol);
+                StrategyPosition position = StrategyPosition.builder()
+                                .id(1L)
+                                .accountNo(accountNo)
+                                .symbol(symbol)
+                                .market("KR")
+                                .strategyType(StrategyType.SHORT_TERM)
+                                .entryDt(today.minusDays(6)) // 6일 경과 (timeCutDays=5 초과)
+                                .entryPrice(new BigDecimal("70000"))
+                                .quantity(10)
+                                .trailingHigh(new BigDecimal("71000"))
+                                .atrMultiplier(new BigDecimal("2.0"))
+                                .timeCutDays(5)
+                                .targetReturnPct(new BigDecimal("3.0")) // 목표 3%
+                                .build();
 
-        // then
-        assertThat(signals).hasSize(1);
-        assertThat(signals.get(0).getReason()).isEqualTo("TIME_CUT");
-        assertThat(signals.get(0).getSymbol()).isEqualTo(symbol);
-    }
+                when(strategyPositionRepository.findByAccountNoAndExitDtIsNullOrderByEntryDtAsc(accountNo))
+                                .thenReturn(List.of(position));
 
-    @Test
-    @DisplayName("현재가 없으면 시그널 생성 안 함")
-    void getSellSignals_noCurrentPrice_noSignal() {
-        // given
-        String accountNo = "1234567890";
-        StrategyPosition position = StrategyPosition.builder()
-                .id(1L)
-                .accountNo(accountNo)
-                .symbol("005930")
-                .market("KR")
-                .strategyType(StrategyType.SHORT_TERM)
-                .entryDt(LocalDate.now().minusDays(10))
-                .entryPrice(new BigDecimal("70000"))
-                .quantity(10)
-                .build();
+                // ATR Trailing Stop 조건 미충족 (현재가가 trailing_high 근처)
+                BigDecimal currentPrice = new BigDecimal("70500"); // 수익률 약 0.7% (목표 3% 미달)
+                Map<String, BigDecimal> currentPriceBySymbol = new HashMap<>();
+                currentPriceBySymbol.put(symbol, currentPrice);
 
-        when(strategyPositionRepository.findByAccountNoAndExitDtIsNullOrderByEntryDtAsc(accountNo))
-                .thenReturn(List.of(position));
-        when(dailyStockRepository.findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(
-                any(), any(), any(LocalDate.class), any(LocalDate.class)))
-                .thenReturn(List.of());
+                // ATR 계산용 데이터
+                List<DailyStock> history = new ArrayList<>();
+                for (int i = 0; i < 20; i++) {
+                        LocalDate d = today.minusDays(19 - i);
+                        history.add(DailyStock.builder()
+                                        .basDt(d)
+                                        .symbol(symbol)
+                                        .market("KR")
+                                        .highPrice(new BigDecimal("75000"))
+                                        .lowPrice(new BigDecimal("70000"))
+                                        .closePrice(new BigDecimal("72000"))
+                                        .build());
+                }
+                when(dailyStockRepository.findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(
+                                eq(symbol), eq("KR"), any(LocalDate.class), any(LocalDate.class)))
+                                .thenReturn(history);
 
-        // when
-        List<ExitRuleService.ExitSignal> signals = exitRuleService.getSellSignals(accountNo, null);
+                when(exitRuleEvaluator.evaluate(any(ExitRuleInput.class)))
+                                .thenReturn(ExitRuleResult.exit("TIME_CUT"));
 
-        // then
-        assertThat(signals).isEmpty();
-    }
+                // when
+                List<ExitRuleService.ExitSignal> signals = exitRuleService.getSellSignals(accountNo,
+                                currentPriceBySymbol);
+
+                // then
+                assertThat(signals).hasSize(1);
+                assertThat(signals.get(0).getReason()).isEqualTo("TIME_CUT");
+                assertThat(signals.get(0).getSymbol()).isEqualTo(symbol);
+        }
+
+        @Test
+        @DisplayName("현재가 없으면 시그널 생성 안 함")
+        void getSellSignals_noCurrentPrice_noSignal() {
+                // given
+                String accountNo = "1234567890";
+                StrategyPosition position = StrategyPosition.builder()
+                                .id(1L)
+                                .accountNo(accountNo)
+                                .symbol("005930")
+                                .market("KR")
+                                .strategyType(StrategyType.SHORT_TERM)
+                                .entryDt(LocalDate.now().minusDays(10))
+                                .entryPrice(new BigDecimal("70000"))
+                                .quantity(10)
+                                .build();
+
+                when(strategyPositionRepository.findByAccountNoAndExitDtIsNullOrderByEntryDtAsc(accountNo))
+                                .thenReturn(List.of(position));
+                when(dailyStockRepository.findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(
+                                any(), any(), any(LocalDate.class), any(LocalDate.class)))
+                                .thenReturn(List.of());
+
+                // when
+                List<ExitRuleService.ExitSignal> signals = exitRuleService.getSellSignals(accountNo, null);
+
+                // then
+                assertThat(signals).isEmpty();
+        }
 }

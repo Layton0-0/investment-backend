@@ -1,5 +1,7 @@
 package com.investment.web.controller;
 
+import com.investment.auth.dto.MyPageResponseDto;
+import com.investment.auth.service.AuthService;
 import com.investment.domain.entity.BrokerType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -14,7 +16,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 @Controller
 @RequiredArgsConstructor
 public class AuthWebController {
-    
+
+    private final AuthService authService;
+
     /**
      * 로그인 페이지
      */
@@ -22,7 +26,7 @@ public class AuthWebController {
     public String loginPage() {
         return "login";
     }
-    
+
     /**
      * 회원가입 페이지
      */
@@ -32,12 +36,19 @@ public class AuthWebController {
         model.addAttribute("brokerTypes", BrokerType.values());
         return "register";
     }
-    
+
     /**
      * 마이페이지 (비밀번호·사용자명 등 내 정보)
      */
     @GetMapping("/mypage")
     public String myPagePage(Authentication authentication, Model model) {
+        if (authentication != null && authentication.isAuthenticated()) {
+            try {
+                MyPageResponseDto userInfo = authService.getMyPage(authentication.getName());
+                model.addAttribute("userInfo", userInfo);
+            } catch (Exception ignored) {
+            }
+        }
         return "mypage";
     }
 
@@ -46,6 +57,13 @@ public class AuthWebController {
      */
     @GetMapping("/settings")
     public String settingsPage(Authentication authentication, Model model) {
+        if (authentication != null && authentication.isAuthenticated()) {
+            try {
+                MyPageResponseDto userInfo = authService.getMyPage(authentication.getName());
+                model.addAttribute("userInfo", userInfo);
+            } catch (Exception ignored) {
+            }
+        }
         return "settings";
     }
 }

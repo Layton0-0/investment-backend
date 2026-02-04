@@ -6,7 +6,6 @@ import com.investment.datacollection.service.SecCollectionService;
 import com.investment.datacollection.service.UsMarketCollectionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -26,9 +25,8 @@ public class DataCollectionScheduler {
     private final UsMarketCollectionService usMarketCollectionService;
 
     /**
-     * DART 공시 수집 (10분마다)
+     * DART 공시 수집 (10분마다). Spring Batch Job에서 호출.
      */
-    @Scheduled(cron = "${investment.data.dart.schedule-cron:0 */10 * * * *}")
     public void collectDart() {
         try {
             dartCollectionService.collectAndSave();
@@ -38,9 +36,8 @@ public class DataCollectionScheduler {
     }
 
     /**
-     * SEC EDGAR 공시 수집 (15분마다)
+     * SEC EDGAR 공시 수집 (15분마다). Spring Batch Job에서 호출.
      */
-    @Scheduled(cron = "${investment.data.sec.schedule-cron:0 */15 * * * *}")
     public void collectSec() {
         try {
             secCollectionService.collectAndSave();
@@ -50,9 +47,8 @@ public class DataCollectionScheduler {
     }
 
     /**
-     * KRX 일별 시세 수집 (매일 장 마감 후, 기본 16:00 KST)
+     * KRX 일별 시세 수집 (매일 장 마감 후, 기본 16:00 KST). Spring Batch Job에서 호출.
      */
-    @Scheduled(cron = "${investment.data.krx.schedule-cron:0 0 16 * * *}")
     public void collectKrxDaily() {
         try {
             LocalDate today = LocalDate.now();
@@ -63,10 +59,8 @@ public class DataCollectionScheduler {
     }
 
     /**
-     * US 시장 일별 시세 수집 (매일 장 마감 후, 기본 17:00 KST - 미국 장 마감 후)
-     * 현재는 스텁 구현. 실제 데이터 수집은 후속 작업.
+     * US 시장 일별 시세 수집 (매일 장 마감 후, 기본 17:00 KST). Spring Batch Job에서 호출.
      */
-    @Scheduled(cron = "${investment.data.us.schedule-cron:0 0 17 * * *}")
     public void collectUsDaily() {
         try {
             LocalDate today = LocalDate.now();

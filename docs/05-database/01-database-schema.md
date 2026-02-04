@@ -390,20 +390,19 @@ TB_TRADING_PORTFOLIOS (1:N) TB_TRADING_PORTFOLIO_ITEMS
 - **개발 환경**: `ddl-auto: update` (자동 스키마 생성)
 - **프로덕션 환경**: `ddl-auto: validate` (스키마 검증만)
 
-### 8.2 수동 마이그레이션
-- `schema.sql`: 초기 스키마 생성 스크립트 (모든 테이블·컬럼 COMMENT 포함)
-- `db/migration/V1__add_user_accounts_server_type.sql`: TB_USER_ACCOUNTS에 SERVER_TYPE 컬럼 및 UK/인덱스 변경
-- `db/migration/V2__add_column_comments.sql`: 기존 테이블 모든 컬럼에 COMMENT 추가
-- `db/migration/V3__add_strategies_market_and_news_items.sql`: TB_STRATEGIES에 MARKET 컬럼 추가, UK 변경(ACCOUNT_NO, MARKET, STRATEGY_TYPE), TB_NEWS_ITEMS 테이블 생성. **Rollback**: `db/migration/rollback/V3_rollback.sql` — TB_NEWS_ITEMS DROP, TB_STRATEGIES에서 MARKET 제거 및 기존 UK 복원.
-- Flyway 또는 Liquibase 사용 고려 (향후)
+### 8.2 스키마 마이그레이션 (Flyway)
+- 현재 DB는 이미 생성된 상태이며, **Flyway baseline 20**으로 관리가 시작된 상태입니다.
+- 신규 스키마 변경은 `db/migration/V21__*.sql` 형식으로 추가하며, 앱 기동 시 Flyway가 자동 적용합니다.
+- `schema.sql`은 참고용·신규 환경 1회 수동 생성용으로 유지합니다.
+- Flyway 사용 중 (baseline-on-migrate: true, baseline-version: 20).
 
 ### 8.3 롤백 정책 (Database MCP 규칙)
 - **신규 테이블/컬럼 적용 전**: 반드시 DB 백업 수행. 마이그레이션 스크립트와 동일 버전의 **rollback 스크립트**를 `db/migration/rollback/` 에 보관.
-- **V3 롤백 예시**: `V3_rollback.sql` 에서 `DROP TABLE IF EXISTS TB_NEWS_ITEMS;`, `ALTER TABLE TB_STRATEGIES DROP COLUMN MARKET;`, 기존 UNIQUE 제약 복원 등.
+- **대상**: Flyway 신규 마이그레이션(V21 이상)에 대해서만 rollback 스크립트를 보관합니다. V1~V20 롤백 스크립트는 정리로 제거되었습니다.
 
 ### 8.4 컬럼 COMMENT
 - 모든 테이블의 모든 컬럼에 DB COMMENT를 부여하여 가독성 및 도구 연동을 지원합니다.
-- 신규 스키마는 `schema.sql`에 COMMENT 포함, 기존 DB는 `V2__add_column_comments.sql`로 보강합니다.
+- 신규 스키마는 `schema.sql`에 COMMENT 포함하여 반영합니다.
 
 ## 문서 변경 이력
 

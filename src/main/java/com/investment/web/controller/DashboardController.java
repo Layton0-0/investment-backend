@@ -1,7 +1,6 @@
 package com.investment.web.controller;
 
 import com.investment.account.dto.*;
-import com.investment.common.security.LogMaskingUtil;
 import com.investment.account.service.AccountService;
 import com.investment.auth.dto.MyPageResponseDto;
 import com.investment.auth.service.AuthService;
@@ -20,6 +19,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -43,24 +43,24 @@ public class DashboardController {
 
     /**
      * 루트 경로는 인증 상태에 따라 리다이렉트
-     * - 인증된 사용자: /dashboard로 리다이렉트
+     * - 인증된 사용자: /dashboard로 리다이렉트 (쿼리 파라미터 유지)
      * - 미인증 사용자: /login으로 리다이렉트
      */
     @GetMapping("/")
-    public String index(Authentication authentication) {
+    public String index(Authentication authentication, HttpServletRequest request) {
         if (authentication != null && authentication.isAuthenticated()) {
-            return "redirect:/dashboard";
+            String query = request.getQueryString();
+            return "redirect:/dashboard" + (query != null && !query.isEmpty() ? "?" + query : "");
         }
         return "redirect:/login";
     }
 
     /**
      * 대시보드 페이지
-     * 계좌 선택을 지원하며, 계좌번호가 없으면 자동으로 메인 계좌를 조회합니다.
+     * 모의계좌·실계좌를 각각 조회하여 한 화면에 두 구역으로 표시합니다.
      */
     @GetMapping("/dashboard")
-    public String dashboard(@RequestParam(required = false) String accountId,
-            @RequestParam(required = false, defaultValue = "") String accountNo,
+    public String dashboard(@RequestParam(required = false) String serverType,
             Authentication authentication,
             Model model) {
         String userId = authentication != null ? authentication.getName() : null;
@@ -73,10 +73,9 @@ public class DashboardController {
             }
         } catch (Exception e) {
             log.warn("사용자 정보 조회 실패: {}", e.getMessage());
-            // 사용자 정보 조회 실패해도 계속 진행
         }
 
-        // 계좌 목록 조회
+        // 계좌 목록 조회 (메뉴·설정 등에서 사용)
         try {
             if (userId != null) {
                 AccountListResponseDto accountList = accountService.getUserAccounts(userId);
@@ -86,74 +85,94 @@ public class DashboardController {
             }
         } catch (Exception e) {
             log.warn("계좌 목록 조회 실패: {}", e.getMessage());
-            // 계좌 목록 조회 실패해도 계속 진행
         }
 
-        // 계좌 선택 처리
-        if (accountId != null && !accountId.trim().isEmpty() && userId != null) {
-            try {
-                // accountId로 계좌 조회
-                MainAccountResponseDto account = accountService.getAccountByAccountId(userId, accountId);
-                accountNo = account.getAccountNo();
-                model.addAttribute("selectedAccountId", accountId);
-            } catch (Exception e) {
-                log.warn("계좌 조회 실패: accountId={}, error={}", accountId, e.getMessage());
-            }
-        }
+        final Authentication auth = authentication;
 
-        // 계좌번호가 없으면 메인 계좌 자동 조회
-        if (accountNo == null || accountNo.trim().isEmpty()) {
+        // 모의계좌(serverType=1) 메인 계좌 조회 및 데이터 로드
+        try {
             if (userId != null) {
-                try {
-                    MainAccountResponseDto mainAccount = accountService.getMainAccount(userId);
-                    accountNo = mainAccount.getAccountNo();
-                    model.addAttribute("selectedAccountId", mainAccount.getAccountId());
-                } catch (Exception e) {
-                    log.warn("메인 계좌 조회 실패: {}", e.getMessage());
-                    // 메인 계좌 조회 실패 시 기존 방식 사용
-                    accountNo = accountService.getUserAccountNo(userId);
+                MainAccountResponseDto mainVirtual = accountService.getMainAccount(userId, "1");
+                if (mainVirtual != null && mainVirtual.getAccountNo() != null
+                        && !mainVirtual.getAccountNo().trim().isEmpty()) {
+                    String accNoVirtual = mainVirtual.getAccountNo();
+                    model.addAttribute("accountNoVirtual", accNoVirtual);
+                    model.addAttribute("hasVirtualAccount", true);
+
+                    CompletableFuture<BalanceAndPositionsDto> balanceVirtualFuture = CompletableFuture.supplyAsync(
+                            () -> runWithAuth(auth, () -> accountService.getBalanceAndPositions(accNoVirtual)));
+                    CompletableFuture<List<OrderResponseDto>> ordersVirtualFuture = CompletableFuture
+                            .supplyAsync(() -> runWithAuth(auth, () -> orderService.getOrders(accNoVirtual)));
+                    CompletableFuture<Optional<TradingSettingDto>> settingVirtualFuture = CompletableFuture.supplyAsync(
+                            () -> runWithAuth(auth, () -> tradingSettingService.getSettingOptional(accNoVirtual)));
+
+                    BalanceAndPositionsDto balanceVirtual = balanceVirtualFuture.join();
+                    List<AccountPositionDto> positionsVirtual = balanceVirtual.getPositions();
+                    List<OrderResponseDto> ordersVirtual = ordersVirtualFuture.join();
+                    Optional<TradingSettingDto> settingVirtualOpt = settingVirtualFuture.join();
+
+                    model.addAttribute("balanceVirtual", balanceVirtual.getBalance());
+                    model.addAttribute("positionsVirtual", positionsVirtual);
+                    model.addAttribute("ordersVirtual", ordersVirtual);
+                    settingVirtualOpt.ifPresent(dto -> model.addAttribute("settingVirtual", dto));
+
+                    addStatisticsFor("Virtual", positionsVirtual, model);
+                    addMarketSummaryFor("Virtual", positionsVirtual, model);
+                    addPipelineSummaryFor("Virtual", accNoVirtual, model);
+                } else {
+                    model.addAttribute("hasVirtualAccount", false);
                 }
             } else {
-                // 인증 정보가 없으면 기존 방식 사용 (하위 호환성)
-                accountNo = accountService.getDefaultAccountNo();
+                model.addAttribute("hasVirtualAccount", false);
             }
+        } catch (Exception e) {
+            log.warn("모의계좌 데이터 조회 실패: {}", e.getMessage());
+            model.addAttribute("hasVirtualAccount", false);
         }
 
-        // 계좌번호가 있으면 데이터 조회 (잔고+보유 1회, 주문·설정 병렬 로딩으로 응답 시간 단축)
-        if (accountNo != null && !accountNo.trim().isEmpty()) {
-            try {
-                final String accNo = accountNo;
-                final Authentication auth = authentication;
+        // 실계좌(serverType=0) 메인 계좌 조회 및 데이터 로드
+        try {
+            if (userId != null) {
+                MainAccountResponseDto mainReal = accountService.getMainAccount(userId, "0");
+                if (mainReal != null && mainReal.getAccountNo() != null && !mainReal.getAccountNo().trim().isEmpty()) {
+                    String accNoReal = mainReal.getAccountNo();
+                    model.addAttribute("accountNoReal", accNoReal);
+                    model.addAttribute("hasRealAccount", true);
 
-                CompletableFuture<BalanceAndPositionsDto> balanceAndPositionsFuture =
-                        CompletableFuture.supplyAsync(() -> runWithAuth(auth, () -> accountService.getBalanceAndPositions(accNo)));
-                CompletableFuture<List<OrderResponseDto>> ordersFuture =
-                        CompletableFuture.supplyAsync(() -> runWithAuth(auth, () -> orderService.getOrders(accNo)));
-                CompletableFuture<Optional<TradingSettingDto>> settingFuture =
-                        CompletableFuture.supplyAsync(() -> runWithAuth(auth, () -> tradingSettingService.getSettingOptional(accNo)));
+                    CompletableFuture<BalanceAndPositionsDto> balanceRealFuture = CompletableFuture.supplyAsync(
+                            () -> runWithAuth(auth, () -> accountService.getBalanceAndPositions(accNoReal)));
+                    CompletableFuture<List<OrderResponseDto>> ordersRealFuture = CompletableFuture
+                            .supplyAsync(() -> runWithAuth(auth, () -> orderService.getOrders(accNoReal)));
+                    CompletableFuture<Optional<TradingSettingDto>> settingRealFuture = CompletableFuture.supplyAsync(
+                            () -> runWithAuth(auth, () -> tradingSettingService.getSettingOptional(accNoReal)));
 
-                BalanceAndPositionsDto balanceAndPositions = balanceAndPositionsFuture.join();
-                AccountBalanceDto balance = balanceAndPositions.getBalance();
-                List<AccountPositionDto> positions = balanceAndPositions.getPositions();
-                List<OrderResponseDto> orders = ordersFuture.join();
-                Optional<TradingSettingDto> settingOpt = settingFuture.join();
+                    BalanceAndPositionsDto balanceReal = balanceRealFuture.join();
+                    List<AccountPositionDto> positionsReal = balanceReal.getPositions();
+                    List<OrderResponseDto> ordersReal = ordersRealFuture.join();
+                    Optional<TradingSettingDto> settingRealOpt = settingRealFuture.join();
 
-                model.addAttribute("balance", balance);
-                model.addAttribute("positions", positions);
-                model.addAttribute("orders", orders);
-                settingOpt.ifPresent(dto -> model.addAttribute("setting", dto));
+                    model.addAttribute("balanceReal", balanceReal.getBalance());
+                    model.addAttribute("positionsReal", positionsReal);
+                    model.addAttribute("ordersReal", ordersReal);
+                    settingRealOpt.ifPresent(dto -> model.addAttribute("settingReal", dto));
 
-                calculateStatistics(positions, model);
-                addMarketSummary(positions, model);
-                addPipelineSummary(accNo, model);
-            } catch (Exception e) {
-                log.error("계좌 데이터 조회 실패: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo), e);
-                model.addAttribute("error", "계좌 정보를 불러오는 중 오류가 발생했습니다: " + e.getMessage());
+                    addStatisticsFor("Real", positionsReal, model);
+                    addMarketSummaryFor("Real", positionsReal, model);
+                    addPipelineSummaryFor("Real", accNoReal, model);
+                } else {
+                    model.addAttribute("hasRealAccount", false);
+                }
+            } else {
+                model.addAttribute("hasRealAccount", false);
             }
+        } catch (Exception e) {
+            log.warn("실계좌 데이터 조회 실패: {}", e.getMessage());
+            model.addAttribute("hasRealAccount", false);
         }
 
-        model.addAttribute("accountNo", accountNo);
-        model.addAttribute("hasAccount", accountNo != null && !accountNo.trim().isEmpty());
+        boolean hasVirtual = Boolean.TRUE.equals(model.getAttribute("hasVirtualAccount"));
+        boolean hasReal = Boolean.TRUE.equals(model.getAttribute("hasRealAccount"));
+        model.addAttribute("hasAccount", hasVirtual || hasReal);
         return "dashboard";
     }
 
@@ -172,46 +191,40 @@ public class DashboardController {
         }
     }
 
-    /**
-     * 통계 정보 계산
-     */
-    private void calculateStatistics(List<AccountPositionDto> positions, Model model) {
+    private void addStatisticsFor(String suffix, List<AccountPositionDto> positions, Model model) {
+        String prefix = "positionCount" + suffix;
+        String totalPl = "totalProfitLoss" + suffix;
+        String totalPlRate = "totalProfitLossRate" + suffix;
         if (positions == null || positions.isEmpty()) {
-            model.addAttribute("positionCount", 0);
-            model.addAttribute("totalProfitLoss", BigDecimal.ZERO);
-            model.addAttribute("totalProfitLossRate", BigDecimal.ZERO);
+            model.addAttribute(prefix, 0);
+            model.addAttribute(totalPl, BigDecimal.ZERO);
+            model.addAttribute(totalPlRate, BigDecimal.ZERO);
             return;
         }
-
         int positionCount = positions.size();
         BigDecimal totalProfitLoss = positions.stream()
                 .map(AccountPositionDto::getProfitLoss)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        // 총 손익률 계산 (가중 평균)
         BigDecimal totalInvestedValue = positions.stream()
                 .map(p -> p.getAveragePrice().multiply(BigDecimal.valueOf(p.getQuantity())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-
         BigDecimal totalProfitLossRate = BigDecimal.ZERO;
         if (totalInvestedValue.compareTo(BigDecimal.ZERO) > 0) {
             totalProfitLossRate = totalProfitLoss
                     .divide(totalInvestedValue, 4, RoundingMode.HALF_UP)
                     .multiply(BigDecimal.valueOf(100));
         }
-
-        model.addAttribute("positionCount", positionCount);
-        model.addAttribute("totalProfitLoss", totalProfitLoss);
-        model.addAttribute("totalProfitLossRate", totalProfitLossRate);
+        model.addAttribute(prefix, positionCount);
+        model.addAttribute(totalPl, totalProfitLoss);
+        model.addAttribute(totalPlRate, totalProfitLossRate);
     }
 
-    /**
-     * 시장(KR/US)별 보유 종목 수 집계 (대시보드 계좌 요약 KR/US 구분용).
-     */
-    private void addMarketSummary(List<AccountPositionDto> positions, Model model) {
+    private void addMarketSummaryFor(String suffix, List<AccountPositionDto> positions, Model model) {
+        String kr = "positionCountKr" + suffix;
+        String us = "positionCountUs" + suffix;
         if (positions == null || positions.isEmpty()) {
-            model.addAttribute("positionCountKr", 0);
-            model.addAttribute("positionCountUs", 0);
+            model.addAttribute(kr, 0);
+            model.addAttribute(us, 0);
             return;
         }
         long countKr = positions.stream()
@@ -220,25 +233,20 @@ public class DashboardController {
         long countUs = positions.stream()
                 .filter(p -> "US".equals(p.getMarket()))
                 .count();
-        model.addAttribute("positionCountKr", (int) countKr);
-        model.addAttribute("positionCountUs", (int) countUs);
+        model.addAttribute(kr, (int) countKr);
+        model.addAttribute(us, (int) countUs);
     }
 
-    /**
-     * 자동투자 파이프라인 요약 (유니버스·시그널·보유 포지션 수) 및 자동투자 ON/OFF.
-     */
-    private void addPipelineSummary(String accountNo, Model model) {
+    private void addPipelineSummaryFor(String suffix, String accountNo, Model model) {
         try {
             PipelineSummaryDto summary = pipelineSummaryService.getSummary(LocalDate.now(), accountNo);
-            model.addAttribute("pipelineSummary", summary);
-            model.addAttribute("universeCountKr", summary.getUniverseCountKr());
-            model.addAttribute("universeCountUs", summary.getUniverseCountUs());
-            model.addAttribute("signalCountKr", summary.getSignalCountKr());
-            model.addAttribute("signalCountUs", summary.getSignalCountUs());
-            model.addAttribute("openPositionCount", summary.getOpenPositionCount());
+            model.addAttribute("universeCountKr" + suffix, summary.getUniverseCountKr());
+            model.addAttribute("universeCountUs" + suffix, summary.getUniverseCountUs());
+            model.addAttribute("signalCountKr" + suffix, summary.getSignalCountKr());
+            model.addAttribute("signalCountUs" + suffix, summary.getSignalCountUs());
+            model.addAttribute("openPositionCount" + suffix, summary.getOpenPositionCount());
         } catch (Exception e) {
             log.debug("파이프라인 요약 조회 실패(스킵): {}", e.getMessage());
-            model.addAttribute("pipelineSummary", null);
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.investment.backtest;
 
 import com.investment.backtest.dto.*;
+import com.investment.config.FrictionCostProperties;
 import com.investment.domain.entity.DailyStock;
 import com.investment.domain.repository.DailyStockRepository;
 import com.investment.factor.dto.PositionRecommendationDto;
@@ -34,6 +35,7 @@ public class BacktestService {
     private final PositionSizingService positionSizingService;
     private final ExitRuleEvaluator exitRuleEvaluator;
     private final DailyStockRepository dailyStockRepository;
+    private final FrictionCostProperties frictionCostProperties;
 
     /**
      * 백테스트 실행.
@@ -73,28 +75,43 @@ public class BacktestService {
                 BacktestPosition pos = it.next();
                 BigDecimal close = getClose(pos.getSymbol(), pos.getMarket(), date);
                 BigDecimal high = getHigh(pos.getSymbol(), pos.getMarket(), date);
+                BigDecimal low = getLow(pos.getSymbol(), pos.getMarket(), date);
                 if (close == null) {
                     continue;
+                }
+                pos.updateTrailingHigh(high);
+                pos.updatePriorLow(close);
+                if (low != null) {
+                    pos.updatePriorLow(low);
                 }
                 ExitRuleInput input = ExitRuleInput.builder()
                         .entryPrice(pos.getEntryPrice())
                         .trailingHigh(pos.getTrailingHigh() != null ? pos.getTrailingHigh() : pos.getEntryPrice())
+                        .priorLow(pos.getPriorLow() != null ? pos.getPriorLow() : pos.getEntryPrice())
                         .entryDt(pos.getEntryDt())
                         .strategyType(pos.getStrategyType())
+                        .market(pos.getMarket())
                         .currentPrice(close)
                         .todayHigh(high)
                         .today(date)
                         .timeCutDays(pos.getTimeCutDays())
                         .targetReturnPct(pos.getTargetReturnPct())
                         .atrMultiplier(pos.getAtrMultiplier())
+                        .rsi(null)
                         .build();
                 ExitRuleResult result = exitRuleEvaluator.evaluate(input);
                 if (result.isShouldExit()) {
-                    BigDecimal pnl = close.subtract(pos.getEntryPrice()).multiply(BigDecimal.valueOf(pos.getQuantity()));
+                    BigDecimal cost = pos.getEntryPrice().multiply(BigDecimal.valueOf(pos.getQuantity()));
+                    BigDecimal exitValue = close.multiply(BigDecimal.valueOf(pos.getQuantity()));
+                    BigDecimal feeBuy = computeBuyFrictionCost(pos.getMarket(), cost);
+                    BigDecimal feeSell = computeSellFrictionCost(pos.getMarket(), exitValue);
+                    BigDecimal taf = computeTafCost(pos.getMarket(), pos.getQuantity());
+                    BigDecimal totalFriction = feeBuy.add(feeSell).add(taf);
+                    BigDecimal pnl = exitValue.subtract(cost).subtract(totalFriction);
                     BigDecimal pnlPct = pos.getEntryPrice().compareTo(BigDecimal.ZERO) != 0
-                            ? close.subtract(pos.getEntryPrice()).divide(pos.getEntryPrice(), 6, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
+                            ? pnl.divide(cost, 6, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
                             : BigDecimal.ZERO;
-                    cash = cash.add(close.multiply(BigDecimal.valueOf(pos.getQuantity())));
+                    cash = cash.add(exitValue).subtract(feeSell).subtract(taf);
                     trades.add(BacktestTradeDto.builder()
                             .symbol(pos.getSymbol())
                             .market(pos.getMarket())
@@ -106,6 +123,7 @@ public class BacktestService {
                             .quantity(pos.getQuantity())
                             .pnl(pnl)
                             .pnlPct(pnlPct)
+                            .totalFrictionCost(totalFriction)
                             .exitReason(result.getReason())
                             .build());
                     it.remove();
@@ -142,8 +160,13 @@ public class BacktestService {
                     continue;
                 }
                 BigDecimal cost = rec.getEntryPrice().multiply(BigDecimal.valueOf(buyQty));
-                cash = cash.subtract(cost);
+                BigDecimal feeBuy = computeBuyFrictionCost(rec.getMarket(), cost);
+                cash = cash.subtract(cost).subtract(feeBuy);
                 BigDecimal entryPrice = rec.getEntryPrice();
+                // Time-Cut은 SHORT_TERM 전용
+                int timeCutDays = (strategyType == StrategyType.SHORT_TERM) ? DEFAULT_TIME_CUT_DAYS : 0;
+                BigDecimal targetReturnPct = (strategyType == StrategyType.SHORT_TERM) ? DEFAULT_TARGET_RETURN_PCT
+                        : null;
                 positions.add(BacktestPosition.builder()
                         .symbol(rec.getSymbol())
                         .market(rec.getMarket())
@@ -152,8 +175,9 @@ public class BacktestService {
                         .entryPrice(entryPrice)
                         .quantity((int) buyQty)
                         .trailingHigh(entryPrice)
-                        .timeCutDays(DEFAULT_TIME_CUT_DAYS)
-                        .targetReturnPct(DEFAULT_TARGET_RETURN_PCT)
+                        .priorLow(entryPrice)
+                        .timeCutDays(timeCutDays)
+                        .targetReturnPct(targetReturnPct)
                         .atrMultiplier(DEFAULT_ATR_MULTIPLIER)
                         .build());
             }
@@ -174,8 +198,8 @@ public class BacktestService {
 
         BigDecimal totalReturnPct = request.getInitialCapital().compareTo(BigDecimal.ZERO) != 0
                 ? finalEquity.subtract(request.getInitialCapital())
-                .divide(request.getInitialCapital(), 6, RoundingMode.HALF_UP)
-                .multiply(BigDecimal.valueOf(100))
+                        .divide(request.getInitialCapital(), 6, RoundingMode.HALF_UP)
+                        .multiply(BigDecimal.valueOf(100))
                 : BigDecimal.ZERO;
 
         long days = java.time.temporal.ChronoUnit.DAYS.between(start, end) + 1;
@@ -191,23 +215,34 @@ public class BacktestService {
         BigDecimal sharpeRatio = computeSharpe(equityCurve);
         BigDecimal sortinoRatio = computeSortino(equityCurve);
         BigDecimal calmarRatio = (mddPct != null && mddPct.abs().compareTo(BigDecimal.ZERO) > 0)
-                ? cagr.divide(mddPct.abs(), 4, RoundingMode.HALF_UP) : null;
+                ? cagr.divide(mddPct.abs(), 4, RoundingMode.HALF_UP)
+                : null;
 
-        int winningTrades = (int) trades.stream().filter(t -> t.getPnl() != null && t.getPnl().compareTo(BigDecimal.ZERO) > 0).count();
-        int losingTrades = (int) trades.stream().filter(t -> t.getPnl() != null && t.getPnl().compareTo(BigDecimal.ZERO) < 0).count();
+        int winningTrades = (int) trades.stream()
+                .filter(t -> t.getPnl() != null && t.getPnl().compareTo(BigDecimal.ZERO) > 0).count();
+        int losingTrades = (int) trades.stream()
+                .filter(t -> t.getPnl() != null && t.getPnl().compareTo(BigDecimal.ZERO) < 0).count();
         BigDecimal avgWin = winningTrades > 0
                 ? trades.stream().filter(t -> t.getPnl() != null && t.getPnl().compareTo(BigDecimal.ZERO) > 0)
-                .map(BacktestTradeDto::getPnl).reduce(BigDecimal.ZERO, BigDecimal::add).divide(BigDecimal.valueOf(winningTrades), 4, RoundingMode.HALF_UP)
+                        .map(BacktestTradeDto::getPnl).reduce(BigDecimal.ZERO, BigDecimal::add)
+                        .divide(BigDecimal.valueOf(winningTrades), 4, RoundingMode.HALF_UP)
                 : null;
         BigDecimal avgLoss = losingTrades > 0
                 ? trades.stream().filter(t -> t.getPnl() != null && t.getPnl().compareTo(BigDecimal.ZERO) < 0)
-                .map(BacktestTradeDto::getPnl).reduce(BigDecimal.ZERO, BigDecimal::add).divide(BigDecimal.valueOf(losingTrades), 4, RoundingMode.HALF_UP)
+                        .map(BacktestTradeDto::getPnl).reduce(BigDecimal.ZERO, BigDecimal::add)
+                        .divide(BigDecimal.valueOf(losingTrades), 4, RoundingMode.HALF_UP)
                 : null;
-        BigDecimal winRate = trades.isEmpty() ? null : BigDecimal.valueOf(winningTrades).divide(BigDecimal.valueOf(trades.size()), 4, RoundingMode.HALF_UP);
-        BigDecimal sumWins = trades.stream().filter(t -> t.getPnl() != null && t.getPnl().compareTo(BigDecimal.ZERO) > 0).map(BacktestTradeDto::getPnl).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal sumLosses = trades.stream().filter(t -> t.getPnl() != null && t.getPnl().compareTo(BigDecimal.ZERO) < 0).map(BacktestTradeDto::getPnl).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal winRate = trades.isEmpty() ? null
+                : BigDecimal.valueOf(winningTrades).divide(BigDecimal.valueOf(trades.size()), 4, RoundingMode.HALF_UP);
+        BigDecimal sumWins = trades.stream()
+                .filter(t -> t.getPnl() != null && t.getPnl().compareTo(BigDecimal.ZERO) > 0)
+                .map(BacktestTradeDto::getPnl).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sumLosses = trades.stream()
+                .filter(t -> t.getPnl() != null && t.getPnl().compareTo(BigDecimal.ZERO) < 0)
+                .map(BacktestTradeDto::getPnl).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal profitFactor = (sumLosses != null && sumLosses.abs().compareTo(BigDecimal.ZERO) > 0)
-                ? sumWins.divide(sumLosses.abs(), 4, RoundingMode.HALF_UP) : (sumWins.compareTo(BigDecimal.ZERO) > 0 ? sumWins : null);
+                ? sumWins.divide(sumLosses.abs(), 4, RoundingMode.HALF_UP)
+                : (sumWins.compareTo(BigDecimal.ZERO) > 0 ? sumWins : null);
 
         return BacktestRunResult.builder()
                 .startDate(request.getStartDate())
@@ -234,6 +269,50 @@ public class BacktestService {
                 .build();
     }
 
+    /** 매수 시 마찰 비용: notional * (commission + slippage). */
+    private BigDecimal computeBuyFrictionCost(String market, BigDecimal notional) {
+        if (notional == null || notional.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+        if (isUsMarket(market)) {
+            FrictionCostProperties.UsaStockFee usa = frictionCostProperties.getUsa().getStock();
+            BigDecimal rate = usa.getCommission().add(usa.getSlippage());
+            return notional.multiply(rate).setScale(2, RoundingMode.HALF_UP);
+        }
+        FrictionCostProperties.StockFee kr = frictionCostProperties.getKorea().getStock();
+        BigDecimal rate = kr.getCommission().add(kr.getSlippage());
+        return notional.multiply(rate).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /** 매도 시 마찰 비용: notional * (commission + tax(KR) or secFee(US) + slippage). */
+    private BigDecimal computeSellFrictionCost(String market, BigDecimal notional) {
+        if (notional == null || notional.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+        if (isUsMarket(market)) {
+            FrictionCostProperties.UsaStockFee usa = frictionCostProperties.getUsa().getStock();
+            BigDecimal rate = usa.getCommission().add(usa.getSecFee()).add(usa.getSlippage());
+            return notional.multiply(rate).setScale(2, RoundingMode.HALF_UP);
+        }
+        FrictionCostProperties.StockFee kr = frictionCostProperties.getKorea().getStock();
+        BigDecimal rate = kr.getCommission().add(kr.getTax()).add(kr.getSlippage());
+        return notional.multiply(rate).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /** TAF 비용 (미국 매도 시만): qty * tafPerShareUsd (USD). */
+    private BigDecimal computeTafCost(String market, int quantity) {
+        if (!isUsMarket(market) || quantity <= 0) {
+            return BigDecimal.ZERO;
+        }
+        return frictionCostProperties.getUsa().getStock().getTafPerShareUsd()
+                .multiply(BigDecimal.valueOf(quantity))
+                .setScale(4, RoundingMode.HALF_UP);
+    }
+
+    private boolean isUsMarket(String market) {
+        return market != null && "US".equalsIgnoreCase(market.trim());
+    }
+
     private StrategyType parseStrategyType(String s) {
         if (s == null) {
             return StrategyType.SHORT_TERM;
@@ -246,18 +325,28 @@ public class BacktestService {
     }
 
     private BigDecimal getClose(String symbol, String market, LocalDate date) {
-        List<DailyStock> list = dailyStockRepository.findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(symbol, market, date, date);
+        List<DailyStock> list = dailyStockRepository.findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(symbol, market,
+                date, date);
         return list.isEmpty() || list.get(0).getClosePrice() == null ? null : list.get(0).getClosePrice();
     }
 
     private BigDecimal getHigh(String symbol, String market, LocalDate date) {
-        List<DailyStock> list = dailyStockRepository.findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(symbol, market, date, date);
+        List<DailyStock> list = dailyStockRepository.findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(symbol, market,
+                date, date);
         return list.isEmpty() || list.get(0).getHighPrice() == null ? null : list.get(0).getHighPrice();
     }
 
+    private BigDecimal getLow(String symbol, String market, LocalDate date) {
+        List<DailyStock> list = dailyStockRepository.findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(symbol, market,
+                date, date);
+        return list.isEmpty() || list.get(0).getLowPrice() == null ? null : list.get(0).getLowPrice();
+    }
+
     private BigDecimal getCloseLatest(String symbol, String market, LocalDate beforeOrEqual) {
-        List<DailyStock> list = dailyStockRepository.findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(symbol, market, beforeOrEqual.minusDays(60), beforeOrEqual);
-        return list.isEmpty() || list.get(list.size() - 1).getClosePrice() == null ? null : list.get(list.size() - 1).getClosePrice();
+        List<DailyStock> list = dailyStockRepository.findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(symbol, market,
+                beforeOrEqual.minusDays(60), beforeOrEqual);
+        return list.isEmpty() || list.get(list.size() - 1).getClosePrice() == null ? null
+                : list.get(list.size() - 1).getClosePrice();
     }
 
     private BigDecimal computeMddPct(List<DateEquityPoint> curve) {
@@ -271,7 +360,8 @@ public class BacktestService {
                 peak = p.getEquity();
             }
             if (peak.compareTo(BigDecimal.ZERO) > 0) {
-                BigDecimal drawdown = peak.subtract(p.getEquity()).divide(peak, 6, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100));
+                BigDecimal drawdown = peak.subtract(p.getEquity()).divide(peak, 6, RoundingMode.HALF_UP)
+                        .multiply(BigDecimal.valueOf(100));
                 if (drawdown.compareTo(mdd) > 0) {
                     mdd = drawdown;
                 }
@@ -295,7 +385,8 @@ public class BacktestService {
         if (returns.isEmpty()) {
             return null;
         }
-        BigDecimal mean = returns.stream().reduce(BigDecimal.ZERO, BigDecimal::add).divide(BigDecimal.valueOf(returns.size()), 6, RoundingMode.HALF_UP);
+        BigDecimal mean = returns.stream().reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(BigDecimal.valueOf(returns.size()), 6, RoundingMode.HALF_UP);
         BigDecimal variance = returns.stream()
                 .map(r -> r.subtract(mean).multiply(r.subtract(mean)))
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
@@ -323,8 +414,10 @@ public class BacktestService {
         if (returns.isEmpty()) {
             return null;
         }
-        BigDecimal mean = returns.stream().reduce(BigDecimal.ZERO, BigDecimal::add).divide(BigDecimal.valueOf(returns.size()), 6, RoundingMode.HALF_UP);
-        List<BigDecimal> negative = returns.stream().filter(r -> r.compareTo(BigDecimal.ZERO) < 0).collect(Collectors.toList());
+        BigDecimal mean = returns.stream().reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(BigDecimal.valueOf(returns.size()), 6, RoundingMode.HALF_UP);
+        List<BigDecimal> negative = returns.stream().filter(r -> r.compareTo(BigDecimal.ZERO) < 0)
+                .collect(Collectors.toList());
         if (negative.isEmpty()) {
             return mean.compareTo(BigDecimal.ZERO) > 0 ? BigDecimal.valueOf(999.0) : null;
         }

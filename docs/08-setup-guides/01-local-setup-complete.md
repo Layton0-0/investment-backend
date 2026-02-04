@@ -223,14 +223,31 @@ KOREA_INVESTMENT_APP_SECRET=<앱시크릿>
 
 # 데이터 수집 API (선택사항)
 DART_API_KEY=<DART API 키>
-KRX_AUTH_KEY=<KRX 인증키>
+KRX_AUTH_KEY=<KRX 인증키>   # KRX Open API는 서비스별 이용신청 필요. [KRX API 필요 목록](./04-krx-api-required.md) 참조.
 DATA_COLLECTION_INTERNAL_KEY=<내부 API 키>
 
-# US 시장 일별 시세 (yfinance). 설정 시 US 일별 수집 활성화
-# US_YFINANCE_SCRIPT_PATH=<scripts/us_daily_collector.py 절대경로 또는 상대경로>
-# US_SYMBOLS=AAPL,MSFT,GOOGL,AMZN,META,TSLA,NVDA,JPM,V,JNJ
-# US_PYTHON_COMMAND=python
+# US 시장 일별 시세 (yfinance). 로보 백테스트·US 일봉 수집용
+# 1) .\scripts\setup-us-daily-collect.ps1 실행 → yfinance 설치 및 테스트
+# 2) 앱을 프로젝트 루트에서 실행하면 기본 경로(scripts/us_daily_collector.py) 사용
+# 다른 CWD에서 실행 시: US_YFINANCE_SCRIPT_PATH=<us_daily_collector.py 절대경로>, US_PYTHON_COMMAND=python
+# US_SYMBOLS=AAPL,MSFT,GOOGL,SPY,TLT,BIL,... (기본값에 로보용 SPY,TLT,BIL 포함)
 ```
+
+#### 3-2-1. US 일봉 수집 (yfinance) — 로보 백테스트용
+
+로보어드바이저 백테스트에서 US 일봉(SPY, TLT 등)이 필요할 때:
+
+**방법 A — Docker Compose (권장)**  
+1. `docker-compose up -d us-daily-collector`로 US 일봉 수집 서비스 기동.  
+2. `.env`에 `US_COLLECTOR_URL=http://localhost:8001` 설정. (Spring이 같은 호스트에서 실행될 때)  
+3. 앱 실행 후 백테스트 페이지 → 로보어드바이저 탭 → **US 일봉 수집** 버튼으로 기간 수집.
+
+**방법 B — 로컬 Python 스크립트**  
+1. **한 번만 설정**: 프로젝트 루트에서 `.\scripts\setup-us-daily-collect.ps1` 실행 → Python에 yfinance 설치 및 스크립트 테스트.  
+2. **앱 실행**: 앱을 **프로젝트 루트**에서 실행(예: `.\gradlew bootRun`)하면 기본 경로 `scripts/us_daily_collector.py`가 사용됩니다.  
+3. **수집**: 백테스트 페이지 → 로보어드바이저 탭 → **US 일봉 수집** 버튼으로 기간 수집.
+
+다른 작업 디렉터리에서 앱을 실행하는 경우, 스크립트 설정 안내에서 출력되는 `US_YFINANCE_SCRIPT_PATH`(절대 경로)와 `US_PYTHON_COMMAND`를 `.env`에 설정하세요.
 
 **보안 키 생성 방법:**
 
@@ -537,6 +554,22 @@ curl http://localhost:8000/
 - Docker 컨테이너 문제
 - MCP 연결 실패
 - 빌드 잠금 문제
+
+### Spring Batch 메타데이터 테이블이 없을 때
+
+**근본 원인**: Flyway 도입 시 기존 마이그레이션 SQL을 정리하면서 **BATCH_* 테이블을 생성하던 V20__spring_batch_metadata.sql을 삭제**했습니다. Flyway는 baseline 20으로 “이미 적용됨”만 기록하고, 버전 21 이상 스크립트만 실행하는데, 당시에는 V21이 없었기 때문에 **어떤 마이그레이션도 BATCH_* 테이블을 만들지 않는 상태**가 되었습니다. 여기에 `spring.batch.jdbc.initialize-schema: never` 설정으로 Spring Batch가 스키마를 자동 생성하지 않으므로, 테이블이 없는 DB에서는 배치 실행 시 `BATCH_JOB_INSTANCE` 없음 오류가 발생합니다.
+
+**해결**: `db/migration/V21__spring_batch_metadata.sql`이 BATCH_* 테이블을, `V22__spring_batch_sequences.sql`이 MariaDB용 SEQUENCE(BATCH_JOB_SEQ, BATCH_JOB_EXECUTION_SEQ, BATCH_STEP_EXECUTION_SEQ)를 생성합니다. 앱을 **한 번 재기동**하면 Flyway가 V21·V22를 순서대로 실행합니다. `Unknown SEQUENCE: 'BATCH_JOB_SEQ'` 오류는 Spring Batch 5가 MariaDB 10.3+에서 네이티브 SEQUENCE를 사용하기 때문에 발생하며, V22 적용으로 해결됩니다.
+
+### Flyway "Detected failed migration" / V22 SEQUENCE "out of range value"
+
+**증상**: 기동 시 `FlywayValidateException: Detected failed migration to version 22` 또는 `Sequence 'BATCH_JOB_SEQ' has out of range value for options` 발생.
+
+**원인**: 이전 기동에서 V22가 실패한 상태로 schema history에 남았거나, MariaDB SEQUENCE 옵션(MINVALUE 0, MAXVALUE 9223372036854775807)이 허용 범위를 벗어남.
+
+**해결**:
+- **로컬**: `application-local.yml`에 `spring.flyway.repair-on-validate-failure: true`가 설정되어 있으면, 검증 실패 시 자동으로 repair 후 migrate 재시도.
+- V22는 MariaDB 규칙에 맞게 `MINVALUE 1`, `START WITH 1`, `MAXVALUE 9223372036854775806`으로 정의되어 있으며, 기존 잘못된 시퀀스는 `DROP SEQUENCE IF EXISTS` 후 재생성.
 
 ## 참고 문서
 
