@@ -88,10 +88,18 @@ public class BatchJobRegistry {
                                                 .triggerPath("/api/v1/trigger/factor-calculation")
                                                 .build(),
                                 BatchJobDefinition.builder()
+                                                .id("auto-buy")
+                                                .name("자동매수(통합)")
+                                                .description("매일 09:10 KST에 공통 전처리 → 로보(ETF) → 파이프라인(개별종목) 순으로 통합 실행합니다.")
+                                                .cronExpression("0 10 9 * * *")
+                                                .timeZone(TZ)
+                                                .triggerPath("/api/v1/trigger/auto-buy")
+                                                .build(),
+                                BatchJobDefinition.builder()
                                                 .id("pipeline-execution")
                                                 .name("파이프라인 실행")
-                                                .description("장 시작 후(09:10 KST) 4단계 파이프라인(단/중/장기 배분)을 실행합니다.")
-                                                .cronExpression("0 10 9 * * *")
+                                                .description("4단계 파이프라인만 수동 실행합니다. (스케줄은 자동매수(통합) 사용)")
+                                                .cronExpression(null)
                                                 .timeZone(TZ)
                                                 .triggerPath("/api/v1/trigger/pipeline-execution")
                                                 .build(),
@@ -146,8 +154,8 @@ public class BatchJobRegistry {
                                 BatchJobDefinition.builder()
                                                 .id("robo-rebalance")
                                                 .name("로보 리밸런싱")
-                                                .description("매월 말일 09:00 KST에 로보 어드바이저 리밸런싱을 실행합니다.")
-                                                .cronExpression("0 0 9 L * *")
+                                                .description("로보 어드바이저 리밸런싱만 수동 실행합니다. (스케줄은 자동매수(통합) 사용)")
+                                                .cronExpression(null)
                                                 .timeZone(TZ)
                                                 .triggerPath("/api/v1/trigger/robo-rebalance")
                                                 .build());

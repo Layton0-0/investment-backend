@@ -55,6 +55,7 @@
 | POST | `/api/v1/trigger/krx-daily` | KRX 일별 시세 수집 |
 | POST | `/api/v1/trigger/us-daily` | US 일별 시세 수집 |
 | POST | `/api/v1/trigger/factor-calculation` | 팩터 계산 즉시 실행 |
+| POST | `/api/v1/trigger/auto-buy` | 자동매수(통합) 실행 |
 | POST | `/api/v1/trigger/pipeline-execution` | 파이프라인 실행 |
 | POST | `/api/v1/trigger/pipeline-exit` | 파이프라인 청산 |
 | POST | `/api/v1/trigger/fill-confirmation` | 체결 확인 |
@@ -119,7 +120,7 @@
 | GET /api/v1/user/accounts/main | userAccountsApi.getMainAccount | useDashboardData, Market, Investment | |
 | GET 목록, GET {id}, PUT main | (없음) | - | **미연동** |
 | GET /api/v1/pipeline/summary | pipelineApi.getPipelineSummary | useDashboardData, Investment(AutoInvest) | |
-| POST /api/v1/trigger/* | triggerApi.trigger(path) | Ops(Batch) | path: dart-collect, sec-collect, factor-calculation 등 |
+| POST /api/v1/trigger/* | triggerApi.trigger(path) | Ops(Batch) | path: dart-collect, sec-collect, factor-calculation, auto-buy, pipeline-execution 등. 버튼 라벨 "지금 실행" |
 | GET /api/v1/news | newsApi.getNews | Market(News) | |
 | POST /api/v1/news/collect | (없음) | - | **미연동** |
 | GET /api/v1/signals | signalsApi.getSignals | Investment(AutoInvest) | |
@@ -149,7 +150,7 @@
 | `/batch` | Batch | triggerApi.trigger, batchApi.getBatchJobs |
 | `/backtest` | Backtest | backtestApi.runBacktest |
 | `/settings` | Settings | useSettingsAccounts(getSettingsAccounts, updateSettingsAccounts) |
-| `/risk`, `/ops/*` | OpsPage (OpsDashboard) | (목업 데이터; 트리거는 Batch에서만) |
+| `/risk`, `/ops/*` | OpsPage (OpsDashboard) | riskApi.getRiskSummary, getRiskLimits, getRiskHistory (/risk); Batch에서만 트리거 |
 
 ---
 
@@ -172,7 +173,7 @@
 | **Ops 전용** | | | |
 | 데이터 파이프라인 `/ops/data` | 파이프라인 실행 상태·로그·이력 | (Batch 트리거로 일부) | 전용 API 없음, 목업 |
 | 알림센터 `/ops/alerts` | 알림 목록·설정 | - | 미구현 |
-| 리스크 리포트 `/risk` | 리스크 지표·한도·이력 | - | 목업 |
+| 리스크 리포트 `/risk` | 리스크 지표·한도·이력 | getRiskSummary, getRiskLimits, getRiskHistory | - |
 | 모델/예측 `/ops/model` | 예측 모델 상태·결과 | - | 목업 |
 | 감사 로그 `/ops/audit` | 인증·권한·변경 이력 | - | 미구현(감사 로그 저장·조회 API) |
 | 시스템 헬스 `/ops/health` | 서비스·DB·캐시 헬스 | (Actuator) | SPA 연동용 정리 API 선택 |

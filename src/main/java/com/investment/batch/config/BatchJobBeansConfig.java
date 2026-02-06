@@ -103,6 +103,14 @@ public class BatchJobBeansConfig {
                                 step(jobRepository, tx, "factor-calculation-step", tasklet));
         }
 
+        @Bean(name = "auto-buy")
+        public Job autoBuyJob(JobRepository jobRepository,
+                        PlatformTransactionManager tx,
+                        AutoBuyTasklet tasklet) {
+                return job(jobRepository, "auto-buy",
+                                step(jobRepository, tx, "auto-buy-step", tasklet));
+        }
+
         @Bean(name = "pipeline-execution")
         public Job pipelineExecutionJob(JobRepository jobRepository,
                         PlatformTransactionManager tx,

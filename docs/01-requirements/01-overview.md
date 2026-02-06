@@ -39,8 +39,8 @@ Investment Choi - 주식 투자 수익 분석 및 자동 매매 시스템
 
 ## 기술 스택
 - **Backend**: Spring Boot 3.2.2 (Java 17)
-- **Frontend**: Thymeleaf (확장 가능 메뉴 구조)
-- **Database**: MariaDB 11.8.5
+- **Frontend**: Thymeleaf (확장 가능 메뉴 구조), React (Vite) 일부 화면
+- **Database**: TimescaleDB (PostgreSQL 확장) — 시계열·일반 데이터
 - **Build Tool**: Gradle
 - **API**: 한국투자증권 KIS Developers (Open API) — REST·WebSocket
 
@@ -50,6 +50,7 @@ Investment Choi - 주식 투자 수익 분석 및 자동 매매 시스템
 - **버전**: 1.0.0
 
 ## 참고 문서
+- [기획·개발 기준 정리](./00-planning-basis.md) — 앞으로의 개발 기준(최소 아키텍처·기획요청·gemini 설계) 및 논리 레이어 매핑
 - [요구사항 상세](./02-functional-requirements.md)
 - [비기능 요구사항](./03-non-functional-requirements.md)
 - [아키텍처 설계](../02-architecture/01-system-architecture.md)
@@ -60,3 +61,4 @@ Investment Choi - 주식 투자 수익 분석 및 자동 매매 시스템
 |------|------|--------|----------|
 | 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 |
 | 1.1 | 2026-01-29 | System | 자동투자수익 비전·4단계 파이프라인·국내/미국·뉴스 원천·확장성 반영 |
+| 1.2 | 2026-02-06 | System | 기술 스택 MariaDB → TimescaleDB 반영, 기획·개발 기준(00-planning-basis) 참조 추가 |

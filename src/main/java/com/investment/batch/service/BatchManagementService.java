@@ -53,8 +53,12 @@ public class BatchManagementService {
                     .lastExecutionTime(getLastExecutionTime(def.getId()))
                     .build();
             try {
-                ZonedDateTime now = ZonedDateTime.now(ZoneId.of(def.getTimeZone()));
-                dto.setNextExecutionTime(calculateNextExecution(def.getCronExpression(), now));
+                String cron = def.getCronExpression();
+                if (cron != null && !cron.isBlank()) {
+                    String tz = def.getTimeZone() != null ? def.getTimeZone() : "Asia/Seoul";
+                    ZonedDateTime now = ZonedDateTime.now(ZoneId.of(tz));
+                    dto.setNextExecutionTime(calculateNextExecution(cron, now));
+                }
             } catch (Exception e) {
                 log.warn("다음 실행 시간 계산 실패: jobId={}", def.getId(), e);
             }

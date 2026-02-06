@@ -36,12 +36,17 @@ public class BatchJobScheduler {
     @PostConstruct
     public void scheduleJobs() {
         for (BatchJobDefinition def : batchJobRegistry.getDefinitions()) {
+            String cron = def.getCronExpression();
+            if (cron == null || cron.isBlank()) {
+                log.debug("Skipping schedule for manual-only job: id={}", def.getId());
+                continue;
+            }
             try {
                 Job job = applicationContext.getBean(def.getId(), Job.class);
-                CronTrigger trigger = new CronTrigger(def.getCronExpression(), ZoneId.of(def.getTimeZone()));
+                CronTrigger trigger = new CronTrigger(cron, ZoneId.of(def.getTimeZone()));
                 String jobId = def.getId();
                 taskScheduler.schedule(() -> runJob(jobId, job), trigger);
-                log.debug("Scheduled batch job: id={}, cron={}", jobId, def.getCronExpression());
+                log.debug("Scheduled batch job: id={}, cron={}", jobId, cron);
             } catch (Exception e) {
                 log.warn("Failed to schedule batch job: id={}", def.getId(), e);
             }

@@ -4,11 +4,19 @@
 
 **갱신 원칙**: 개발 완료·스프린트 시작·범위 변경 시 이 문서를 수정하고, 다른 문서(roadmap, README)에서 이 문서를 참조한다.
 
+**기획·개발 기준**: 진행예정 항목은 [기획·개발 기준 정리](../01-requirements/00-planning-basis.md)에서 지정한 기준 문서([minimum-architecture-requirement.md](../01-requirements/minimum-architecture-requirement.md), [기획요청.md](../01-requirements/기획요청.md), [gemini-설계.md](../01-requirements/gemini-설계.md))에 따라 Phase·레이어별로 그룹화되어 있다.
+
 ---
 
 ## 1. 완료 (Completed)
 
 ### 도메인·DB·API
+- [x] **슈퍼관리자(yoon) DB 지정**  
+  Flyway V26: TB_USERS에서 USERNAME='yoon'인 계정의 ROLE을 'Admin'으로 고정. 해당 계정을 메인 슈퍼관리자로 DB에 반영. 비밀번호 동기화는 `SUPER_ADMIN_PASSWORD` env(또는 `investment.security.super-admin.password`) 설정 시 기동 시 한 번만 `SuperAdminSeeder`가 갱신.
+- [x] **관리자 계정 생성·로그인 정책 (플랜 구현)**  
+  JWT 인증 시 DB role 반영: `JwtAuthenticationFilter`에서 `UserExistenceChecker.findUser(userId)`로 User 조회 후 `Role.fromDbRole(user.getRole())`로 ROLE_USER/ROLE_ADMIN/ROLE_Ops 부여. Kill Switch 등 `@PreAuthorize("hasRole('ADMIN')")` 정상 동작. 최초 관리자 부트스트랩: `BootstrapAdminRunner`(ADMIN 0건일 때만 config username/password로 1회 생성), `investment.security.bootstrap-admin.*` 설정. ADMIN 전용 API: `POST /api/v1/admin/users`(AdminUserController, AdminUserService), body username/password/role(Admin|Ops), `@PreAuthorize("hasRole('ADMIN')")`. 문서: decisions.md ADR 17, 01-api-overview.md §1.3·§3.0.1, 02-development-status 본 항목.
+- [x] **리스크 리포트 (/risk) 백엔드·프론트 연동**  
+  GET `/api/v1/risk/summary`, `/limits`, `/history` 설계·구현. `RiskReportController`, `RiskReportService`에서 기존 `TradingHaltService`, `RiskGateService`, `DailyLossLimitService`, `PortfolioPeakService`, `PortfolioPeakRepository`, `RiskProperties`, `TradingSettingRepository` 등 조합해 DTO 반환. 인증 필요(`@PreAuthorize("isAuthenticated()")`), Principal/SecurityContextHolder 기반 userId 추출, 미인증 시 UNAUTHORIZED 401. 프론트 `riskApi.ts`(getRiskSummary, getRiskLimits, getRiskHistory) 추가, Ops 리스크 탭에서 목업 제거 후 실제 API 연동. [02-api-endpoints.md §9](../04-api/02-api-endpoints.md), [11-api-frontend-mapping.md](../04-api/11-api-frontend-mapping.md) §4 리스크 리포트 행 갱신.
 - [x] **2.0 아키텍처 Phase 2 (PreTrade·Kill Switch·Portfolio)**  
   Pre-Trade 컴플라이언스: `PreTradeComplianceEngine`(Kill Switch, 단일 종목 10% 상한, MDD 15% 게이트), `OrderService.executeOrderInternal` 주문 직전 호출. Kill Switch: `TB_TRADING_HALT`·`TradingHaltService`, GET/PUT `/api/v1/system/kill-switch`(Ops만 설정). MDD용 `TB_PORTFOLIO_PEAK`·`PortfolioPeakService`. 포트폴리오: `TaxAwareOptimizerImpl`(FrictionCost 기반 비중 조정), `RebalancerImpl`(잔고·포지션 기반 매매 리스트). Flyway V25. [00-strategy-registry.md 2.9.1~2.9.3](../02-architecture/00-strategy-registry.md), [01-system-architecture.md §9](../02-architecture/01-system-architecture.md) 반영.
 - [x] **TimescaleDB 전환 및 2.0 아키텍처 Phase 1**
@@ -177,6 +185,8 @@
   **P0 리스크 게이트·일일 손실 한도**: RiskProperties·RiskGateService(레짐·VIX·MacroEconomicStrategyEngine 연동), DailyLossLimitService(시초 평가액 기록·isNewBuyAllowed), PipelineExecutionScheduler 실행 전 검사·비중 배율 적용. AccountService.getBalanceAndPositionsWithUserId(파이프라인용). **P1 실행가·상한**: RoboBacktestService rebalanceExecutionPrice(CLOSE/NEXT_OPEN), getOpen·getExecutionPrice. PositionSizingService position-cap-per-symbol-pct·max-new-positions-per-day. **P2 장중 변동성 돌파**: IntradayBreakoutService(전일 유니버스·시가+Range×k·실시간 시세), IntradayBreakoutScheduler(09:10·09:40), BreakoutCandidateDto. **P3 일일 PnL 리뷰**: DailyPnlService·DailyPnlScheduler(16:05), DailyLossLimitService.getOpeningBalance. application.yml investment.risk.*, investment.intraday.*, investment.daily-pnl.*. [00-strategy-registry.md](../02-architecture/00-strategy-registry.md) §2.9·§3.2.1, [12-auto-investment-strategy.md](../02-architecture/12-auto-investment-strategy.md) §6.2 반영.
 - [x] **P0~P3 후속: 테스트·VIX·로보 ETF 주문**  
   **테스트**: RiskGateService·DailyLossLimitService·IntradayBreakoutService·DailyPnlService 단위 테스트, PipelineExecutionScheduler·IntradayBreakoutScheduler·DailyPnlScheduler 테스트 추가. **VIX·거시 지표 연동**: MacroIndicatorProvider 인터페이스·DefaultMacroIndicatorProvider(설정 URL GET JSON 파싱 vix/interestRate 등), PipelineExecutionScheduler에 주입·getCurrentIndicators() → evaluateWithIndicators/evaluate(vix). investment.risk.macro-indicator-url(선택). **로보 ETF 주문 실행**: RoboRebalanceExecutor에서 AccountService.getBalanceAndPositionsWithUserId·US 보유 비중 조회 후 목표 비중과 비교해 매수/매도 OrderRequestDto(market=US) 생성·OrderService.executeOrderForPipeline 호출. execute-orders(false 기본)·min-order-amount-usd(50). [00-strategy-registry.md](../02-architecture/00-strategy-registry.md)·[12-auto-investment-strategy.md](../02-architecture/12-auto-investment-strategy.md) 반영.
+- [x] **로보·파이프라인 통합 복합 로직**  
+  **통합 오케스트레이터**: `AutoBuyOrchestrator`(로보 → 파이프라인 순서 실행), `AutoBuyTasklet`·Batch Job `auto-buy`(09:10 KST cron). **배치**: `BatchJobDefinition`에서 cron optional·cron 없으면 스케줄 미등록. `pipeline-execution`·`robo-rebalance`는 cron 제거(수동 전용), `auto-buy`만 09:10 스케줄. **트리거**: `POST /api/v1/trigger/auto-buy`(dryRun optional). **프론트**: 스케줄 현황 테이블 버튼 라벨 "지금 실행"·헤더 한글화, 백테스트 기본 기간(React) 최근 1개월. [12-auto-investment-strategy.md §6.1.1](../02-architecture/12-auto-investment-strategy.md) 반영.
 
 ### 자동투자 프로세스·활성화 체크리스트
 
@@ -186,61 +196,67 @@
 
 ## 2. 진행중 (In progress)
 
-- **로보·파이프라인 통합 복합 로직**: 자동매수 = 파이프라인+로보 통합 복합 로직(한 오케스트레이션)으로 문서·설계 목표 반영. 트리거 API·스케줄 현황 "지금 실행" 버튼·백테스트 기본 기간(최근 1개월) 구현 진행.
+- (없음)
 
 ---
 
 ## 3. 진행예정 (Planned)
 
-산출 기획([자동투자 전략 명세](../02-architecture/12-auto-investment-strategy.md), [뉴스·공시 수집·연동 설계](../02-architecture/13-news-collection-design.md), [화면·메뉴 기획서](./01-screen-menu-spec.md), [로드맵](../roadmap.md))을 토대로 구체화한 항목입니다.
+산출 기획([자동투자 전략 명세](../02-architecture/12-auto-investment-strategy.md), [뉴스·공시 수집·연동 설계](../02-architecture/13-news-collection-design.md), [화면·메뉴 기획서](./01-screen-menu-spec.md), [로드맵](../roadmap.md))을 토대로 구체화했으며, **기준 문서 Phase·레이어**별로 그룹화했다.
 
-### 메뉴별 백엔드 순차 개발 (퍼블 메뉴 전부 필요 기능)
+### Phase 1 (Foundation) — 메뉴·API 정리
 
 - [ ] **메뉴별 백엔드 개발 순차 진행**  
   [11-api-frontend-mapping.md §4](../04-api/11-api-frontend-mapping.md) 메뉴(라우트)별 백엔드 API 필요·연동 현황 및 §5.2 미구현·미연동 우선순위를 기준으로, 백엔드 개발이 필요한 메뉴를 하나씩 구현(API 추가·수정 → 프론트 연동 → 문서 갱신). Ops 전용 메뉴(데이터 파이프라인, 알림센터, 리스크, 모델/예측, 감사 로그, 시스템 헬스)는 각 메뉴별 필요한 백엔드 기능을 11-api-frontend-mapping에 나열한 대로 순차 진행.
 
-### 단기 (로드맵 Phase 1~4 대응)
+### 데이터·파이프라인 (Data Engine)
 
-- [x] **테스트 코드 보강 (1차)**  
-  단위·슬라이스 테스트 추가: PasswordValidator, GlobalExceptionHandler, NewsItemService, NewsController, StrategyManagementService, StrategyApiController, AuthController, AuthService. 기존 OrderController/OrderService/TradingSettingService/KoreaInvestmentMarketDataClient/StockCodeConverter 테스트 수정. getBulkIndicators 모의 데이터 분기 추가. WebMvcTest에 SecurityConfig 의존 MockBean 추가. 전체 테스트 실행: `$env:GRADLE_UNIQUE_BUILD_DIR='1'; .\gradlew test` 또는 `.\scripts\run-tests.ps1`. (AuthController getMyPage 슬라이스 테스트 1건은 addFilters=false 시 principal 미전달로 @Disabled.)
-- [x] **성능 최적화 (1차)**  
-  대시보드 병렬 로딩(잔고·보유·주문·설정), 현재가 동기 캐시·다중 종목 병렬 조회 적용. 상세는 완료 섹션 참조.
-- [ ] **성능 최적화 (2차·선택)**  
-  쿼리·캐싱·비동기 추가 적용. 시장 데이터·종목 분석·계좌 조회 응답 시간 목표(평균 500ms, 95%ile 1초) 측정·튜닝.
-- [x] **데이터 수집 연동 (구축 로드맵 1단계)**  
-  DART/KRX/Yahoo 연동·수집·저장·스케줄 적용 완료. 상세는 완료 섹션 참조.
-- [x] **팩터 계산 엔진 (구축 로드맵 2단계)**  
-  완료. 상세는 완료 섹션 참조.
-- [x] **LSTM 예측 모델(초기)**  
-  완료. 상세는 완료 섹션 참조.
-
-### 중기 (로드맵 Phase 5~6)
-
-- [x] **4단계 파이프라인 구현 (1차)**  
-  유니버스(유동성만)·시그널 유니버스 필터·PositionSizingService·PipelineExecutor·ExitRuleService(Time-Cut) 완료. 상세는 완료 섹션 참조.
-- [x] **4단계 파이프라인 확장 (데이터 수집 후 실제 구현)**  
-  완료. 상세는 완료 섹션 참조.
-- [x] **시장·기간별 전략 로직**  
-  완료. 상세는 완료 섹션 참조.
 - [ ] **뉴스·공시 파이프라인 (확정 원천만)**  
   **한국**: DART(Open API) 실시간/단기 폴링 공시, 키워드(무상증자·영업익 30% 증가 등) 포착 시 매수 시그널; 연합뉴스 수집·NLP·속보/긴급 가중치; 네이버 금융(많이 본 뉴스·실시간 검색 종목) 수집·이용약관 준수. **미국**: SEC EDGAR API(8-K·10-K·10-Q), 8-K 발생 시 **최우선 순위** 로직; Reuters 헤드라인·감정 분석; Yahoo Finance(OHLCV·Earnings Calendar·Analyst Up/Down). 수집·저장(TB_NEWS_ITEMS)·감정/중요도/이벤트 유형 분석, 전략 시그널 점수 반영, Fallback(원천 장애 시 파이프라인 중단 없음).
+- [ ] **수정주가·Feature Store 강화 (필요 시)**  
+  수정주가(Adjuster) 파이프라인 반영, Feature Store 전처리·저장 강화.
+
+### 전략·포트폴리오 (Brain)
+
 - [ ] **고급 분석·포트폴리오**  
   섹터 분석, 상관관계·리스크 메트릭(VaR/CVaR, Sharpe/Sortino), 리밸런싱 자동화, 리스크 기반 포지션 사이징.
-- [ ] **대시보드·UX**  
-  자동투자 현황 파이프라인 실데이터·시그널/보유 포지션 테이블은 완료. 대시보드: 계좌 요약(국내·미국 구분), 자동투자 상태 카드. 실시간 차트, 성과 분석, 반응형·모바일.
-- [ ] **로보어드바이저 사용자 플로우 명확화**  
-  랜딩(/) 한 줄 문구("나 대신 투자해주는 로보어드바이저")·CTA 강화. 대시보드·자동투자 현황·설정에 다음 액션(설정으로 가기 등) 및 안내 문구 반영. [00-robo-advisor-product-summary.md](00-robo-advisor-product-summary.md), [03-user-flows.md](03-figma-wireframes/03-user-flows.md) 신규 사용자 권장 경로 참조.
 
-### 장기 (로드맵 Phase 7~8)
+### 리스크·컴플라이언스 (Risk Guard)
+
+- [ ] **리스크 리포트 (/risk) 백엔드**  
+  리스크 리포트(`/risk`) MDD·VaR·노출 등 백엔드 API·데이터 연동.
+- [ ] **VaR/CVaR·연말 손실 한도 정책**  
+  VaR/CVaR 메트릭 노출, 연말 손실 한도 정책 보강(필요 시).
+
+### 실행·게이트웨이 (Execution / Gateway)
 
 - [ ] **KIS Open API 실전 구축**  
   **WebSocket 우선**: 실시간 호가/체결가(Tick) 구독, 변동성 돌파 시그널 0.1초 단위 감시; 체결 Push 수신 시 익절/손절 대기 로직 즉시 활성화. **REST 퀀트 스코어링**: 국내 순위 분석 API(거래대금·등락률 상위)→주도주 유니버스 매일 아침 갱신; 투자자별 매매동향 API→10분 단위 수급 점수; 미국 해외주식 기간별 시세(환율 포함)·데이터 정합성. **리스크**: Throttling(실전 초당 20회, 주문 2~10회)→주문 요청 큐(메시지 큐 RabbitMQ 등) 순차 처리; Access Token **장 시작 30분 전** Crontab 자동 갱신. **시드·주문**: 국내 지정가·최유리 지정가, 예수금 30~50% 변동성 비중; 미국 실시간 시세(유료)·시장가, 통합증거금; 모의투자 2주 테스트 후 실전.
 - [ ] **다중 계좌·실시간 스트리밍**  
   다중 계좌 관리, WebSocket 시세·알림, 통합 포트폴리오 뷰.
-- [ ] **화면 확장 (기획서 향후 메뉴)**  
-  백테스트(`/backtest`) 결과·파라미터 화면은 완료. 리스크 리포트(`/risk`) MDD·VaR·노출 등.
-- [ ] **모바일 앱**  
-  iOS/Android, 푸시 알림 (선택).
+
+### 프론트·대시보드
+
+- [ ] **대시보드·UX**  
+  자동투자 현황 파이프라인 실데이터·시그널/보유 포지션 테이블은 완료. 대시보드: 계좌 요약(국내·미국 구분), 자동투자 상태 카드. 실시간 차트, 성과 분석, 반응형·모바일.
+- [ ] **로보어드바이저 사용자 플로우 명확화**  
+  랜딩(/) 한 줄 문구("나 대신 투자해주는 로보어드바이저")·CTA 강화. 대시보드·자동투자 현황·설정에 다음 액션(설정으로 가기 등) 및 안내 문구 반영. [00-robo-advisor-product-summary.md](00-robo-advisor-product-summary.md), [03-user-flows.md](03-figma-wireframes/03-user-flows.md) 신규 사용자 권장 경로 참조.
+- [ ] **Tax 리포트 화면 (/report/tax) 연동**  
+  연말 세금·리포트 화면 백엔드 API 연동 및 표시.
+- [ ] **모바일 앱 (선택)**  
+  iOS/Android, 푸시 알림.
+
+### 연말 세금·리포트 (Year-End Tax)
+
+- [ ] **연말 세금·리포트 백엔드·PDF/CSV**  
+  국내/해외 실현 손익·2.5M 공제·배당·Hometax용 PDF/CSV 생성, 가정·제한·면책 문구 문서화.
+
+### 인프라·운영
+
+- [ ] **성능 최적화 (2차·선택)**  
+  쿼리·캐싱·비동기 추가 적용. 시장 데이터·종목 분석·계좌 조회 응답 시간 목표(평균 500ms, 95%ile 1초) 측정·튜닝.
+- [ ] **단일 VPS·Cron/배치·배포 절차 문서화**  
+  모니터링·복구 절차 보강(이미 일부 있으면 정리).
 
 ---
 
@@ -248,6 +264,7 @@
 
 | 문서 | 역할 |
 |------|------|
+| [기획·개발 기준 정리](../01-requirements/00-planning-basis.md) | 기준 문서(minimum·기획요청·gemini) 지정·요약·논리 레이어↔패키지 매핑 |
 | [로보어드바이저 제품 요약](00-robo-advisor-product-summary.md) | 첫 목적 기준 한 줄·핵심 플로우·완료/부족/필요·화면–API 매핑 요약 |
 | [로드맵](../roadmap.md) | Phase별 목표·일정·체크리스트 |
 | [화면·메뉴 기획서](./01-screen-menu-spec.md) | 메뉴 트리·화면 역할·확장 규칙 |
@@ -295,3 +312,5 @@
 | 1.27 | 2026-02-02 | 완료: 월스트리트 정렬(한국·미국) — **한국(KR)**: 청산 -5% 고정·전저점 이탈·RSI≥70 익절(ExitRuleEvaluator·ExitRuleService·StrategyPosition PRIOR_LOW V18); 진입 5일 연속 수급 메타( TB_ORDER_FLOW NET_BUY_AMT_1D V19)·역발상 RSI(CONTRARIAN_RSI)·P/B 필터 스텁(UniverseFilterService). **미국(US)**: 듀얼 모멘텀(노트) 모드 — 절대 SPY 12M vs T-bill·상대 섹터 ETF 6M 상위 2개(RoboAllocationEngine.computeTargetWeightsDualMomentumNote·RoboBacktestService·RoboRebalanceExecutor 모드 분기). application.yml pipeline.short-term-kr-stop-loss-pct·prior-low-stop-kr-enabled·rsi-exit-threshold·factor.contrarian-rsi-threshold·pb-value-min/max·backtest.robo.dual-momentum-mode·sector-etf-symbols 등. 00-strategy-registry·12-auto-investment-strategy v1.7 반영. |
 | 1.28 | 2026-02-03 | 완료: 자동투자 현황 3단계 자금 배분 요약 표시 — PipelineSummaryDto.allocationSummary, PipelineSummaryService 거래 설정 기반 단기·중기·장기 예상 배분 계산·포맷, auto-invest 3단계 카드 실데이터 표시. KRX Open API 필요 목록 문서 추가(08-setup-guides/04-krx-api-required.md). |
 | 1.29 | 2026-02-04 | 완료: 전체 화면 기획 + Figma 와이어프레임 문서 패키지 — 03-figma-wireframes(IA·권한·플로우·컴포넌트·가드레일·화면 스펙·Figma 규칙·AI 프롬프트), 01-screen-menu-spec §6 Ops 확장·역할 권한 개요. |
+| 1.30 | 2026-02-06 | 기획·개발 기준 문구 추가(00-planning-basis·기준 문서 3종 링크). 진행예정을 Phase·레이어별 그룹으로 재구성(Data Engine·Brain·Risk Guard·Execution·프론트·연말 세금·인프라). 참조 관계에 00-planning-basis 추가. |
+| 1.31 | 2026-02-06 | 완료: 로보·파이프라인 통합 복합 로직 — AutoBuyOrchestrator·AutoBuyTasklet·auto-buy Job(09:10), cron optional·pipeline/robo 수동 전용, POST /api/v1/trigger/auto-buy, React 백테스트 기본 기간(최근 1개월)·스케줄 현황 "지금 실행" 라벨. |

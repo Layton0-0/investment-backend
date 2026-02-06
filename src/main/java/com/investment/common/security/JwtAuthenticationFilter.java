@@ -9,7 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
@@ -17,7 +17,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Collections;
+import java.util.List;
 
 /**
  * JWT 인증 필터
@@ -45,7 +45,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 String userId = jwtTokenProvider.getUserId(tokenSource.token);
                 String username = jwtTokenProvider.getUsername(tokenSource.token);
 
-                if (!userExistenceChecker.exists(userId)) {
+                var userOpt = userExistenceChecker.findUser(userId);
+                if (userOpt.isEmpty()) {
                     log.warn("JWT는 유효하나 DB에 사용자가 없음: userId={}, username={}",
                             LogMaskingUtil.maskUserId(userId),
                             LogMaskingUtil.maskUsername(username));
@@ -57,16 +58,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     }
                     // SecurityContext 미설정 → 비인증 처리 (401 또는 /login 리다이렉트)
                 } else {
+                    var user = userOpt.get();
+                    List<GrantedAuthority> authorities = Role.fromDbRole(user.getRole());
                     UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                             userId,
                             null,
-                            Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER")));
+                            authorities);
                     authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authentication);
 
-                    log.debug("JWT 인증 성공: userId={}, username={}",
+                    log.debug("JWT 인증 성공: userId={}, username={}, role={}",
                             LogMaskingUtil.maskUserId(userId),
-                            LogMaskingUtil.maskUsername(username));
+                            LogMaskingUtil.maskUsername(username),
+                            user.getRole());
                     if (log.isDebugEnabled()) {
                         log.debug("  [DEBUG] userId(actual)={}, username(actual)={}", userId, username);
                     }

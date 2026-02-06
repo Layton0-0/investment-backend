@@ -111,6 +111,21 @@ public class TriggerController {
         return runTrigger("/factor-calculation", "팩터 계산 완료", "팩터 계산 실패", new JobParametersBuilder());
     }
 
+    @Operation(summary = "자동매수(통합)", description = "공통 전처리 → 로보(ETF) → 파이프라인(개별종목) 순으로 통합 실행. dryRun=true면 실제 주문 없음")
+    @PostMapping("/auto-buy")
+    public ResponseEntity<Map<String, Object>> triggerAutoBuy(
+            @Parameter(description = "true면 실제 주문 없이 실행") @RequestParam(required = false) Boolean dryRun) {
+        JobParametersBuilder params = new JobParametersBuilder();
+        if (dryRun != null)
+            params.addString("dryRun", dryRun.toString());
+        ResponseEntity<Map<String, Object>> result = runTrigger("/auto-buy", "자동매수(통합) 완료", "자동매수(통합) 실패", params);
+        if (result.getBody() != null && result.getBody().get("success") == Boolean.TRUE) {
+            return ResponseEntity
+                    .ok(Map.of("success", true, "message", "자동매수(통합) 완료", "dryRun", Boolean.TRUE.equals(dryRun)));
+        }
+        return result;
+    }
+
     @Operation(summary = "파이프라인 실행", description = "4단계 파이프라인 실행. dryRun=true면 주문 미실행")
     @PostMapping("/pipeline-execution")
     public ResponseEntity<Map<String, Object>> triggerPipelineExecution(

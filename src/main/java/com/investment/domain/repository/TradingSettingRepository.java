@@ -14,6 +14,11 @@ public interface TradingSettingRepository extends JpaRepository<TradingSetting, 
     Optional<TradingSetting> findByAccountNo(String accountNo);
 
     /**
+     * 사용자별 거래설정 목록 (리스크 리포트 등에서 사용자 계좌 범위 조회용).
+     */
+    List<TradingSetting> findByUserIdOrderByAccountNo(String userId);
+
+    /**
      * 거래설정이 있는 계좌번호 목록 (자동투자 실행 대상).
      */
     @Query("SELECT DISTINCT t.accountNo FROM TradingSetting t ORDER BY t.accountNo")

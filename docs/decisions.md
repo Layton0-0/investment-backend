@@ -20,6 +20,7 @@
 14. [한국투자증권 API 요청 방식 및 MCP 사용](#14-한국투자증권-api-요청-방식-및-mcp-사용)
 15. [TimescaleDB 전환](#15-timescaledb-전환)
 16. [Alpha-Risk-Execution 분리 및 Portfolio/Risk 레이어 도입](#16-alpha-risk-execution-분리-및-portfoliorisk-레이어-도입)
+17. [관리자 계정 생성·로그인 정책](#17-관리자-계정-생성로그인-정책)
 
 ---
 
@@ -590,6 +591,32 @@ API 설계 표준 수립 필요
 
 ---
 
+## 17. 관리자 계정 생성·로그인 정책
+
+**결정일**: 2026년 2월  
+**상태**: 확정  
+**결정**: 관리자 계정은 공개 회원가입으로 생성하지 않음. 최초는 부트스트랩/시드, 추가는 ADMIN 전용 API 또는 시드.
+
+### 배경
+상용 시스템(OWASP, Keycloak, Laravel 등) 관행에 맞춰 관리자 계정을 안전하게 운용해야 함. 누구나 관리자로 가입할 수 있으면 보안 위험.
+
+### 결정 사항
+- **관리자 회원가입**: 공개 API로 제공하지 않음. 일반 회원가입(`POST /api/v1/auth/signup`)은 계속 일반 사용자(User)만 생성.
+- **최초 관리자**: (1) Flyway/시드로 지정 계정(예: yoon) ROLE=Admin 반영, (2) 부트스트랩: `investment.security.bootstrap-admin.enabled=true` 및 username/password 설정 시 ADMIN 0건일 때만 1회 User(role=Admin) 생성.
+- **추가 관리자**: 기존 ADMIN만 호출 가능한 `POST /api/v1/admin/users` (body: username, password, role=Admin|Ops). 또는 DB 시드/수동 부여.
+- **관리자 로그인**: 기존 `POST /api/v1/auth/login` 그대로 사용. DB의 role로 구분.
+- **인가**: JWT 인증 시 DB에서 User 조회 후 `User.getRole()`을 Spring Security 권한(ROLE_USER/ROLE_ADMIN/ROLE_Ops)으로 매핑하여 SecurityContext에 반영. `@PreAuthorize("hasRole('ADMIN')")` 등이 정상 동작.
+
+### 영향
+- JwtAuthenticationFilter: User 조회 후 Role.fromDbRole(user.getRole())로 권한 설정.
+- Role enum: USER, ADMIN, OPS(ROLE_Ops). DB role 문자열 "User", "Admin", "Ops" 매핑.
+- AdminUserController: POST /api/v1/admin/users, @PreAuthorize("hasRole('ADMIN')").
+- application.yml: investment.security.bootstrap-admin.*, investment.security.super-admin.* (슈퍼관리자 yoon 비밀번호 동기화용).
+
+**참고**: [개발 진행 현황](./09-planning/02-development-status.md), [역할·권한](09-planning/03-figma-wireframes/02-roles-and-permissions.md).
+
+---
+
 ## 참고 문서
 
 - [시스템 아키텍처](./02-architecture/01-system-architecture.md)
@@ -607,3 +634,4 @@ API 설계 표준 수립 필요
 | 1.2 | 2026-01-29 | System | ADR 13 로깅 시 민감정보 마스킹 표준화(LogMaskingUtil) 추가 |
 | 1.3 | 2026-01-30 | System | ADR 14 한국투자증권 API 요청 방식(GET+query) 및 MCP 필수 사용, 작업 중 문서 업데이트 규칙 반영 |
 | 1.4 | 2026-02-06 | System | ADR 15 TimescaleDB 전환, ADR 16 Alpha-Risk-Execution·Portfolio/Risk 레이어 도입 |
+| 1.5 | 2026-02-06 | System | ADR 17 관리자 계정 생성·로그인 정책 (공개 회원가입 없음, 부트스트랩·ADMIN 전용 API·JWT role 반영) |

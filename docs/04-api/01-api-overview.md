@@ -11,8 +11,9 @@
 - **경로**: `/api/v1/`
 
 ### 1.3 인증
-- 현재는 계좌번호 기반 접근 제어
-- 향후 JWT 토큰 기반 인증 추가 예정
+- JWT 토큰 기반 인증 (Authorization: Bearer 또는 쿠키 token). 로그인/회원가입은 `POST /api/v1/auth/login`, `POST /api/v1/auth/signup`.
+- 인가: 매 요청 시 JWT에서 userId로 DB User 조회 후 역할(role)을 SecurityContext에 반영. 역할은 User/Ops/Admin. 관리자 전용 API는 `@PreAuthorize("hasRole('ADMIN')")` 등으로 보호.
+- 관리자 계정 생성: 공개 회원가입으로는 생성하지 않음. 최초는 부트스트랩/시드, 추가는 ADMIN 전용 API(`POST /api/v1/admin/users`) 또는 시드. 자세한 정책은 [decisions.md §17](../decisions.md#17-관리자-계정-생성로그인-정책) 참조.
 
 ### 1.4 응답 형식
 - **Content-Type**: `application/json`
@@ -55,6 +56,9 @@
 - `GET /api/v1/auth/mypage` - 마이페이지 조회
 - `PUT /api/v1/auth/mypage` - 마이페이지 수정
 - `POST /api/v1/auth/logout` - 로그아웃
+
+### 3.0.1 관리자 API (ADMIN 전용)
+- `POST /api/v1/admin/users` - 관리자(Admin/Ops) 계정 생성. 요청 body: username, password, role(Admin|Ops). 인가: `hasRole('ADMIN')`.
 
 ### 3.1 계좌 API
 - `GET /api/v1/accounts/{accountNo}/balance` - 계좌 잔고 조회 (단일 리소스용 REST)

@@ -167,6 +167,8 @@
 
 **설계 목표**: 기존 `PipelineExecutionScheduler` / `RoboRebalanceScheduler`를 별도 스케줄로 두지 않고, **통합 자동매수 오케스트레이터** 한 번 호출로 위 순서(공통 전처리 → 로보 → 파이프라인)를 실행하는 방향으로 통합한다. 설정에서는 "자동매수 ON" 하나로 이 통합 로직을 켜고, 세부에서 "로보 포함 여부"만 옵션으로 둘 수 있다. 수동 트리거 API(`/api/v1/trigger/...`) 및 스케줄 현황 화면의 "지금 실행" 버튼으로 각 단계를 수동 실행할 수 있다.
 
+**구현 완료**: `AutoBuyOrchestrator`(로보 → 파이프라인 순 호출), Batch Job `auto-buy`(09:10 KST 단일 스케줄). `pipeline-execution`·`robo-rebalance`는 cron 제거(수동 전용). `POST /api/v1/trigger/auto-buy`(dryRun optional).
+
 ### 6.2 자동투자 프로세스 플로우
 
 자동투자는 **리스크 게이트·일일 손실 한도 검사 → 데이터 수집 → 팩터 계산 → 파이프라인 실행 → 청산 평가 → 체결 확인 → 일일 PnL 리뷰** 순으로 스케줄에 따라 동작한다. 전문 투자자 흐름(P0~P3): 파이프라인 실행 전 `RiskGateService`·`DailyLossLimitService` 검사, 장중 변동성 돌파(`IntradayBreakoutScheduler`), 장 마감 후 `DailyPnlScheduler`로 일일 수익률 기록.
@@ -177,7 +179,7 @@
 |------|------------------|------|
 | 데이터 수집 | DART 10분마다, SEC 15분마다, KRX 16:00, US 17:00 | TB_DAILY_STOCK, TB_NEWS_ITEMS 등 |
 | 팩터 계산 | 매일 08:00 KST | 유니버스 → 시그널 (TB_UNIVERSE, TB_SIGNAL_SCORE) |
-| 파이프라인 실행 | 매일 09:10 KST | 자동투자 ON 계좌만, 6회 run; auto-execute 여부에 따라 주문 실행 여부 결정 |
+| 자동매수(통합) | 매일 09:10 KST | 공통 전처리 → 로보(ETF) → 파이프라인(개별종목) 순 실행. 자동투자 ON 계좌만; auto-execute 여부에 따라 주문 실행 여부 결정 |
 | 청산 | 장중 5분마다 (09:00~15:59 평일) | Trailing Stop / -10% 손절 / Time-Cut 등; auto-execute=true일 때만 매도 주문 |
 | 체결 확인 | 매분 | 체결된 주문 → 포지션 등록 (register-position-on-execution 옵션) |
 

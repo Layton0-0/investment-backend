@@ -122,9 +122,23 @@ com.investment
     └── service/
 ```
 
-## 3. 주요 컴포넌트
+## 3. 기준 문서와의 대응
 
-### 3.1 API 레이어
+앞으로의 개발 기준인 [minimum-architecture-requirement.md](../01-requirements/minimum-architecture-requirement.md), [기획요청.md](../01-requirements/기획요청.md), [gemini-설계.md](../01-requirements/gemini-설계.md)에서 정의한 **Alpha–Risk–Execution·Portfolio·Compliance** 논리 구조와 현재 구현의 대응 관계는 [00-planning-basis.md](../01-requirements/00-planning-basis.md)에서 단일 소스로 관리한다. 요약만 아래 표로 둔다.
+
+| 논리 블록 (기준 문서) | 구현 패키지/서비스 |
+|----------------------|-------------------|
+| **Gateway (KIS Adapter)** | `account`·`order`·`marketdata` — 한국투자증권 REST 클라이언트, 토큰·국내/해외 정규화 |
+| **Data Engine** | `core.pipeline`, `datacollection`, `batch` — 데이터 수집·팩터·유니버스·시그널 (수정주가·Feature Store 강화는 개발예정) |
+| **Brain (Alpha·Portfolio)** | `core.engine.alpha`, `core.engine.portfolio`, `strategy`, `factor` — 시그널·TaxAwareOptimizer·Rebalancer |
+| **Risk Guard (Compliance)** | `core.engine.risk`, `risk.service` — PreTradeComplianceEngine, TradingHaltService, PortfolioPeakService |
+| **Execution** | `order` — OrderService, executeOrderForPipeline, KR/US 스마트 라우팅 |
+
+§1 다이어그램의 애플리케이션 레이어는 위 논리 블록에 따라 **Data Engine → Brain → Risk Guard → Execution** 순서로 파이프라인이 동작하며, Gateway는 한국투자증권 Open API와의 접점이다.
+
+## 4. 주요 컴포넌트
+
+### 4.1 API 레이어
 - **AccountController**: 계좌 조회 API
 - **OrderController**: 주문 관리 API
 - **AnalysisController**: 종목 분석 API
@@ -133,7 +147,7 @@ com.investment
 - **TradingPortfolioController**: 트레이딩 포트폴리오 API
 - **BatchManagementController**: 배치 작업 관리 API
 
-### 3.2 서비스 레이어
+### 4.2 서비스 레이어
 - **AccountService**: 계좌 정보 조회 서비스
 - **OrderService**: 주문 실행 및 관리 서비스
 - **AnalysisService**: 종목 분석 서비스
@@ -146,19 +160,19 @@ com.investment
 - **StockAnalysisService**: 주식 분석 서비스
 - **StockScreeningService**: 주식 스크리닝 서비스
 
-### 3.3 도메인 레이어
+### 4.3 도메인 레이어
 - **Entity**: Order, Strategy, TradingPortfolio, TradingPortfolioItem, TradingSetting, Portfolio
 - **Repository**: 각 엔티티별 Repository 인터페이스
 - **Domain Model**: StrategyType, StrategyStatus
 
-### 3.4 인프라 레이어
+### 4.4 인프라 레이어
 - **MarketDataClient**: 시장 데이터 조회 인터페이스
   - **KoreaInvestmentMarketDataClient**: 한국투자증권 API 구현체
 - **Database**: JPA/Hibernate를 통한 TimescaleDB(PostgreSQL) 접근
 
-## 4. 데이터 흐름
+## 5. 데이터 흐름
 
-### 4.1 주문 실행 흐름
+### 5.1 주문 실행 흐름
 
 ```
 Client Request
@@ -178,7 +192,7 @@ OrderService
 Response
 ```
 
-### 4.2 종목 분석 흐름
+### 5.2 종목 분석 흐름
 
 ```
 Client Request
@@ -198,7 +212,7 @@ AnalysisService
 Response
 ```
 
-### 4.3 전략 실행 흐름
+### 5.3 전략 실행 흐름
 
 ```
 StrategyScheduler (스케줄러)
@@ -213,7 +227,7 @@ StrategyService
     └──► StrategyRepository (실행 결과 업데이트)
 ```
 
-### 4.4 트레이딩 포트폴리오 생성 흐름
+### 5.4 트레이딩 포트폴리오 생성 흐름
 
 ```
 TradingPortfolioScheduler (매일 오전 9시)
@@ -229,9 +243,9 @@ TradingPortfolioService
     └──► TradingPortfolioRepository (저장)
 ```
 
-## 5. 외부 시스템 연동
+## 6. 외부 시스템 연동
 
-### 5.1 한국투자증권 Open API
+### 6.1 한국투자증권 Open API
 - **연동 방식**: REST API
 - **인증 방식**: OAuth 2.0 (App Key, App Secret)
 - **구현 상태**: 완전 구현
@@ -243,29 +257,29 @@ TradingPortfolioService
 - **서버 타입**: 모의투자/실거래 선택 가능
 - **MCP 통합**: 한국투자 코딩도우미 MCP를 활용한 개발 환경 지원
 
-### 5.3 데이터베이스
+### 6.2 데이터베이스
 - **TimescaleDB**: PostgreSQL 기반 시계열·관계형 데이터베이스 (Docker: `timescale/timescaledb:latest-pg16`)
 - **JPA/Hibernate**: ORM 프레임워크 (PostgreSQLDialect)
 - **초기 스키마**: 신규 환경은 `--spring.profiles.active=local,init-db` 1회 실행 후 일반 프로파일로 전환
 
-## 6. 스케줄러
+## 7. 스케줄러
 
-### 6.1 StrategyScheduler
+### 7.1 StrategyScheduler
 - **기능**: 활성화된 전략을 주기적으로 실행
 - **실행 주기**: 설정 가능 (기본 1시간)
 
-### 6.2 TradingPortfolioScheduler
+### 7.2 TradingPortfolioScheduler
 - **기능**: 매일 일별 트레이딩 포트폴리오 생성
 - **실행 시간**: 매일 오전 9시 (한국 시간)
 
-## 7. 예외 처리
+## 8. 예외 처리
 
-### 7.1 예외 계층
+### 8.1 예외 계층
 - **DomainException**: 비즈니스 규칙 위반
 - **AppException**: 애플리케이션 레벨 오류
 - **GlobalExceptionHandler**: 전역 예외 처리
 
-### 7.2 에러 응답 형식
+### 8.2 에러 응답 형식
 ```json
 {
   "code": "ERROR_CODE",
@@ -276,24 +290,24 @@ TradingPortfolioService
 }
 ```
 
-## 8. 설정 관리
+## 9. 설정 관리
 
-### 8.1 프로파일
+### 9.1 프로파일
 - **local**: 로컬 개발 환경
 - **dev**: 개발 환경
 - **prod**: 프로덕션 환경
 
-### 8.2 주요 설정
+### 9.2 주요 설정
 - **데이터베이스**: 연결 정보, 커넥션 풀 설정
 - **시장 데이터**: 제공자 선택, API 키, 타임아웃
 - **거래 설정**: 최대/최소 투자금액, 기본 통화
 - **로깅**: 로그 레벨, 로그 파일 경로
 
-## 9. 2.0 개편안 (기관급 퀀트 엔진)
+## 10. 2.0 개편안 (기관급 퀀트 엔진)
 
 기존 구조를 유지하면서 **Alpha - Risk - Execution** 분리 원칙을 반영한 패키지·컴포넌트가 추가되었다.
 
-### 9.1 논리 아키텍처 (Quant Engine)
+### 10.1 논리 아키텍처 (Quant Engine)
 
 - **DataPipeline**: 시장 데이터 수집·정제 진입점 (`core.pipeline.DataPipelineService`). 수정주가는 한투 API `FID_ORG_ADJ_PRC=0` 사용으로 명시.
 - **Alpha**: 전략 시그널 생성 (`core.engine.alpha.AlphaEngine` → 기존 StrategyService 위임).
@@ -301,7 +315,7 @@ TradingPortfolioService
 - **Risk**: 주문 직전 컴플라이언스 (`PreTradeComplianceEngine`). Kill Switch, 단일 종목 10% 상한, MDD 15% 게이트. `OrderService`에서 주문 직전 호출.
 - **Execution**: 주문 집행 게이트웨이 (`core.engine.execution.ExecutionGateway` → OrderService 위임).
 
-### 9.2 추가 패키지
+### 10.2 추가 패키지
 
 - `core.engine.alpha`: AlphaEngine, AlphaEngineFacade
 - `core.engine.portfolio`: TaxAwareOptimizer, TaxAwareOptimizerImpl, Rebalancer, RebalancerImpl, StubPortfolioComponents
@@ -319,3 +333,4 @@ TradingPortfolioService
 |------|------|--------|----------|
 | 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 |
 | 2.0 | 2026-02-06 | System | TimescaleDB 전환, 2.0 개편안(Quant Engine·패키지) 반영 |
+| 2.1 | 2026-02-06 | System | §3 기준 문서와의 대응 섹션 추가(논리 블록↔패키지 매핑), 섹션 번호 3~10 재정렬 |

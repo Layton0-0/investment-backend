@@ -30,6 +30,12 @@
   - 개발: `3600000` (1시간)
   - 프로덕션: `1800000` (30분) 또는 `3600000` (1시간)
 
+#### 관리자 계정 관련 (부트스트랩·슈퍼관리자)
+- **BOOTSTRAP_ADMIN_ENABLED** / **investment.security.bootstrap-admin.enabled**: `true` 시 ADMIN 0건일 때만 1회 관리자 생성. 기본 `false`.
+- **BOOTSTRAP_ADMIN_USERNAME** / **BOOTSTRAP_ADMIN_PASSWORD**: 부트스트랩 시 사용할 username·password. 프로덕션에서는 최초 기동 후 비밀번호 변경 권장.
+- **SUPER_ADMIN_PASSWORD** / **investment.security.super-admin.password**: 설정 시 기동 시 슈퍼관리자(yoon) 비밀번호를 해당 값으로 한 번 동기화. 역할(Admin)은 Flyway V26에서 설정. 평문을 저장하지 말고 env만 사용 권장.
+- 관리자 추가 생성: 기존 ADMIN으로 로그인 후 `POST /api/v1/admin/users` (body: username, password, role=Admin|Ops). 자세한 정책은 [decisions.md §17](../decisions.md#17-관리자-계정-생성로그인-정책) 참조.
+
 ### 쿠키 보안 설정
 
 #### COOKIE_SECURE

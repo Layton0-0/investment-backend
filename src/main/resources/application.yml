@@ -269,6 +269,15 @@ investment:
     encryption-key: ${INVESTMENT_ENCRYPTION_KEY:}  # AES-256 키 (Base64 인코딩)
     jwt-secret: ${INVESTMENT_JWT_SECRET:default-secret-key-change-in-production-minimum-256-bits}
     jwt-expiration: ${INVESTMENT_JWT_EXPIRATION:3600000}  # 1시간 (밀리초)
+    # 슈퍼관리자(yoon) 비밀번호 동기화. 설정 시 기동 시 한 번만 갱신 (역할은 V26 마이그레이션에서 Admin 설정)
+    super-admin:
+      username: yoon
+      password: ${SUPER_ADMIN_PASSWORD:}
+    # 최초 관리자 부트스트랩. ADMIN 0건일 때만 1회 생성 (enabled + username + password 설정 시)
+    bootstrap-admin:
+      enabled: ${BOOTSTRAP_ADMIN_ENABLED:false}
+      username: ${BOOTSTRAP_ADMIN_USERNAME:}
+      password: ${BOOTSTRAP_ADMIN_PASSWORD:}
   market-data:
     provider: ${MARKET_DATA_PROVIDER:korea-investment}
     timeout: ${MARKET_DATA_TIMEOUT:30000}

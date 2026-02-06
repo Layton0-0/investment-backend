@@ -938,6 +938,73 @@ curl -X POST "http://localhost:8080/api/v1/market-data/current-prices" \
 
 ---
 
+## 9. 리스크 리포트 API
+
+리스크 리포트 화면(`/risk`)에서 킬스위치·일일 손실 한도·리스크 게이트·계좌별 MDD·한도 설정·이력을 조회합니다. **인증 필요** (`isAuthenticated()`). 기존 `TradingHaltService`, `RiskGateService`, `DailyLossLimitService`, `PortfolioPeakService` 등을 조합해 DTO로 반환합니다.
+
+### 9.1 리스크 요약
+
+**엔드포인트**: `GET /api/v1/risk/summary`
+
+**설명**: 킬스위치·리스크 게이트·계좌별 일일 손실 한도·MDD 요약을 반환합니다. 사용자(인증 주체) 기준으로 소유 계좌만 포함됩니다.
+
+**성공 응답 (200 OK)**:
+```json
+{
+  "killSwitchActive": false,
+  "regimeGateEnabled": true,
+  "riskGateAllowsNewBuy": true,
+  "riskGateSizeMultiplier": 1.0,
+  "accounts": [
+    {
+      "accountNoMasked": "****1234",
+      "serverType": "1",
+      "openingBalance": 10000000,
+      "currentValue": 10500000,
+      "newBuyBlockedByDailyLoss": false,
+      "mdd": 0.05,
+      "peakValue": 11000000
+    }
+  ]
+}
+```
+
+**에러 응답 (401 Unauthorized)**: 인증되지 않은 경우 `code: "UNAUTHORIZED"`.
+
+---
+
+### 9.2 리스크 한도 설정
+
+**엔드포인트**: `GET /api/v1/risk/limits`
+
+**설명**: 일일 손실 한도·VIX 임계값·고변동 시 축소 비율 등 한도 설정 요약을 반환합니다. `application.yml` / `RiskProperties` 기반입니다.
+
+**성공 응답 (200 OK)**:
+```json
+{
+  "regimeGateEnabled": true,
+  "vixThreshold": 30,
+  "reduceSizeOnHighVolPct": 50,
+  "dailyLossLimitPct": 5
+}
+```
+
+---
+
+### 9.3 리스크 이력
+
+**엔드포인트**: `GET /api/v1/risk/history?from={yyyy-MM-dd}&to={yyyy-MM-dd}`
+
+**설명**: 게이트 축소·손실 한도 도달 등 리스크 이력을 반환합니다. 1차는 저장 구조 없음으로 빈 배열을 반환합니다. 쿼리 `from`, `to`는 선택이며, 미입력 시 기본 30일 전~오늘입니다.
+
+**쿼리 파라미터**:
+- `from` (optional): 시작일 (yyyy-MM-dd)
+- `to` (optional): 종료일 (yyyy-MM-dd)
+
+**성공 응답 (200 OK)**: `RiskHistoryItemDto[]` (예: `[]`). 항목이 있으면 `eventType`, `accountNoMasked`, `description`, `occurredAt`(ISO-8601) 포함.
+
+---
+
 ## 트리거 API (수동 실행)
 
 스케줄 작업을 수동으로 한 번 실행할 때 사용합니다. 스케줄 현황(`/batch`) 화면의 "지금 실행" 버튼 및 자동투자 현황의 "파이프라인 수동 실행 (dry-run)" 등에서 호출합니다. **인증 필요**. 구현은 Spring Batch Job을 `JobLauncher.run`으로 실행하며, 경로·요청 파라미터·응답 형식(`success`, `message` 등)은 기존과 동일합니다.
@@ -951,11 +1018,12 @@ curl -X POST "http://localhost:8080/api/v1/market-data/current-prices" \
 | `POST /api/v1/trigger/krx-daily` | KRX 일별 시세 수집 즉시 실행 | `basDt` (optional, yyyy-MM-dd). 미입력 시 오늘 |
 | `POST /api/v1/trigger/us-daily` | US 시장 일별 시세 수집 즉시 실행 | `basDt` (optional). 미입력 시 오늘. 응답에 `saved` 포함 |
 | `POST /api/v1/trigger/factor-calculation` | 유니버스 필터 및 팩터(시그널) 계산 즉시 실행 | - |
-| `POST /api/v1/trigger/pipeline-execution` | 4단계 파이프라인 실행 | `dryRun` (optional, boolean). true면 실제 주문 없이 실행. 응답에 `dryRun` 포함 |
+| `POST /api/v1/trigger/auto-buy` | 자동매수(통합): 공통 전처리 → 로보(ETF) → 파이프라인(개별종목) 순 실행 | `dryRun` (optional, boolean). true면 실제 주문 없이 실행. 응답에 `dryRun` 포함 |
+| `POST /api/v1/trigger/pipeline-execution` | 4단계 파이프라인만 수동 실행 (스케줄은 자동매수 통합 사용) | `dryRun` (optional, boolean). true면 실제 주문 없이 실행. 응답에 `dryRun` 포함 |
 | `POST /api/v1/trigger/pipeline-exit` | 보유 포지션 청산 규칙 평가 및 매도 시그널 시 주문 실행 | - |
 | `POST /api/v1/trigger/fill-confirmation` | 체결된 주문에 대해 포지션 등록 | - |
 | `POST /api/v1/trigger/unfilled-check` | PENDING N분 경과 주문에 대해 Discord 긴급 알림 | - |
-| `POST /api/v1/trigger/robo-rebalance` | 로보 어드바이저 리밸런싱 | `dryRun` (optional, boolean). true면 백테스트만 실행·저장, ETF 주문 없음. 응답에 `dryRun` 포함 |
+| `POST /api/v1/trigger/robo-rebalance` | 로보 리밸런싱만 수동 실행 (스케줄은 자동매수 통합 사용) | `dryRun` (optional, boolean). true면 백테스트만 실행·저장, ETF 주문 없음. 응답에 `dryRun` 포함 |
 | `POST /api/v1/trigger/daily-pnl` | 장 마감 후 계좌별 당일 수익률 기록 | - |
 | `POST /api/v1/trigger/intraday-breakout` | 장중 변동성 돌파(09:00~10:00 구간) 실행 | 설정 시에만 유효 |
 | `POST /api/v1/trigger/medium-term-rebalance` | 중기(MEDIUM_TERM) 월 1회 리밸런싱 훅 (스텁) | - |
@@ -1025,3 +1093,4 @@ curl -X POST "http://localhost:8080/api/v1/trigger/pipeline-execution?dryRun=tru
 | 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 - 계좌 API 상세 내용 통합 |
 | 1.1 | 2026-01-28 | System | 시장 데이터 API 섹션 추가 (현재가 조회) |
 | 1.2 | 2026-02-03 | System | 트리거 API(수동 실행) 섹션 추가 - DART/SEC/KRX/US 수집·팩터 계산·파이프라인 실행/청산·체결 확인·미체결 확인·로보 리밸런싱·일일 PnL·장중 변동성 돌파·중기 리밸런스 |
+| 1.3 | 2026-02-06 | System | §9 리스크 리포트 API 추가 - GET /api/v1/risk/summary, /limits, /history (인증 필요, DTO·에러 처리) |

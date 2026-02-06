@@ -8,6 +8,7 @@
 - **마지막 업데이트**: 2026년 1월 29일
 - **비전**: **자동투자수익** — 사람 개입 없이 퀀트 엔진 기반 자동 매매 (MDD -15% 이내, CAGR 30%+ 목표). 국내(KR)·미국(US) 4단계 파이프라인(유니버스→시그널→자금관리→매매실행), 확정 공시/뉴스/센티멘트 원천만 파이프라인 연결. [자동투자 전략 명세](./02-architecture/12-auto-investment-strategy.md), [뉴스·공시 수집·연동 설계](./02-architecture/13-news-collection-design.md) 참조.
 - **진행 현황**: 완료·진행중·진행예정 목록은 **[개발 진행 현황](./09-planning/02-development-status.md)** 문서를 참조하고, 변동 시 해당 문서를 수정한다.
+- **기준 문서**: 앞으로의 개발은 [기획·개발 기준 정리](./01-requirements/00-planning-basis.md)에서 지정한 세 문서(minimum-architecture-requirement, 기획요청, gemini-설계)에 따라 진행한다. Phase 1(Foundation) → Phase 2(Quant Engine & Risk) → Phase 3(Intelligence & Tax) → Phase 4(Stability & Optional Scale)와 본 로드맵의 단기·중기·장기 Phase는 [02-development-status.md](./09-planning/02-development-status.md)에서 레이어별로 정합되어 있다.
 
 ## 단기 로드맵 (1-3개월)
 
@@ -284,6 +285,10 @@
 
 ## 참고 문서
 
+- **[기획·개발 기준 정리](./01-requirements/00-planning-basis.md)** — 개발 기준(세 문서 요약·논리 레이어 매핑)
+- [minimum-architecture-requirement.md](./01-requirements/minimum-architecture-requirement.md) — 최소 아키텍처 명세 (QTS·Fat VPS·Phase 1~3)
+- [기획요청.md](./01-requirements/기획요청.md) — 제품/시스템 기획 요청 (헤지펀드급 로직·Phase 1~4)
+- [gemini-설계.md](./01-requirements/gemini-설계.md) — Spring Boot 개편안 (Alpha–Risk–Execution·core.engine)
 - [PRD](./PRD.md)
 - **[개발 진행 현황](./09-planning/02-development-status.md)** — 완료·진행중·진행예정 목록 (참조·변동 시 수정)
 - [아키텍처 결정 사항](./decisions.md)
@@ -299,3 +304,4 @@
 |------|------|--------|----------|
 | 1.0 | 2026-01-29 | System | 초기 로드맵 작성 - essential-tech-spec.md의 Phase 정보 기반 |
 | 1.1 | 2026-01-29 | System | 자동투자수익 비전·4단계 파이프라인·국내/미국·뉴스 파이프라인·KIS API 단계 반영 |
+| 1.2 | 2026-02-06 | System | 기준 문서(00-planning-basis·minimum·기획요청·gemini) 참조 추가, Phase 기준 문서 정합 문구 반영 |
