@@ -70,6 +70,29 @@
 - **일일 손실 한도**: 당일 시초 평가액 대비 손실이 `daily-loss-limit-pct` 초과 시 당일 신규 매수 중단. `DailyLossLimitService`, `PipelineExecutionScheduler` 실행 전 `isNewBuyAllowed` 검사.
 - **설정**: `investment.risk.*` (application.yml).
 
+### 2.9.1 Pre-Trade 컴플라이언스 (Phase 2)
+
+주문 직전 검사(`ComplianceEngine.preTradeCheck`). `OrderService.executeOrderInternal` 맨 앞에서 호출.
+
+- **Kill Switch**: `TB_TRADING_HALT.halt_all_orders=true` 시 모든 주문 거부. API: GET/PUT `/api/v1/system/kill-switch`. Ops 역할만 설정 가능.
+- **단일 종목 비중 상한**: 주문 후 해당 종목 비중 > 10%가 되면 거부. 계좌 평가총액·포지션 평가금액 기반.
+- **MDD 게이트**: 계좌별 피크(`TB_PORTFOLIO_PEAK`) 대비 현재 평가액으로 MDD 계산. MDD > 15% 시 **신규 매수만** 차단(매도 허용).
+- **구현**: `PreTradeComplianceEngine`, `TradingHaltService`, `PortfolioPeakService`. 스텁 사용 시 `investment.compliance.use-stub=true`.
+
+### 2.9.2 TaxAwareOptimizer (Phase 2)
+
+- **역할**: 전략에서 나온 원시 비중에 왕복 마찰 비용(수수료·세금·슬리피지) 반영 후 재정규화.
+- **KR**: `FrictionCostProperties.korea.stock` (commission×2 + tax + slippage×2).
+- **US**: `FrictionCostProperties.usa.stock` (commission×2 + secFee + slippage×2).
+- **구현**: `TaxAwareOptimizerImpl`. 비용을 상쇄하지 못하는 비중은 0으로 두고 나머지 정규화.
+
+### 2.9.3 Rebalancer (Phase 2)
+
+- **역할**: 현재 보유(잔고·포지션) vs 목표 비중 차이로 매수/매도 리스트 생성.
+- **입력**: 계좌번호, 시장(KR/US), 목표 비중, 평가총액, userId(잔고 조회용).
+- **출력**: `RebalanceItem(symbol, side=BUY|SELL, quantity, notional)`.
+- **구현**: `RebalancerImpl` — `AccountService.getBalanceAndPositionsWithUserId`로 포지션 조회 후 시장별 필터, 목표와 차이 산출.
+
 ### 2.10 Friction cost (마찰 비용)
 
 백테스트·로보 리밸런싱 시 **수수료·세금·슬리피지**를 반영해 실전에 가까운 PnL을 산출한다. 한국투자증권(KIS) 실전 수수료 체계 기준.

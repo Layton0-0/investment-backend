@@ -2,6 +2,9 @@ package com.investment.api.controller;
 
 import com.investment.account.dto.*;
 import com.investment.account.service.AccountService;
+import com.investment.common.exception.DomainException;
+import com.investment.common.exception.ErrorCode;
+import com.investment.common.exception.GlobalExceptionHandler;
 import com.investment.common.security.JwtAuthenticationFilter;
 import com.investment.common.security.RateLimitFilter;
 import com.investment.config.SecurityHeadersConfig;
@@ -11,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
@@ -23,6 +27,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(AccountController.class)
+@Import(GlobalExceptionHandler.class)
 @AutoConfigureMockMvc(addFilters = false)
 @DisplayName("AccountController")
 class AccountControllerTest {
@@ -137,6 +142,17 @@ class AccountControllerTest {
         mockMvc.perform(get("/api/v1/accounts/12345678/assets"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accountNo").value("12345678"));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/accounts/{accountNo}/assets 계좌 없을 때 404")
+    void getAccountAssets_accountNotFound_returns404() throws Exception {
+        when(accountService.getAccountAssets("99999999"))
+                .thenThrow(new DomainException(ErrorCode.ACCOUNT_NOT_FOUND, "한국투자증권 API 키를 찾을 수 없습니다"));
+
+        mockMvc.perform(get("/api/v1/accounts/99999999/assets"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
     }
 
     @Test

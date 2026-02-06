@@ -46,7 +46,12 @@ public class GlobalExceptionHandler {
                 .timestamp(java.time.LocalDateTime.now())
                 .build();
 
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        HttpStatus status = ErrorCode.ACCOUNT_NOT_FOUND.equals(e.getErrorCode())
+                ? HttpStatus.NOT_FOUND
+                : ErrorCode.ORDER_REJECTED.equals(e.getErrorCode())
+                ? HttpStatus.FORBIDDEN
+                : HttpStatus.BAD_REQUEST;
+        return ResponseEntity.status(status).body(response);
     }
 
     @ExceptionHandler(AppException.class)

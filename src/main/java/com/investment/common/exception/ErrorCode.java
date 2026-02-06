@@ -21,7 +21,9 @@ public final class ErrorCode {
     public static final String INVALID_ORDER_TYPE = "INVALID_ORDER_TYPE";
     public static final String INVALID_ORDER_AMOUNT = "INVALID_ORDER_AMOUNT";
     public static final String EXCEEDS_MAX_INVESTMENT = "EXCEEDS_MAX_INVESTMENT";
-    
+    /** Pre-Trade 컴플라이언스 거부(Kill Switch, 비중 상한, MDD 등) */
+    public static final String ORDER_REJECTED = "ORDER_REJECTED";
+
     // 시장 데이터 API 관련
     public static final String MARKET_DATA_API_ERROR = "MARKET_DATA_API_ERROR";
     public static final String MARKET_DATA_API_TIMEOUT = "MARKET_DATA_API_TIMEOUT";

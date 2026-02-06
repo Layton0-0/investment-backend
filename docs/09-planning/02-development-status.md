@@ -9,6 +9,10 @@
 ## 1. 완료 (Completed)
 
 ### 도메인·DB·API
+- [x] **2.0 아키텍처 Phase 2 (PreTrade·Kill Switch·Portfolio)**  
+  Pre-Trade 컴플라이언스: `PreTradeComplianceEngine`(Kill Switch, 단일 종목 10% 상한, MDD 15% 게이트), `OrderService.executeOrderInternal` 주문 직전 호출. Kill Switch: `TB_TRADING_HALT`·`TradingHaltService`, GET/PUT `/api/v1/system/kill-switch`(Ops만 설정). MDD용 `TB_PORTFOLIO_PEAK`·`PortfolioPeakService`. 포트폴리오: `TaxAwareOptimizerImpl`(FrictionCost 기반 비중 조정), `RebalancerImpl`(잔고·포지션 기반 매매 리스트). Flyway V25. [00-strategy-registry.md 2.9.1~2.9.3](../02-architecture/00-strategy-registry.md), [01-system-architecture.md §9](../02-architecture/01-system-architecture.md) 반영.
+- [x] **TimescaleDB 전환 및 2.0 아키텍처 Phase 1**
+  MariaDB → TimescaleDB(PostgreSQL) 전환: docker-compose timescaledb 서비스, application*.yml·build.gradle PostgreSQL 설정, Flyway V21~V24 PostgreSQL DDL 변환. 초기 스키마는 `init-db` 프로파일 1회 실행. 기관급 퀀트 엔진 패키지 추가: `core.engine.alpha`(AlphaEngine), `core.engine.portfolio`(TaxAwareOptimizer·Rebalancer 스텁), `core.engine.risk`(ComplianceEngine 스텁), `core.engine.execution`(ExecutionGateway), `core.pipeline`(DataPipelineService). [01-system-architecture.md §9](../02-architecture/01-system-architecture.md), [decisions.md ADR 15·16](../decisions.md) 반영.
 - [x] **Friction cost(수수료/세금/슬리피지) 설정 및 백테스트 반영**  
   한국투자증권(KIS) 실전 수수료·세금·슬리피지 테이블을 `application.yml`(`investment.fees`) 및 `FrictionCostProperties`에 반영. 일반 백테스트(`BacktestService`)는 매수/매도 시 마찰 비용 차감·PnL 반영·`BacktestTradeDto.totalFrictionCost` 노출. 로보 백테스트(`RoboBacktestService`)는 `FrictionCostProperties` 기반 round-trip·TAF 적용, 요청 `commPct`/`slipPct` 오버라이드 시 하위 호환. [전략 레지스트리 2.9 Friction cost](../02-architecture/00-strategy-registry.md#29-friction-cost-마찰-비용) 참조.
 - [x] **로보 백테스트 데이터 부재·평평한 곡선 안내**  
@@ -25,6 +29,18 @@
   CacheConfig에 CACHE_CURRENT_PRICE 정의, RealtimeMarketDataService에서 상수 사용.
 
 ### 화면·메뉴
+- [x] **한국투자증권 토큰 발급 1분 1회 제한·사용자 단위 락**  
+  KoreaInvestmentTokenService에 사용자당 1분 1회 새 발급 제한(TOKEN_ISSUANCE_COOLDOWN_MS)·lastIssuanceTimeByUserId·issuanceLockByUserId 추가. getAccessToken에서 동시에 모의/실 두 타입 발급이 겹치지 않도록 사용자 단위 synchronized 락으로 직렬화. 403 "접근토큰 발급 1분당 1회" 재발 방지.
+- [x] **대시보드 모의·실계좌 동시 로드**  
+  useDashboardData에서 서버타입과 무관하게 모의·실 메인 계좌 각각에 대해 자산·포지션·주문·파이프라인 요약·거래 설정을 병렬 로드. virtualPositions/realPositions, virtualRecentOrders/realRecentOrders 등 모의·실 구분 저장. Dashboard에서 모의/실 카드에 각각 해당 데이터 매핑, 보유 종목·최근 주문 테이블 모의/실 각각 표시.
+- [x] **관리자 인가: User role·로그인 응답 role·OPS 로그인 버튼 제거**  
+  TB_USERS에 ROLE 컬럼 추가(V24), User 엔티티·AuthResponseDto에 role 필드, AuthService 로그인/회원가입 응답에 role 포함. 프론트 LoginPage에서 "OPS 로그인" 버튼 제거, 로그인 API 응답의 role로 인가(역할은 서버에서 반환).
+- [x] **React 대시보드 API 매핑 정리(Thymeleaf·기획 문서 기준) 및 상세 에러 안내**  
+  Thymeleaf 대시보드·01-screen-menu-spec 기준으로 React Dashboard에 메인 계좌·자산·포지션·주문·파이프라인 요약(GET /api/v1/pipeline/summary)·거래 설정(GET /api/v1/settings/{accountNo}) 연동. 백엔드 GlobalExceptionHandler에서 ACCOUNT_NOT_FOUND 시 404 반환. 프론트 userAccountsApi/accountApi/ordersApi/settingsApi/pipelineApi에서 404·400 시 null/[] 반환(graceful). ApiError에 code·details·traceId 추가, errorMessages.ts로 원인별 한글 메시지(getDisplayErrorMessage) 제공, Dashboard 등에서 적용. [02-api-endpoints.md](../04-api/02-api-endpoints.md) 계좌/자산 404 명시.
+- [x] **API–프론트엔드 매핑 문서 추가**  
+  [11-api-frontend-mapping.md](../04-api/11-api-frontend-mapping.md) 신규: 백엔드 API 목록·프론트 모듈/함수·사용 위치(라우트/페이지)·미연동 정리. 01-api-overview.md §3.7 배치 경로 보정(GET /batch/api/jobs), §9.2에 11 문서 링크 추가.
+- [x] **배치 작업 목록 API 연동**  
+  프론트 batchApi.getBatchJobs() (GET /batch/api/jobs) 추가, /batch 화면(Batch 컴포넌트)에서 하드코딩 테이블 제거 후 API 응답으로 스케줄 현황 테이블 렌더링. 로딩·에러·지금 실행(triggerPath 기반) 유지.
 - [x] **전체 UI/UX 리팩터링 (디자인 시스템·레이아웃·페이지 스타일 통일)**  
   common.css에 디자인 토큰(CSS 변수)·container 1200px·`.data-table`·카드 변형·대시보드/전략/포트폴리오/백테스트 등 공통 유틸리티 추가. 모든 인증 페이지에 layout-header + layout-menu 적용(portfolio, mypage 포함). dashboard/strategies 인라인 스타일 제거·common 클래스 사용. portfolio·error 페이지 common 기반 통일. 접근성·반응형(미디어 쿼리·포커스) 점검. [07-frontend-simplification.md](../02-architecture/07-frontend-simplification.md), [08-frontend-architecture.md](../02-architecture/08-frontend-architecture.md) 반영.
 - [x] **메뉴 설정 및 공통 레이아웃**  
@@ -45,6 +61,28 @@
   메뉴 "설정" → `/mypage` (기존 마이페이지).
 - [x] **설정 UI/UX 리팩토링 (모의/실계좌 선택·토글·빈 상태)**  
   설정 페이지: 카드 제목 "계좌·API 연결", "자동투자 설정" 통일. 등록된 계좌 수(0/1/2)에 따라 거래 설정 분기 — 0개면 빈 상태 + [계좌 설정으로 가기] CTA, 1개면 해당 타입 폼만, 2개면 세그먼트 "모의계좌 | 실계좌" + 선택한 타입 단일 폼. 자동투자·로보 어드바이저를 common.css 토글 마크업(toggle-label·toggle-text-left·toggle-slider·toggle-text-right)으로 스위치 형태 표시. common.css에 .empty-state, .segment-control, .segment-btn 추가. 화면·메뉴 기획서 §3.8 반영.
+- [x] **프론트 화면 기획서 기획요청 반영·디자인 AI 전체 프롬프트 문서**  
+  [01-screen-menu-spec.md](01-screen-menu-spec.md)에 기획요청 §8·§9 반영: 포트폴리오 세금·수수료 영향 뷰, 연말 세금·리포트 메뉴(§3.10·`/report/tax`), 대시보드/Ops 킬스위치·시스템 헬스 블록. [10-design-ai-full-prompt.md](03-figma-wireframes/10-design-ai-full-prompt.md) 신규: 디자인 AI에 붙여넣기만 하면 되는 통합 프롬프트(디자인 원칙·모든 화면 진입/구성/액션/결과/예외 워크플로우·연말 리포트·세금뷰·킬스위치·가드레일). [00-index.md](03-figma-wireframes/00-index.md) 읽는 순서에 10 문서 링크 추가.
+- [x] **전체 화면 기획 + Figma 와이어프레임 문서 패키지**  
+  [03-figma-wireframes](03-figma-wireframes/00-index.md) 폴더에 IA·역할/권한·유저 플로우·컴포넌트·가드레일·화면별 스펙(06-screen-specs)·Figma 구조·Figma AI 프롬프트 작성. 2역할(User/Ops)·Ops 확장 메뉴(데이터 파이프라인·알림센터·리스크·모델·감사·헬스) 반영. [01-screen-menu-spec.md](01-screen-menu-spec.md) §6 향후(Ops) 메뉴·§6.2 역할·권한 개요 추가.
+- [x] **React 프론트 시니어급 리팩토링**  
+  구조: 루트 App.tsx 제거, components/styles를 src 하위로 이관, `@/` path alias 도입. 타입: any 제거, Dashboard/Settings/UI 등 Props·API DTO 명시, http.ts ImportMetaEnv·ApiErrorBody 적용. 비동기: useDashboardData·useSettingsAccounts 훅 추출, 컴포넌트는 훅만 사용. 컴포넌트: Dashboard를 DashboardSummaryCards·DashboardAccountCard·DashboardPositionsTable·DashboardOrdersTable로 분할, DataTable rowKey·그리드 key 안정화. Error Boundary·Settings 토글 no-op 제거·useEffect 의존성 정리·상수(routes.ts)·보안/Error Boundary 문서(README) 반영. 테스트: useDashboardData·LoginPage(401 메시지) 추가.
+- [x] **React 프론트(분리 배포) 초기 전환: Vite+React Router + API 연동 골격**  
+  `investment-front`에 Vite 기반 실행 환경(`package.json`, `vite.config.ts`, `tsconfig.json`)을 구성하고, mock UI를 기준으로 `react-router-dom` 라우팅 + 공통 `AppShell`(헤더/사이드바/모의·실 토글) 구조를 구성. 로그인/회원가입/마이페이지는 `/api/v1/auth/*` 연동(토큰은 Authorization Bearer 사용)으로 동작. 주요 화면(Dashboard/AutoInvest/Strategies/News/Portfolio/Orders/Batch/Backtest/Settings)은 REST API 기반으로 mock 데이터를 제거하고 조회/트리거를 연결. 백엔드에는 자동투자 현황용 `/api/v1/pipeline/summary` 엔드포인트 추가.
+- [x] **Figma MCP 설정 및 프론트 Figma 와이어프레임 문서 정합**  
+  `.cursor/mcp.json.template`에 Figma MCP 서버(figma-developer-mcp) 예시 추가. Figma **Make** 파일은 MCP 미지원(Design 파일만 조회 가능)이므로, [07-figma-structure.md](03-figma-wireframes/07-figma-structure.md) §6에 Make/Design 구분·MCP 사용 안내 추가. 프론트는 03-figma-wireframes 문서 기준으로 정합: `globals.css`에 디자인 토큰(--space-sm/md/lg, --radius-sm/md, --color-primary 등), AppShell 본문 최대 너비 1200px(Layout/Container), 로그인/회원가입 S01-auth 스펙(401·계좌 인증 실패 안내 문구) 반영.
+- [x] **프론트 화면 플로우 기획서 정합 (경로·메뉴·serverType)**  
+  백엔드 [01-screen-menu-spec.md](01-screen-menu-spec.md)·[01-information-architecture.md](03-figma-wireframes/01-information-architecture.md)·[03-user-flows.md](03-figma-wireframes/03-user-flows.md)에 맞춰 React 프론트 라우트·메뉴 수정. 회원가입 경로 `/signup` 추가·`/register`는 `/signup`으로 리다이렉트, 리스크 리포트 경로 `/risk` 추가·Ops 메뉴 링크 `/risk`로 변경, 모든 메뉴·헤더 링크에 `serverType` 쿼리 포함·탭 변경 시 URL 갱신·진입 시 URL의 serverType 동기화, 로그인 페이지 회원가입 링크 `/signup`으로 변경.
+- [x] **프론트엔드 보안 리팩토링 및 문서화**  
+  `investment-front/docs/`에 01-security, 02-architecture, 03-development-guide 추가. 인증: localStorage 토큰 제거, HttpOnly 쿠키 기반(apiFetch credentials: include, AuthContext 초기 mypage 체크·401 시 skipUnauthorizedHandler). Vite proxy `/api` → 8083. XSS: chart.tsx dangerouslySetInnerHTML 제거(useEffect로 style 주입). 외부 링크: secureUrl(isSafeHref/getSafeHref)·Market.tsx 적용. 사이드바 쿠키 SameSite=Lax·Secure(HTTPS 시). 로그인/회원가입 에러 메시지 일반화. 입력 검증: inputValidation(validateLogin/validateSignup)·Login/Register 연동. 테스트: http.test, secureUrl.test, inputValidation.test, LoginPage/AppRoutes 모킹 보강.
+- [x] **Figma 퍼블 반영 (investment-front/publish)**  
+  `publish/` Figma 기반 퍼블을 `src/`에 반영. Logo 컴포넌트(SVG), UI.tsx Tailwind/DataTable +/- 셀 스타일, AppShell(Logo·경로별 SegmentControl·max-width 1440px·퍼블 색상), LoginPage/RegisterPage 퍼블 레이아웃·한글 문구, DashboardSummaryCards 아이콘+라벨 퀵메뉴, DashboardAccountCard/Dashboard 퍼블 색상, Investment/Market/Ops/System 카드·타이포 색상 통일. 테스트(LoginPage/AppRoutes) 기대 문자열 한글 반영.
+- [x] **smart-portfolio-pal 퍼블리싱 반영 (investment-front)**  
+  smart-portfolio-pal 디자인 참고로 전역 스타일(Deep Navy Fintech HSL·Pretendard·gradient·shadow-card)·button variants(hero/heroOutline/success)·랜딩 페이지(/, Header·HeroSection·FeaturesSection·Footer)·라우트 변경(/ = 랜딩, /dashboard = 메인 홈)·AppShell 좌측 사이드바+메인 재구성·로그인 페이지 스플릿 레이아웃·대시보드 카드 토큰 적용. 문서: investment-front/docs/02-architecture.md 요약, 테스트·IntersectionObserver mock 보강.
+- [x] **개편 디자인 기준 프론트엔드 적용 (investment-front)**  
+  smart-portfolio-pal과 동일한 레이아웃·메뉴·라우트 구조로 정리. **훅**: `useAccountType`(URL `serverType` 쿼리 ↔ AuthContext 동기화). **레이아웃**: AppShell 제거, AppLayout(AppHeader + AppMenu + AccountTabs + max-w-[1200px] 본문) 적용. **라우트**: 페이지 단위 매핑, `/report/tax`(TaxReportPage) 추가, Ops 개별 경로(`/ops/data`, `/ops/alerts` 등) 유지·path 기반 OpsPage subPage 분기. **페이지**: DashboardPage, AutoInvestPage, StrategyPage(/strategies/:market), NewsPage, PortfolioPage, OrdersPage, BatchPage, BacktestPage, SettingsPage, TaxReportPage(스텁), OpsPage(기존). 메뉴: User 메뉴 + 연말 세금·리포트 + Ops 전용(Ops 역할 시). 테스트: AppRoutes(랜딩/대시보드/연말리포트 인증 시 렌더) 보강. [01-screen-menu-spec.md](01-screen-menu-spec.md), [10-design-ai-full-prompt.md](03-figma-wireframes/10-design-ai-full-prompt.md) 반영.
+- [x] **설정 페이지 smart-portfolio-pal 디자인 전면 반영 (investment-front)**  
+  설정 화면을 개편 디자인에 맞춰 전면 적용. **탭**: "계좌·API 연결" | "자동투자 설정" (shadcn Tabs). **계좌 탭**: 모의계좌 카드·실계좌 카드 각각 표시(연결됨/미등록 배지, API Key/Secret/계좌번호/Current Password, 카드별 [저장]). **자동투자 탭**: 계좌 0개 시 빈 상태 + [계좌 설정으로 가기] CTA; 1~2개 시 세그먼트(모의계좌|실계좌) + 선택 타입별 폼(자동 매매·로보 토글, 최소/최대 투자금, 단·중·장기 비율, [저장]); 서버 설정 읽기 전용 카드(PIPELINE_AUTO_EXECUTE, PIPELINE_ALLOW_REAL_EXECUTION). **훅**: `useSettingsAccountsAll` 추가(virtual/real 동시 조회·타입별 저장). [10-design-ai-full-prompt.md §5.10](03-figma-wireframes/10-design-ai-full-prompt.md), [01-screen-menu-spec.md §3.8](01-screen-menu-spec.md) 반영.
 
 ### 인프라·운영
 - [x] **Flyway 도입 및 기존 마이그레이션 SQL 정리**  
@@ -75,6 +113,8 @@
   `LogMaskingUtil`에 `maskAccountNo`, `maskSecret` 추가. app key / secret / 계좌번호 / userId 등 암호화 저장 항목은 로그 출력 시 반드시 `LogMaskingUtil` 사용(INFO/WARN/ERROR에서 마스킹만, DEBUG에서 필요 시 실제 값 추가). KoreaInvestmentTokenClient, AuthService, KoreaInvestmentAccountClient, OrderService, KoreaInvestmentOrderClient, Strategy·Account·Setting·Dashboard 등 전역 적용. 상세 규칙: [보안 설정 참조](../07-security/02-security-configuration-reference.md#로깅-시-민감정보-마스킹-개발-규칙).
 - [x] **한국투자증권 API 조회 GET+query 수정**  
   조회 API(주식잔고·매수가능·매도가능·주문체결·자산현황·기간별손익·현재가·차트)가 query parameter로 전달되어야 하는데 JSON body로 호출되던 오류 수정. `KoreaInvestmentAccountClient` 7곳·`KoreaInvestmentMarketDataClient` 2곳을 **GET + URI query parameter**로 변경. `buildUriWithQueryParams` 헬퍼 추가, `KoreaInvestmentRequestBuilder` 주석 보강(조회 API는 Map을 query로 사용). [한국투자증권 API 가이드](../04-api/09-korea-investment-api-guide.md)에 조회 API GET·query 명시, [ADR 14](../decisions.md#14-한국투자증권-api-요청-방식-및-mcp-사용) 및 [MCP 규칙](../.cursor/rules/MCP.mdc): 한국투자증권 API 개발 시 MCP 무조건 사용·작업 중 문서 업데이트 필수.
+- [x] **투자계좌자산현황조회 404 수정 및 모의계좌 폴백**  
+  한국투자증권 공식 예제(inquire_account_balance) 기준으로 path·TR ID·파라미터·응답 파싱 수정. path: `inquire-assets` → `inquire-account-balance`, TR ID: `CTRP6548R`(실거래 전용). **모의계좌는 해당 API 미지원** → 모의(serverType=1)일 때 `inquireAssets()`에서 주식잔고조회(inquire-balance) 결과로 `AccountAssetDto` 구성해 반환(폴백). [09-korea-investment-api-guide.md](../04-api/09-korea-investment-api-guide.md) §5 갱신.
 - [x] **대시보드 거래 설정 optional 처리**  
   TradingSettingService.getSettingOptional(accountNo) 추가(없으면 empty). DashboardController에서 계좌 데이터 조회 시 getSettingOptional 사용, 있으면 setting 모델 추가·없으면 미추가(거래 설정 카드 미표시). 거래 설정 미저장 상태에서도 대시보드(잔고·보유·주문) 정상 표시.
 - [x] **테스트 커버리지**  
@@ -154,6 +194,11 @@
 
 산출 기획([자동투자 전략 명세](../02-architecture/12-auto-investment-strategy.md), [뉴스·공시 수집·연동 설계](../02-architecture/13-news-collection-design.md), [화면·메뉴 기획서](./01-screen-menu-spec.md), [로드맵](../roadmap.md))을 토대로 구체화한 항목입니다.
 
+### 메뉴별 백엔드 순차 개발 (퍼블 메뉴 전부 필요 기능)
+
+- [ ] **메뉴별 백엔드 개발 순차 진행**  
+  [11-api-frontend-mapping.md §4](../04-api/11-api-frontend-mapping.md) 메뉴(라우트)별 백엔드 API 필요·연동 현황 및 §5.2 미구현·미연동 우선순위를 기준으로, 백엔드 개발이 필요한 메뉴를 하나씩 구현(API 추가·수정 → 프론트 연동 → 문서 갱신). Ops 전용 메뉴(데이터 파이프라인, 알림센터, 리스크, 모델/예측, 감사 로그, 시스템 헬스)는 각 메뉴별 필요한 백엔드 기능을 11-api-frontend-mapping에 나열한 대로 순차 진행.
+
 ### 단기 (로드맵 Phase 1~4 대응)
 
 - [x] **테스트 코드 보강 (1차)**  
@@ -183,6 +228,8 @@
   섹터 분석, 상관관계·리스크 메트릭(VaR/CVaR, Sharpe/Sortino), 리밸런싱 자동화, 리스크 기반 포지션 사이징.
 - [ ] **대시보드·UX**  
   자동투자 현황 파이프라인 실데이터·시그널/보유 포지션 테이블은 완료. 대시보드: 계좌 요약(국내·미국 구분), 자동투자 상태 카드. 실시간 차트, 성과 분석, 반응형·모바일.
+- [ ] **로보어드바이저 사용자 플로우 명확화**  
+  랜딩(/) 한 줄 문구("나 대신 투자해주는 로보어드바이저")·CTA 강화. 대시보드·자동투자 현황·설정에 다음 액션(설정으로 가기 등) 및 안내 문구 반영. [00-robo-advisor-product-summary.md](00-robo-advisor-product-summary.md), [03-user-flows.md](03-figma-wireframes/03-user-flows.md) 신규 사용자 권장 경로 참조.
 
 ### 장기 (로드맵 Phase 7~8)
 
@@ -201,6 +248,7 @@
 
 | 문서 | 역할 |
 |------|------|
+| [로보어드바이저 제품 요약](00-robo-advisor-product-summary.md) | 첫 목적 기준 한 줄·핵심 플로우·완료/부족/필요·화면–API 매핑 요약 |
 | [로드맵](../roadmap.md) | Phase별 목표·일정·체크리스트 |
 | [화면·메뉴 기획서](./01-screen-menu-spec.md) | 메뉴 트리·화면 역할·확장 규칙 |
 | [자동투자 전략 명세](../02-architecture/12-auto-investment-strategy.md) | 4단계 파이프라인·시장별 알고리즘·원천·KIS 실전 구축·구축 로드맵 |
@@ -246,3 +294,4 @@
 | 1.26 | 2026-02-02 | 완료: 로보 어드바이저 백테스트·자동투자 연동 — RoboAllocationEngine·RoboBacktestService·POST/GET backtest/robo API·/backtest 모드·설정 로보 ON/OFF·RoboRebalanceScheduler·실행 전 백테스트·TB_TRADING_SETTINGS ROBO_ADVISOR_ENABLED(V17). |
 | 1.27 | 2026-02-02 | 완료: 월스트리트 정렬(한국·미국) — **한국(KR)**: 청산 -5% 고정·전저점 이탈·RSI≥70 익절(ExitRuleEvaluator·ExitRuleService·StrategyPosition PRIOR_LOW V18); 진입 5일 연속 수급 메타( TB_ORDER_FLOW NET_BUY_AMT_1D V19)·역발상 RSI(CONTRARIAN_RSI)·P/B 필터 스텁(UniverseFilterService). **미국(US)**: 듀얼 모멘텀(노트) 모드 — 절대 SPY 12M vs T-bill·상대 섹터 ETF 6M 상위 2개(RoboAllocationEngine.computeTargetWeightsDualMomentumNote·RoboBacktestService·RoboRebalanceExecutor 모드 분기). application.yml pipeline.short-term-kr-stop-loss-pct·prior-low-stop-kr-enabled·rsi-exit-threshold·factor.contrarian-rsi-threshold·pb-value-min/max·backtest.robo.dual-momentum-mode·sector-etf-symbols 등. 00-strategy-registry·12-auto-investment-strategy v1.7 반영. |
 | 1.28 | 2026-02-03 | 완료: 자동투자 현황 3단계 자금 배분 요약 표시 — PipelineSummaryDto.allocationSummary, PipelineSummaryService 거래 설정 기반 단기·중기·장기 예상 배분 계산·포맷, auto-invest 3단계 카드 실데이터 표시. KRX Open API 필요 목록 문서 추가(08-setup-guides/04-krx-api-required.md). |
+| 1.29 | 2026-02-04 | 완료: 전체 화면 기획 + Figma 와이어프레임 문서 패키지 — 03-figma-wireframes(IA·권한·플로우·컴포넌트·가드레일·화면 스펙·Figma 규칙·AI 프롬프트), 01-screen-menu-spec §6 Ops 확장·역할 권한 개요. |

@@ -1,5 +1,6 @@
 package com.investment.api.controller;
 
+import com.investment.account.service.AccountService;
 import com.investment.auth.service.AuthService;
 import com.investment.common.security.JwtAuthenticationFilter;
 import com.investment.common.security.RateLimitFilter;
@@ -37,6 +38,8 @@ class SettingControllerTest {
     private TradingSettingService tradingSettingService;
     @MockBean
     private AuthService authService;
+    @MockBean
+    private AccountService accountService;
     @MockBean
     private JwtAuthenticationFilter jwtAuthenticationFilter;
     @MockBean

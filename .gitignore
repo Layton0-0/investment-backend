@@ -59,6 +59,9 @@ application-*-secret.yml
 **/*.secret
 
 # Temporary files
+agent-test*.txt
+COMMIT_MESSAGE.txt
+commit-msg.txt
 *.tmp
 *.temp
 *.bak

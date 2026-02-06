@@ -1,5 +1,6 @@
 package com.investment.api.controller;
 
+import com.investment.account.service.AccountService;
 import com.investment.common.security.JwtAuthenticationFilter;
 import com.investment.common.security.RateLimitFilter;
 import com.investment.config.SecurityHeadersConfig;
@@ -34,6 +35,8 @@ class SignalControllerTest {
 
     @MockBean
     private SignalScoreService signalScoreService;
+    @MockBean
+    private AccountService accountService;
     @MockBean
     private JwtAuthenticationFilter jwtAuthenticationFilter;
     @MockBean

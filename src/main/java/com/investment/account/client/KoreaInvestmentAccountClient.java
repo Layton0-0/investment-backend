@@ -192,18 +192,17 @@ public class KoreaInvestmentAccountClient {
     }
 
     /**
-     * 계좌번호에 해당하는 API 키 조회 (모의/실거래 구분하여 올바른 키 반환)
+     * 계좌번호에 해당하는 API 키 조회 (모의/실거래 구분).
+     * 해당 계좌의 serverType에 대한 API 키만 반환하며, 다른 serverType으로 fallback하지 않음.
+     * 실거래 계좌가 저장되어 있지 않으면 빈 값을 반환하여 토큰 발급/API 요청을 하지 않음.
      */
     private Optional<UserApiKey> getUserApiKeyForAccount(String userId, String accountNo) {
         String serverType = resolveServerTypeForAccount(userId, accountNo);
-        if (serverType != null) {
-            Optional<UserApiKey> byServer = userApiKeyRepository.findByUserIdAndBrokerTypeAndServerType(userId,
-                    BrokerType.KOREA_INVESTMENT, serverType);
-            if (byServer.isPresent()) {
-                return byServer;
-            }
+        if (serverType == null) {
+            return Optional.empty();
         }
-        return userApiKeyRepository.findByUserIdAndBrokerType(userId, BrokerType.KOREA_INVESTMENT);
+        return userApiKeyRepository.findByUserIdAndBrokerTypeAndServerType(userId,
+                BrokerType.KOREA_INVESTMENT, serverType);
     }
 
     /**
@@ -236,15 +235,15 @@ public class KoreaInvestmentAccountClient {
                             "한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
             String serverType;
 
-            // Access Token 조회 (제공되지 않은 경우에만)
-            if (accessToken == null) {
-                accessToken = tokenService.getAccessToken(userId);
-            }
-
             // API 키 복호화 (선택된 키의 서버 타입으로 API 호출)
             String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
             String appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
             serverType = userApiKey.getServerType();
+
+            // Access Token 조회 (해당 serverType만 사용, 실계좌 미저장 시 호출되지 않음)
+            if (accessToken == null) {
+                accessToken = tokenService.getAccessToken(userId, serverType);
+            }
 
             // Base URL 및 TR ID 결정
             String baseUrl = getBaseUrl(serverType);
@@ -364,7 +363,7 @@ public class KoreaInvestmentAccountClient {
             if (userApiKey == null) {
                 return new ArrayList<>();
             }
-            String accessToken = tokenService.getAccessToken(userId);
+            String accessToken = tokenService.getAccessToken(userId, userApiKey.getServerType());
             String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
             String appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
             String serverType = userApiKey.getServerType();
@@ -593,7 +592,7 @@ public class KoreaInvestmentAccountClient {
                     .orElseThrow(() -> new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                             "한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
 
-            String accessToken = tokenService.getAccessToken(userId);
+            String accessToken = tokenService.getAccessToken(userId, userApiKey.getServerType());
             String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
             String appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
             String serverType = userApiKey.getServerType();
@@ -677,7 +676,7 @@ public class KoreaInvestmentAccountClient {
                     .orElseThrow(() -> new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                             "한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
 
-            String accessToken = tokenService.getAccessToken(userId);
+            String accessToken = tokenService.getAccessToken(userId, userApiKey.getServerType());
             String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
             String appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
             String serverType = userApiKey.getServerType();
@@ -760,7 +759,7 @@ public class KoreaInvestmentAccountClient {
                     .orElseThrow(() -> new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                             "한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
 
-            String accessToken = tokenService.getAccessToken(userId);
+            String accessToken = tokenService.getAccessToken(userId, userApiKey.getServerType());
             String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
             String appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
             String serverType = userApiKey.getServerType();
@@ -868,10 +867,13 @@ public class KoreaInvestmentAccountClient {
                     .orElseThrow(() -> new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                             "한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
 
-            String accessToken = tokenService.getAccessToken(userId);
+            String serverType = userApiKey.getServerType();
+            if ("1".equals(serverType)) {
+                return inquireAssetsFallbackFromBalance(userId, accountNo);
+            }
+            String accessToken = tokenService.getAccessToken(userId, serverType);
             String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
             String appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
-            String serverType = userApiKey.getServerType();
 
             String baseUrl = getBaseUrl(serverType);
             String trId = getAssetsTrId(serverType);
@@ -880,20 +882,13 @@ public class KoreaInvestmentAccountClient {
             HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
                     accessToken, appKey, appSecret, trId);
 
-            // 조회 파라미터 (GET query parameter로 전달)
+            // 조회 파라미터 (GET query, 공식 스펙: CANO, ACNT_PRDT_CD, INQR_DVSN_1, BSPR_BF_DT_APLY_YN)
             Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createAccountRequestBody(
                     accountNo,
                     Map.of(
-                            "AFHR_FLPR_YN", "N",
-                            "OFL_YN", "",
-                            "INQR_DVSN", "02",
-                            "UNPR_DVSN", "01",
-                            "FUND_STTL_ICLD_YN", "N",
-                            "FNCG_AMT_AUTO_RDPT_YN", "N",
-                            "PRCS_DVSN", "01",
-                            "CTX_AREA_FK100", "",
-                            "CTX_AREA_NK100", ""));
-            URI uri = buildUriWithQueryParams(baseUrl, PATH_INQUIRE_ASSETS, queryParams);
+                            "INQR_DVSN_1", "",
+                            "BSPR_BF_DT_APLY_YN", ""));
+            URI uri = buildUriWithQueryParams(baseUrl, PATH_INQUIRE_ACCOUNT_BALANCE, queryParams);
 
             // local 환경에서 요청 상세 로그 출력
             logApiRequest("투자계좌자산현황조회", uri, headers, queryParams);
@@ -924,15 +919,16 @@ public class KoreaInvestmentAccountClient {
                         "한국투자증권 API 오류: rt_cd=" + rtCd + ", msg1=" + msg1);
             }
 
-            JsonNode output = rootNode.path("output");
+            // 투자계좌자산현황조회(inquire-account-balance) 응답: output2 단일 객체 (공식 예제 output2 필드명)
+            JsonNode output2 = rootNode.path("output2");
             return AccountAssetDto.builder()
                     .accountNo(accountNo)
-                    .totalAssetValue(new BigDecimal(output.path("tot_evlu_amt").asText("0")))
-                    .deposit(new BigDecimal(output.path("dnca_tot_amt").asText("0")))
-                    .stockValue(new BigDecimal(output.path("scts_evlu_amt").asText("0")))
-                    .totalProfitLoss(new BigDecimal(output.path("evlu_pfls_smtl_amt").asText("0")))
-                    .totalProfitLossRate(new BigDecimal(output.path("evlu_pfls_rt").asText("0")))
-                    .orderableCash(new BigDecimal(output.path("ord_psbl_cash").asText("0")))
+                    .totalAssetValue(new BigDecimal(output2.path("tot_asst_amt").asText("0")))
+                    .deposit(new BigDecimal(output2.path("tot_dncl_amt").asText("0")))
+                    .stockValue(new BigDecimal(output2.path("evlu_amt_smtl").asText("0")))
+                    .totalProfitLoss(new BigDecimal(output2.path("evlu_pfls_amt_smtl").asText("0")))
+                    .totalProfitLossRate(new BigDecimal(output2.path("evlu_pfls_rt").asText("0")))
+                    .orderableCash(new BigDecimal(output2.path("dncl_amt").asText("0")))
                     .currency("KRW")
                     .build();
 
@@ -944,6 +940,28 @@ public class KoreaInvestmentAccountClient {
             throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                     "투자계좌자산현황조회 실패: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 모의계좌용: 투자계좌자산현황조회 API 미지원이므로 주식잔고조회 결과로 자산 요약을 구성한다.
+     */
+    private AccountAssetDto inquireAssetsFallbackFromBalance(String userId, String accountNo) {
+        log.debug("모의계좌: 투자계좌자산현황 API 미지원 → 주식잔고조회로 자산 요약 구성");
+        BalanceAndPositionsResult result = inquireBalance(userId, accountNo);
+        AccountBalanceDto balance = result.getBalance();
+        BigDecimal total = balance.getTotalAssetValue() != null ? balance.getTotalAssetValue() : BigDecimal.ZERO;
+        BigDecimal deposit = balance.getDeposit() != null ? balance.getDeposit() : BigDecimal.ZERO;
+        BigDecimal stockValue = total.subtract(deposit).max(BigDecimal.ZERO);
+        return AccountAssetDto.builder()
+                .accountNo(accountNo)
+                .totalAssetValue(total)
+                .deposit(deposit)
+                .stockValue(stockValue)
+                .totalProfitLoss(balance.getTotalProfitLoss() != null ? balance.getTotalProfitLoss() : BigDecimal.ZERO)
+                .totalProfitLossRate(balance.getTotalProfitLossRate() != null ? balance.getTotalProfitLossRate() : BigDecimal.ZERO)
+                .orderableCash(balance.getOrderableCash() != null ? balance.getOrderableCash() : BigDecimal.ZERO)
+                .currency("KRW")
+                .build();
     }
 
     /**
@@ -959,7 +977,7 @@ public class KoreaInvestmentAccountClient {
                     .orElseThrow(() -> new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                             "한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
 
-            String accessToken = tokenService.getAccessToken(userId);
+            String accessToken = tokenService.getAccessToken(userId, userApiKey.getServerType());
             String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
             String appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
             String serverType = userApiKey.getServerType();

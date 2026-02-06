@@ -34,9 +34,9 @@
         ┌───────────────────┼───────────────────┐
         ▼                   ▼                   ▼
 ┌──────────────┐  ┌──────────────────────────────┐
-│  MariaDB     │  │  한국투자증권 Open API        │
-│  (데이터베이스)│  │  (REST API)                   │
-│              │  │  - 시장 데이터 조회             │
+│ TimescaleDB  │  │  한국투자증권 Open API        │
+│ (PostgreSQL) │  │  (REST API)                   │
+│  시계열·일반  │  │  - 시장 데이터 조회             │
 │              │  │  - 기술적 지표 계산            │
 └──────────────┘  └──────────────────────────────┘
 ```
@@ -154,7 +154,7 @@ com.investment
 ### 3.4 인프라 레이어
 - **MarketDataClient**: 시장 데이터 조회 인터페이스
   - **KoreaInvestmentMarketDataClient**: 한국투자증권 API 구현체
-- **Database**: JPA/Hibernate를 통한 MariaDB 접근
+- **Database**: JPA/Hibernate를 통한 TimescaleDB(PostgreSQL) 접근
 
 ## 4. 데이터 흐름
 
@@ -244,8 +244,9 @@ TradingPortfolioService
 - **MCP 통합**: 한국투자 코딩도우미 MCP를 활용한 개발 환경 지원
 
 ### 5.3 데이터베이스
-- **MariaDB**: 관계형 데이터베이스
-- **JPA/Hibernate**: ORM 프레임워크
+- **TimescaleDB**: PostgreSQL 기반 시계열·관계형 데이터베이스 (Docker: `timescale/timescaledb:latest-pg16`)
+- **JPA/Hibernate**: ORM 프레임워크 (PostgreSQLDialect)
+- **초기 스키마**: 신규 환경은 `--spring.profiles.active=local,init-db` 1회 실행 후 일반 프로파일로 전환
 
 ## 6. 스케줄러
 
@@ -288,8 +289,33 @@ TradingPortfolioService
 - **거래 설정**: 최대/최소 투자금액, 기본 통화
 - **로깅**: 로그 레벨, 로그 파일 경로
 
+## 9. 2.0 개편안 (기관급 퀀트 엔진)
+
+기존 구조를 유지하면서 **Alpha - Risk - Execution** 분리 원칙을 반영한 패키지·컴포넌트가 추가되었다.
+
+### 9.1 논리 아키텍처 (Quant Engine)
+
+- **DataPipeline**: 시장 데이터 수집·정제 진입점 (`core.pipeline.DataPipelineService`). 수정주가는 한투 API `FID_ORG_ADJ_PRC=0` 사용으로 명시.
+- **Alpha**: 전략 시그널 생성 (`core.engine.alpha.AlphaEngine` → 기존 StrategyService 위임).
+- **Portfolio**: 포트폴리오 최적화·리밸런싱 (`TaxAwareOptimizerImpl`, `RebalancerImpl`). Phase 2 구현 완료.
+- **Risk**: 주문 직전 컴플라이언스 (`PreTradeComplianceEngine`). Kill Switch, 단일 종목 10% 상한, MDD 15% 게이트. `OrderService`에서 주문 직전 호출.
+- **Execution**: 주문 집행 게이트웨이 (`core.engine.execution.ExecutionGateway` → OrderService 위임).
+
+### 9.2 추가 패키지
+
+- `core.engine.alpha`: AlphaEngine, AlphaEngineFacade
+- `core.engine.portfolio`: TaxAwareOptimizer, TaxAwareOptimizerImpl, Rebalancer, RebalancerImpl, StubPortfolioComponents
+- `core.engine.risk`: ComplianceEngine, PreTradeComplianceEngine, ComplianceEngineStub, ComplianceResult
+- `core.engine.execution`: ExecutionGateway, OrderServiceExecutionGateway
+- `core.pipeline`: DataPipelineService
+- `risk.service`: TradingHaltService, PortfolioPeakService
+- **Kill Switch API**: GET/PUT `/api/v1/system/kill-switch` (KillSwitchController). Ops 역할만 설정 가능.
+
+---
+
 ## 문서 변경 이력
 
 | 버전 | 일자 | 작성자 | 변경 내용 |
 |------|------|--------|----------|
 | 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 |
+| 2.0 | 2026-02-06 | System | TimescaleDB 전환, 2.0 개편안(Quant Engine·패키지) 반영 |

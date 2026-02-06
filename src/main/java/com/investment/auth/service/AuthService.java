@@ -61,10 +61,11 @@ public class AuthService {
             throw new DomainException(ErrorCode.INVALID_BROKER_TYPE, "지원하지 않는 증권사입니다");
         }
 
-        // 사용자 생성
+        // 사용자 생성 (기본 역할: User)
         User user = User.builder()
                 .username(request.getUsername())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .role("User")
                 .build();
         user = userRepository.save(user);
 
@@ -172,10 +173,12 @@ public class AuthService {
         // JWT 토큰 생성
         String token = jwtTokenProvider.createToken(user.getId(), user.getUsername());
 
+        String role = user.getRole() != null && !user.getRole().isBlank() ? user.getRole() : "User";
         return AuthResponseDto.builder()
                 .token(token)
                 .userId(user.getId())
                 .username(user.getUsername())
+                .role(role)
                 .message("회원가입이 완료되었습니다")
                 .build();
     }
@@ -264,10 +267,15 @@ public class AuthService {
         // JWT 토큰 생성
         String token = jwtTokenProvider.createToken(user.getId(), user.getUsername());
 
+        String role = user.getRole();
+        if (role == null || role.isBlank()) {
+            role = "User";
+        }
         return AuthResponseDto.builder()
                 .token(token)
                 .userId(user.getId())
                 .username(user.getUsername())
+                .role(role)
                 .message("로그인 성공")
                 .build();
     }

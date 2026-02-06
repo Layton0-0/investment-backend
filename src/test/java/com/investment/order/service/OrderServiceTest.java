@@ -2,6 +2,8 @@ package com.investment.order.service;
 
 import com.investment.common.exception.DomainException;
 import com.investment.common.exception.ErrorCode;
+import com.investment.core.engine.risk.ComplianceEngine;
+import com.investment.core.engine.risk.ComplianceResult;
 import com.investment.domain.entity.Order;
 import com.investment.domain.entity.TradingSetting;
 import com.investment.domain.repository.OrderRepository;
@@ -40,6 +42,9 @@ class OrderServiceTest {
         @Mock
         private KoreaInvestmentOrderClient orderClient;
 
+        @Mock
+        private ComplianceEngine complianceEngine;
+
         @InjectMocks
         private OrderService orderService;
 
@@ -76,7 +81,8 @@ class OrderServiceTest {
 
         @Test
         void 주문_실행_성공() {
-                // given: 한국투자증권 API 성공 응답
+                // given: 컴플라이언스 승인, 한국투자증권 API 성공 응답
+                when(complianceEngine.preTradeCheck(any(), eq(TEST_USER_ID))).thenReturn(ComplianceResult.approve());
                 when(tradingSettingRepository.findByAccountNo("1234567890"))
                                 .thenReturn(Optional.of(tradingSetting));
                 when(orderClient.placeBuyOrder(eq(TEST_USER_ID), anyString(), anyString(), anyInt(), any(),
@@ -122,6 +128,7 @@ class OrderServiceTest {
                                 .quantity(10)
                                 .price(new BigDecimal("200000.00"))
                                 .build();
+                when(complianceEngine.preTradeCheck(any(), eq(TEST_USER_ID))).thenReturn(ComplianceResult.approve());
                 when(tradingSettingRepository.findByAccountNo("1234567890"))
                                 .thenReturn(Optional.of(tradingSetting));
 
@@ -143,6 +150,7 @@ class OrderServiceTest {
                                 .quantity(1)
                                 .price(new BigDecimal("500.00"))
                                 .build();
+                when(complianceEngine.preTradeCheck(any(), eq(TEST_USER_ID))).thenReturn(ComplianceResult.approve());
                 when(tradingSettingRepository.findByAccountNo("1234567890"))
                                 .thenReturn(Optional.of(tradingSetting));
 
@@ -206,6 +214,7 @@ class OrderServiceTest {
         @Test
         void executeOrderForPipeline_marketKR_callsDomesticOrder() {
                 // given: market KR (or null) → domestic placeBuyOrder
+                when(complianceEngine.preTradeCheck(any(), eq(TEST_USER_ID))).thenReturn(ComplianceResult.approve());
                 when(tradingSettingRepository.findByAccountNo("1234567890"))
                                 .thenReturn(Optional.of(tradingSetting));
                 when(orderClient.placeBuyOrder(eq(TEST_USER_ID), anyString(), eq("005930"), anyInt(), any(),
@@ -251,6 +260,7 @@ class OrderServiceTest {
                                 .price(new BigDecimal("150.00"))
                                 .market("US")
                                 .build();
+                when(complianceEngine.preTradeCheck(any(), eq(TEST_USER_ID))).thenReturn(ComplianceResult.approve());
                 when(tradingSettingRepository.findByAccountNo("1234567890"))
                                 .thenReturn(Optional.of(tradingSetting));
                 when(orderClient.placeOverseasBuyOrder(eq(TEST_USER_ID), anyString(), eq("AAPL"), eq(100), any(),
@@ -283,5 +293,18 @@ class OrderServiceTest {
                 verify(orderClient).placeOverseasBuyOrder(eq(TEST_USER_ID), eq("1234567890"), eq("AAPL"), eq(100),
                                 any(), anyString());
                 verify(orderClient, never()).placeBuyOrder(any(), any(), any(), anyInt(), any(), any());
+        }
+
+        @Test
+        void 주문_실행_컴플라이언스_거부() {
+                when(complianceEngine.preTradeCheck(any(), eq(TEST_USER_ID)))
+                                .thenReturn(ComplianceResult.reject("Kill Switch 활성화"));
+
+                DomainException exception = assertThrows(DomainException.class,
+                                () -> orderService.executeOrder(orderRequest));
+
+                assertEquals(ErrorCode.ORDER_REJECTED, exception.getErrorCode());
+                assertTrue(exception.getMessage().contains("Kill Switch"));
+                verify(orderRepository, never()).save(any(Order.class));
         }
 }

@@ -51,6 +51,13 @@
 - **TypeScript**: 타입 안정성
 - **Tailwind CSS**: 유틸리티 기반 스타일링
 
+#### React SPA (분리 배포/개발) — 구현 시작
+- **프론트 디렉토리**: `investment-front/`
+- **개발 서버**: Vite (기본 5173)
+- **백엔드 연동**: `VITE_API_BASE_URL` 환경변수로 API base URL 지정 (예: `http://localhost:8083`)
+- **인증**: `/api/v1/auth/login` 응답의 `token`을 브라우저 저장소에 보관 후, 모든 API 요청에 `Authorization: Bearer <token>` 헤더로 전송 (백엔드 `JwtAuthenticationFilter`는 헤더 토큰 지원)
+- **CORS**: 백엔드는 `CORS_ALLOWED_ORIGINS`(기본 `*`)로 제어하며, Bearer 토큰 방식은 credentials 없이 동작 가능
+
 ## 현재 구현 특징
 
 ### 1. 가벼운 디자인

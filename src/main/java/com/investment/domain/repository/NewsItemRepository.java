@@ -20,13 +20,13 @@ public interface NewsItemRepository extends JpaRepository<NewsItem, String> {
         boolean existsBySourceAndUrl(String source, String url);
 
         @Query("SELECT n FROM NewsItem n WHERE " +
-                        "(:market IS NULL OR n.market = :market) AND " +
-                        "(:source IS NULL OR n.source = :source) AND " +
-                        "(:itemType IS NULL OR n.itemType = :itemType) AND " +
-                        "(:symbol IS NULL OR n.symbol = :symbol) AND " +
-                        "(:titlePattern IS NULL OR n.title LIKE :titlePattern) AND " +
-                        "(:fromAt IS NULL OR n.collectedAt >= :fromAt) AND " +
-                        "(:toAt IS NULL OR n.collectedAt <= :toAt) " +
+                        "n.market = COALESCE(:market, n.market) AND " +
+                        "n.source = COALESCE(:source, n.source) AND " +
+                        "n.itemType = COALESCE(:itemType, n.itemType) AND " +
+                        "n.symbol = COALESCE(:symbol, n.symbol) AND " +
+                        "n.title LIKE COALESCE(:titlePattern, n.title) AND " +
+                        "n.collectedAt >= COALESCE(:fromAt, n.collectedAt) AND " +
+                        "n.collectedAt <= COALESCE(:toAt, n.collectedAt) " +
                         "ORDER BY n.collectedAt DESC")
         Page<NewsItem> findByFilters(
                         @Param("market") String market,

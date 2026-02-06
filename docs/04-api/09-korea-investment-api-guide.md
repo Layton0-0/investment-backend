@@ -470,11 +470,12 @@ Java 17을 사용하는 경우 기본적으로 TLS 1.2 이상을 지원하므로
 - **필수 파라미터**: `CANO`, `ACNT_PRDT_CD`, `INQR_STRT_DT`, `INQR_END_DT`, `SLL_BUY_DVSN_CD`, `CCLD_DVSN`, `INQR_DVSN`, `INQR_DVSN_3`, `EXCG_ID_DVSN_CD` (선택)
 
 #### 5. 투자계좌자산현황조회
-- **TR ID**: `TTTC8436R` (실거래) / `VTTC8436R` (모의투자)
-- **엔드포인트**: `/uapi/domestic-stock/v1/trading/inquire-assets`
+- **TR ID**: `CTRP6548R` (실거래 전용)
+- **엔드포인트**: `/uapi/domestic-stock/v1/trading/inquire-account-balance`
 - **요청 방식**: **GET** + query parameter
-- **기능**: 계좌 자산 현황 종합 조회
+- **기능**: 계좌 자산 현황 종합 조회 (output1·output2 반환, output2 기준 DTO 매핑). **모의계좌 미지원** — 모의계좌일 때는 `inquireAssets()` 내부에서 주식잔고조회(inquire-balance) 결과로 자산 요약을 구성해 반환(폴백).
 - **사용 클래스**: `KoreaInvestmentAccountClient.inquireAssets()`
+- **필수 파라미터**: `CANO`, `ACNT_PRDT_CD` / 선택: `INQR_DVSN_1`, `BSPR_BF_DT_APLY_YN`
 
 #### 6. 기간별손익일별합산조회
 - **TR ID**: `TTTC8708R` (실거래) / `VTTC8708R` (모의투자)

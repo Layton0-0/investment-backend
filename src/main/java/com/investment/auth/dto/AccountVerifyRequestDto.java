@@ -12,6 +12,12 @@ import lombok.Setter;
 @Setter
 public class AccountVerifyRequestDto {
 
+    /**
+     * 증권사 구분 (BrokerType code, 예: KOREA_INVESTMENT).
+     * 현재 계좌인증은 한국투자증권만 지원하며, 향후 확장 시 사용.
+     */
+    private String brokerType;
+
     @NotBlank(message = "API Key는 필수입니다")
     private String appKey;
 

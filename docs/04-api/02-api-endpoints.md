@@ -258,6 +258,8 @@ curl -X GET "http://localhost:8080/api/v1/accounts/12345678/assets"
 }
 ```
 
+**에러 응답 (404 Not Found)**: 계좌가 없거나 해당 계좌에 대한 API 키를 찾을 수 없을 때 `ACCOUNT_NOT_FOUND` 코드로 404를 반환합니다. (전역 예외 핸들러에서 `ACCOUNT_NOT_FOUND` → 404 매핑.)
+
 ---
 
 ### 1.7 기간별손익조회
@@ -673,6 +675,37 @@ curl -X GET "http://localhost:8080/api/v1/accounts/12345678/profit-loss?startDat
 **에러 코드**:
 - `INVALID_INPUT`: 잘못된 입력값
 - `INVALID_SETTING_VALUE`: 설정값이 유효 범위를 벗어남
+
+---
+
+### 5.3 Kill Switch (Phase 2)
+
+**엔드포인트**: `GET /api/v1/system/kill-switch`
+
+**설명**: 긴급 시 전체 주문 차단(Kill Switch) 상태를 조회합니다. 인증된 사용자 조회 가능.
+
+**응답 (200 OK)**:
+```json
+{ "haltAllOrders": false }
+```
+
+---
+
+**엔드포인트**: `PUT /api/v1/system/kill-switch`
+
+**설명**: Kill Switch를 설정합니다. **Ops**(또는 ADMIN) 역할만 설정 가능.
+
+**요청 본문**:
+```json
+{ "haltAllOrders": true }
+```
+
+**응답 (200 OK)**: 설정 반영된 상태
+```json
+{ "haltAllOrders": true }
+```
+
+**참고**: `haltAllOrders=true` 시 모든 주문이 Pre-Trade 컴플라이언스에서 거부(ORDER_REJECTED, 403)됩니다.
 
 ---
 

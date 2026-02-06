@@ -1,5 +1,6 @@
 package com.investment.api.controller;
 
+import com.investment.account.service.AccountService;
 import com.investment.analysis.dto.AnalysisRequestDto;
 import com.investment.analysis.dto.AnalysisResponseDto;
 import com.investment.analysis.service.AnalysisService;
@@ -34,6 +35,8 @@ class AnalysisControllerTest {
 
     @MockBean
     private AnalysisService analysisService;
+    @MockBean
+    private AccountService accountService;
     @MockBean
     private JwtAuthenticationFilter jwtAuthenticationFilter;
     @MockBean

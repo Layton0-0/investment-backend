@@ -43,7 +43,7 @@
 - `201 Created`: 생성 성공
 - `204 No Content`: 성공 (응답 본문 없음)
 - `400 Bad Request`: 잘못된 요청
-- `404 Not Found`: 리소스를 찾을 수 없음
+- `404 Not Found`: 리소스를 찾을 수 없음 (계좌/자산 조회 시 `ACCOUNT_NOT_FOUND`도 404로 반환)
 - `500 Internal Server Error`: 서버 오류
 
 ## 3. API 엔드포인트 목록
@@ -87,7 +87,7 @@
 - `GET /api/v1/trading-portfolios/{date}` - 트레이딩 포트폴리오 조회
 
 ### 3.7 배치 관리 API
-- `GET /api/v1/batch/jobs` - 배치 작업 목록 조회
+- 배치 작업 목록: **실제 구현**은 `GET /batch/api/jobs` (BatchManagementController). SPA 프론트는 이 경로로 연동. 상세 매핑은 [API–프론트엔드 매핑](./11-api-frontend-mapping.md) 참조.
 
 ### 3.8 뉴스·공시 API
 - `GET /api/v1/news` - 뉴스·공시 목록 조회 (쿼리: `market`, `source`, `itemType`, `symbol`, `title`, `from`, `to`, `page`, `size`). `market`·`source`·`itemType`·`symbol` 빈값이면 전체, `title`은 부분 일치.
@@ -181,6 +181,7 @@
 - [설정 API](./06-setting-api.md)
 - [트레이딩 포트폴리오 API](./07-trading-portfolio-api.md)
 - [데이터 수집 API 및 설정](./10-data-collection-api.md) (DART/KRX/Yahoo, 내부 수집 API)
+- [API–프론트엔드 매핑](./11-api-frontend-mapping.md) (엔드포인트별 프론트 연동 위치·미연동 정리)
 
 ## 문서 변경 이력
 
@@ -188,3 +189,4 @@
 |------|------|--------|----------|
 | 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 - 계좌 API 문서 통합 반영 |
 | 1.1 | 2026-01-30 | System | 데이터 수집 API 문서 링크 추가 (10-data-collection-api.md) |
+| 1.2 | 2026-02-05 | System | §3.7 배치 API 실제 경로(GET /batch/api/jobs) 명시, §9.2 API–프론트 매핑 문서(11) 링크 추가 |

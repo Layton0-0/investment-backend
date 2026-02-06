@@ -19,8 +19,10 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 한국투자증권 토큰 관리 서비스
- * 
+ *
  * 로그인 시점에 토큰이 DB에 없으면 1회 발급하여 저장합니다.
+ * 한국투자증권 API 접근토큰 발급 1분당 1회 제한을 준수하며,
+ * 동시 발급은 사용자 단위 락으로 직렬화합니다.
  */
 @Slf4j
 @Service
@@ -37,8 +39,21 @@ public class KoreaInvestmentTokenService {
     private final ConcurrentHashMap<String, Long> recentTokenIssuance = new ConcurrentHashMap<>();
     private static final long RECENT_ISSUANCE_WINDOW_MS = 5000; // 5초
 
+    /** 한국투자증권 API 제한: 접근토큰 발급 1분당 1회 (사용자당) */
+    private static final long TOKEN_ISSUANCE_COOLDOWN_MS = 60_000L;
+
+    /** 사용자별 마지막 토큰 발급 시각(밀리초). 사용자당 1분 1회 제한용 */
+    private final ConcurrentHashMap<String, Long> lastIssuanceTimeByUserId = new ConcurrentHashMap<>();
+
+    /** 사용자 단위 발급 락. 동시에 모의/실 두 타입 발급이 겹치지 않도록 직렬화 */
+    private final ConcurrentHashMap<String, Object> issuanceLockByUserId = new ConcurrentHashMap<>();
+
     private static String issuanceKey(String userId, String serverType) {
         return userId + "|" + (serverType != null ? serverType : "1");
+    }
+
+    private Object lockForUser(String userId) {
+        return issuanceLockByUserId.computeIfAbsent(userId, k -> new Object());
     }
 
     /**
@@ -211,7 +226,9 @@ public class KoreaInvestmentTokenService {
         }
 
         // 최근 발급 이력 기록
-        recentTokenIssuance.put(issuanceKey(userId, serverType), System.currentTimeMillis());
+        long now = System.currentTimeMillis();
+        recentTokenIssuance.put(issuanceKey(userId, serverType), now);
+        lastIssuanceTimeByUserId.put(userId, now);
 
         log.info("토큰 발급 및 저장 완료: userId={}, serverType={}", userId, serverType);
     }
@@ -265,7 +282,7 @@ public class KoreaInvestmentTokenService {
         String st = serverType != null ? serverType : "1";
         KoreaInvestmentToken token = tokenRepository.findByUserIdAndServerType(userId, st).orElse(null);
 
-        // 토큰이 없거나 만료된 경우 재발급
+        // 토큰이 없거나 만료된 경우: 사용자 단위 락으로 직렬화 후 재발급
         if (token == null || !token.isValid()) {
             String key = issuanceKey(userId, st);
             Long recentIssuanceTime = recentTokenIssuance.get(key);
@@ -293,16 +310,40 @@ public class KoreaInvestmentTokenService {
             }
 
             if (token == null || !token.isValid()) {
-                log.info("토큰이 없거나 만료됨, 재발급 시도: userId={}, serverType={}", userId, st);
+                synchronized (lockForUser(userId)) {
+                    token = tokenRepository.findByUserIdAndServerType(userId, st).orElse(null);
+                    if (token != null && token.isValid()) {
+                        try {
+                            return encryptionUtil.decrypt(token.getAccessTokenEncrypted());
+                        } catch (RuntimeException e) {
+                            log.warn("토큰 복호화 실패: userId={}, serverType={}, error={}", userId, st, e.getMessage());
+                            token = null;
+                        }
+                    }
+                    if (token == null || !token.isValid()) {
+                        Long lastByUser = lastIssuanceTimeByUserId.get(userId);
+                        long now = System.currentTimeMillis();
+                        if (lastByUser != null && (now - lastByUser) < TOKEN_ISSUANCE_COOLDOWN_MS) {
+                            long waitSec = (TOKEN_ISSUANCE_COOLDOWN_MS - (now - lastByUser)) / 1000;
+                            String msg = String.format(
+                                    "접근토큰 발급은 1분당 1회만 가능합니다. 약 %d초 후 다시 시도해 주세요.",
+                                    Math.max(1, waitSec));
+                            log.warn("토큰 발급 제한: userId={}, serverType={}, lastIssuance={}ms ago", userId, st, now - lastByUser);
+                            throw new RuntimeException(msg);
+                        }
 
-                UserApiKey userApiKey = userApiKeyRepository
-                        .findByUserIdAndBrokerTypeAndServerType(userId, BrokerType.KOREA_INVESTMENT, st)
-                        .orElseThrow(() -> new RuntimeException("한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId + ", serverType=" + st));
+                        log.info("토큰이 없거나 만료됨, 재발급 시도: userId={}, serverType={}", userId, st);
 
-                issueTokenForUser(userApiKey);
+                        UserApiKey userApiKey = userApiKeyRepository
+                                .findByUserIdAndBrokerTypeAndServerType(userId, BrokerType.KOREA_INVESTMENT, st)
+                                .orElseThrow(() -> new RuntimeException("한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId + ", serverType=" + st));
 
-                token = tokenRepository.findByUserIdAndServerType(userId, st)
-                        .orElseThrow(() -> new RuntimeException("토큰 발급 후 조회 실패: userId=" + userId + ", serverType=" + st));
+                        issueTokenForUser(userApiKey);
+
+                        token = tokenRepository.findByUserIdAndServerType(userId, st)
+                                .orElseThrow(() -> new RuntimeException("토큰 발급 후 조회 실패: userId=" + userId + ", serverType=" + st));
+                    }
+                }
             }
         }
 
@@ -317,7 +358,16 @@ public class KoreaInvestmentTokenService {
                     .findByUserIdAndBrokerTypeAndServerType(userId, BrokerType.KOREA_INVESTMENT, st)
                     .orElseThrow(() -> new RuntimeException("한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
 
-            issueTokenForUser(userApiKey);
+            synchronized (lockForUser(userId)) {
+                Long lastByUser = lastIssuanceTimeByUserId.get(userId);
+                long now = System.currentTimeMillis();
+                if (lastByUser != null && (now - lastByUser) < TOKEN_ISSUANCE_COOLDOWN_MS) {
+                    long waitSec = (TOKEN_ISSUANCE_COOLDOWN_MS - (now - lastByUser)) / 1000;
+                    throw new RuntimeException(String.format(
+                            "접근토큰 발급은 1분당 1회만 가능합니다. 약 %d초 후 다시 시도해 주세요.", Math.max(1, waitSec)));
+                }
+                issueTokenForUser(userApiKey);
+            }
 
             token = tokenRepository.findByUserIdAndServerType(userId, st)
                     .orElseThrow(() -> new RuntimeException("토큰 발급 후 조회 실패: userId=" + userId));

@@ -4,6 +4,8 @@ import com.investment.common.exception.DomainException;
 import com.investment.common.exception.ErrorCode;
 import com.investment.common.security.LogMaskingUtil;
 import com.investment.config.CacheConfig;
+import com.investment.core.engine.risk.ComplianceEngine;
+import com.investment.core.engine.risk.ComplianceResult;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import com.investment.domain.entity.Order;
 import com.investment.domain.entity.TradingSetting;
@@ -49,6 +51,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final TradingSettingRepository tradingSettingRepository;
     private final KoreaInvestmentOrderClient orderClient;
+    private final ComplianceEngine complianceEngine;
 
     /**
      * 주문 실행
@@ -115,6 +118,11 @@ public class OrderService {
      * 주문 실행 내부 로직 (userId 지정).
      */
     private OrderResponseDto executeOrderInternal(OrderRequestDto request, String userId) {
+        ComplianceResult compliance = complianceEngine.preTradeCheck(request, userId);
+        if (!compliance.isApproved()) {
+            throw new DomainException(ErrorCode.ORDER_REJECTED, compliance.getReason());
+        }
+
         TradingSetting setting = tradingSettingRepository.findByAccountNo(request.getAccountNo())
                 .orElseThrow(() -> new DomainException(
                         ErrorCode.SETTING_NOT_FOUND,

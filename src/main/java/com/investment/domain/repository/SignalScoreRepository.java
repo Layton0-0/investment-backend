@@ -22,7 +22,8 @@ public interface SignalScoreRepository extends JpaRepository<SignalScore, Signal
 
     Page<SignalScore> findByBasDtAndMarketAndFactorType(LocalDate basDt, String market, String factorType, Pageable pageable);
 
-    @Query("SELECT s FROM SignalScore s WHERE (:basDt IS NULL OR s.basDt = :basDt) AND (:market IS NULL OR s.market = :market) AND (:symbol IS NULL OR s.symbol = :symbol) AND (:factorType IS NULL OR s.factorType = :factorType)")
+    // COALESCE 사용: PostgreSQL에서 "? IS NULL" 시 파라미터 타입 추론 불가(42P18) 방지
+    @Query("SELECT s FROM SignalScore s WHERE s.basDt = COALESCE(:basDt, s.basDt) AND s.market = COALESCE(:market, s.market) AND s.symbol = COALESCE(:symbol, s.symbol) AND s.factorType = COALESCE(:factorType, s.factorType)")
     Page<SignalScore> findByFilters(
             @Param("basDt") LocalDate basDt,
             @Param("market") String market,

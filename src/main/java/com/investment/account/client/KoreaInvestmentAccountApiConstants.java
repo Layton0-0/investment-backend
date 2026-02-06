@@ -25,7 +25,8 @@ public final class KoreaInvestmentAccountApiConstants {
     public static final String PATH_INQUIRE_PSBL_ORDER3 = "/uapi/domestic-stock/v1/trading/inquire-psbl-order3";
     public static final String PATH_INQUIRE_DAILY_CCLD = "/uapi/domestic-stock/v1/trading/inquire-daily-ccld";
     public static final String PATH_INQUIRE_BALANCE_RLZ_PL = "/uapi/domestic-stock/v1/trading/inquire-balance-rlz-pl";
-    public static final String PATH_INQUIRE_ASSETS = "/uapi/domestic-stock/v1/trading/inquire-assets";
+    /** 투자계좌자산현황조회 (공식: inquire-account-balance, TR: CTRP6548R/VTRP6548R) */
+    public static final String PATH_INQUIRE_ACCOUNT_BALANCE = "/uapi/domestic-stock/v1/trading/inquire-account-balance";
     public static final String PATH_INQUIRE_PERIOD_PROFIT_LOSS = "/uapi/domestic-stock/v1/trading/inquire-period-profit-loss";
     
     // 주식잔고조회 TR ID
@@ -60,9 +61,9 @@ public final class KoreaInvestmentAccountApiConstants {
     public static final String TR_ID_BALANCE_RLZ_PL_REAL = "TTTC8494R"; // 실거래
     public static final String TR_ID_BALANCE_RLZ_PL_VIRTUAL = "VTTC8494R"; // 모의투자
     
-    // 투자계좌자산현황조회 TR ID
-    public static final String TR_ID_ASSETS_REAL = "TTTC8436R"; // 실거래
-    public static final String TR_ID_ASSETS_VIRTUAL = "VTTC8436R"; // 모의투자
+    // 투자계좌자산현황조회 TR ID (공식 예제: inquire_account_balance, CTRP6548R)
+    // 실거래·모의투자 동일 tr_id (모의투자 전용 VTRP6548R 미지원으로 동일 코드 사용)
+    public static final String TR_ID_ASSETS = "CTRP6548R";
     
     // 기간별손익일별합산조회 TR ID
     public static final String TR_ID_PERIOD_PROFIT_LOSS_REAL = "TTTC8708R"; // 실거래
@@ -178,15 +179,13 @@ public final class KoreaInvestmentAccountApiConstants {
     
     /**
      * 서버 타입에 따른 TR ID 반환 (투자계좌자산현황조회)
-     * 
+     * 실거래·모의투자 동일 tr_id(CTRP6548R) 사용.
+     *
      * @param serverType "0": 실거래, "1": 모의투자
      * @return TR ID
      */
     public static String getAssetsTrId(String serverType) {
-        if ("0".equals(serverType)) {
-            return TR_ID_ASSETS_REAL;
-        }
-        return TR_ID_ASSETS_VIRTUAL;
+        return TR_ID_ASSETS;
     }
     
     /**

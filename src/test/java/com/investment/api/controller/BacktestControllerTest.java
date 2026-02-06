@@ -1,5 +1,6 @@
 package com.investment.api.controller;
 
+import com.investment.account.service.AccountService;
 import com.investment.backtest.BacktestService;
 import com.investment.backtest.dto.BacktestRunRequest;
 import com.investment.backtest.dto.BacktestRunResult;
@@ -44,6 +45,8 @@ class BacktestControllerTest {
         private BacktestService backtestService;
         @MockBean
         private RoboBacktestService roboBacktestService;
+        @MockBean
+        private AccountService accountService;
         @MockBean
         private RoboPreExecutionResultStore roboPreExecutionResultStore;
         @MockBean

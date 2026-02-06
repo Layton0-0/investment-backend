@@ -1,0 +1,8 @@
+# First-time TimescaleDB schema creation.
+# Usage: run once with --spring.profiles.active=local,init-db then switch back to local only.
+# After tables exist, run with normal profile (ddl-auto=validate).
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: update

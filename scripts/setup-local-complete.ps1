@@ -235,11 +235,19 @@ if (-not (Test-Path "$ProjectRoot\gradle\wrapper\gradle-wrapper.jar")) {
 if (-not $SkipDocker) {
     Write-Host "`n[3/7] Starting Docker Compose infrastructure..." -ForegroundColor Yellow
     
-    # Check docker-compose.yml
-    if (-not (Test-Path "$ProjectRoot\docker-compose.yml")) {
-        Write-Host "  [ERROR] docker-compose.yml not found." -ForegroundColor Red
+    # Check docker-compose (investment-infra 또는 레거시 infra)
+    $composePath = $null
+    if (Test-Path "$ProjectRoot\..\investment-infra\docker-compose.local.yml") { $composePath = (Resolve-Path "$ProjectRoot\..\investment-infra\docker-compose.local.yml").Path }
+    elseif (Test-Path "$ProjectRoot\..\infra\docker-compose.local.yml") { $composePath = (Resolve-Path "$ProjectRoot\..\infra\docker-compose.local.yml").Path }
+    elseif (Test-Path "$ProjectRoot\..\investment-infra\docker-compose.yml") { $composePath = (Resolve-Path "$ProjectRoot\..\investment-infra\docker-compose.yml").Path }
+    elseif (Test-Path "$ProjectRoot\..\infra\docker-compose.yml") { $composePath = (Resolve-Path "$ProjectRoot\..\infra\docker-compose.yml").Path }
+    elseif (Test-Path "$ProjectRoot\docker-compose.yml") { $composePath = (Resolve-Path "$ProjectRoot\docker-compose.yml").Path }
+    if (-not $composePath) {
+        Write-Host "  [ERROR] docker-compose not found. Create investment-infra/docker-compose.local.yml or place docker-compose.yml in project root." -ForegroundColor Red
         exit 1
     }
+    $ComposeDir = Split-Path -Parent $composePath
+    $ComposeFile = Split-Path -Leaf $composePath
     
     # Check Docker
     try {
@@ -257,22 +265,23 @@ if (-not $SkipDocker) {
     # Check existing containers
     Write-Host "  Checking existing containers..." -ForegroundColor Cyan
     try {
-        $existingOutput = docker compose ps --format json 2>&1
+        Set-Location $ComposeDir
+        $existingOutput = docker compose -f $ComposeFile ps --format json 2>&1
         if ($existingOutput) {
             $existingContainers = $existingOutput | ConvertFrom-Json -ErrorAction SilentlyContinue
             if ($existingContainers) {
                 Write-Host "  Existing containers found. Restarting..." -ForegroundColor Cyan
-                docker compose down 2>&1 | Out-Null
+                docker compose -f $ComposeFile down 2>&1 | Out-Null
             }
         }
     } catch {
         # Ignore and continue
     }
     
-    # Start Docker Compose
-    Write-Host "  Starting Docker Compose..." -ForegroundColor Cyan
-    Set-Location $ProjectRoot
-    docker compose up -d
+    # Start Docker Compose (infra 또는 루트의 compose 사용)
+    Write-Host "  Starting Docker Compose ($ComposeFile)..." -ForegroundColor Cyan
+    Set-Location $ComposeDir
+    docker compose -f $ComposeFile up -d
     
     if ($LASTEXITCODE -eq 0) {
         Write-Host "  [OK] Docker Compose started" -ForegroundColor Green
@@ -288,14 +297,15 @@ if (-not $SkipDocker) {
             $elapsed += 2
             
             try {
-                $mariadbOutput = docker compose ps mariadb --format json 2>&1
-                $redisOutput = docker compose ps redis --format json 2>&1
+                Set-Location $ComposeDir
+                $mariadbOutput = docker compose -f $ComposeFile ps timescaledb --format json 2>&1
+                $redisOutput = docker compose -f $ComposeFile ps redis --format json 2>&1
                 
                 if ($mariadbOutput -and $redisOutput) {
-                    $mariadb = $mariadbOutput | ConvertFrom-Json -ErrorAction SilentlyContinue
+                    $db = $mariadbOutput | ConvertFrom-Json -ErrorAction SilentlyContinue
                     $redis = $redisOutput | ConvertFrom-Json -ErrorAction SilentlyContinue
                     
-                    if ($mariadb -and $redis -and $mariadb.State -eq "running" -and $redis.State -eq "running") {
+                    if ($db -and $redis -and $db.State -eq "running" -and $redis.State -eq "running") {
                         $allHealthy = $true
                     }
                 }

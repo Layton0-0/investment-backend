@@ -230,13 +230,22 @@ public class AccountService {
             } catch (Exception apiException) {
                 log.warn("한국투자증권 API 호출 실패, DB 폴백 사용: accountNo={}, error={}",
                         LogMaskingUtil.maskAccountNo(accountNo), apiException.getMessage());
-                // API 실패 시 DB 폴백
-                return getPositionsFromDb(accountNo);
+                try {
+                    return getPositionsFromDb(accountNo);
+                } catch (Exception dbEx) {
+                    log.warn("DB 폴백 보유 종목 조회 실패, 빈 목록 반환: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo), dbEx);
+                    return new ArrayList<>();
+                }
             }
         } catch (IllegalStateException e) {
             // 인증되지 않은 사용자 또는 userId를 찾을 수 없는 경우 DB 폴백
             log.debug("사용자 ID를 찾을 수 없음, DB 폴백 사용: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo));
-            return getPositionsFromDb(accountNo);
+            try {
+                return getPositionsFromDb(accountNo);
+            } catch (Exception dbEx) {
+                log.warn("DB 폴백 보유 종목 조회 실패, 빈 목록 반환: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo), dbEx);
+                return new ArrayList<>();
+            }
         } catch (Exception e) {
             log.error("보유 종목 조회 실패: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo), e);
             throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
@@ -329,31 +338,38 @@ public class AccountService {
     }
 
     /**
-     * DB에서 보유 종목 조회 (폴백용)
+     * DB에서 보유 종목 조회 (폴백용).
+     * null-safe: averagePrice/currentPrice/quantity 등이 null이어도 NPE 없이 처리.
      */
     private List<AccountPositionDto> getPositionsFromDb(String accountNo) {
         List<Portfolio> portfolios = portfolioRepository.findByAccountNo(accountNo);
+        if (portfolios == null) {
+            return new ArrayList<>();
+        }
 
         return portfolios.stream()
                 .map(portfolio -> {
-                    BigDecimal currentPrice = portfolio.getCurrentPrice();
-                    if (currentPrice == null) {
-                        currentPrice = portfolio.getAveragePrice();
+                    BigDecimal avgPrice = portfolio.getAveragePrice() != null
+                            ? portfolio.getAveragePrice() : BigDecimal.ZERO;
+                    BigDecimal currentPrice = portfolio.getCurrentPrice() != null
+                            ? portfolio.getCurrentPrice() : avgPrice;
+                    int qty = portfolio.getQuantity() >= 0 ? portfolio.getQuantity() : 0;
+
+                    BigDecimal totalValue = currentPrice.multiply(BigDecimal.valueOf(qty));
+                    BigDecimal cost = avgPrice.multiply(BigDecimal.valueOf(qty));
+                    BigDecimal profitLoss = totalValue.subtract(cost);
+                    BigDecimal profitLossRate = BigDecimal.ZERO;
+                    if (cost.compareTo(BigDecimal.ZERO) > 0) {
+                        profitLossRate = profitLoss
+                                .divide(cost, 4, RoundingMode.HALF_UP)
+                                .multiply(BigDecimal.valueOf(100));
                     }
 
-                    BigDecimal totalValue = currentPrice.multiply(BigDecimal.valueOf(portfolio.getQuantity()));
-                    BigDecimal profitLoss = totalValue.subtract(
-                            portfolio.getAveragePrice().multiply(BigDecimal.valueOf(portfolio.getQuantity())));
-                    BigDecimal profitLossRate = portfolio.getAveragePrice().compareTo(BigDecimal.ZERO) > 0 ? profitLoss
-                            .divide(portfolio.getAveragePrice().multiply(BigDecimal.valueOf(portfolio.getQuantity())),
-                                    4, RoundingMode.HALF_UP)
-                            .multiply(BigDecimal.valueOf(100)) : BigDecimal.ZERO;
-
                     return AccountPositionDto.builder()
-                            .symbol(portfolio.getSymbol())
+                            .symbol(portfolio.getSymbol() != null ? portfolio.getSymbol() : "")
                             .name(portfolio.getName())
-                            .quantity(portfolio.getQuantity())
-                            .averagePrice(portfolio.getAveragePrice())
+                            .quantity(qty)
+                            .averagePrice(avgPrice)
                             .currentPrice(currentPrice)
                             .totalValue(totalValue)
                             .profitLoss(profitLoss)

@@ -1,5 +1,6 @@
 package com.investment.auth.controller;
 
+import com.investment.account.service.AccountService;
 import com.investment.auth.dto.*;
 import com.investment.auth.service.AccountVerificationService;
 import com.investment.auth.service.AuthService;
@@ -36,6 +37,8 @@ class AuthControllerTest {
 
         @MockBean
         private AccountVerificationService accountVerificationService;
+        @MockBean
+        private AccountService accountService;
         @MockBean
         private JwtAuthenticationFilter jwtAuthenticationFilter;
         @MockBean

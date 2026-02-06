@@ -40,7 +40,6 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-batch'
     implementation 'org.flywaydb:flyway-core'
-    implementation 'org.flywaydb:flyway-mysql'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     
     // Reactive Web (비동기 처리)
@@ -50,8 +49,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-cache'
     
-    // Database - MariaDB 11.8.5 호환
-    runtimeOnly 'org.mariadb.jdbc:mariadb-java-client:3.3.3'
+    // Database - PostgreSQL (TimescaleDB 호환)
+    runtimeOnly 'org.postgresql:postgresql'
     
     // Lombok
     compileOnly 'org.projectlombok:lombok'
@@ -80,7 +79,8 @@ dependencies {
     implementation 'io.micrometer:micrometer-registry-prometheus'
     implementation 'io.micrometer:micrometer-tracing-bridge-brave'
     
-    // Testing
+    // Testing (H2 for @SpringBootTest without external DB)
+    testRuntimeOnly 'com.h2database:h2'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.mockito:mockito-core'

@@ -42,7 +42,10 @@ public class User {
     
     @Column(name = "LAST_LOGIN_AT")
     private LocalDateTime lastLoginAt;
-    
+
+    @Column(name = "ROLE", length = 20, nullable = false)
+    private String role = "User";
+
     @PrePersist
     protected void onCreate() {
         if (id == null) {
@@ -58,9 +61,10 @@ public class User {
     }
     
     @Builder
-    public User(String username, String passwordHash) {
+    public User(String username, String passwordHash, String role) {
         this.username = username;
         this.passwordHash = passwordHash;
+        this.role = role != null && !role.isBlank() ? role : "User";
     }
     
     /**

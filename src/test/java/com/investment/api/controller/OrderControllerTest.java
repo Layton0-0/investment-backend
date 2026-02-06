@@ -1,6 +1,7 @@
 package com.investment.api.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.investment.account.service.AccountService;
 import com.investment.common.security.JwtAuthenticationFilter;
 import com.investment.common.security.RateLimitFilter;
 import com.investment.config.SecurityHeadersConfig;
@@ -32,6 +33,9 @@ class OrderControllerTest {
 
         @MockBean
         private OrderService orderService;
+
+        @MockBean
+        private AccountService accountService;
 
         @MockBean
         private JwtAuthenticationFilter jwtAuthenticationFilter;

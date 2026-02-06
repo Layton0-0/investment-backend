@@ -18,6 +18,8 @@
 12. [뉴스·공시 파이프라인 채택](#12-뉴스공시-파이프라인-채택)
 13. [로깅 시 민감정보 마스킹 표준화](#13-로깅-시-민감정보-마스킹-표준화)
 14. [한국투자증권 API 요청 방식 및 MCP 사용](#14-한국투자증권-api-요청-방식-및-mcp-사용)
+15. [TimescaleDB 전환](#15-timescaledb-전환)
+16. [Alpha-Risk-Execution 분리 및 Portfolio/Risk 레이어 도입](#16-alpha-risk-execution-분리-및-portfoliorisk-레이어-도입)
 
 ---
 
@@ -544,6 +546,50 @@ API 설계 표준 수립 필요
 
 ---
 
+## 15. TimescaleDB 전환
+
+**결정일**: 2026년 2월  
+**상태**: 확정  
+**결정**: MariaDB에서 TimescaleDB(PostgreSQL 기반)로 전환
+
+### 배경
+기관급 퀀트 엔진 개편안에서 시계열 데이터(일봉·팩터·시그널) 적재·조회 효율과 데이터 정합성 강화를 위해 시계열 DB 도입이 권장됨.
+
+### 결정 사항
+- **DB**: TimescaleDB (`timescale/timescaledb:latest-pg16`) 사용. Docker Compose에서 MariaDB 서비스를 TimescaleDB로 교체.
+- **드라이버·다이얼렉트**: `org.postgresql.Driver`, `PostgreSQLDialect`. Flyway 마이그레이션 V21~V24는 PostgreSQL 문법으로 변환.
+- **초기 스키마**: 신규 환경은 `spring.profiles.active=local,init-db` 1회 실행( Hibernate ddl-auto=update ) 후 일반 프로파일로 전환.
+
+### 영향
+- docker-compose: investment-infra 레포의 docker-compose.local.yml 사용. TimescaleDB 포트 5432, Redis, 볼륨 timescaledb_data.
+- [application*.yml](src/main/resources/): driver, url, dialect → PostgreSQL.
+- [build.gradle](build.gradle): mariadb·flyway-mysql 제거, postgresql 의존성 추가.
+- [db/migration](src/main/resources/db/migration/): V21~V24 PostgreSQL 호환 DDL.
+
+---
+
+## 16. Alpha-Risk-Execution 분리 및 Portfolio/Risk 레이어 도입
+
+**결정일**: 2026년 2월  
+**상태**: 확정  
+**결정**: 기관급 퀀트 엔진 구조(Alpha - Risk - Execution) 분리 및 Portfolio Construction·PreTrade Compliance 레이어 도입
+
+### 배경
+기존 OrderService 내 검증만으로는 "의사결정 깊이"와 "데이터 정합성"이 부족하다는 개편안에 따라, 전략(Alpha)·리스크(Compliance)·집행(Execution)을 명시적으로 분리하고 포트폴리오 최적화 레이어를 추가한다.
+
+### 결정 사항
+- **Alpha**: `core.engine.alpha.AlphaEngine` — 전략 시그널 생성 진입점. Phase 1에서 StrategyService 위임.
+- **Portfolio**: `core.engine.portfolio` — TaxAwareOptimizer(세금·비용 반영), Rebalancer(목표 비중 대비 매매 리스트). Phase 1 스텁, Phase 2 구현.
+- **Risk**: `core.engine.risk.ComplianceEngine` — 주문 직전 PreTrade 검사(개별 종목 비중 상한, MDD 게이트, Kill Switch). Phase 1 스텁, Phase 2 구현.
+- **Execution**: `core.engine.execution.ExecutionGateway` — 주문 집행·한투 국내/해외 라우팅. Phase 1에서 OrderService 위임.
+- **Data Pipeline**: `core.pipeline.DataPipelineService` — 데이터 수집·정제 오케스트레이션 진입점. 수정주가 정책 명시.
+
+### 영향
+- [01-system-architecture.md](./02-architecture/01-system-architecture.md) §9 개편안 반영.
+- 신규 패키지: core.engine.alpha, core.engine.portfolio, core.engine.risk, core.engine.execution, core.pipeline.
+
+---
+
 ## 참고 문서
 
 - [시스템 아키텍처](./02-architecture/01-system-architecture.md)
@@ -560,3 +606,4 @@ API 설계 표준 수립 필요
 | 1.1 | 2026-01-29 | System | ADR 11 시장 차원(KR/US) 도입, ADR 12 뉴스·공시 파이프라인 채택 추가 |
 | 1.2 | 2026-01-29 | System | ADR 13 로깅 시 민감정보 마스킹 표준화(LogMaskingUtil) 추가 |
 | 1.3 | 2026-01-30 | System | ADR 14 한국투자증권 API 요청 방식(GET+query) 및 MCP 필수 사용, 작업 중 문서 업데이트 규칙 반영 |
+| 1.4 | 2026-02-06 | System | ADR 15 TimescaleDB 전환, ADR 16 Alpha-Risk-Execution·Portfolio/Risk 레이어 도입 |

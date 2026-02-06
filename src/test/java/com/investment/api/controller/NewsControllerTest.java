@@ -1,5 +1,6 @@
 package com.investment.api.controller;
 
+import com.investment.account.service.AccountService;
 import com.investment.common.security.JwtAuthenticationFilter;
 import com.investment.common.security.RateLimitFilter;
 import com.investment.config.SecurityHeadersConfig;
@@ -33,6 +34,8 @@ class NewsControllerTest {
 
         @MockBean
         private NewsItemService newsItemService;
+        @MockBean
+        private AccountService accountService;
         @MockBean
         private DartCollectionService dartCollectionService;
         @MockBean

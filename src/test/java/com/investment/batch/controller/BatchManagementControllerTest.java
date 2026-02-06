@@ -1,5 +1,6 @@
 package com.investment.batch.controller;
 
+import com.investment.account.service.AccountService;
 import com.investment.auth.service.AuthService;
 import com.investment.batch.dto.BatchJobDto;
 import com.investment.batch.service.BatchManagementService;
@@ -32,6 +33,8 @@ class BatchManagementControllerTest {
     private BatchManagementService batchManagementService;
     @MockBean
     private AuthService authService;
+    @MockBean
+    private AccountService accountService;
     @MockBean
     private JwtAuthenticationFilter jwtAuthenticationFilter;
     @MockBean
