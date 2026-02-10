@@ -43,12 +43,12 @@ class BatchManagementServiceTest {
                         .triggerPath("/api/v1/trading-portfolios/generate")
                         .build(),
                 BatchJobDefinition.builder()
-                        .id("dart-disclosure-collector")
-                        .name("DART 공시 수집")
-                        .description("10분마다")
-                        .cronExpression("0 */10 * * * *")
+                        .id("krx-daily-collector")
+                        .name("KRX 일별 시세 수집")
+                        .description("매일 16:00")
+                        .cronExpression("0 0 16 * * *")
                         .timeZone("Asia/Seoul")
-                        .triggerPath("/api/v1/trigger/dart-collect")
+                        .triggerPath("/api/v1/trigger/krx-daily")
                         .build()));
         when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), anyString())).thenReturn(0L);
         when(jdbcTemplate.queryForObject(anyString(), eq(java.sql.Timestamp.class), anyString())).thenReturn(null);
@@ -58,7 +58,7 @@ class BatchManagementServiceTest {
         assertNotNull(jobs);
         assertEquals(2, jobs.size());
         assertTrue(jobs.stream().anyMatch(j -> "trading-portfolio-generator".equals(j.getId())));
-        assertTrue(jobs.stream().anyMatch(j -> "dart-disclosure-collector".equals(j.getId())));
+        assertTrue(jobs.stream().anyMatch(j -> "krx-daily-collector".equals(j.getId())));
         jobs.forEach(job -> {
             assertNotNull(job.getId());
             assertNotNull(job.getName());

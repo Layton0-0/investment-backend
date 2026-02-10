@@ -12,7 +12,7 @@
 
 ### 1.3 인증
 - JWT 토큰 기반 인증 (Authorization: Bearer 또는 쿠키 token). 로그인/회원가입은 `POST /api/v1/auth/login`, `POST /api/v1/auth/signup`.
-- 인가: 매 요청 시 JWT에서 userId로 DB User 조회 후 역할(role)을 SecurityContext에 반영. 역할은 User/Ops/Admin. 관리자 전용 API는 `@PreAuthorize("hasRole('ADMIN')")` 등으로 보호.
+- 인가: 매 요청 시 JWT에서 userId로 DB User 조회 후 역할(role)을 SecurityContext에 반영. 역할은 User/Admin. 관리자 전용 API는 `@PreAuthorize("hasRole('ADMIN')")` 등으로 보호.
 - 관리자 계정 생성: 공개 회원가입으로는 생성하지 않음. 최초는 부트스트랩/시드, 추가는 ADMIN 전용 API(`POST /api/v1/admin/users`) 또는 시드. 자세한 정책은 [decisions.md §17](../decisions.md#17-관리자-계정-생성로그인-정책) 참조.
 
 ### 1.4 응답 형식
@@ -58,7 +58,7 @@
 - `POST /api/v1/auth/logout` - 로그아웃
 
 ### 3.0.1 관리자 API (ADMIN 전용)
-- `POST /api/v1/admin/users` - 관리자(Admin/Ops) 계정 생성. 요청 body: username, password, role(Admin|Ops). 인가: `hasRole('ADMIN')`.
+- `POST /api/v1/admin/users` - 관리자(Admin) 계정 생성. 요청 body: username, password, role(Admin). 인가: `hasRole('ADMIN')`.
 
 ### 3.1 계좌 API
 - `GET /api/v1/accounts/{accountNo}/balance` - 계좌 잔고 조회 (단일 리소스용 REST)
@@ -104,6 +104,16 @@
 - `POST /api/v1/backtest` - 백테스트 실행 (body: startDate, endDate, market, strategyType, initialCapital). 응답: 메트릭(MDD·CAGR·Sharpe·Sortino·Calmar·승률·손익비)·수익 곡선·거래 목록(거래별 totalFrictionCost 포함). 마찰 비용은 `investment.fees` 설정 적용. 인증 필요.
 - `POST /api/v1/backtest/robo` - 로보 어드바이저 백테스트 실행 (body: startDate, endDate, initialCapital, optional: assetSymbols, momentumMonths, maWindowDays, topN, rebalanceFrequency, commPct, slipPct 등). 요청에 commPct/slipPct가 없으면 `investment.fees`(미국 ETF round-trip·TAF) 적용, 있으면 해당 값으로 오버라이드. 응답: 메트릭(CAGR·MDD·Sharpe·Calmar·Turnover)·수익 곡선·벤치마크 곡선·리밸런싱 이력. 인증 필요.
 - `GET /api/v1/backtest/robo/last-pre-execution?accountNo=xxx` - 실행 전 백테스트 최근 결과 조회 (통과/미통과·MDD·Sharpe·runAt). 인증 필요.
+
+### 3.11 Ops API (ADMIN 전용)
+- `GET /api/v1/ops/data-pipeline/status` - 데이터 파이프라인 원천별(DART/SEC/KRX/US) 수집 상태·최근 기준일·오류 요약 조회. 인가: `hasRole('ADMIN')`.
+- `GET /api/v1/ops/alerts` - 알림 이력 조회 (페이징·레벨 필터). Discord 긴급 알림 발송 시 TB_ALERT_LOG에 저장된 이력. 인가: `hasRole('ADMIN')`.
+- `GET /api/v1/ops/audit` - 감사 로그 조회 (페이징·이벤트유형·기간 필터). 설정 변경·수동 트리거·실계좌 가드 차단 이벤트. userId/accountNo 마스킹 저장. 인가: `hasRole('ADMIN')`.
+- `GET /api/v1/ops/model/status` - 모델/예측 상태 조회. 예측 서비스(AI) 헬스·설정 URL 표시(마스킹)·마지막 체크 시각. 인가: `hasRole('ADMIN')`.
+- `GET /api/v1/ops/health` - 시스템 헬스 요약. DB·Redis·예측 서비스 상태(UP/DOWN/UNKNOWN). 인가: `hasRole('ADMIN')`.
+
+### 3.12 연말 세금·리포트 API
+- `GET /api/v1/report/tax/summary` - 연말 세금 요약. 쿼리: `year` (선택). 응답: year, domesticRealizedGainLoss, overseasRealizedGainLoss, dividendTotal, estimatedTax, disclaimer. **집계 근거**: 인증 사용자 소유 계좌에 대해 한국투자증권 기간별손익조회(realizedProfitLoss)를 해당 연도 구간으로 호출해 합산. 국내/해외 구분은 계좌별 API 응답 또는 서버타입 기준(모의/실 동일). 배당(dividendTotal)은 별도 수집 전까지 null. 예상 세금(estimatedTax)은 실현손익 가정 공식(국내 과세 표준 단순 적용) 추정이며 세무 자문 아님. PDF/CSV export·Hometax 연동은 별도 엔드포인트. 인증 필요.
 
 ## 4. API 버전 관리
 

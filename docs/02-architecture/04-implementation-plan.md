@@ -10,10 +10,10 @@
 - [ ] Circuit Breaker 패턴 적용
 
 ### Phase 2: AI/ML 서비스 통합
-- [ ] AI 서비스 클라이언트 인터페이스 설계
-- [ ] Python FastAPI 서비스 기본 구조
-- [ ] LSTM 예측 모델 개발
-- [ ] 모델 서빙 API 구현
+- [x] AI 서비스 클라이언트 인터페이스 설계
+- [x] Python FastAPI 서비스 기본 구조 (investment-prediction-service, /api/v1/predict, /api/v1/health, Dockerfile)
+- [x] LSTM 예측 모델 개발 (조건부 추론)
+- [x] 모델 서빙 API 구현 (단일·배치 예측)
 
 ### Phase 3: 실시간 데이터 처리
 - [ ] WebSocket 지원

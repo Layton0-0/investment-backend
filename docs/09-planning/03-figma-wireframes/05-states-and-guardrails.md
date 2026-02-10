@@ -8,8 +8,8 @@
 ## 2. 자동 주문 관련 가드
 
 - **자동 매매 OFF**: 자동투자 현황·대시보드에서 "자동 매매 OFF" 표시. "주문이 나가지 않습니다. 설정에서 자동 매매를 켜세요." + 설정 링크.
-- **auto-execute=false(서버)**: 실제 매수/매도가 나가지 않음. Ops 또는 설정 근처에 "현재 서버는 Dry-Run 모드입니다. 실제 주문을 실행하려면 서버 설정(PIPELINE_AUTO_EXECUTE)이 필요합니다." 읽기 전용 안내.
-- **allow-real-execution=false(서버)**: 실계좌에 대한 자동 실행 차단. Ops 화면에 "실계좌 자동 실행은 서버 설정(PIPELINE_ALLOW_REAL_EXECUTION)으로만 허용됩니다." 읽기 전용 표시.
+- **auto-execute=false(서버)**: 실제 매수/매도가 나가지 않음. Admin 또는 설정 근처에 "현재 서버는 Dry-Run 모드입니다. 실제 주문을 실행하려면 서버 설정(PIPELINE_AUTO_EXECUTE)이 필요합니다." 읽기 전용 안내.
+- **allow-real-execution=false(서버)**: 실계좌에 대한 자동 실행 차단. Admin 화면에 "실계좌 자동 실행은 서버 설정(PIPELINE_ALLOW_REAL_EXECUTION)으로만 허용됩니다." 읽기 전용 표시.
 
 ## 3. 리스크 게이트·일일 손실 한도
 

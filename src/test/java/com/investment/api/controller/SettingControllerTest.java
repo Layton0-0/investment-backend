@@ -5,6 +5,7 @@ import com.investment.auth.service.AuthService;
 import com.investment.common.security.JwtAuthenticationFilter;
 import com.investment.common.security.RateLimitFilter;
 import com.investment.config.SecurityHeadersConfig;
+import com.investment.ops.service.AuditLogService;
 import com.investment.setting.dto.TradingSettingDto;
 import com.investment.setting.service.TradingSettingService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,6 +39,8 @@ class SettingControllerTest {
     private TradingSettingService tradingSettingService;
     @MockBean
     private AuthService authService;
+    @MockBean
+    private AuditLogService auditLogService;
     @MockBean
     private AccountService accountService;
     @MockBean

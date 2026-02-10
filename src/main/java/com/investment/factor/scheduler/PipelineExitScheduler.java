@@ -10,6 +10,7 @@ import com.investment.domain.repository.TradingSettingRepository;
 import com.investment.domain.repository.UserAccountRepository;
 import com.investment.factor.execution.ExitRuleService;
 import com.investment.marketdata.dto.CurrentPriceDto;
+import com.investment.ops.service.AuditLogService;
 import com.investment.marketdata.service.RealtimeMarketDataService;
 import com.investment.order.dto.OrderRequestDto;
 import com.investment.order.service.OrderService;
@@ -43,6 +44,7 @@ public class PipelineExitScheduler {
     private final ExitRuleService exitRuleService;
     private final RealtimeMarketDataService realtimeMarketDataService;
     private final OrderService orderService;
+    private final AuditLogService auditLogService;
 
     @Value("${investment.pipeline.auto-execute:false}")
     private boolean autoExecute = false;
@@ -154,6 +156,9 @@ public class PipelineExitScheduler {
         if ("0".equals(serverType) && !allowRealExecution) {
             log.warn("실전 계좌 자동 실행 미허용(allow-real-execution=false), 청산 주문 스킵: accountNo={}, count={}",
                     accountNo, signals.size());
+            auditLogService.record(AuditLogService.EVENT_REAL_ACCOUNT_GUARD_BLOCKED, userId, accountNo,
+                    "실전 계좌 자동 실행 미허용으로 청산 주문 스킵 count=" + signals.size(),
+                    AuditLogService.RESULT_SUCCESS, null);
             return;
         }
 

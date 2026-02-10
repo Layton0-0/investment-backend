@@ -1,12 +1,15 @@
 package com.investment.alert;
 
 import com.investment.common.security.LogMaskingUtil;
+import com.investment.domain.entity.AlertLog;
+import com.investment.domain.repository.AlertLogRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -24,9 +27,12 @@ public class DiscordEmergencyAlertService implements EmergencyAlertService {
     private String discordWebhookUrl;
 
     private final WebClient.Builder webClientBuilder;
+    private final AlertLogRepository alertLogRepository;
 
-    public DiscordEmergencyAlertService(WebClient.Builder webClientBuilder) {
+    public DiscordEmergencyAlertService(WebClient.Builder webClientBuilder,
+                                        AlertLogRepository alertLogRepository) {
         this.webClientBuilder = webClientBuilder;
+        this.alertLogRepository = alertLogRepository;
     }
 
     @Override
@@ -53,7 +59,9 @@ public class DiscordEmergencyAlertService implements EmergencyAlertService {
         if (baseUrl != null && !baseUrl.isBlank()) {
             body.append("URL: ").append(baseUrl.trim()).append("\n");
         }
-        sendToDiscord(body.toString());
+        String content = body.toString();
+        persistAlert("WARNING", "UnfilledOrder", content);
+        sendToDiscord(content);
     }
 
     @Override
@@ -77,7 +85,17 @@ public class DiscordEmergencyAlertService implements EmergencyAlertService {
         if (baseUrl != null && !baseUrl.isBlank()) {
             body.append("URL: ").append(baseUrl.trim()).append("\n");
         }
-        sendToDiscord(body.toString());
+        String content = body.toString();
+        persistAlert("ERROR", "Failure", content);
+        sendToDiscord(content);
+    }
+
+    private void persistAlert(String level, String component, String message) {
+        try {
+            alertLogRepository.save(AlertLog.of(Instant.now(), level, component, message));
+        } catch (Exception e) {
+            log.warn("알림 이력 저장 실패: {}", e.getMessage());
+        }
     }
 
     private void sendToDiscord(String content) {

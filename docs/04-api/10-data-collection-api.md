@@ -6,14 +6,13 @@
 
 ## 설정 (application.yml / 환경변수)
 
+DART/SEC는 Spring에 설정 없음. Python 수집기 환경변수(DART_API_KEY, SEC_API_KEY 등)는 investment-data-collector README 참조.
+
 | 프로퍼티 | 환경변수 | 설명 |
 |----------|----------|------|
-| investment.data.dart.api-key | DART_API_KEY | Open DART API 인증키 (로그 마스킹 대상) |
-| investment.data.dart.base-url | DART_BASE_URL | 기본: https://opendart.fss.or.kr/api |
-| investment.data.dart.collect-days | DART_COLLECT_DAYS | 수집 기간(일). 기본 3 |
-| investment.data.dart.schedule-cron | DART_SCHEDULE_CRON | DART 수집 cron. 기본 10분마다 |
 | investment.data.krx.auth-key | KRX_AUTH_KEY | KRX Open API 인증키 (로그 마스킹 대상) |
 | investment.data.krx.base-url | KRX_BASE_URL | 기본: https://openapi.krx.co.kr |
+| investment.data.us.collector-url | US_COLLECTOR_URL | Python 수집기 URL. 수동 DART/SEC 수집 및 US 일봉 호출에 사용 |
 | investment.data.internal-api-key | DATA_COLLECTION_INTERNAL_KEY | 내부 수집 API 키. 미설정 시 내부 API 비활성화 |
 
 ## 내부 API (수집기 → Spring)
@@ -26,10 +25,10 @@ Yahoo 등 외부 수집기가 수집한 뉴스·이벤트를 일괄 등록한다
 - **요청 본문**: `{ "items": [ { "source", "market", "itemType", "title", "summary", "url", "collectedAt", "symbol", "eventType" } ] }`
 - **응답**: `{ "received": N, "saved": M }` (200). 중복(SOURCE+URL) 항목은 저장하지 않고 saved에 미포함.
 
-## 스케줄
+## 스케줄 및 수동 수집
 
-- **DART 공시**: DataCollectionScheduler에서 10분마다 실행. DartCollectionService.collectAndSave() → NewsItem(SOURCE=DART, ITEM_TYPE=FACT) 저장.
-- **Yahoo**: Cron 또는 수동으로 `scripts/yahoo_collector.py` 실행 후 Spring 내부 API로 전달.
+- **DART 공시 / SEC EDGAR 공시**: **Python investment-data-collector**에서 수행. 스케줄은 `POST /dart-collect`, `POST /sec-collect` 호출 또는 `SCHEDULE_DART_SEC=1`로 기동 시 10분(DART)/15분(SEC) 주기. 수동 수집은 **Spring POST /api/v1/news/collect** 가 **Python 수집기 API**(POST /dart-collect, POST /sec-collect)를 호출하는 구조. `investment.data.us.collector-url` 설정 필요.
+- **Yahoo**: Cron 또는 수동으로 `collectors/yahoo_collector.py` 실행 후 Spring 내부 API로 전달.
 
 ## 참고
 

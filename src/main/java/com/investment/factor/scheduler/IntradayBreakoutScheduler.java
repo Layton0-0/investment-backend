@@ -47,6 +47,10 @@ public class IntradayBreakoutScheduler {
     @Value("${investment.pipeline.auto-execute:false}")
     private boolean autoExecute = false;
 
+    /** KR 시초가/변동성 돌파 시 주문구분(ORD_DVSN). 02=최유리, 03=IOC. 빈값이면 지정가(00). */
+    @Value("${investment.pipeline.kr-opening-order-dvsn:}")
+    private String krOpeningOrderDvsn = "";
+
     /** Spring Batch Job에서 호출. */
     public void runIntradayBreakout() {
         if (!breakoutEnabled) {
@@ -114,6 +118,7 @@ public class IntradayBreakoutScheduler {
         }
         for (BreakoutCandidateDto c : toBuy) {
             try {
+                String orderDvsn = (krOpeningOrderDvsn != null && !krOpeningOrderDvsn.isBlank()) ? krOpeningOrderDvsn : null;
                 OrderRequestDto request = OrderRequestDto.builder()
                         .accountNo(accountNo)
                         .symbol(c.getSymbol())
@@ -121,6 +126,7 @@ public class IntradayBreakoutScheduler {
                         .quantity((int) c.getRecommendedQty())
                         .price(c.getCurrentPrice())
                         .market(c.getMarket() != null ? c.getMarket() : "KR")
+                        .orderDvsn(orderDvsn)
                         .build();
                 orderService.executeOrderForPipeline(request, userId);
                 log.info("장중 돌파 매수 실행: accountNo={}, symbol={}, qty={}, price={}",

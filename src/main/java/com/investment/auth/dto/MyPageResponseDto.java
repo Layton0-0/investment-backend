@@ -40,4 +40,9 @@ public class MyPageResponseDto {
      * 예: "12345678-12" -> "****5678-12"
      */
     private String accountNoMasked;
+
+    /**
+     * 사용자 역할 (User / Admin). 메뉴·권한 표시용.
+     */
+    private String role;
 }

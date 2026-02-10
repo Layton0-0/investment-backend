@@ -24,7 +24,7 @@
 
 ## 권한
 
-- User, Ops 모두 접근.
+- User, Admin 모두 접근.
 
 ## 연동 API
 

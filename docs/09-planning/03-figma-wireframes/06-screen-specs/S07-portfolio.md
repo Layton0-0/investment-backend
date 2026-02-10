@@ -21,7 +21,7 @@
 
 ## 권한
 
-- User, Ops: 읽기.
+- User, Admin: 읽기.
 
 ## 연동 API
 

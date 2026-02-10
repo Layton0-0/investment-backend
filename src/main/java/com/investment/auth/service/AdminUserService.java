@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 관리자(Admin/Ops) 생성 서비스. ADMIN 역할만 호출 가능한 API에서 사용.
+ * 관리자(Admin) 생성 서비스. ADMIN 역할만 호출 가능한 API에서 사용.
  */
 @Slf4j
 @Service

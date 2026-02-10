@@ -87,6 +87,19 @@
 | **배치 관리 (BatchManagementController)** | | |
 | GET | `/batch` | 스케줄 현황 페이지 (SSR, Thymeleaf) |
 | GET | `/batch/api/jobs` | 배치 작업 목록 JSON (SPA 연동용) |
+| **Ops 데이터 파이프라인 (OpsDataPipelineController)** | | |
+| GET | `/api/v1/ops/data-pipeline/status` | 데이터 파이프라인 원천별 수집 상태 (ADMIN 전용) |
+| **Ops 알림센터 (OpsAlertsController)** | | |
+| GET | `/api/v1/ops/alerts` | 알림 이력 조회 (ADMIN 전용, 페이징·레벨 필터) |
+| **Ops 감사 로그 (OpsAuditController)** | | |
+| GET | `/api/v1/ops/audit` | 감사 로그 조회 (ADMIN 전용, 페이징·eventType·기간 필터) |
+| **Ops 모델/예측 (OpsModelController)** | | |
+| GET | `/api/v1/ops/model/status` | 모델/예측 상태 조회 (ADMIN 전용) |
+| **Ops 시스템 헬스 (OpsHealthController)** | | |
+| GET | `/api/v1/ops/health` | 시스템 헬스 요약 (ADMIN 전용) |
+| **연말 세금·리포트 (TaxReportController)** | | |
+| GET | `/api/v1/report/tax/summary` | 연말 세금 요약 (year 쿼리, 실데이터 집계) |
+| GET | `/api/v1/report/tax/summary/export` | 연말 세금 요약 내보내기 (year, format=csv\|pdf) |
 
 **참고**: API 개요 문서(01-api-overview.md)의 "3.7 배치 관리 API"에는 `GET /api/v1/batch/jobs`로 기술되어 있으나, **현재 백엔드 구현은 `GET /batch/api/jobs`** 이다. SPA 프론트는 동일 base URL로 `/batch/api/jobs`를 호출한다. 향후 `/api/v1/batch/jobs`로 통일할지 별도 결정.
 
@@ -120,7 +133,7 @@
 | GET /api/v1/user/accounts/main | userAccountsApi.getMainAccount | useDashboardData, Market, Investment | |
 | GET 목록, GET {id}, PUT main | (없음) | - | **미연동** |
 | GET /api/v1/pipeline/summary | pipelineApi.getPipelineSummary | useDashboardData, Investment(AutoInvest) | |
-| POST /api/v1/trigger/* | triggerApi.trigger(path) | Ops(Batch) | path: dart-collect, sec-collect, factor-calculation, auto-buy, pipeline-execution 등. 버튼 라벨 "지금 실행" |
+| POST /api/v1/trigger/* | triggerApi.trigger(path) | Admin(Batch) | path: dart-collect, sec-collect, factor-calculation, auto-buy, pipeline-execution 등. 버튼 라벨 "지금 실행" |
 | GET /api/v1/news | newsApi.getNews | Market(News) | |
 | POST /api/v1/news/collect | (없음) | - | **미연동** |
 | GET /api/v1/signals | signalsApi.getSignals | Investment(AutoInvest) | |
@@ -130,7 +143,14 @@
 | POST robo, GET last-pre-execution, POST collect-us-daily | (없음) | - | **미연동** |
 | POST /api/v1/analysis | (없음) | - | **미연동** |
 | GET/POST /api/v1/market-data/* | (없음) | - | **미연동** |
-| GET /batch/api/jobs | batchApi.getBatchJobs | Ops(Batch) | **SPA 연동** (문서상 /api/v1/batch/jobs 아님) |
+| GET /batch/api/jobs | batchApi.getBatchJobs | Admin(Batch) | **SPA 연동** (문서상 /api/v1/batch/jobs 아님) |
+| GET /api/v1/ops/data-pipeline/status | opsApi.getDataPipelineStatus | Admin(Ops 데이터 파이프라인 /ops/data) | 연동 완료 |
+| GET /api/v1/ops/alerts | opsApi.getAlerts | Admin(Ops 알림센터 /ops/alerts) | 연동 완료 |
+| GET /api/v1/ops/audit | opsApi.getAuditLogs | Admin(Ops 감사 로그 /ops/audit) | 연동 완료 |
+| GET /api/v1/ops/model/status | opsApi.getModelStatus | Admin(Ops 모델/예측 /ops/model) | 연동 완료 |
+| GET /api/v1/ops/health | opsApi.getHealth | Admin(Ops 시스템 헬스 /ops/health) | 연동 완료 |
+| GET /api/v1/report/tax/summary | reportApi.getTaxSummary | TaxReportPage | 연말 세금·리포트 화면 |
+| GET /api/v1/report/tax/summary/export | reportApi.downloadTaxSummaryExport (window.open) | TaxReportPage | CSV/PDF 다운로드 |
 
 ---
 
@@ -150,7 +170,8 @@
 | `/batch` | Batch | triggerApi.trigger, batchApi.getBatchJobs |
 | `/backtest` | Backtest | backtestApi.runBacktest |
 | `/settings` | Settings | useSettingsAccounts(getSettingsAccounts, updateSettingsAccounts) |
-| `/risk`, `/ops/*` | OpsPage (OpsDashboard) | riskApi.getRiskSummary, getRiskLimits, getRiskHistory (/risk); Batch에서만 트리거 |
+| `/report/tax` | TaxReportPage | reportApi.getTaxSummary |
+| `/risk`, `/ops/*` | OpsPage (OpsDashboard) | riskApi.getRiskSummary, getRiskLimits, getRiskHistory (/risk); Batch에서만 트리거; /ops/data에서 opsApi.getDataPipelineStatus 연동 완료 |
 
 ---
 
@@ -170,13 +191,14 @@
 | 백테스트 `/backtest` | 백테스트 실행, 로보 3종 | runBacktest | 로보 last-pre-execution, collect-us-daily (§4.2) |
 | 설정 `/settings` | 계좌 설정 조회·저장, 거래 설정 조회·저장 | getSettingsAccounts, updateSettingsAccounts, getSettingByAccountNo | PUT settings/{accountNo} (§4.2) |
 | 마이페이지 `/mypage` | 마이페이지 조회·수정 | getMyPage | PUT mypage (§4.2) |
-| **Ops 전용** | | | |
-| 데이터 파이프라인 `/ops/data` | 파이프라인 실행 상태·로그·이력 | (Batch 트리거로 일부) | 전용 API 없음, 목업 |
-| 알림센터 `/ops/alerts` | 알림 목록·설정 | - | 미구현 |
+| **Admin 전용** | | | |
+| 데이터 파이프라인 `/ops/data` | 파이프라인 원천별 수집 상태·최근 기준일·오류 요약 | getDataPipelineStatus (opsApi) | - |
+| 알림센터 `/ops/alerts` | 알림 목록·설정 | getAlerts (opsApi) | - |
+| 감사 로그 `/ops/audit` | 설정 변경·수동 트리거·실계좌 가드 차단 이벤트 | getAuditLogs (opsApi) | - |
 | 리스크 리포트 `/risk` | 리스크 지표·한도·이력 | getRiskSummary, getRiskLimits, getRiskHistory | - |
-| 모델/예측 `/ops/model` | 예측 모델 상태·결과 | - | 목업 |
-| 감사 로그 `/ops/audit` | 인증·권한·변경 이력 | - | 미구현(감사 로그 저장·조회 API) |
-| 시스템 헬스 `/ops/health` | 서비스·DB·캐시 헬스 | (Actuator) | SPA 연동용 정리 API 선택 |
+| 연말 세금·리포트 `/report/tax` | 연도별 세금 요약(실현손익·배당·면책)·CSV/PDF 내보내기 | getTaxSummary, downloadTaxSummaryExport (reportApi) | 연동 완료 |
+| 모델/예측 `/ops/model` | 예측 모델 상태·결과 | getModelStatus (opsApi) | 연동 완료 |
+| 시스템 헬스 `/ops/health` | 서비스·DB·캐시 헬스 | getHealth (opsApi) | 연동 완료 |
 
 **순차 개발**: §4.2 우선순위(P0~P3)와 위 표의 미연동 항목을 메뉴 단위로 묶어, 02-development-status.md "진행예정"에 순차 개발 계획으로 반영한다.
 
@@ -211,4 +233,4 @@
 | 버전 | 일자 | 변경 내용 |
 |------|------|----------|
 | 1.0 | 2026-02-05 | 최초 작성: API 목록, 프론트 매핑 테이블, 라우트별 요약, 불일치·누락 정리 |
-| 1.1 | 2026-02-05 | §4 메뉴(라우트)별 백엔드 API 필요·연동 현황 추가, Ops 전용 메뉴별 정리, §4→§5 번호 조정 |
+| 1.1 | 2026-02-05 | §4 메뉴(라우트)별 백엔드 API 필요·연동 현황 추가, Admin 전용 메뉴별 정리, §4→§5 번호 조정 |

@@ -32,7 +32,7 @@ public class KillSwitchController {
 
     @Operation(summary = "Kill Switch 설정 (차단/해제)")
     @PutMapping("/kill-switch")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('Ops')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Map<String, Boolean>> setKillSwitch(@RequestBody Map<String, Boolean> body) {
         Boolean halt = body.get("haltAllOrders");
         if (halt == null) {

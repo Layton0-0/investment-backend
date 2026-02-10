@@ -24,6 +24,6 @@ public class CreateAdminUserRequestDto {
     private String password;
 
     @NotBlank(message = "역할은 필수입니다")
-    @Pattern(regexp = "^(Admin|Ops)$", message = "역할은 Admin 또는 Ops만 가능합니다")
+    @Pattern(regexp = "^(Admin)$", message = "역할은 Admin만 가능합니다")
     private String role;
 }

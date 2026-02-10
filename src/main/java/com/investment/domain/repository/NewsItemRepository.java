@@ -6,12 +6,19 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface NewsItemRepository extends JpaRepository<NewsItem, String> {
+
+        /** 원천별 최근 수집 시각 (데이터 파이프라인 상태 API용). */
+        @Query("SELECT MAX(n.collectedAt) FROM NewsItem n WHERE n.source = :source")
+        Optional<LocalDateTime> findMaxCollectedAtBySource(@Param("source") String source);
 
         /**
          * 원천·URL 기준 중복 여부 (수집 저장 시 중복 방지용).
@@ -37,4 +44,12 @@ public interface NewsItemRepository extends JpaRepository<NewsItem, String> {
                         @Param("fromAt") LocalDateTime fromAt,
                         @Param("toAt") LocalDateTime toAt,
                         Pageable pageable);
+
+        /**
+         * 시그널 반영 대상 공시 (DART 키워드 매칭·8-K) 최근 N일.
+         * eventType 'DART_SIGNAL:%' 또는 '8K'이고, collectedAt >= since, market 일치.
+         */
+        @Query("SELECT n FROM NewsItem n WHERE (n.eventType LIKE 'DART_SIGNAL:%' OR n.eventType = '8K') " +
+                        "AND n.collectedAt >= :since AND n.market = :market ORDER BY n.collectedAt DESC")
+        List<NewsItem> findSignalRelevantSince(@Param("market") String market, @Param("since") LocalDateTime since);
 }

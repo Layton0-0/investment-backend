@@ -296,6 +296,51 @@ class OrderServiceTest {
         }
 
         @Test
+        void executeOrderForPipeline_orderDvsn_set_passesToClient() {
+                // given: KR 주문에 orderDvsn "02"(최유리) 설정 시 해당 값이 placeBuyOrder에 전달됨
+                OrderRequestDto krRequestWithDvsn = OrderRequestDto.builder()
+                                .accountNo("1234567890")
+                                .symbol("005930")
+                                .orderType(OrderRequestDto.OrderType.BUY)
+                                .quantity(10)
+                                .price(new BigDecimal("70000.00"))
+                                .market("KR")
+                                .orderDvsn("02")
+                                .build();
+                when(complianceEngine.preTradeCheck(any(), eq(TEST_USER_ID))).thenReturn(ComplianceResult.approve());
+                when(tradingSettingRepository.findByAccountNo("1234567890"))
+                                .thenReturn(Optional.of(tradingSetting));
+                when(orderClient.placeBuyOrder(eq(TEST_USER_ID), anyString(), eq("005930"), eq(10), any(), eq("02")))
+                                .thenReturn(Mono.just(KoreaInvestmentOrderClient.OrderResponse.builder()
+                                                .orderNo("ORD-KR-2")
+                                                .status("SUCCESS")
+                                                .build()));
+                Order savedOrder = Order.builder()
+                                .accountNo(krRequestWithDvsn.getAccountNo())
+                                .symbol(krRequestWithDvsn.getSymbol())
+                                .orderType(Order.OrderType.BUY)
+                                .quantity(krRequestWithDvsn.getQuantity())
+                                .price(krRequestWithDvsn.getPrice())
+                                .status(Order.OrderStatus.PENDING)
+                                .build();
+                try {
+                        java.lang.reflect.Field idField = Order.class.getDeclaredField("id");
+                        idField.setAccessible(true);
+                        idField.set(savedOrder, java.util.UUID.randomUUID().toString());
+                } catch (Exception e) {
+                        throw new RuntimeException(e);
+                }
+                when(orderRepository.save(any(Order.class))).thenReturn(savedOrder);
+
+                // when
+                orderService.executeOrderForPipeline(krRequestWithDvsn, TEST_USER_ID);
+
+                // then: orderDvsn "02"가 placeBuyOrder의 orderType 인자로 전달됨
+                verify(orderClient).placeBuyOrder(eq(TEST_USER_ID), eq("1234567890"), eq("005930"), eq(10), any(),
+                                eq("02"));
+        }
+
+        @Test
         void 주문_실행_컴플라이언스_거부() {
                 when(complianceEngine.preTradeCheck(any(), eq(TEST_USER_ID)))
                                 .thenReturn(ComplianceResult.reject("Kill Switch 활성화"));

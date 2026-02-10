@@ -30,4 +30,7 @@ public class RiskProperties {
 
     /** 거시경제 지표 API URL (선택). GET JSON 예: {"vix": 18.5}. 미설정 시 VIX 미제공(기존 동작). */
     private String macroIndicatorUrl;
+
+    /** VaR/CVaR 단순 파라메트릭용 일일 변동성 가정 (%). 기본 1.0 = 1%. 0 또는 미설정 시 VaR/CVaR 미산출 */
+    private BigDecimal varDailyVolPct;
 }

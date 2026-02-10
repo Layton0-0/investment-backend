@@ -61,6 +61,7 @@ class RiskReportServiceTest {
         lenient().when(riskProperties.getVixThreshold()).thenReturn(new BigDecimal("30"));
         lenient().when(riskProperties.getReduceSizeOnHighVolPct()).thenReturn(new BigDecimal("50"));
         lenient().when(riskProperties.getDailyLossLimitPct()).thenReturn(new BigDecimal("5"));
+        lenient().when(riskProperties.getVarDailyVolPct()).thenReturn(null);
     }
 
     @Test

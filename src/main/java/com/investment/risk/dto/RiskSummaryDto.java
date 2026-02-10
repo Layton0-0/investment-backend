@@ -28,4 +28,12 @@ public class RiskSummaryDto {
     private BigDecimal riskGateSizeMultiplier;
     /** 계좌별 리스크 요약 (현재 사용자 소유 계좌만) */
     private List<RiskAccountSummaryDto> accounts;
+    /** 계좌 합산 현재 평가액 (노출 합계). 실데이터 */
+    private BigDecimal totalCurrentValue;
+    /** 계좌 중 최대 MDD (0~1). 실데이터, 없으면 null */
+    private BigDecimal maxMddPct;
+    /** 1일 VaR 95% (포트폴리오 대비 손실 가능 비율, %). 단순 파라메트릭 추정, 없으면 null */
+    private BigDecimal var95Pct;
+    /** 1일 CVaR 95% (Expected Shortfall, %). 단순 파라메트릭 추정, 없으면 null */
+    private BigDecimal cvar95Pct;
 }

@@ -71,10 +71,10 @@ investment-choi/
 
 | 항목 | 버전/기술 | 상태 | 비고 |
 |------|----------|------|------|
-| Python | 3.11+ | ⏳ 구현 필요 | FastAPI 서비스 |
-| FastAPI | 최신 | ⏳ 구현 필요 | 비동기 API 서버 |
-| PyTorch | 최신 (CPU) | ⏳ 구현 필요 | LSTM 모델 (초기) |
-| NumPy/Pandas | 최신 | ⏳ 구현 필요 | 데이터 처리 |
+| Python | 3.11+ | ✅ 완료 | FastAPI 서비스 (실제 경로: `investment-prediction-service/`) |
+| FastAPI | 최신 | ✅ 완료 | 비동기 API 서버, /api/v1/predict, /api/v1/health |
+| PyTorch | 최신 (CPU) | ✅ 완료 | LSTM 모델 (조건부 추론) |
+| NumPy/Pandas | 최신 | ✅ 완료 | 데이터 처리·전처리 |
 
 ### 2.4 Frontend
 
@@ -200,6 +200,22 @@ investment-choi/
 │   └── README.md
 ├── docs/                                # 문서
 ├── build.gradle
+└── README.md
+```
+
+**실제 구조 (참고)**: Python 예측 서비스는 모노리프 내부가 아니라 **프로젝트 루트와 형제 디렉터리** `investment-prediction-service/` 로 두고 있음.
+
+```
+investment-prediction-service/
+├── app/
+│   ├── main.py                 # FastAPI 앱 진입점
+│   ├── api/routes.py           # /api/v1/predict, /api/v1/health
+│   ├── models/                 # LSTM 등 ML 모델
+│   ├── services/               # predictor 등 비즈니스 로직
+│   ├── preprocessing/          # 전처리
+│   └── data/                   # 데이터 로더
+├── requirements.txt
+├── Dockerfile
 └── README.md
 ```
 

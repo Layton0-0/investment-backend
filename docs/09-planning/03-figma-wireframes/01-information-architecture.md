@@ -20,7 +20,7 @@ flowchart TB
     backtest[백테스트]
     settings[설정]
   end
-  subgraph ops [운영자 Ops]
+  subgraph ops [관리자 Admin]
     batch[스케줄 현황]
     dataOps[데이터 파이프라인]
     alerts[알림센터]
@@ -64,7 +64,7 @@ flowchart TB
 | 9 | backtest | 백테스트 | `/backtest` |
 | 10 | settings | 설정 | `/settings` |
 
-### 2.3 운영자(Ops) 전용
+### 2.3 관리자(Admin) 전용
 
 | 메뉴 ID | 표시명 | 경로 |
 |---------|--------|------|
@@ -80,7 +80,7 @@ flowchart TB
 - **전역 계좌 탭**: 로그인 사용자 화면에서 메뉴 바로 아래 **모의계좌 | 실계좌** 탭 표시. 탭 선택 시 URL 쿼리 `serverType=1`(모의) / `serverType=0`(실계좌) 유지. 기본값 `1`.
 - **링크 정합성**: 모든 메뉴 링크·빠른 액션·내부 링크에 현재 `serverType` 쿼리 포함. 예: `/auto-invest?serverType=1`.
 - **헤더 로고**: 클릭 시 `/`(대시보드)로 이동, 현재 `serverType` 쿼리 유지.
-- **Ops 메뉴 노출**: 역할이 운영자(Ops)일 때만 Ops 전용 메뉴(§2.3) 노출. User일 때는 스케줄 현황(`/batch`)까지 가능, 나머지 Ops 메뉴는 숨김 또는 비활성.
+- **Admin 메뉴 노출**: 역할이 관리자(Admin)일 때만 Admin 전용 메뉴(§2.3) 노출. User일 때는 스케줄 현황(`/batch`)까지 가능, 나머지 Admin 메뉴는 숨김 또는 비활성.
 
 ## 4. 참고
 

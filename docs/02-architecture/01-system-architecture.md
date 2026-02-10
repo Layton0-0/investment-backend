@@ -323,7 +323,7 @@ TradingPortfolioService
 - `core.engine.execution`: ExecutionGateway, OrderServiceExecutionGateway
 - `core.pipeline`: DataPipelineService
 - `risk.service`: TradingHaltService, PortfolioPeakService
-- **Kill Switch API**: GET/PUT `/api/v1/system/kill-switch` (KillSwitchController). Ops 역할만 설정 가능.
+- **Kill Switch API**: GET/PUT `/api/v1/system/kill-switch` (KillSwitchController). ADMIN만 설정 가능.
 
 ---
 

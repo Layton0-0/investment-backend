@@ -693,7 +693,7 @@ curl -X GET "http://localhost:8080/api/v1/accounts/12345678/profit-loss?startDat
 
 **엔드포인트**: `PUT /api/v1/system/kill-switch`
 
-**설명**: Kill Switch를 설정합니다. **Ops**(또는 ADMIN) 역할만 설정 가능.
+**설명**: Kill Switch를 설정합니다. **ADMIN** 역할만 설정 가능.
 
 **요청 본문**:
 ```json
@@ -946,26 +946,20 @@ curl -X POST "http://localhost:8080/api/v1/market-data/current-prices" \
 
 **엔드포인트**: `GET /api/v1/risk/summary`
 
-**설명**: 킬스위치·리스크 게이트·계좌별 일일 손실 한도·MDD 요약을 반환합니다. 사용자(인증 주체) 기준으로 소유 계좌만 포함됩니다.
+**설명**: 킬스위치·리스크 게이트·계좌별 일일 손실 한도·MDD·VaR/CVaR 요약을 반환합니다. 사용자(인증 주체) 기준으로 소유 계좌만 포함됩니다. `var95Pct`, `cvar95Pct`는 단순 파라메트릭(일일 변동성 가정) 기반 1일 VaR 95%, CVaR 95%(%).
 
-**성공 응답 (200 OK)**:
+**성공 응답 (200 OK)**: `totalCurrentValue`, `maxMddPct`, `var95Pct`, `cvar95Pct` 포함. 예:
 ```json
 {
   "killSwitchActive": false,
   "regimeGateEnabled": true,
   "riskGateAllowsNewBuy": true,
   "riskGateSizeMultiplier": 1.0,
-  "accounts": [
-    {
-      "accountNoMasked": "****1234",
-      "serverType": "1",
-      "openingBalance": 10000000,
-      "currentValue": 10500000,
-      "newBuyBlockedByDailyLoss": false,
-      "mdd": 0.05,
-      "peakValue": 11000000
-    }
-  ]
+  "accounts": [...],
+  "totalCurrentValue": 10500000,
+  "maxMddPct": 0.05,
+  "var95Pct": 1.65,
+  "cvar95Pct": 2.06
 }
 ```
 
@@ -1002,6 +996,181 @@ curl -X POST "http://localhost:8080/api/v1/market-data/current-prices" \
 - `to` (optional): 종료일 (yyyy-MM-dd)
 
 **성공 응답 (200 OK)**: `RiskHistoryItemDto[]` (예: `[]`). 항목이 있으면 `eventType`, `accountNoMasked`, `description`, `occurredAt`(ISO-8601) 포함.
+
+---
+
+## 10. Ops 데이터 파이프라인 API
+
+Admin 전용 메뉴 `/ops/data`(데이터 파이프라인 상태)에서 원천별 수집 상태·최근 기준일·오류 요약을 조회합니다. **인가**: `hasRole('ADMIN')`.
+
+### 10.1 데이터 파이프라인 상태
+
+**엔드포인트**: `GET /api/v1/ops/data-pipeline/status`
+
+**설명**: DART/SEC/KRX/US 원천별 마지막 배치 실행 시각·최근 기준일(뉴스는 최근 수집일, 시세는 최근 basDt)·상태(OK/WARNING/ERROR)·마지막 실패 시 오류 요약을 반환합니다.
+
+**성공 응답 (200 OK)**:
+```json
+{
+  "sources": [
+    {
+      "sourceId": "DART",
+      "displayName": "DART 공시",
+      "lastRunTime": "2026-02-09T10:00:00",
+      "lastBaselineDate": "2026-02-09",
+      "status": "OK",
+      "errorSummary": null
+    }
+  ],
+  "updatedAt": "2026-02-09T12:00:00"
+}
+```
+
+**DTO**: `DataPipelineStatusDto` — `sources` (원천별 `DataPipelineSourceStatusDto`), `updatedAt`. 각 원천: `sourceId`, `displayName`, `lastRunTime`, `lastBaselineDate`, `status`, `errorSummary`.
+
+---
+
+## 11. Ops 알림센터 API
+
+Admin 전용 메뉴 `/ops/alerts`에서 Discord 긴급 알림 등 알림 이력을 조회합니다. **인가**: `hasRole('ADMIN')`. Discord 발송 시 동일 내용이 TB_ALERT_LOG에 저장됩니다.
+
+### 11.1 알림 목록
+
+**엔드포인트**: `GET /api/v1/ops/alerts`
+
+**설명**: 알림 이력을 페이징·레벨 필터로 조회합니다.
+
+**쿼리 파라미터**:
+- `page` (int, optional): 페이지 번호 (0부터). 기본값 0
+- `size` (int, optional): 페이지 크기 (1~100). 기본값 20
+- `level` (String, optional): 필터 — INFO, WARNING, ERROR
+
+**성공 응답 (200 OK)**:
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "occurredAt": "2026-02-10T12:00:00+09:00",
+      "level": "WARNING",
+      "component": "UnfilledOrder",
+      "message": "** [긴급] 미체결 주문 알림 **\n..."
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1
+}
+```
+
+**DTO**: `AlertListResponseDto` — `items` (AlertItemDto 배열), `page`, `size`, `totalElements`, `totalPages`. `AlertItemDto`: `id`, `occurredAt` (ISO-8601), `level`, `component`, `message`.
+
+---
+
+## 12. Ops 감사 로그 API
+
+Admin 전용 메뉴 `/ops/audit`에서 설정 변경·수동 트리거·실계좌 가드 차단 이벤트 이력을 조회합니다. **인가**: `hasRole('ADMIN')`. 이벤트 기록 시 userId/accountNo는 마스킹 후 TB_AUDIT_LOG에 저장됩니다.
+
+### 12.1 감사 로그 목록
+
+**엔드포인트**: `GET /api/v1/ops/audit`
+
+**설명**: 감사 이력을 페이징·이벤트유형·기간 필터로 조회합니다.
+
+**쿼리 파라미터**:
+- `page` (int, optional): 페이지 번호 (0부터). 기본값 0
+- `size` (int, optional): 페이지 크기 (1~100). 기본값 20
+- `eventType` (String, optional): 필터 — SETTING_CHANGE, MANUAL_TRIGGER, REAL_ACCOUNT_GUARD_BLOCKED
+- `from` (LocalDate, optional): 기간 시작 (yyyy-MM-dd)
+- `to` (LocalDate, optional): 기간 종료 (yyyy-MM-dd)
+
+**성공 응답 (200 OK)**:
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "occurredAt": "2026-02-10T12:00:00+09:00",
+      "eventType": "SETTING_CHANGE",
+      "userIdMasked": "ab***",
+      "accountNoMasked": "****-12",
+      "summary": "거래 설정 저장",
+      "result": "SUCCESS",
+      "ipAddress": null
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1
+}
+```
+
+**DTO**: `AuditLogListResponseDto` — `items` (AuditLogItemDto 배열), `page`, `size`, `totalElements`, `totalPages`. `AuditLogItemDto`: `id`, `occurredAt` (ISO-8601), `eventType`, `userIdMasked`, `accountNoMasked`, `summary`, `result`, `ipAddress`.
+
+### 12.2 Ops 모델/예측 상태
+
+Admin 전용 메뉴 `/ops/model`에서 예측 서비스(AI) 상태를 조회합니다. **인가**: `hasRole('ADMIN')`.
+
+**엔드포인트**: `GET /api/v1/ops/model/status`
+
+**설명**: AiPredictionClient 기반 헬스 체크 결과·설정 URL 표시(마스킹)·마지막 체크 시각을 반환합니다.
+
+**성공 응답 (200 OK)**:
+```json
+{
+  "modelReady": true,
+  "serviceUrl": "configured",
+  "lastCheckAt": "2026-02-10T12:00:00Z",
+  "version": null,
+  "failureRateRecent": null
+}
+```
+
+**DTO**: `OpsModelStatusDto` — `modelReady` (boolean), `serviceUrl` (configured/not configured), `lastCheckAt` (Instant), `version` (optional), `failureRateRecent` (optional, 0~1).
+
+### 12.3 Ops 시스템 헬스
+
+Admin 전용 메뉴 `/ops/health`에서 DB·Redis·예측 서비스 상태 요약을 조회합니다. **인가**: `hasRole('ADMIN')`.
+
+**엔드포인트**: `GET /api/v1/ops/health`
+
+**설명**: DB(DataSource), Redis(캐시), 예측 서비스(FastAPI) 상태를 통합한 요약. Redis 미설정(no-redis 프로파일) 시 `redis: "UNKNOWN"`.
+
+**성공 응답 (200 OK)**:
+```json
+{
+  "db": "UP",
+  "redis": "UP",
+  "predictionService": "UP",
+  "lastCheckedAt": "2026-02-10T12:00:00Z"
+}
+```
+
+**DTO**: `OpsHealthDto` — `db`, `redis`, `predictionService` (각 "UP"|"DOWN"|"UNKNOWN"), `lastCheckedAt` (Instant).
+
+---
+
+## 13. 연말 세금·리포트 API
+
+기획요청 §9: 한국 개인투자자 연말 세금·리포팅. 연간 실현손익·국내/해외·배당·예상 세금. 실데이터는 사용자 계좌별 기간별손익조회(realizedProfitLoss) 연도 합산. **인증 필요**.
+
+### 13.1 세금 요약
+
+**엔드포인트**: `GET /api/v1/report/tax/summary`
+
+**쿼리 파라미터**: `year` (int, optional): 기준 연도. 미입력 시 현재 연도.
+
+**성공 응답 (200 OK)**: `TaxReportSummaryDto` — `year`, `domesticRealizedGainLoss`, `overseasRealizedGainLoss`, `dividendTotal`, `estimatedTax`, `disclaimer`. 집계 근거는 01-api-overview §3.12 참조.
+
+### 13.2 세금 요약 내보내기 (CSV/PDF)
+
+**엔드포인트**: `GET /api/v1/report/tax/summary/export`
+
+**쿼리 파라미터**: `year` (int, optional): 기준 연도. `format` (string, 기본 "csv"): `csv` 또는 `pdf`.
+
+**성공 응답 (200 OK)**: `Content-Disposition: attachment`, 본문은 CSV(UTF-8) 또는 PDF 바이너리.
 
 ---
 
@@ -1094,3 +1263,8 @@ curl -X POST "http://localhost:8080/api/v1/trigger/pipeline-execution?dryRun=tru
 | 1.1 | 2026-01-28 | System | 시장 데이터 API 섹션 추가 (현재가 조회) |
 | 1.2 | 2026-02-03 | System | 트리거 API(수동 실행) 섹션 추가 - DART/SEC/KRX/US 수집·팩터 계산·파이프라인 실행/청산·체결 확인·미체결 확인·로보 리밸런싱·일일 PnL·장중 변동성 돌파·중기 리밸런스 |
 | 1.3 | 2026-02-06 | System | §9 리스크 리포트 API 추가 - GET /api/v1/risk/summary, /limits, /history (인증 필요, DTO·에러 처리) |
+| 1.4 | 2026-02-09 | System | §10 Ops 데이터 파이프라인 API 추가 - GET /api/v1/ops/data-pipeline/status (ADMIN 전용, 원천별 수집 상태·최근 기준일·오류 요약) |
+| 1.5 | 2026-02-10 | System | §11 Ops 알림센터 API 추가 - GET /api/v1/ops/alerts (ADMIN 전용, 페이징·레벨 필터, Discord 발송 이력 저장·조회) |
+| 1.6 | 2026-02-10 | System | §12 연말 세금·리포트 API (스텁) - GET /api/v1/report/tax/summary (인증 필요, year 선택, 실데이터·PDF/CSV는 후속) |
+| 1.7 | 2026-02-10 | System | §12 Ops 감사 로그 API 추가 - GET /api/v1/ops/audit (ADMIN 전용, 페이징·eventType·기간 필터, 설정 변경·수동 트리거·실계좌 가드 차단 이벤트). §13 연말 세금 리넘버링 |
+| 1.8 | 2026-02-10 | System | §12.2 Ops 모델/예측 상태 API - GET /api/v1/ops/model/status (ADMIN 전용). §12.3 Ops 시스템 헬스 API - GET /api/v1/ops/health (ADMIN 전용, DB·Redis·예측 서비스) |

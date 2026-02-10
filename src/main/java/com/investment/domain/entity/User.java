@@ -73,6 +73,13 @@ public class User {
     public void updatePassword(String passwordHash) {
         this.passwordHash = passwordHash;
     }
+
+    /**
+     * 역할 업데이트 (슈퍼관리자 시드 등에서 사용)
+     */
+    public void updateRole(String role) {
+        this.role = role != null && !role.isBlank() ? role : "User";
+    }
     
     /**
      * 마지막 로그인 시간 업데이트

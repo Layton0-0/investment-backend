@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import static org.springframework.http.HttpStatus.CREATED;
 
 /**
- * 관리자(Admin/Ops) 생성 API. ADMIN 역할만 호출 가능.
+ * 관리자(Admin) 생성 API. ADMIN 역할만 호출 가능.
  */
 @Tag(name = "관리자", description = "관리자 계정 생성 (ADMIN 전용)")
 @RestController
@@ -29,7 +29,7 @@ public class AdminUserController {
 
     @PostMapping("/users")
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "관리자 계정 생성", description = "Admin 또는 Ops 역할의 사용자를 생성합니다. ADMIN만 호출 가능.")
+    @Operation(summary = "관리자 계정 생성", description = "Admin 역할의 사용자를 생성합니다. ADMIN만 호출 가능.")
     public ResponseEntity<CreateAdminUserResponseDto> createAdminUser(
             @Valid @RequestBody CreateAdminUserRequestDto request) {
         CreateAdminUserResponseDto response = adminUserService.createAdminUser(request);

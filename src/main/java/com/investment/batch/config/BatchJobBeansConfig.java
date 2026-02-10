@@ -63,21 +63,7 @@ public class BatchJobBeansConfig {
                                 step(jobRepository, tx, "long-term-step", tasklet));
         }
 
-        @Bean(name = "dart-disclosure-collector")
-        public Job dartCollectJob(JobRepository jobRepository,
-                        PlatformTransactionManager tx,
-                        DartCollectTasklet tasklet) {
-                return job(jobRepository, "dart-disclosure-collector",
-                                step(jobRepository, tx, "dart-step", tasklet));
-        }
-
-        @Bean(name = "sec-disclosure-collector")
-        public Job secCollectJob(JobRepository jobRepository,
-                        PlatformTransactionManager tx,
-                        SecCollectTasklet tasklet) {
-                return job(jobRepository, "sec-disclosure-collector",
-                                step(jobRepository, tx, "sec-step", tasklet));
-        }
+        // DART/SEC 공시 수집은 Python investment-data-collector에서 수행
 
         @Bean(name = "krx-daily-collector")
         public Job krxDailyCollectJob(JobRepository jobRepository,

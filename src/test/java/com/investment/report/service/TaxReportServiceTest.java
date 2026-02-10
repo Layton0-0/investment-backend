@@ -1,0 +1,97 @@
+package com.investment.report.service;
+
+import com.investment.account.dto.ProfitLossDto;
+import com.investment.account.service.AccountService;
+import com.investment.domain.entity.TradingSetting;
+import com.investment.domain.repository.TradingSettingRepository;
+import com.investment.report.dto.TaxReportSummaryDto;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.Collections;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
+
+@DisplayName("TaxReportService")
+@ExtendWith(MockitoExtension.class)
+class TaxReportServiceTest {
+
+    @Mock
+    private TradingSettingRepository tradingSettingRepository;
+
+    @Mock
+    private AccountService accountService;
+
+    private TaxReportService taxReportService;
+
+    @BeforeEach
+    void setUp() {
+        taxReportService = new TaxReportService(tradingSettingRepository, accountService);
+    }
+
+    @Test
+    @DisplayName("getSummary userId null이면 스텁 반환")
+    void getSummary_nullUserId_returnsStub() {
+        TaxReportSummaryDto dto = taxReportService.getSummary(null, null);
+        assertThat(dto.getYear()).isEqualTo(java.time.Year.now().getValue());
+        assertThat(dto.getDisclaimer()).isNotBlank();
+        assertThat(dto.getDomesticRealizedGainLoss()).isNull();
+    }
+
+    @Test
+    @DisplayName("getSummary year null이면 현재 연도")
+    void getSummary_nullYear_usesCurrentYear() {
+        when(tradingSettingRepository.findByUserIdOrderByAccountNo("user1")).thenReturn(Collections.emptyList());
+        TaxReportSummaryDto dto = taxReportService.getSummary("user1", null);
+        assertThat(dto.getYear()).isEqualTo(java.time.Year.now().getValue());
+        assertThat(dto.getDisclaimer()).isNotBlank();
+    }
+
+    @Test
+    @DisplayName("getSummary year 지정 시 해당 연도")
+    void getSummary_withYear_returnsThatYear() {
+        when(tradingSettingRepository.findByUserIdOrderByAccountNo("user1")).thenReturn(Collections.emptyList());
+        TaxReportSummaryDto dto = taxReportService.getSummary("user1", 2025);
+        assertThat(dto.getYear()).isEqualTo(2025);
+    }
+
+    @Test
+    @DisplayName("getSummary 계좌별 기간별손익 합산 후 domesticRealizedGainLoss·estimatedTax 반영")
+    void getSummary_withAccounts_aggregatesRealizedAndEstimatesTax() {
+        TradingSetting s1 = TradingSetting.builder()
+                .accountNo("acc1")
+                .userId("user1")
+                .maxInvestmentAmount(BigDecimal.ZERO)
+                .minInvestmentAmount(BigDecimal.ZERO)
+                .defaultCurrency("KRW")
+                .build();
+        when(tradingSettingRepository.findByUserIdOrderByAccountNo("user1")).thenReturn(List.of(s1));
+        ProfitLossDto pl = ProfitLossDto.builder()
+                .accountNo("acc1")
+                .startDate(LocalDate.of(2025, 1, 1))
+                .endDate(LocalDate.of(2025, 12, 31))
+                .totalProfitLoss(BigDecimal.ZERO)
+                .totalProfitLossRate(BigDecimal.ZERO)
+                .realizedProfitLoss(new BigDecimal("1000000"))
+                .unrealizedProfitLoss(BigDecimal.ZERO)
+                .currency("KRW")
+                .build();
+        when(accountService.getPeriodProfitLoss(eq("acc1"), any(), any())).thenReturn(pl);
+
+        TaxReportSummaryDto dto = taxReportService.getSummary("user1", 2025);
+        assertThat(dto.getYear()).isEqualTo(2025);
+        assertThat(dto.getDomesticRealizedGainLoss()).isEqualByComparingTo("1000000");
+        assertThat(dto.getEstimatedTax()).isEqualByComparingTo("220000"); // 22%
+        assertThat(dto.getDisclaimer()).isNotBlank();
+    }
+}

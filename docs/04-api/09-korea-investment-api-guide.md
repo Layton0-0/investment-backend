@@ -651,6 +651,17 @@ public Mono<OrderResponse> placeBuyOrder(String userId, String accountNo,
 - **Hashkey**: 필수. `KoreaInvestmentHashkeyUtil.generateHashkey(requestBody, appSecret)` 사용
 - **사용 클래스**: `KoreaInvestmentOrderClient.placeBuyOrder`, `placeSellOrder`
 
+### 국내 주문 주문구분(ORD_DVSN) 코드
+
+| 코드 | 설명 | 비고 |
+|------|------|------|
+| 00 | 지정가 | 기본값. 가격 지정 후 대기 |
+| 01 | 시장가 | 현재 호가 기준 즉시 체결 |
+| 02 | 최유리 지정가 | 매수 시 최우선 매도호가, 매도 시 최우선 매수호가로 주문. 시초가/변동성 돌파 시 슬리피지 방어 권장 |
+| 03 | IOC (즉시체결·잔량취소) | 즉시 체결 가능한 수량만 체결, 나머지 취소. 시초가/변동성 돌파 시 사용 가능 |
+
+KR 시초가·변동성 돌파 구간에서는 `investment.pipeline.kr-opening-order-dvsn`(02 또는 03) 설정 시 `OrderRequestDto.orderDvsn`으로 전달되며, 파이프라인(KR+SHORT_TERM) 및 장중 변동성 돌파 스케줄러에서 적용된다. 미설정 시 지정가(00) 사용.
+
 ## 해외주식 주문 API (미국)
 
 - **엔드포인트**: `/uapi/overseas-stock/v1/trading/order`

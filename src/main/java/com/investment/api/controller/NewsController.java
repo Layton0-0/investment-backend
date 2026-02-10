@@ -1,7 +1,6 @@
 package com.investment.api.controller;
 
-import com.investment.datacollection.service.DartCollectionService;
-import com.investment.datacollection.service.SecCollectionService;
+import com.investment.datacollection.client.DataCollectorApiClient;
 import com.investment.news.dto.NewsItemPageResponseDto;
 import com.investment.news.service.NewsItemService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -28,8 +27,7 @@ import java.util.Map;
 public class NewsController {
 
     private final NewsItemService newsItemService;
-    private final DartCollectionService dartCollectionService;
-    private final SecCollectionService secCollectionService;
+    private final DataCollectorApiClient dataCollectorApiClient;
 
     @Operation(summary = "뉴스·공시 목록 조회", description = "필터(시장·원천·유형·종목·제목·기간) 및 페이징으로 뉴스·공시 목록을 조회합니다. 빈값이면 해당 조건 전체.")
     @GetMapping
@@ -47,21 +45,18 @@ public class NewsController {
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "뉴스·공시 수집 실행", description = "DART(국내)·SEC EDGAR(미국) 공시를 즉시 수집합니다. 인증 필요.")
+    @Operation(summary = "뉴스·공시 수집 실행", description = "Python 수집기 API(POST /dart-collect, /sec-collect)를 호출해 DART·SEC EDGAR 공시를 즉시 수집합니다. investment.data.us.collector-url 설정 필요.")
     @PostMapping("/collect")
     public ResponseEntity<Map<String, Object>> triggerNewsAndDisclosureCollection() {
-        int dartSaved = 0;
-        int secSaved = 0;
-        try {
-            dartSaved = dartCollectionService.collectAndSave();
-        } catch (Exception e) {
-            log.warn("DART 수집 실패: {}", e.getMessage());
+        if (dataCollectorApiClient.getCollectorBaseUrl().isEmpty()) {
+            return ResponseEntity.status(503).body(Map.of(
+                    "dartSaved", 0,
+                    "secSaved", 0,
+                    "message", "데이터 수집기 URL(investment.data.us.collector-url) 미설정. Python 수집기 기동 후 설정하세요."
+            ));
         }
-        try {
-            secSaved = secCollectionService.collectAndSave();
-        } catch (Exception e) {
-            log.warn("SEC EDGAR 수집 실패: {}", e.getMessage());
-        }
+        int dartSaved = dataCollectorApiClient.triggerDartCollect();
+        int secSaved = dataCollectorApiClient.triggerSecCollect();
         return ResponseEntity.ok(Map.of(
                 "dartSaved", dartSaved,
                 "secSaved", secSaved,

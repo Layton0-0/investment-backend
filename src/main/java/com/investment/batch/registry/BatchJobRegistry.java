@@ -47,22 +47,7 @@ public class BatchJobRegistry {
                                                 .timeZone(TZ)
                                                 .triggerPath(null)
                                                 .build(),
-                                BatchJobDefinition.builder()
-                                                .id("dart-disclosure-collector")
-                                                .name("DART 공시 수집")
-                                                .description("10분마다 Open DART 공시 목록을 수집하여 TB_NEWS_ITEMS에 저장합니다.")
-                                                .cronExpression("0 */10 * * * *")
-                                                .timeZone(TZ)
-                                                .triggerPath("/api/v1/trigger/dart-collect")
-                                                .build(),
-                                BatchJobDefinition.builder()
-                                                .id("sec-disclosure-collector")
-                                                .name("SEC EDGAR 공시 수집")
-                                                .description("15분마다 SEC EDGAR 공시 목록을 수집합니다.")
-                                                .cronExpression("0 */15 * * * *")
-                                                .timeZone(TZ)
-                                                .triggerPath("/api/v1/trigger/sec-collect")
-                                                .build(),
+                                // DART/SEC 공시 수집은 Python investment-data-collector에서 수행 (POST /dart-collect, /sec-collect)
                                 BatchJobDefinition.builder()
                                                 .id("krx-daily-collector")
                                                 .name("KRX 일별 시세 수집")

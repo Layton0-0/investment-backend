@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * KRX 일별 시세 Repository.
@@ -33,4 +34,8 @@ public interface DailyStockRepository extends JpaRepository<DailyStock, DailySto
             @Param("minTrdVal") long minTrdVal);
 
     boolean existsByBasDtAndSymbol(LocalDate basDt, String symbol);
+
+    /** 시장별 최근 기준일 (데이터 파이프라인 상태 API용). */
+    @Query("SELECT MAX(d.basDt) FROM DailyStock d WHERE d.market = :market")
+    Optional<LocalDate> findMaxBasDtByMarket(@Param("market") String market);
 }

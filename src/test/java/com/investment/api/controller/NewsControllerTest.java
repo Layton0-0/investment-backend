@@ -4,8 +4,7 @@ import com.investment.account.service.AccountService;
 import com.investment.common.security.JwtAuthenticationFilter;
 import com.investment.common.security.RateLimitFilter;
 import com.investment.config.SecurityHeadersConfig;
-import com.investment.datacollection.service.DartCollectionService;
-import com.investment.datacollection.service.SecCollectionService;
+import com.investment.datacollection.client.DataCollectorApiClient;
 import com.investment.news.dto.NewsItemPageResponseDto;
 import com.investment.news.service.NewsItemService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,6 +21,7 @@ import java.util.Collections;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(NewsController.class)
@@ -37,9 +37,7 @@ class NewsControllerTest {
         @MockBean
         private AccountService accountService;
         @MockBean
-        private DartCollectionService dartCollectionService;
-        @MockBean
-        private SecCollectionService secCollectionService;
+        private DataCollectorApiClient dataCollectorApiClient;
         @MockBean
         private JwtAuthenticationFilter jwtAuthenticationFilter;
         @MockBean
@@ -142,5 +140,31 @@ class NewsControllerTest {
                                 .param("from", "2026-01-01")
                                 .param("to", "2026-01-31"))
                                 .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("POST /api/v1/news/collect 수집기 URL 미설정 시 503")
+        void triggerCollect_noCollectorUrl_returns503() throws Exception {
+                when(dataCollectorApiClient.getCollectorBaseUrl()).thenReturn("");
+
+                mockMvc.perform(post("/api/v1/news/collect"))
+                                .andExpect(status().isServiceUnavailable())
+                                .andExpect(jsonPath("$.dartSaved").value(0))
+                                .andExpect(jsonPath("$.secSaved").value(0))
+                                .andExpect(jsonPath("$.message").exists());
+        }
+
+        @Test
+        @DisplayName("POST /api/v1/news/collect 수집기 URL 설정 시 Python API 호출 후 200")
+        void triggerCollect_withCollectorUrl_returns200() throws Exception {
+                when(dataCollectorApiClient.getCollectorBaseUrl()).thenReturn("http://localhost:8001");
+                when(dataCollectorApiClient.triggerDartCollect()).thenReturn(5);
+                when(dataCollectorApiClient.triggerSecCollect()).thenReturn(3);
+
+                mockMvc.perform(post("/api/v1/news/collect"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.dartSaved").value(5))
+                                .andExpect(jsonPath("$.secSaved").value(3))
+                                .andExpect(jsonPath("$.message").value("뉴스·공시 수집이 완료되었습니다."));
         }
 }

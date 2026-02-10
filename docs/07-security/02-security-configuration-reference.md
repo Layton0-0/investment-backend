@@ -33,8 +33,10 @@
 #### 관리자 계정 관련 (부트스트랩·슈퍼관리자)
 - **BOOTSTRAP_ADMIN_ENABLED** / **investment.security.bootstrap-admin.enabled**: `true` 시 ADMIN 0건일 때만 1회 관리자 생성. 기본 `false`.
 - **BOOTSTRAP_ADMIN_USERNAME** / **BOOTSTRAP_ADMIN_PASSWORD**: 부트스트랩 시 사용할 username·password. 프로덕션에서는 최초 기동 후 비밀번호 변경 권장.
-- **SUPER_ADMIN_PASSWORD** / **investment.security.super-admin.password**: 설정 시 기동 시 슈퍼관리자(yoon) 비밀번호를 해당 값으로 한 번 동기화. 역할(Admin)은 Flyway V26에서 설정. 평문을 저장하지 말고 env만 사용 권장.
-- 관리자 추가 생성: 기존 ADMIN으로 로그인 후 `POST /api/v1/admin/users` (body: username, password, role=Admin|Ops). 자세한 정책은 [decisions.md §17](../decisions.md#17-관리자-계정-생성로그인-정책) 참조.
+- **SUPER_ADMIN_USERNAME** / **SUPER_ADMIN_PASSWORD** / **investment.security.super-admin.username·password**: 설정 시 기동 시 **DB에 해당 계정이 없으면 자동 생성(role=Admin)**, 있으면 비밀번호만 동기화. 회원가입 API 없이 env만으로 슈퍼관리자 보장. 평문은 env만 사용 권장.
+- **슈퍼관리자 모의계좌**: **SUPER_ADMIN_VIRTUAL_APP_KEY**, **SUPER_ADMIN_VIRTUAL_APP_SECRET**, **SUPER_ADMIN_VIRTUAL_ACCOUNT_NO**(선택). 셋 중 app-key·app-secret이 있으면 한국투자증권 모의(serverType=1) API 키·계좌를 동기화. account-no는 8자리-2자리 형식(예: 12345678-12).
+- **슈퍼관리자 실계좌**: **SUPER_ADMIN_REAL_APP_KEY**, **SUPER_ADMIN_REAL_APP_SECRET**, **SUPER_ADMIN_REAL_ACCOUNT_NO**(선택). 실거래(serverType=0) 동일.
+- 관리자 추가 생성: 기존 ADMIN으로 로그인 후 `POST /api/v1/admin/users` (body: username, password, role=Admin). 자세한 정책은 [decisions.md §17](../decisions.md#17-관리자-계정-생성로그인-정책) 참조.
 
 ### 쿠키 보안 설정
 
@@ -139,10 +141,9 @@ investment:
 
 ### investment.data (데이터 수집 API 키 — 로그 마스킹 대상)
 
-- **DART_API_KEY**: Open DART API 인증키 (opendart.fss.or.kr 발급). 로그 출력 시 `LogMaskingUtil.maskApiKey` 사용.
 - **KRX_AUTH_KEY**: KRX Open API 인증키 (openapi.krx.co.kr 발급). 로그 출력 시 `LogMaskingUtil.maskApiKey` 사용.
-- **SEC_API_KEY**: SEC EDGAR API 키 (data.sec.gov). SEC 공시 수집 시 사용. 미설정 시 SEC 수집 스킵. 로그 출력 시 `LogMaskingUtil.maskApiKey` 사용.
-- **DATA_COLLECTION_INTERNAL_KEY**: 내부 수집 API 보호 키. Yahoo 등 Python 수집기가 POST /api/v1/internal/collected-news 호출 시 `X-Internal-Data-Key` 헤더에 전달. 미설정 시 내부 API는 403 반환.
+- **DART_API_KEY / SEC_API_KEY**: Python 수집기(investment-data-collector)에서 사용. Spring에는 미노출.
+- **DATA_COLLECTION_INTERNAL_KEY**: 내부 수집 API 보호 키. Yahoo·DART·SEC 등 Python 수집기가 POST /api/v1/internal/collected-news 호출 시 `X-Internal-Data-Key` 헤더에 전달. 미설정 시 내부 API는 403 반환.
 
 ## Redis 키 구조
 

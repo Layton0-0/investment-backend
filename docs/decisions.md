@@ -537,6 +537,7 @@ API 설계 표준 수립 필요
 ### 결정 사항
 - **조회 API 요청 방식**: 계좌 조회(주식잔고조회, 매수가능·매도가능·주문체결·자산현황·기간별손익) 및 시세 조회(현재가·차트)는 **GET** + **URI query parameter**로 호출한다. 주문 실행·토큰 발급은 POST+JSON body 유지.
 - **개발 시 MCP 필수**: 한국투자증권 API를 추가·수정할 때마다 **한국투자증권 MCP**로 해당 엔드포인트의 HTTP 메서드·파라미터 방식을 확인한 뒤 구현한다. MCP 확인 없이 요청 형식을 가정하여 구현하지 않는다.
+- **토큰 사용 정책**: 접근 토큰은 1회 발급 후 DB에 저장하고, 이후 모든 API 호출은 `getAccessToken(userId, serverType)`으로 DB에서만 조회한다. 클라이언트(Account/MarketData 등)는 `issueTokenForUser`를 호출하지 않으며, 401 시에도 재발급이 아니라 getAccessToken 재조회 후 1회 재시도만 한다.
 - **문서 동기화**: 작업 중 API·설계·결정이 바뀌면 관련 문서(API 가이드, development-status, decisions 등)를 반드시 갱신한다.
 
 ### 영향
@@ -603,13 +604,13 @@ API 설계 표준 수립 필요
 ### 결정 사항
 - **관리자 회원가입**: 공개 API로 제공하지 않음. 일반 회원가입(`POST /api/v1/auth/signup`)은 계속 일반 사용자(User)만 생성.
 - **최초 관리자**: (1) Flyway/시드로 지정 계정(예: yoon) ROLE=Admin 반영, (2) 부트스트랩: `investment.security.bootstrap-admin.enabled=true` 및 username/password 설정 시 ADMIN 0건일 때만 1회 User(role=Admin) 생성.
-- **추가 관리자**: 기존 ADMIN만 호출 가능한 `POST /api/v1/admin/users` (body: username, password, role=Admin|Ops). 또는 DB 시드/수동 부여.
+- **추가 관리자**: 기존 ADMIN만 호출 가능한 `POST /api/v1/admin/users` (body: username, password, role=Admin). 또는 DB 시드/수동 부여.
 - **관리자 로그인**: 기존 `POST /api/v1/auth/login` 그대로 사용. DB의 role로 구분.
-- **인가**: JWT 인증 시 DB에서 User 조회 후 `User.getRole()`을 Spring Security 권한(ROLE_USER/ROLE_ADMIN/ROLE_Ops)으로 매핑하여 SecurityContext에 반영. `@PreAuthorize("hasRole('ADMIN')")` 등이 정상 동작.
+- **인가**: JWT 인증 시 DB에서 User 조회 후 `User.getRole()`을 Spring Security 권한(ROLE_USER/ROLE_ADMIN)으로 매핑하여 SecurityContext에 반영. `@PreAuthorize("hasRole('ADMIN')")` 등이 정상 동작.
 
 ### 영향
 - JwtAuthenticationFilter: User 조회 후 Role.fromDbRole(user.getRole())로 권한 설정.
-- Role enum: USER, ADMIN, OPS(ROLE_Ops). DB role 문자열 "User", "Admin", "Ops" 매핑.
+- Role enum: USER, ADMIN. DB role 문자열 "User", "Admin" 매핑.
 - AdminUserController: POST /api/v1/admin/users, @PreAuthorize("hasRole('ADMIN')").
 - application.yml: investment.security.bootstrap-admin.*, investment.security.super-admin.* (슈퍼관리자 yoon 비밀번호 동기화용).
 

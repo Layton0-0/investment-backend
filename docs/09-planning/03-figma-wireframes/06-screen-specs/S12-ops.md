@@ -1,6 +1,6 @@
-# S12 — Ops 전용 화면
+# S12 — Admin 전용 화면 (Ops 페이지)
 
-운영자(Ops)만 접근. User는 메뉴 미노출 또는 비활성.
+관리자(Admin)만 접근. User는 메뉴 미노출 또는 비활성.
 
 ## 데이터 파이프라인 상태 (/ops/data)
 
@@ -36,4 +36,4 @@
 
 ## 권한
 
-- Ops만 접근. 연동 API는 각 기능별로 정의(내부 API 또는 기존 actuator·batch 확장).
+- Admin만 접근. 연동 API는 각 기능별로 정의(내부 API 또는 기존 actuator·batch 확장).

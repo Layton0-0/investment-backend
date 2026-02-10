@@ -37,13 +37,13 @@ class AdminUserServiceTest {
     @DisplayName("createAdminUser 정상 시 201 응답 DTO 반환")
     void createAdminUser_success_returnsResponse() {
         CreateAdminUserRequestDto request = new CreateAdminUserRequestDto();
-        request.setUsername("ops1");
+        request.setUsername("admin1");
         request.setPassword("MyP@ssw0rd99");
-        request.setRole("Ops");
+        request.setRole("Admin");
 
-        when(userRepository.existsByUsername("ops1")).thenReturn(false);
+        when(userRepository.existsByUsername("admin1")).thenReturn(false);
         when(passwordEncoder.encode(anyString())).thenReturn("encoded");
-        User saved = User.builder().username("ops1").passwordHash("encoded").role("Ops").build();
+        User saved = User.builder().username("admin1").passwordHash("encoded").role("Admin").build();
         when(userRepository.save(any(User.class))).thenAnswer(inv -> {
             User u = inv.getArgument(0);
             User withId = User.builder()
@@ -58,21 +58,21 @@ class AdminUserServiceTest {
         CreateAdminUserResponseDto result = adminUserService.createAdminUser(request);
 
         assertThat(result.getUserId()).isEqualTo("saved-id-1");
-        assertThat(result.getUsername()).isEqualTo("ops1");
-        assertThat(result.getRole()).isEqualTo("Ops");
+        assertThat(result.getUsername()).isEqualTo("admin1");
+        assertThat(result.getRole()).isEqualTo("Admin");
         ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(captor.capture());
-        assertThat(captor.getValue().getRole()).isEqualTo("Ops");
+        assertThat(captor.getValue().getRole()).isEqualTo("Admin");
     }
 
     @Test
     @DisplayName("createAdminUser 중복 username 시 DomainException")
     void createAdminUser_duplicateUsername_throws() {
         CreateAdminUserRequestDto request = new CreateAdminUserRequestDto();
-        request.setUsername("ops1");
+        request.setUsername("admin1");
         request.setPassword("MyP@ssw0rd99");
         request.setRole("Admin");
-        when(userRepository.existsByUsername("ops1")).thenReturn(true);
+        when(userRepository.existsByUsername("admin1")).thenReturn(true);
 
         assertThatThrownBy(() -> adminUserService.createAdminUser(request))
                 .isInstanceOf(DomainException.class);

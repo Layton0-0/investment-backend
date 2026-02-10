@@ -70,6 +70,9 @@ dependencies {
     
     // OpenAPI/Swagger
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0'
+
+    // PDF (연말 세금 리포트 export)
+    implementation 'com.github.librepdf:openpdf:1.3.33'
     
     // Circuit Breaker (Resilience4j)
     implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.1.0'

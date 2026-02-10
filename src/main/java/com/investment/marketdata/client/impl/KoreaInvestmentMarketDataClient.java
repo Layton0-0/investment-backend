@@ -1,7 +1,6 @@
 package com.investment.marketdata.client.impl;
 
 import com.investment.common.security.EncryptionUtil;
-import com.investment.domain.entity.BrokerType;
 import com.investment.domain.entity.UserApiKey;
 import com.investment.domain.repository.UserApiKeyRepository;
 import com.investment.marketdata.client.IndicatorResponse;
@@ -431,18 +430,8 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
             UserApiKey userApiKey = userApiKeys.get(0);
             String serverType = userApiKey.getServerType() != null ? userApiKey.getServerType() : "1";
 
-            String accessToken;
-            try {
-                accessToken = tokenService.getAccessToken(userId);
-            } catch (RuntimeException e) {
-                log.warn("토큰 조회 실패, 재발급 시도: userId={}, error={}", userId, e.getMessage());
-                if (userApiKey.getBrokerType() == BrokerType.KOREA_INVESTMENT) {
-                    tokenService.issueTokenForUser(userApiKey);
-                    accessToken = tokenService.getAccessToken(userId);
-                } else {
-                    throw new IllegalStateException("한국투자증권이 아닌 증권사입니다: " + userApiKey.getBrokerType());
-                }
-            }
+            // DB에서 토큰 조회(없거나 만료 시 토큰 서비스 내부에서만 1회 발급). 직접 발급 호출 없음.
+            String accessToken = tokenService.getAccessToken(userId, serverType);
 
             String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
             String appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());

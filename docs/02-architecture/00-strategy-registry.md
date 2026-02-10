@@ -74,7 +74,7 @@
 
 주문 직전 검사(`ComplianceEngine.preTradeCheck`). `OrderService.executeOrderInternal` 맨 앞에서 호출.
 
-- **Kill Switch**: `TB_TRADING_HALT.halt_all_orders=true` 시 모든 주문 거부. API: GET/PUT `/api/v1/system/kill-switch`. Ops 역할만 설정 가능.
+- **Kill Switch**: `TB_TRADING_HALT.halt_all_orders=true` 시 모든 주문 거부. API: GET/PUT `/api/v1/system/kill-switch`. ADMIN만 설정 가능.
 - **단일 종목 비중 상한**: 주문 후 해당 종목 비중 > 10%가 되면 거부. 계좌 평가총액·포지션 평가금액 기반.
 - **MDD 게이트**: 계좌별 피크(`TB_PORTFOLIO_PEAK`) 대비 현재 평가액으로 MDD 계산. MDD > 15% 시 **신규 매수만** 차단(매도 허용).
 - **구현**: `PreTradeComplianceEngine`, `TradingHaltService`, `PortfolioPeakService`. 스텁 사용 시 `investment.compliance.use-stub=true`.
@@ -92,6 +92,13 @@
 - **입력**: 계좌번호, 시장(KR/US), 목표 비중, 평가총액, userId(잔고 조회용).
 - **출력**: `RebalanceItem(symbol, side=BUY|SELL, quantity, notional)`.
 - **구현**: `RebalancerImpl` — `AccountService.getBalanceAndPositionsWithUserId`로 포지션 조회 후 시장별 필터, 목표와 차이 산출.
+
+### 2.9.4 공시·뉴스 시그널 반영 (뉴스·공시 1차)
+
+- **역할**: DART 키워드 매칭·SEC 8-K 등 시그널 반영 대상 공시에 등장한 종목을 포지션 사이징 시 우선 정렬(동일 조건에서 진입 우선순위 상향).
+- **데이터**: TB_NEWS_ITEMS. eventType `DART_SIGNAL:%`(DART 키워드 매칭), `8K`(SEC 8-K). `NewsSignalService.getSymbolsWithSignalNews(market, basDt)` → 최근 N일 시그널 공시 종목 집합.
+- **적용**: `PositionSizingService.getRecommendations`에서 유니버스 통과 종목 목록 정렬 시 시그널 공시 종목을 앞에 배치. `investment.news.signal-lookback-days` (기본 7).
+- **참조**: [13-news-collection-design.md](./13-news-collection-design.md).
 
 ### 2.10 Friction cost (마찰 비용)
 

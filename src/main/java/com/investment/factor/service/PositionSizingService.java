@@ -4,6 +4,7 @@ import com.investment.domain.entity.DailyStock;
 import com.investment.domain.entity.SignalScore;
 import com.investment.domain.repository.DailyStockRepository;
 import com.investment.domain.repository.SignalScoreRepository;
+import com.investment.news.service.NewsSignalService;
 import com.investment.factor.dto.PositionRecommendationDto;
 import com.investment.factor.util.TechnicalIndicatorUtil;
 import com.investment.strategy.domain.StrategyType;
@@ -39,6 +40,7 @@ public class PositionSizingService {
 
     private final SignalScoreRepository signalScoreRepository;
     private final DailyStockRepository dailyStockRepository;
+    private final NewsSignalService newsSignalService;
 
     /** 1회 매매당 총자산 대비 리스크 비율 (예: 0.01 = 1%) */
     @Value("${investment.factor.position-risk-pct:0.01}")
@@ -150,6 +152,10 @@ public class PositionSizingService {
             }
         }
         List<String> symbolList = new ArrayList<>(symbols);
+        Set<String> newsSymbols = newsSignalService.getSymbolsWithSignalNews(market, basDt);
+        if (!newsSymbols.isEmpty()) {
+            symbolList.sort((a, b) -> Boolean.compare(newsSymbols.contains(b), newsSymbols.contains(a)));
+        }
 
         LocalDate fromDt = basDt.minusDays(ATR_DAYS + 5);
         List<PositionRecommendationDto> out = new ArrayList<>();

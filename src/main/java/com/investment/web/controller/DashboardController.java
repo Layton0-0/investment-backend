@@ -99,19 +99,21 @@ public class DashboardController {
                     model.addAttribute("accountNoVirtual", accNoVirtual);
                     model.addAttribute("hasVirtualAccount", true);
 
+                    // userId 명시 전달로 병렬 스레드에서 SecurityContext 의존 없이 모의/실 계좌별 올바른 API 호출 보장
                     CompletableFuture<BalanceAndPositionsDto> balanceVirtualFuture = CompletableFuture.supplyAsync(
-                            () -> runWithAuth(auth, () -> accountService.getBalanceAndPositions(accNoVirtual)));
+                            () -> accountService.getBalanceAndPositionsWithUserId(userId, accNoVirtual));
                     CompletableFuture<List<OrderResponseDto>> ordersVirtualFuture = CompletableFuture
                             .supplyAsync(() -> runWithAuth(auth, () -> orderService.getOrders(accNoVirtual)));
                     CompletableFuture<Optional<TradingSettingDto>> settingVirtualFuture = CompletableFuture.supplyAsync(
-                            () -> runWithAuth(auth, () -> tradingSettingService.getSettingOptional(accNoVirtual)));
+                            () -> tradingSettingService.getSettingOptional(accNoVirtual));
 
                     BalanceAndPositionsDto balanceVirtual = balanceVirtualFuture.join();
-                    List<AccountPositionDto> positionsVirtual = balanceVirtual.getPositions();
+                    List<AccountPositionDto> positionsVirtual = balanceVirtual != null
+                            ? balanceVirtual.getPositions() : List.of();
                     List<OrderResponseDto> ordersVirtual = ordersVirtualFuture.join();
                     Optional<TradingSettingDto> settingVirtualOpt = settingVirtualFuture.join();
 
-                    model.addAttribute("balanceVirtual", balanceVirtual.getBalance());
+                    model.addAttribute("balanceVirtual", balanceVirtual != null ? balanceVirtual.getBalance() : null);
                     model.addAttribute("positionsVirtual", positionsVirtual);
                     model.addAttribute("ordersVirtual", ordersVirtual);
                     settingVirtualOpt.ifPresent(dto -> model.addAttribute("settingVirtual", dto));
@@ -139,19 +141,21 @@ public class DashboardController {
                     model.addAttribute("accountNoReal", accNoReal);
                     model.addAttribute("hasRealAccount", true);
 
+                    // userId 명시 전달로 병렬 스레드에서 SecurityContext 의존 없이 실계좌 API 호출 보장
                     CompletableFuture<BalanceAndPositionsDto> balanceRealFuture = CompletableFuture.supplyAsync(
-                            () -> runWithAuth(auth, () -> accountService.getBalanceAndPositions(accNoReal)));
+                            () -> accountService.getBalanceAndPositionsWithUserId(userId, accNoReal));
                     CompletableFuture<List<OrderResponseDto>> ordersRealFuture = CompletableFuture
                             .supplyAsync(() -> runWithAuth(auth, () -> orderService.getOrders(accNoReal)));
                     CompletableFuture<Optional<TradingSettingDto>> settingRealFuture = CompletableFuture.supplyAsync(
-                            () -> runWithAuth(auth, () -> tradingSettingService.getSettingOptional(accNoReal)));
+                            () -> tradingSettingService.getSettingOptional(accNoReal));
 
                     BalanceAndPositionsDto balanceReal = balanceRealFuture.join();
-                    List<AccountPositionDto> positionsReal = balanceReal.getPositions();
+                    List<AccountPositionDto> positionsReal = balanceReal != null
+                            ? balanceReal.getPositions() : List.of();
                     List<OrderResponseDto> ordersReal = ordersRealFuture.join();
                     Optional<TradingSettingDto> settingRealOpt = settingRealFuture.join();
 
-                    model.addAttribute("balanceReal", balanceReal.getBalance());
+                    model.addAttribute("balanceReal", balanceReal != null ? balanceReal.getBalance() : null);
                     model.addAttribute("positionsReal", positionsReal);
                     model.addAttribute("ordersReal", ordersReal);
                     settingRealOpt.ifPresent(dto -> model.addAttribute("settingReal", dto));

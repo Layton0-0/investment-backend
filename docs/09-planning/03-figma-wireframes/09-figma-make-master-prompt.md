@@ -11,7 +11,7 @@
 - 전역 상태: **모의계좌(serverType=1) | 실계좌(serverType=0)** 탭을 모든 인증 후 화면에 표시하고 URL 쿼리로 유지
 - 권한: **2역할**
   - `User`: 투자/설정/조회 중심
-  - `Ops`: User + 운영(스케줄 트리거·데이터·알림·리스크·모델·감사·헬스)
+  - `Admin`: User + 운영(스케줄 트리거·데이터·알림·리스크·모델·감사·헬스)
 
 ---
 
@@ -76,7 +76,7 @@ AutoLayout 규칙:
 - 백테스트(`/backtest`)
 - 설정(`/settings`)
 
-### 2.2 Ops 전용 메뉴(역할이 Ops일 때만 노출)
+### 2.2 Admin 전용 메뉴(역할이 Admin일 때만 노출)
 
 - 데이터 파이프라인 상태(`/ops/data`)
 - 알림센터(`/ops/alerts`)
@@ -86,9 +86,9 @@ AutoLayout 규칙:
 - 시스템 헬스(`/ops/health`)
 
 권한 규칙:
-- `User`는 Ops 전용 메뉴를 **숨김**
-- `Ops`는 전 메뉴 접근
-- `/batch`의 “지금 실행” 버튼은 **Ops만 활성**(User는 비활성 또는 숨김)
+- `User`는 Admin 전용 메뉴를 **숨김**
+- `Admin`은 전 메뉴 접근
+- `/batch`의 “지금 실행” 버튼은 **Admin만 활성**(User는 비활성 또는 숨김)
 
 ---
 
@@ -134,7 +134,7 @@ AutoLayout 규칙:
 - 계좌 미등록: “모의계좌를 등록해주세요” / “실계좌를 등록해주세요” + 설정 CTA
 - 자동 매매 OFF: “주문이 나가지 않습니다. 설정에서 자동 매매를 켜세요.” + 설정 링크
 - 서버 Dry-Run(auto-execute=false): “현재 서버는 Dry-Run 모드입니다. 실제 주문 실행은 서버 설정(PIPELINE_AUTO_EXECUTE)이 필요합니다.” (읽기 전용 안내)
-- 실계좌 자동 실행 차단(allow-real-execution=false): “실계좌 자동 실행은 서버 설정(PIPELINE_ALLOW_REAL_EXECUTION)으로만 허용됩니다.” (Ops 화면에서 읽기 전용 표시)
+- 실계좌 자동 실행 차단(allow-real-execution=false): “실계좌 자동 실행은 서버 설정(PIPELINE_ALLOW_REAL_EXECUTION)으로만 허용됩니다.” (Admin 화면에서 읽기 전용 표시)
 - 리스크 게이트/일일 손실 한도: “신규 매수 축소/중단” 문구 + 원인 요약
 - Rate limit: “요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.”
 
@@ -210,7 +210,7 @@ AutoLayout 규칙:
 ### 5.8 08-Batch
 
 - `batch_default_jobs`
-  - Job 목록 테이블: Job 이름, cron 설명, 마지막 실행, 성공/실패 횟수, 지금 실행 버튼(Opson만 활성)
+  - Job 목록 테이블: Job 이름, cron 설명, 마지막 실행, 성공/실패 횟수, 지금 실행 버튼(Admin만 활성)
   - “지금 실행”은 확인 모달(실제 주문 가능 시 경고 포함)
 
 ### 5.9 09-Backtest
@@ -235,7 +235,7 @@ AutoLayout 규칙:
 
 ### 5.11 11-Ops
 
-Ops 페이지에 다음 프레임을 만들고, **User에게는 숨김** 처리:
+Admin(11-Ops) 페이지에 다음 프레임을 만들고, **User에게는 숨김** 처리:
 
 - `ops-data_default` : 원천별 수집 상태 카드/테이블(DART/SEC/KRX/US)
 - `ops-alerts_default_list` : 알림 목록 + ACK 버튼 + 필터

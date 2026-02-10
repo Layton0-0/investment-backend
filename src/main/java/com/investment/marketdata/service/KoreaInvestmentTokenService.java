@@ -149,88 +149,82 @@ public class KoreaInvestmentTokenService {
     /**
      * 특정 사용자의 토큰 발급
      * 토큰이 유효하면 발급하지 않습니다.
+     * 모든 발급(로그인·getAccessToken 등)이 같은 사용자 락 아래에서만 실행되어,
+     * 발급 API 응답 전 다른 요청이 "없음"으로 판단해 재발급하는 경쟁 조건을 방지합니다.
      */
     @Transactional
     public void issueTokenForUser(UserApiKey userApiKey) {
         String userId = userApiKey.getUserId();
         String serverType = userApiKey.getServerType() != null ? userApiKey.getServerType() : "1";
 
-        // 기존 토큰 확인 (서버 타입별)
-        KoreaInvestmentToken existingToken = tokenRepository.findByUserIdAndServerType(userId, serverType).orElse(null);
+        synchronized (lockForUser(userId)) {
+            // 락 안에서 재조회: 다른 스레드(예: 로그인)가 방금 저장했을 수 있음
+            KoreaInvestmentToken existingToken = tokenRepository.findByUserIdAndServerType(userId, serverType).orElse(null);
 
-        // 토큰이 유효하면 발급하지 않음
-        // 단, 복호화 가능 여부도 확인 (암호화 키 변경 시 대비)
-        if (existingToken != null && existingToken.isValid()) {
-            // 복호화 가능 여부 확인
+            if (existingToken != null && existingToken.isValid()) {
+                try {
+                    encryptionUtil.decrypt(existingToken.getAccessTokenEncrypted());
+                    log.debug("기존 토큰이 유효함: userId={}", userId);
+                    return;
+                } catch (RuntimeException e) {
+                    log.warn("기존 토큰 복호화 실패, 삭제 후 재발급: userId={}, error={}", userId, e.getMessage());
+                    tokenRepository.delete(existingToken);
+                    existingToken = null;
+                }
+            }
+
+            // API 키 복호화
+            String appKey;
+            String appSecret;
             try {
-                encryptionUtil.decrypt(existingToken.getAccessTokenEncrypted());
-                log.debug("기존 토큰이 유효함: userId={}", userId);
-                return;
+                appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
+                appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
             } catch (RuntimeException e) {
-                // 복호화 실패 시 토큰 삭제 후 재발급
-                log.warn("기존 토큰 복호화 실패, 삭제 후 재발급: userId={}, error={}", userId, e.getMessage());
-                tokenRepository.delete(existingToken);
-                existingToken = null;
+                log.error("API 키 복호화 실패: userId={}, error={}", userId, e.getMessage());
+                throw new RuntimeException(
+                        String.format("API 키 복호화 실패. 암호화 키가 변경되었거나 데이터가 손상되었을 수 있습니다. " +
+                                "마이페이지에서 API 키를 다시 입력해주세요. (userId: %s)", userId),
+                        e);
             }
-        }
 
-        // API 키 복호화
-        String appKey;
-        String appSecret;
-        try {
-            appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
-            appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
-        } catch (RuntimeException e) {
-            log.error("API 키 복호화 실패: userId={}, error={}", userId, e.getMessage());
-            throw new RuntimeException(
-                    String.format("API 키 복호화 실패. 암호화 키가 변경되었거나 데이터가 손상되었을 수 있습니다. " +
-                            "마이페이지에서 API 키를 다시 입력해주세요. (userId: %s)", userId),
-                    e);
-        }
+            String accessToken;
+            try {
+                accessToken = tokenClient.issueAccessToken(
+                        appKey,
+                        appSecret,
+                        userApiKey.getServerType()).block(Duration.ofSeconds(30));
 
-        // 토큰 발급 (비동기 처리)
-        // 주의: 트랜잭션 내에서 block() 사용 시 데드락 위험이 있으므로,
-        // 별도 트랜잭션에서 실행되거나 비동기 처리 후 결과를 기다려야 함
-        // 현재는 REQUIRES_NEW로 별도 트랜잭션에서 실행되므로 안전함
-        String accessToken;
-        try {
-            accessToken = tokenClient.issueAccessToken(
-                    appKey,
-                    appSecret,
-                    userApiKey.getServerType()).block(Duration.ofSeconds(30));
-
-            if (accessToken == null) {
-                throw new RuntimeException("토큰 발급 실패: userId=" + userId);
+                if (accessToken == null) {
+                    throw new RuntimeException("토큰 발급 실패: userId=" + userId);
+                }
+            } catch (Exception e) {
+                log.error("토큰 발급 중 오류 발생: userId={}", userId, e);
+                throw new RuntimeException("토큰 발급 실패: userId=" + userId, e);
             }
-        } catch (Exception e) {
-            log.error("토큰 발급 중 오류 발생: userId={}", userId, e);
-            throw new RuntimeException("토큰 발급 실패: userId=" + userId, e);
+
+            String encryptedToken = encryptionUtil.encrypt(accessToken);
+            long expiresAt = System.currentTimeMillis() + (23 * 60 * 60 * 1000); // 23시간
+
+            if (existingToken != null) {
+                existingToken.updateToken(encryptedToken, expiresAt);
+                tokenRepository.save(existingToken);
+            } else {
+                KoreaInvestmentToken token = KoreaInvestmentToken.builder()
+                        .userId(userId)
+                        .serverType(serverType)
+                        .accessTokenEncrypted(encryptedToken)
+                        .expiresAt(expiresAt)
+                        .issuedAt(LocalDateTime.now())
+                        .build();
+                tokenRepository.save(token);
+            }
+
+            long now = System.currentTimeMillis();
+            recentTokenIssuance.put(issuanceKey(userId, serverType), now);
+            lastIssuanceTimeByUserId.put(userId, now);
+
+            log.info("토큰 발급 및 저장 완료: userId={}, serverType={}", userId, serverType);
         }
-
-        // 토큰 암호화하여 저장
-        String encryptedToken = encryptionUtil.encrypt(accessToken);
-        long expiresAt = System.currentTimeMillis() + (23 * 60 * 60 * 1000); // 23시간
-
-        if (existingToken != null) {
-            existingToken.updateToken(encryptedToken, expiresAt);
-            tokenRepository.save(existingToken);
-        } else {
-            KoreaInvestmentToken token = KoreaInvestmentToken.builder()
-                    .userId(userId)
-                    .serverType(serverType)
-                    .accessTokenEncrypted(encryptedToken)
-                    .expiresAt(expiresAt)
-                    .issuedAt(LocalDateTime.now())
-                    .build();
-            tokenRepository.save(token);
-        }
-
-        // 최근 발급 이력 기록
-        long now = System.currentTimeMillis();
-        recentTokenIssuance.put(issuanceKey(userId, serverType), now);
-        lastIssuanceTimeByUserId.put(userId, now);
-
-        log.info("토큰 발급 및 저장 완료: userId={}, serverType={}", userId, serverType);
     }
 
     /**

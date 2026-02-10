@@ -21,7 +21,7 @@
 
 ## 권한
 
-- User, Ops: 읽기·실행.
+- User, Admin: 읽기·실행.
 
 ## 연동 API
 

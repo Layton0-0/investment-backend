@@ -187,6 +187,70 @@ class PipelineExecutorTest {
         }
 
         @Test
+        @DisplayName("KR+SHORT_TERM이고 kr-opening-order-dvsn 설정 시 OrderRequestDto에 orderDvsn 설정")
+        void run_KR_shortTerm_withKrOpeningOrderDvsn_setsOrderDvsnOnRequest() {
+                ReflectionTestUtils.setField(pipelineExecutor, "autoExecute", true);
+                ReflectionTestUtils.setField(pipelineExecutor, "krOpeningOrderDvsn", "02");
+                LocalDate basDt = LocalDate.of(2026, 1, 30);
+                String market = "KR";
+                String accountNo = "1234567890";
+                String userId = "user-kr-dvsn";
+                BigDecimal totalCapital = new BigDecimal("100000000");
+
+                TradingSetting setting = TradingSetting.builder()
+                                .accountNo(accountNo)
+                                .userId(userId)
+                                .maxInvestmentAmount(new BigDecimal("50000000"))
+                                .minInvestmentAmount(new BigDecimal("10000"))
+                                .defaultCurrency("KRW")
+                                .build();
+                when(tradingSettingRepository.findByAccountNo(accountNo)).thenReturn(Optional.of(setting));
+                UserAccount userAccount = UserAccount.builder()
+                                .userId(userId)
+                                .userApiKeyId("key-1")
+                                .accountNoEncrypted("enc-1234567890")
+                                .brokerType(BrokerType.KOREA_INVESTMENT)
+                                .serverType("1")
+                                .accountName("테스트계좌")
+                                .isDefault(true)
+                                .isActive(true)
+                                .build();
+                when(userAccountRepository.findByUserIdAndBrokerType(eq(userId), eq(BrokerType.KOREA_INVESTMENT)))
+                                .thenReturn(List.of(userAccount));
+                when(encryptionUtil.decrypt("enc-1234567890")).thenReturn("1234567890");
+
+                PositionRecommendationDto recommendation = PositionRecommendationDto.builder()
+                                .basDt(basDt)
+                                .symbol("005930")
+                                .market(market)
+                                .recommendedAmt(new BigDecimal("10000000"))
+                                .recommendedQty(100)
+                                .entryPrice(new BigDecimal("100000"))
+                                .stopLoss(new BigDecimal("95000"))
+                                .method("ATR")
+                                .build();
+                when(positionSizingService.getRecommendations(eq(basDt), eq(market), eq(StrategyType.SHORT_TERM),
+                                eq(totalCapital)))
+                                .thenReturn(List.of(recommendation));
+                when(orderService.executeOrderForPipeline(any(OrderRequestDto.class), eq(userId)))
+                                .thenReturn(OrderResponseDto.builder()
+                                                .orderId("order-kr-dvsn")
+                                                .accountNo(accountNo)
+                                                .symbol("005930")
+                                                .orderType(OrderRequestDto.OrderType.BUY)
+                                                .quantity(100)
+                                                .price(new BigDecimal("100000"))
+                                                .status(OrderResponseDto.OrderStatus.PENDING)
+                                                .orderTime(LocalDateTime.now())
+                                                .build());
+
+                pipelineExecutor.run(basDt, market, accountNo, StrategyType.SHORT_TERM, totalCapital, false);
+
+                verify(orderService).executeOrderForPipeline(orderRequestCaptor.capture(), userIdCaptor.capture());
+                assertThat(orderRequestCaptor.getValue().getOrderDvsn()).isEqualTo("02");
+        }
+
+        @Test
         @DisplayName("US 시장 권장 시 OrderRequestDto에 market=US 설정")
         void run_marketUS_setsMarketOnOrderRequest() {
                 ReflectionTestUtils.setField(pipelineExecutor, "autoExecute", true);

@@ -150,7 +150,12 @@ public class OrderService {
                 .build();
 
         try {
+            // 국내(KR): orderDvsn 있으면 사용, 없으면 지정가(00). 해외(US)는 지정가 00 유지.
             String orderType = "00";
+            if (!"US".equalsIgnoreCase(request.getMarketOrKr()) && request.getOrderDvsn() != null
+                    && !request.getOrderDvsn().isBlank()) {
+                orderType = request.getOrderDvsn();
+            }
             KoreaInvestmentOrderClient.OrderResponse apiResponse;
             boolean isOverseas = "US".equalsIgnoreCase(request.getMarketOrKr());
             if (isOverseas) {

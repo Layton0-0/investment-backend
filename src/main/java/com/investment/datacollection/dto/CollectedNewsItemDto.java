@@ -26,4 +26,6 @@ public class CollectedNewsItemDto {
     private LocalDateTime collectedAt;
     private String symbol;
     private String eventType;
+    /** DART 키워드 매칭 등 시그널 반영 대상 여부 (optional) */
+    private Boolean signalRelevant;
 }

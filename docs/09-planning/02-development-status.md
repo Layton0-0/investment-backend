@@ -14,11 +14,11 @@
 - [x] **슈퍼관리자(yoon) DB 지정**  
   Flyway V26: TB_USERS에서 USERNAME='yoon'인 계정의 ROLE을 'Admin'으로 고정. 해당 계정을 메인 슈퍼관리자로 DB에 반영. 비밀번호 동기화는 `SUPER_ADMIN_PASSWORD` env(또는 `investment.security.super-admin.password`) 설정 시 기동 시 한 번만 `SuperAdminSeeder`가 갱신.
 - [x] **관리자 계정 생성·로그인 정책 (플랜 구현)**  
-  JWT 인증 시 DB role 반영: `JwtAuthenticationFilter`에서 `UserExistenceChecker.findUser(userId)`로 User 조회 후 `Role.fromDbRole(user.getRole())`로 ROLE_USER/ROLE_ADMIN/ROLE_Ops 부여. Kill Switch 등 `@PreAuthorize("hasRole('ADMIN')")` 정상 동작. 최초 관리자 부트스트랩: `BootstrapAdminRunner`(ADMIN 0건일 때만 config username/password로 1회 생성), `investment.security.bootstrap-admin.*` 설정. ADMIN 전용 API: `POST /api/v1/admin/users`(AdminUserController, AdminUserService), body username/password/role(Admin|Ops), `@PreAuthorize("hasRole('ADMIN')")`. 문서: decisions.md ADR 17, 01-api-overview.md §1.3·§3.0.1, 02-development-status 본 항목.
+  JWT 인증 시 DB role 반영: `JwtAuthenticationFilter`에서 `UserExistenceChecker.findUser(userId)`로 User 조회 후 `Role.fromDbRole(user.getRole())`로 ROLE_USER/ROLE_ADMIN 부여. Kill Switch 등 `@PreAuthorize("hasRole('ADMIN')")` 정상 동작. 최초 관리자 부트스트랩: `BootstrapAdminRunner`(ADMIN 0건일 때만 config username/password로 1회 생성), `investment.security.bootstrap-admin.*` 설정. ADMIN 전용 API: `POST /api/v1/admin/users`(AdminUserController, AdminUserService), body username/password/role(Admin), `@PreAuthorize("hasRole('ADMIN')")`. 문서: decisions.md ADR 17, 01-api-overview.md §1.3·§3.0.1, 02-development-status 본 항목.
 - [x] **리스크 리포트 (/risk) 백엔드·프론트 연동**  
-  GET `/api/v1/risk/summary`, `/limits`, `/history` 설계·구현. `RiskReportController`, `RiskReportService`에서 기존 `TradingHaltService`, `RiskGateService`, `DailyLossLimitService`, `PortfolioPeakService`, `PortfolioPeakRepository`, `RiskProperties`, `TradingSettingRepository` 등 조합해 DTO 반환. 인증 필요(`@PreAuthorize("isAuthenticated()")`), Principal/SecurityContextHolder 기반 userId 추출, 미인증 시 UNAUTHORIZED 401. 프론트 `riskApi.ts`(getRiskSummary, getRiskLimits, getRiskHistory) 추가, Ops 리스크 탭에서 목업 제거 후 실제 API 연동. [02-api-endpoints.md §9](../04-api/02-api-endpoints.md), [11-api-frontend-mapping.md](../04-api/11-api-frontend-mapping.md) §4 리스크 리포트 행 갱신.
+  GET `/api/v1/risk/summary`, `/limits`, `/history` 설계·구현. `RiskReportController`, `RiskReportService`에서 기존 `TradingHaltService`, `RiskGateService`, `DailyLossLimitService`, `PortfolioPeakService`, `PortfolioPeakRepository`, `RiskProperties`, `TradingSettingRepository` 등 조합해 DTO 반환. 인증 필요(`@PreAuthorize("isAuthenticated()")`), Principal/SecurityContextHolder 기반 userId 추출, 미인증 시 UNAUTHORIZED 401. 프론트 `riskApi.ts`(getRiskSummary, getRiskLimits, getRiskHistory) 추가, Admin 전용 리스크 탭에서 목업 제거 후 실제 API 연동. [02-api-endpoints.md §9](../04-api/02-api-endpoints.md), [11-api-frontend-mapping.md](../04-api/11-api-frontend-mapping.md) §4 리스크 리포트 행 갱신.
 - [x] **2.0 아키텍처 Phase 2 (PreTrade·Kill Switch·Portfolio)**  
-  Pre-Trade 컴플라이언스: `PreTradeComplianceEngine`(Kill Switch, 단일 종목 10% 상한, MDD 15% 게이트), `OrderService.executeOrderInternal` 주문 직전 호출. Kill Switch: `TB_TRADING_HALT`·`TradingHaltService`, GET/PUT `/api/v1/system/kill-switch`(Ops만 설정). MDD용 `TB_PORTFOLIO_PEAK`·`PortfolioPeakService`. 포트폴리오: `TaxAwareOptimizerImpl`(FrictionCost 기반 비중 조정), `RebalancerImpl`(잔고·포지션 기반 매매 리스트). Flyway V25. [00-strategy-registry.md 2.9.1~2.9.3](../02-architecture/00-strategy-registry.md), [01-system-architecture.md §9](../02-architecture/01-system-architecture.md) 반영.
+  Pre-Trade 컴플라이언스: `PreTradeComplianceEngine`(Kill Switch, 단일 종목 10% 상한, MDD 15% 게이트), `OrderService.executeOrderInternal` 주문 직전 호출. Kill Switch: `TB_TRADING_HALT`·`TradingHaltService`, GET/PUT `/api/v1/system/kill-switch`(ADMIN만 설정). MDD용 `TB_PORTFOLIO_PEAK`·`PortfolioPeakService`. 포트폴리오: `TaxAwareOptimizerImpl`(FrictionCost 기반 비중 조정), `RebalancerImpl`(잔고·포지션 기반 매매 리스트). Flyway V25. [00-strategy-registry.md 2.9.1~2.9.3](../02-architecture/00-strategy-registry.md), [01-system-architecture.md §9](../02-architecture/01-system-architecture.md) 반영.
 - [x] **TimescaleDB 전환 및 2.0 아키텍처 Phase 1**
   MariaDB → TimescaleDB(PostgreSQL) 전환: docker-compose timescaledb 서비스, application*.yml·build.gradle PostgreSQL 설정, Flyway V21~V24 PostgreSQL DDL 변환. 초기 스키마는 `init-db` 프로파일 1회 실행. 기관급 퀀트 엔진 패키지 추가: `core.engine.alpha`(AlphaEngine), `core.engine.portfolio`(TaxAwareOptimizer·Rebalancer 스텁), `core.engine.risk`(ComplianceEngine 스텁), `core.engine.execution`(ExecutionGateway), `core.pipeline`(DataPipelineService). [01-system-architecture.md §9](../02-architecture/01-system-architecture.md), [decisions.md ADR 15·16](../decisions.md) 반영.
 - [x] **Friction cost(수수료/세금/슬리피지) 설정 및 백테스트 반영**  
@@ -32,11 +32,13 @@
 - [x] **뉴스·공시 도메인 및 API**  
   NewsItem 엔티티, NewsItemRepository, NewsItemService, GET `/api/v1/news` (필터·페이징). API 개요 문서 반영.
 - [x] **TB_NEWS_ITEMS EVENT_TYPE 확장 (V11)**  
-  DART report_nm 등 긴 보고서명 저장 시 50자 초과 오류 방지. DB V11(EVENT_TYPE VARCHAR(500)), NewsItem.MAX_EVENT_TYPE_LENGTH·truncateEventType, DartCollectionService·SecCollectionService·InternalDataCollectionController에서 eventType 500자 truncate 적용. (V11 롤백 스크립트는 Flyway·마이그레이션 정리로 제거됨. 필요 시 git history 참조.)
+  DART report_nm 등 긴 보고서명 저장 시 50자 초과 오류 방지. DB V11(EVENT_TYPE VARCHAR(500)), NewsItem.MAX_EVENT_TYPE_LENGTH·truncateEventType, InternalDataCollectionController(수집기→Spring 수신)에서 eventType 500자 truncate 적용. (V11 롤백 스크립트는 Flyway·마이그레이션 정리로 제거됨. 필요 시 git history 참조.)
 - [x] **캐시 키 정리**  
   CacheConfig에 CACHE_CURRENT_PRICE 정의, RealtimeMarketDataService에서 상수 사용.
 
 ### 화면·메뉴
+- [x] **한국투자증권 토큰 과다 발급 방지**  
+  로그인/대시보드 진입 시 토큰 발급 API 과다 호출 방지: KoreaInvestmentTokenService.issueTokenForUser에 사용자 단위 락 적용(발급 직렬화, 응답 전 재요청 방지). KoreaInvestmentAccountClient 401 시 issueTokenForUser 제거·getAccessToken 재조회 후 1회 재시도만. KoreaInvestmentMarketDataClient ensureAccessToken에서 직접 발급 제거·getAccessToken(userId, serverType)만 사용. 토큰은 1회 발급 후 DB 저장, 클라이언트는 getAccessToken만 사용.
 - [x] **한국투자증권 토큰 발급 1분 1회 제한·사용자 단위 락**  
   KoreaInvestmentTokenService에 사용자당 1분 1회 새 발급 제한(TOKEN_ISSUANCE_COOLDOWN_MS)·lastIssuanceTimeByUserId·issuanceLockByUserId 추가. getAccessToken에서 동시에 모의/실 두 타입 발급이 겹치지 않도록 사용자 단위 synchronized 락으로 직렬화. 403 "접근토큰 발급 1분당 1회" 재발 방지.
 - [x] **대시보드 모의·실계좌 동시 로드**  
@@ -70,9 +72,9 @@
 - [x] **설정 UI/UX 리팩토링 (모의/실계좌 선택·토글·빈 상태)**  
   설정 페이지: 카드 제목 "계좌·API 연결", "자동투자 설정" 통일. 등록된 계좌 수(0/1/2)에 따라 거래 설정 분기 — 0개면 빈 상태 + [계좌 설정으로 가기] CTA, 1개면 해당 타입 폼만, 2개면 세그먼트 "모의계좌 | 실계좌" + 선택한 타입 단일 폼. 자동투자·로보 어드바이저를 common.css 토글 마크업(toggle-label·toggle-text-left·toggle-slider·toggle-text-right)으로 스위치 형태 표시. common.css에 .empty-state, .segment-control, .segment-btn 추가. 화면·메뉴 기획서 §3.8 반영.
 - [x] **프론트 화면 기획서 기획요청 반영·디자인 AI 전체 프롬프트 문서**  
-  [01-screen-menu-spec.md](01-screen-menu-spec.md)에 기획요청 §8·§9 반영: 포트폴리오 세금·수수료 영향 뷰, 연말 세금·리포트 메뉴(§3.10·`/report/tax`), 대시보드/Ops 킬스위치·시스템 헬스 블록. [10-design-ai-full-prompt.md](03-figma-wireframes/10-design-ai-full-prompt.md) 신규: 디자인 AI에 붙여넣기만 하면 되는 통합 프롬프트(디자인 원칙·모든 화면 진입/구성/액션/결과/예외 워크플로우·연말 리포트·세금뷰·킬스위치·가드레일). [00-index.md](03-figma-wireframes/00-index.md) 읽는 순서에 10 문서 링크 추가.
+  [01-screen-menu-spec.md](01-screen-menu-spec.md)에 기획요청 §8·§9 반영: 포트폴리오 세금·수수료 영향 뷰, 연말 세금·리포트 메뉴(§3.10·`/report/tax`), 대시보드/Admin 킬스위치·시스템 헬스 블록. [10-design-ai-full-prompt.md](03-figma-wireframes/10-design-ai-full-prompt.md) 신규: 디자인 AI에 붙여넣기만 하면 되는 통합 프롬프트(디자인 원칙·모든 화면 진입/구성/액션/결과/예외 워크플로우·연말 리포트·세금뷰·킬스위치·가드레일). [00-index.md](03-figma-wireframes/00-index.md) 읽는 순서에 10 문서 링크 추가.
 - [x] **전체 화면 기획 + Figma 와이어프레임 문서 패키지**  
-  [03-figma-wireframes](03-figma-wireframes/00-index.md) 폴더에 IA·역할/권한·유저 플로우·컴포넌트·가드레일·화면별 스펙(06-screen-specs)·Figma 구조·Figma AI 프롬프트 작성. 2역할(User/Ops)·Ops 확장 메뉴(데이터 파이프라인·알림센터·리스크·모델·감사·헬스) 반영. [01-screen-menu-spec.md](01-screen-menu-spec.md) §6 향후(Ops) 메뉴·§6.2 역할·권한 개요 추가.
+  [03-figma-wireframes](03-figma-wireframes/00-index.md) 폴더에 IA·역할/권한·유저 플로우·컴포넌트·가드레일·화면별 스펙(06-screen-specs)·Figma 구조·Figma AI 프롬프트 작성. 2역할(User/Admin)·Admin 전용 확장 메뉴(데이터 파이프라인·알림센터·리스크·모델·감사·헬스) 반영. [01-screen-menu-spec.md](01-screen-menu-spec.md) §6 향후(Admin) 메뉴·§6.2 역할·권한 개요 추가.
 - [x] **React 프론트 시니어급 리팩토링**  
   구조: 루트 App.tsx 제거, components/styles를 src 하위로 이관, `@/` path alias 도입. 타입: any 제거, Dashboard/Settings/UI 등 Props·API DTO 명시, http.ts ImportMetaEnv·ApiErrorBody 적용. 비동기: useDashboardData·useSettingsAccounts 훅 추출, 컴포넌트는 훅만 사용. 컴포넌트: Dashboard를 DashboardSummaryCards·DashboardAccountCard·DashboardPositionsTable·DashboardOrdersTable로 분할, DataTable rowKey·그리드 key 안정화. Error Boundary·Settings 토글 no-op 제거·useEffect 의존성 정리·상수(routes.ts)·보안/Error Boundary 문서(README) 반영. 테스트: useDashboardData·LoginPage(401 메시지) 추가.
 - [x] **React 프론트(분리 배포) 초기 전환: Vite+React Router + API 연동 골격**  
@@ -88,7 +90,7 @@
 - [x] **smart-portfolio-pal 퍼블리싱 반영 (investment-front)**  
   smart-portfolio-pal 디자인 참고로 전역 스타일(Deep Navy Fintech HSL·Pretendard·gradient·shadow-card)·button variants(hero/heroOutline/success)·랜딩 페이지(/, Header·HeroSection·FeaturesSection·Footer)·라우트 변경(/ = 랜딩, /dashboard = 메인 홈)·AppShell 좌측 사이드바+메인 재구성·로그인 페이지 스플릿 레이아웃·대시보드 카드 토큰 적용. 문서: investment-front/docs/02-architecture.md 요약, 테스트·IntersectionObserver mock 보강.
 - [x] **개편 디자인 기준 프론트엔드 적용 (investment-front)**  
-  smart-portfolio-pal과 동일한 레이아웃·메뉴·라우트 구조로 정리. **훅**: `useAccountType`(URL `serverType` 쿼리 ↔ AuthContext 동기화). **레이아웃**: AppShell 제거, AppLayout(AppHeader + AppMenu + AccountTabs + max-w-[1200px] 본문) 적용. **라우트**: 페이지 단위 매핑, `/report/tax`(TaxReportPage) 추가, Ops 개별 경로(`/ops/data`, `/ops/alerts` 등) 유지·path 기반 OpsPage subPage 분기. **페이지**: DashboardPage, AutoInvestPage, StrategyPage(/strategies/:market), NewsPage, PortfolioPage, OrdersPage, BatchPage, BacktestPage, SettingsPage, TaxReportPage(스텁), OpsPage(기존). 메뉴: User 메뉴 + 연말 세금·리포트 + Ops 전용(Ops 역할 시). 테스트: AppRoutes(랜딩/대시보드/연말리포트 인증 시 렌더) 보강. [01-screen-menu-spec.md](01-screen-menu-spec.md), [10-design-ai-full-prompt.md](03-figma-wireframes/10-design-ai-full-prompt.md) 반영.
+  smart-portfolio-pal과 동일한 레이아웃·메뉴·라우트 구조로 정리. **훅**: `useAccountType`(URL `serverType` 쿼리 ↔ AuthContext 동기화). **레이아웃**: AppShell 제거, AppLayout(AppHeader + AppMenu + AccountTabs + max-w-[1200px] 본문) 적용. **라우트**: 페이지 단위 매핑, `/report/tax`(TaxReportPage) 추가, Ops 개별 경로(`/ops/data`, `/ops/alerts` 등) 유지·path 기반 OpsPage subPage 분기. **페이지**: DashboardPage, AutoInvestPage, StrategyPage(/strategies/:market), NewsPage, PortfolioPage, OrdersPage, BatchPage, BacktestPage, SettingsPage, TaxReportPage(스텁), OpsPage(기존). 메뉴: User 메뉴 + 연말 세금·리포트 + Admin 전용(Admin 역할 시). 테스트: AppRoutes(랜딩/대시보드/연말리포트 인증 시 렌더) 보강. [01-screen-menu-spec.md](01-screen-menu-spec.md), [10-design-ai-full-prompt.md](03-figma-wireframes/10-design-ai-full-prompt.md) 반영.
 - [x] **설정 페이지 smart-portfolio-pal 디자인 전면 반영 (investment-front)**  
   설정 화면을 개편 디자인에 맞춰 전면 적용. **탭**: "계좌·API 연결" | "자동투자 설정" (shadcn Tabs). **계좌 탭**: 모의계좌 카드·실계좌 카드 각각 표시(연결됨/미등록 배지, API Key/Secret/계좌번호/Current Password, 카드별 [저장]). **자동투자 탭**: 계좌 0개 시 빈 상태 + [계좌 설정으로 가기] CTA; 1~2개 시 세그먼트(모의계좌|실계좌) + 선택 타입별 폼(자동 매매·로보 토글, 최소/최대 투자금, 단·중·장기 비율, [저장]); 서버 설정 읽기 전용 카드(PIPELINE_AUTO_EXECUTE, PIPELINE_ALLOW_REAL_EXECUTION). **훅**: `useSettingsAccountsAll` 추가(virtual/real 동시 조회·타입별 저장). [10-design-ai-full-prompt.md §5.10](03-figma-wireframes/10-design-ai-full-prompt.md), [01-screen-menu-spec.md §3.8](01-screen-menu-spec.md) 반영.
 
@@ -132,7 +134,9 @@
 - [x] **대시보드 잔고·보유종목 중복 조회 제거**  
   AccountService에 `getBalanceAndPositions(accountNo)` 추가(주식잔고조회 1회만 호출). DashboardController에서 잔고/보유종목용 Future 2개를 1개로 통합. BalanceAndPositionsDto·@Cacheable(balanceAndPositions_) 적용. API 개요에 단일 리소스용 balance/positions·대시보드용 일괄 조회 설명 반영. **시장 데이터**: 현재가 조회를 동기 캐시 계층(`getCurrentPriceBlocking`)으로 통일 — `@Cacheable`·`@CircuitBreaker` 적용, Mono 반환은 `Mono.fromCallable`로 래핑. 다중 종목 현재가(`getCurrentPrices`)는 종목별 캐시 사용 + CompletableFuture 병렬 조회로 응답 시간 단축. 목표: 시장 데이터·계좌 조회 응답 평균 500ms·95%ile 1초 근접.
 - [x] **데이터 수집 연동 (구축 로드맵 1단계)**  
-  **공통**: NewsItemRepository.existsBySourceAndUrl, NewsItemService.saveCollectedItem, DataCollectionProperties(DART/KRX/내부 API 키), application.yml investment.data.*. **Open DART**: DartApiClient(공시 목록 list.json), DartCollectionService(공시→NewsItem 저장), DataCollectionScheduler(10분마다 DART 수집). **KRX**: KrxApiClient(유가증권 일별매매정보, AUTH_KEY 헤더), 1단계 연동·DTO만, 저장은 2단계 검토. **Yahoo**: Python scripts/yahoo_collector.py(yfinance 또는 스텁), Spring POST /api/v1/internal/collected-news(X-Internal-Data-Key 헤더), NewsItem(SOURCE=YAHOO_FINANCE, ITEM_TYPE=BUZZ) 저장. Fallback: 원천별 try-catch, 해당 원천만 스킵.
+  **공통**: NewsItemRepository.existsBySourceAndUrl, NewsItemService.saveCollectedItem, DataCollectionProperties(KRX/US/내부 API 키), application.yml investment.data.*. **DART/SEC**: Python investment-data-collector에서 수집 후 Spring POST /api/v1/internal/collected-news 전달(동일 기능 Spring 내 중복 제거). **KRX**: KrxApiClient(유가증권 일별매매정보, AUTH_KEY 헤더), 1단계 연동·DTO만, 저장은 2단계 검토. **Yahoo**: Python yahoo_collector.py(yfinance 또는 스텁), Spring POST /api/v1/internal/collected-news(X-Internal-Data-Key 헤더), NewsItem(SOURCE=YAHOO_FINANCE, ITEM_TYPE=BUZZ) 저장. Fallback: 원천별 try-catch, 해당 원천만 스킵.
+- [x] **DART/SEC 공시 수집 배치 역할 Python 이전**  
+  **배치 역할**: DART·SEC EDGAR 공시 수집은 Spring Batch가 아닌 **Python investment-data-collector**에서 수행. Spring에서는 dart-disclosure-collector/sec-disclosure-collector Job·Trigger 제거. **Python**: collectors/dart_collector.py, collectors/sec_edgar_collector.py 추가, app.py에 POST /dart-collect, POST /sec-collect 노출, SCHEDULE_DART_SEC=1 시 APScheduler로 10분(DART)/15분(SEC) 주기 수집 후 Spring POST /api/v1/internal/collected-news 전달. [10-data-collection-api.md](../04-api/10-data-collection-api.md), [investment-data-collector README](../../investment-data-collector/README.md) 반영.
 - [x] **팩터 계산 엔진 (구축 로드맵 2단계)**  
   **KRX 일별 저장**: TB_DAILY_STOCK(V4), DailyStock 엔티티·DailyStockRepository, KrxCollectionService(OutBlock_1 파싱·저장), DataCollectionScheduler KRX 일별 수집(매일 16:00 KST). **팩터 계산**: FactorCalculationService(이격도·변동성 돌파·유동성), FactorCalculationScheduler(매일 08:00 KST). **시그널 저장·API**: TB_SIGNAL_SCORE(V5), SignalScore 엔티티·SignalScoreRepository·SignalScoreService, GET `/api/v1/signals` (basDt·market·symbol·factorType·페이징). **자동투자 현황**: 시그널 건수·목록 GET /api/v1/signals 연동, 2단계 카드·시그널 테이블 실데이터 표시. application.yml investment.factor.*, API 개요 반영.
 - [x] **4단계 파이프라인 구현 (1차)**  
@@ -187,6 +191,32 @@
   **테스트**: RiskGateService·DailyLossLimitService·IntradayBreakoutService·DailyPnlService 단위 테스트, PipelineExecutionScheduler·IntradayBreakoutScheduler·DailyPnlScheduler 테스트 추가. **VIX·거시 지표 연동**: MacroIndicatorProvider 인터페이스·DefaultMacroIndicatorProvider(설정 URL GET JSON 파싱 vix/interestRate 등), PipelineExecutionScheduler에 주입·getCurrentIndicators() → evaluateWithIndicators/evaluate(vix). investment.risk.macro-indicator-url(선택). **로보 ETF 주문 실행**: RoboRebalanceExecutor에서 AccountService.getBalanceAndPositionsWithUserId·US 보유 비중 조회 후 목표 비중과 비교해 매수/매도 OrderRequestDto(market=US) 생성·OrderService.executeOrderForPipeline 호출. execute-orders(false 기본)·min-order-amount-usd(50). [00-strategy-registry.md](../02-architecture/00-strategy-registry.md)·[12-auto-investment-strategy.md](../02-architecture/12-auto-investment-strategy.md) 반영.
 - [x] **로보·파이프라인 통합 복합 로직**  
   **통합 오케스트레이터**: `AutoBuyOrchestrator`(로보 → 파이프라인 순서 실행), `AutoBuyTasklet`·Batch Job `auto-buy`(09:10 KST cron). **배치**: `BatchJobDefinition`에서 cron optional·cron 없으면 스케줄 미등록. `pipeline-execution`·`robo-rebalance`는 cron 제거(수동 전용), `auto-buy`만 09:10 스케줄. **트리거**: `POST /api/v1/trigger/auto-buy`(dryRun optional). **프론트**: 스케줄 현황 테이블 버튼 라벨 "지금 실행"·헤더 한글화, 백테스트 기본 기간(React) 최근 1개월. [12-auto-investment-strategy.md §6.1.1](../02-architecture/12-auto-investment-strategy.md) 반영.
+- [x] **데이터 파이프라인 (/ops/data) 백엔드 API**  
+  GET `/api/v1/ops/data-pipeline/status` 구현: 원천별(DART/SEC/KRX/US) 수집 상태·최근 기준일·오류 요약. `DataPipelineStatusService`, `OpsDataPipelineController`, `BatchManagementService.getLastExecutionTimeForJob`·`getLastFailureMessage`, `NewsItemRepository.findMaxCollectedAtBySource`, `DailyStockRepository.findMaxBasDtByMarket`. 인가: `hasRole('ADMIN')`. 문서: 01-api-overview §3.11, 02-api-endpoints §10, 11-api-frontend-mapping §4 데이터 파이프라인 행 갱신.
+- [x] **AUDIT 권장 조치 반영 (12-auto-investment-strategy-AUDIT §9)**  
+  **(1) 문서·설정 정합성**: `application.yml`의 `pipeline.auto-execute` 기본값을 `false`로 변경(명세 §6.2와 일치). **(2) §7 Speed/Buzz 구현 범위 문서화**: 12-auto-investment-strategy.md §7.5, 13-news-collection-design.md §2.4에 현재 파이프라인 연결(Fact·시세) vs 목표 원천(Speed/Buzz 미구현) 구분 추가. AUDIT §7 판정 문단 보강. **(3) 최유리/IOC**: `OrderRequestDto.orderDvsn` 추가, `OrderService`에서 KR 주문 시 전달. `PipelineExecutor`(KR+SHORT_TERM), `IntradayBreakoutScheduler`에서 `investment.pipeline.kr-opening-order-dvsn`(02=최유리, 03=IOC) 설정 시 해당 주문구분 사용. 09-korea-investment-api-guide.md에 국내 주문 ORD_DVSN 코드표, 12-auto-investment-strategy.md §6.2 항목 3 구현 문구 반영. 테스트: OrderServiceTest.executeOrderForPipeline_orderDvsn_set_passesToClient, PipelineExecutorTest.run_KR_shortTerm_withKrOpeningOrderDvsn_setsOrderDvsnOnRequest.
+- [x] **데이터 파이프라인 (/ops/data) 프론트 연동**  
+  GET /api/v1/ops/data-pipeline/status를 opsApi.getDataPipelineStatus로 연동 완료. Admin /ops/data 화면에서 원천별 수집 상태·최근 기준일·오류 요약 표시. 11-api-frontend-mapping §2·§4 갱신.
+- [x] **알림센터 (/ops/alerts) 백엔드·프론트**  
+  TB_ALERT_LOG(V28), AlertLog 엔티티·AlertLogRepository. DiscordEmergencyAlertService 발송 시 알림 이력 저장. GET /api/v1/ops/alerts (페이징·레벨 필터), OpsAlertsController·OpsAlertsService. 프론트 opsApi.getAlerts, AlertsView(목록·레벨 필터). 02-api-endpoints §11, 01-api-overview §3.11, 11-api-frontend-mapping 갱신.
+- [x] **감사 로그 (/ops/audit) 백엔드·프론트**  
+  TB_AUDIT_LOG(V29), AuditLog 엔티티·AuditLogRepository·AuditLogService. 설정 변경(SettingController)·수동 트리거(TriggerController)·실계좌 가드 차단(PipelineExecutor·PipelineExitScheduler) 시 record 호출. userId/accountNo는 LogMaskingUtil로 마스킹 후 저장. GET /api/v1/ops/audit (ADMIN, 페이징·eventType·from/to 필터), OpsAuditController. 프론트 opsApi.getAuditLogs, AuditView(목록·이벤트유형 필터·페이징). 02-api-endpoints §12, 01-api-overview §3.11, 11-api-frontend-mapping §4 감사 로그 연동 완료 반영.
+- [x] **Ops 모델/예측·시스템 헬스 API 및 프론트 연동**  
+  **모델/예측**: GET /api/v1/ops/model/status (ADMIN), OpsModelController·OpsModelStatusService·OpsModelStatusDto. AiPredictionClient.isModelReady() 기반, serviceUrl 마스킹(configured/not configured)·lastCheckAt. **시스템 헬스**: GET /api/v1/ops/health (ADMIN), OpsHealthController·OpsHealthService·OpsHealthDto. DB(JdbcTemplate)·Redis(선택 주입)·예측 서비스 상태 요약(UP/DOWN/UNKNOWN). 프론트 opsApi.getModelStatus·getHealth, ModelView·HealthView 목업 제거 후 API 연동. 01-api-overview §3.11, 02-api-endpoints §12.2·§12.3, 11-api-frontend-mapping §2·§4 연동 완료.
+- [x] **리스크 리포트 (/risk) 실데이터 연동 보강**  
+  RiskSummaryDto에 totalCurrentValue(계좌 합산 평가액)·maxMddPct(계좌 중 최대 MDD) 추가, RiskReportService에서 실데이터로 채움. 프론트 /risk 화면에 총 평가액(노출)·최대 MDD 카드 표시.
+- [x] **연말 세금·리포트 (/report/tax) 스텁 API**  
+  GET /api/v1/report/tax/summary (year 선택), TaxReportController·TaxReportService·TaxReportSummaryDto. 기준 연도·disclaimer 반환, 실데이터·PDF/CSV·Hometax 연동은 후속. 02-api-endpoints §12, 01-api-overview §3.12.
+- [x] **Tax 리포트 화면 (/report/tax) 연동**  
+  프론트 TaxReportPage에서 GET /api/v1/report/tax/summary 연동·연도 선택(기본 현재 연도)·실현손익/배당/면책 표시. CSV/PDF 내보내기는 후속(연말 세금·리포트 백엔드·PDF/CSV). 11-api-frontend-mapping §2·§3·§4 반영.
+- [x] **뉴스·공시 파이프라인 1차 (확정 원천)**  
+  DART: dart_collector.py에 시그널 키워드(무상증자·영업익 등) 매칭, eventType DART_SIGNAL: 접두사·signalRelevant. SEC: sec_edgar_collector.py에서 8-K form 구분·eventType 8K·signalRelevant. Spring: CollectedNewsItemDto.signalRelevant, NewsItemRepository.findSignalRelevantSince, NewsSignalService.getSymbolsWithSignalNews, PositionSizingService에서 시그널 공시 종목 우선 정렬. investment.news.signal-lookback-days. 13-news-collection-design §4·§6 정합.
+- [x] **연말 세금·리포트 실데이터·PDF/CSV**  
+  TaxReportService.getSummary(userId, year): 사용자 계좌별 기간별손익조회(realizedProfitLoss) 연도 합산·예상 세금 가정 공식. GET /api/v1/report/tax/summary/export?year=&format=csv|pdf (OpenPDF). 01-api-overview §3.12 집계 근거 문서화. TaxReportPage CSV/PDF 버튼 활성화·downloadTaxSummaryExport 연동.
+- [x] **리스크 리포트 VaR/CVaR**  
+  RiskSummaryDto에 var95Pct·cvar95Pct 추가. RiskReportService에서 investment.risk.var-daily-vol-pct 기반 단순 파라메트릭(1.65σ·2.06σ) 1일 VaR 95%·CVaR 95% 산출. 프론트 /risk 화면에 VaR(95%)·CVaR(95%) 카드 표시. 02-api-endpoints §9 응답 필드 반영.
+- [x] **로보어드바이저 사용자 플로우 명확화**  
+  랜딩: 한 줄 문구 "나 대신 투자해주는 고수익 로보어드바이저" 정합·CTA(시작하기/로그인) 유지. 대시보드 계좌 0개 시 "설정에서 계좌를 연결해주세요" + [설정으로 가기](serverType 쿼리). 자동투자 현황 계좌 미연결 시 동일 문구 + [설정으로 가기]. DashboardAccountCard 자동투자 OFF 시 "자동매매를 켜면 로보가 대신 매매합니다" + [설정으로 가기] 기존 유지. 설정 탭 계좌 0개 빈 상태 + [계좌 설정으로 가기] 기존 유지. 00-robo-advisor-product-summary 부족 문단 갱신.
 
 ### 자동투자 프로세스·활성화 체크리스트
 
@@ -207,12 +237,12 @@
 ### Phase 1 (Foundation) — 메뉴·API 정리
 
 - [ ] **메뉴별 백엔드 개발 순차 진행**  
-  [11-api-frontend-mapping.md §4](../04-api/11-api-frontend-mapping.md) 메뉴(라우트)별 백엔드 API 필요·연동 현황 및 §5.2 미구현·미연동 우선순위를 기준으로, 백엔드 개발이 필요한 메뉴를 하나씩 구현(API 추가·수정 → 프론트 연동 → 문서 갱신). Ops 전용 메뉴(데이터 파이프라인, 알림센터, 리스크, 모델/예측, 감사 로그, 시스템 헬스)는 각 메뉴별 필요한 백엔드 기능을 11-api-frontend-mapping에 나열한 대로 순차 진행.
+  [11-api-frontend-mapping.md §4](../04-api/11-api-frontend-mapping.md) 메뉴(라우트)별 백엔드 API 필요·연동 현황 및 §5.2 미구현·미연동 우선순위를 기준으로, 백엔드 개발이 필요한 메뉴를 하나씩 구현(API 추가·수정 → 프론트 연동 → 문서 갱신). Admin 전용 메뉴(데이터 파이프라인, 알림센터, 리스크, 모델/예측, 감사 로그, 시스템 헬스)는 각 메뉴별 필요한 백엔드 기능을 11-api-frontend-mapping에 나열한 대로 순차 진행.
 
 ### 데이터·파이프라인 (Data Engine)
 
-- [ ] **뉴스·공시 파이프라인 (확정 원천만)**  
-  **한국**: DART(Open API) 실시간/단기 폴링 공시, 키워드(무상증자·영업익 30% 증가 등) 포착 시 매수 시그널; 연합뉴스 수집·NLP·속보/긴급 가중치; 네이버 금융(많이 본 뉴스·실시간 검색 종목) 수집·이용약관 준수. **미국**: SEC EDGAR API(8-K·10-K·10-Q), 8-K 발생 시 **최우선 순위** 로직; Reuters 헤드라인·감정 분석; Yahoo Finance(OHLCV·Earnings Calendar·Analyst Up/Down). 수집·저장(TB_NEWS_ITEMS)·감정/중요도/이벤트 유형 분석, 전략 시그널 점수 반영, Fallback(원천 장애 시 파이프라인 중단 없음).
+- [ ] **뉴스·공시 파이프라인 (확정 원천만) — 1차 완료, Speed/Buzz 후속**  
+  1차 완료: DART 키워드 포착·SEC 8-K 최우선·시그널 반영(NewsSignalService·포지션 사이징 우선 정렬). **후속**: 연합뉴스·Reuters·네이버 금융·Yahoo Buzz 수집·NLP·감정/중요도 분석, 전략 시그널 점수 반영 강화.
 - [ ] **수정주가·Feature Store 강화 (필요 시)**  
   수정주가(Adjuster) 파이프라인 반영, Feature Store 전처리·저장 강화.
 
@@ -223,10 +253,10 @@
 
 ### 리스크·컴플라이언스 (Risk Guard)
 
-- [ ] **리스크 리포트 (/risk) 백엔드**  
-  리스크 리포트(`/risk`) MDD·VaR·노출 등 백엔드 API·데이터 연동.
-- [ ] **VaR/CVaR·연말 손실 한도 정책**  
-  VaR/CVaR 메트릭 노출, 연말 손실 한도 정책 보강(필요 시).
+- [x] **리스크 리포트 (/risk) 백엔드**  
+  MDD·노출(총 평가액)·계좌별 실데이터 연동 완료. VaR/CVaR 메트릭 노출 완료(단순 파라메트릭).
+- [ ] **연말 손실 한도 정책 보강 (필요 시)**  
+  VaR/CVaR 기반 연말 손실 한도 정책·역사적 VaR 등 보강은 필요 시 진행.
 
 ### 실행·게이트웨이 (Execution / Gateway)
 
@@ -239,17 +269,13 @@
 
 - [ ] **대시보드·UX**  
   자동투자 현황 파이프라인 실데이터·시그널/보유 포지션 테이블은 완료. 대시보드: 계좌 요약(국내·미국 구분), 자동투자 상태 카드. 실시간 차트, 성과 분석, 반응형·모바일.
-- [ ] **로보어드바이저 사용자 플로우 명확화**  
-  랜딩(/) 한 줄 문구("나 대신 투자해주는 로보어드바이저")·CTA 강화. 대시보드·자동투자 현황·설정에 다음 액션(설정으로 가기 등) 및 안내 문구 반영. [00-robo-advisor-product-summary.md](00-robo-advisor-product-summary.md), [03-user-flows.md](03-figma-wireframes/03-user-flows.md) 신규 사용자 권장 경로 참조.
-- [ ] **Tax 리포트 화면 (/report/tax) 연동**  
-  연말 세금·리포트 화면 백엔드 API 연동 및 표시.
 - [ ] **모바일 앱 (선택)**  
   iOS/Android, 푸시 알림.
 
 ### 연말 세금·리포트 (Year-End Tax)
 
-- [ ] **연말 세금·리포트 백엔드·PDF/CSV**  
-  국내/해외 실현 손익·2.5M 공제·배당·Hometax용 PDF/CSV 생성, 가정·제한·면책 문구 문서화.
+- [ ] **연말 세금·리포트 고도화 (Hometax·배당)**  
+  1차 완료: 실데이터 집계·PDF/CSV export·프론트 다운로드. 후속: 2.5M 공제·배당 수집·Hometax 연동, 가정·제한·면책 문구 문서화.
 
 ### 인프라·운영
 
@@ -314,3 +340,9 @@
 | 1.29 | 2026-02-04 | 완료: 전체 화면 기획 + Figma 와이어프레임 문서 패키지 — 03-figma-wireframes(IA·권한·플로우·컴포넌트·가드레일·화면 스펙·Figma 규칙·AI 프롬프트), 01-screen-menu-spec §6 Ops 확장·역할 권한 개요. |
 | 1.30 | 2026-02-06 | 기획·개발 기준 문구 추가(00-planning-basis·기준 문서 3종 링크). 진행예정을 Phase·레이어별 그룹으로 재구성(Data Engine·Brain·Risk Guard·Execution·프론트·연말 세금·인프라). 참조 관계에 00-planning-basis 추가. |
 | 1.31 | 2026-02-06 | 완료: 로보·파이프라인 통합 복합 로직 — AutoBuyOrchestrator·AutoBuyTasklet·auto-buy Job(09:10), cron optional·pipeline/robo 수동 전용, POST /api/v1/trigger/auto-buy, React 백테스트 기본 기간(최근 1개월)·스케줄 현황 "지금 실행" 라벨. |
+| 1.32 | 2026-02-09 | 완료: 데이터 파이프라인 (/ops/data) 백엔드 API — GET /api/v1/ops/data-pipeline/status, DataPipelineStatusService·OpsDataPipelineController, 원천별(DART/SEC/KRX/US) 수집 상태·최근 기준일·오류 요약. 01-api-overview §3.11, 02-api-endpoints §10, 11-api-frontend-mapping §4 갱신. |
+| 1.33 | 2026-02-09 | 완료: 인가 Role Ops→Admin 통합 — Role enum에서 OPS 제거, User/Admin 두 역할만 유지. fromDbRole에서 기존 DB "Ops"는 ROLE_ADMIN으로 매핑. CreateAdminUserRequestDto·AdminUserController·AdminUserService는 role=Admin만 허용. OpsDataPipelineController·KillSwitchController @PreAuthorize는 hasRole('ADMIN')만 사용. Flyway V27로 TB_USERS.ROLE 'Ops'→'Admin' 마이그레이션. decisions·API·보안·기획·Figma 문서 일괄 수정. |
+| 1.34 | 2026-02-10 | 완료: 감사 로그 (/ops/audit) 백엔드·프론트 — TB_AUDIT_LOG(V29), AuditLog·AuditLogService·OpsAuditController, 설정 변경/수동 트리거/실계좌 가드 차단 시 기록, 프론트 getAuditLogs·AuditView 연동. |
+| 1.35 | 2026-02-10 | 완료: Tax 리포트 화면 (/report/tax) 연동 — TaxReportPage getTaxSummary 연동·연도 기본값(현재 연도)·11-api-frontend-mapping §1~§4 반영. |
+| 1.36 | 2026-02-10 | 완료: 로보어드바이저 사용자 플로우 명확화 — 랜딩 한 줄 문구 정합, 대시보드/자동투자 현황 빈 상태 "설정에서 계좌를 연결해주세요" + 설정으로 가기(serverType 유지), 00-robo-advisor-product-summary 부족 문단 갱신. |
+| 1.37 | 2026-02-10 | 완료: Ops 모델/예측·시스템 헬스 API 및 프론트 연동 — GET /api/v1/ops/model/status, GET /api/v1/ops/health (ADMIN), OpsModelController·OpsHealthController·서비스·DTO, 프론트 getModelStatus·getHealth·ModelView·HealthView API 연동. 01-api-overview §3.11, 02-api-endpoints §12.2·§12.3, 11-api-frontend-mapping §2·§4 갱신. |

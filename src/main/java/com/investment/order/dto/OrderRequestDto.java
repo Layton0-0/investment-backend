@@ -40,6 +40,12 @@ public class OrderRequestDto {
     private String market;
 
     /**
+     * 국내(KR) 주문 시 주문구분(ORD_DVSN). null/빈값이면 지정가(00).
+     * 시초가/변동성 돌파 시 최유리(02) 또는 IOC(03) 사용 권장. 한투 API 가이드 참조.
+     */
+    private String orderDvsn;
+
+    /**
      * 시장 반환. null이거나 빈 문자열이면 KR.
      */
     public String getMarketOrKr() {

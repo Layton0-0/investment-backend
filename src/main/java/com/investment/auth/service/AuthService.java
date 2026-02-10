@@ -298,14 +298,17 @@ public class AuthService {
         String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
         String appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
 
-        // 메인 계좌 조회 (계좌번호 마스킹)
+        // 메인 계좌 조회 (해당 API Key의 serverType 기준, 계좌번호 마스킹)
         String accountNoMasked = null;
-        UserAccount mainAccount = userAccountRepository.findByUserIdAndIsDefaultTrue(userId).orElse(null);
+        UserAccount mainAccount = userAccountRepository
+                .findByUserIdAndServerTypeAndIsDefaultTrue(userId, userApiKey.getServerType())
+                .orElse(null);
         if (mainAccount != null) {
             String accountNo = encryptionUtil.decrypt(mainAccount.getAccountNoEncrypted());
             accountNoMasked = LogMaskingUtil.maskAccountNo(accountNo);
         }
 
+        String role = user.getRole() != null && !user.getRole().isBlank() ? user.getRole() : "User";
         return MyPageResponseDto.builder()
                 .userId(user.getId())
                 .username(user.getUsername())
@@ -316,6 +319,7 @@ public class AuthService {
                 .serverType(userApiKey.getServerType())
                 .serverTypeName("1".equals(userApiKey.getServerType()) ? "모의투자" : "실거래")
                 .accountNoMasked(accountNoMasked)
+                .role(role)
                 .build();
     }
 
@@ -491,6 +495,7 @@ public class AuthService {
         // 응답 생성
         String appKey = encryptionUtil.decrypt(appKeyEncrypted);
         String appSecret = encryptionUtil.decrypt(appSecretEncrypted);
+        String role = user.getRole() != null && !user.getRole().isBlank() ? user.getRole() : "User";
 
         return MyPageResponseDto.builder()
                 .userId(user.getId())
@@ -502,6 +507,7 @@ public class AuthService {
                 .serverType(serverType)
                 .serverTypeName("1".equals(serverType) ? "모의투자" : "실거래")
                 .accountNoMasked(accountNoMasked)
+                .role(role)
                 .build();
     }
 

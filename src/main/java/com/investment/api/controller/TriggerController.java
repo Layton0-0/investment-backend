@@ -1,6 +1,7 @@
 package com.investment.api.controller;
 
 import com.investment.batch.registry.BatchJobRegistry;
+import com.investment.ops.service.AuditLogService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.security.Principal;
 import java.time.LocalDate;
 import java.util.Map;
 
@@ -37,6 +39,18 @@ public class TriggerController {
     private final BatchJobRegistry batchJobRegistry;
     private final JobLauncher jobLauncher;
     private final ApplicationContext applicationContext;
+    private final AuditLogService auditLogService;
+
+    private void recordManualTrigger(Principal principal, String pathSuffix, ResponseEntity<Map<String, Object>> response) {
+        try {
+            boolean success = response.getBody() != null && Boolean.TRUE.equals(response.getBody().get("success"));
+            String userId = principal != null ? principal.getName() : null;
+            auditLogService.record(AuditLogService.EVENT_MANUAL_TRIGGER, userId, null,
+                    "trigger path=" + pathSuffix, success ? AuditLogService.RESULT_SUCCESS : AuditLogService.RESULT_FAILURE, null);
+        } catch (Exception e) {
+            log.trace("감사 로그 기록 스킵: {}", e.getMessage());
+        }
+    }
 
     private ResponseEntity<Map<String, Object>> runTrigger(String pathSuffix, String successMessage,
             String failureMessage,
@@ -63,28 +77,18 @@ public class TriggerController {
         }
     }
 
-    @Operation(summary = "DART 공시 수집", description = "DART 공시 수집을 즉시 실행")
-    @PostMapping("/dart-collect")
-    public ResponseEntity<Map<String, Object>> triggerDartCollect() {
-        return runTrigger("/dart-collect", "DART 공시 수집 완료", "DART 수집 실패",
-                new JobParametersBuilder());
-    }
-
-    @Operation(summary = "SEC EDGAR 공시 수집", description = "SEC EDGAR 공시 수집을 즉시 실행")
-    @PostMapping("/sec-collect")
-    public ResponseEntity<Map<String, Object>> triggerSecCollect() {
-        return runTrigger("/sec-collect", "SEC 공시 수집 완료", "SEC 수집 실패",
-                new JobParametersBuilder());
-    }
+    // DART/SEC 공시 수집은 Python investment-data-collector (POST /dart-collect, /sec-collect)에서 수행
 
     @Operation(summary = "KRX 일별 시세 수집", description = "KRX 일별 시세 수집을 즉시 실행. basDt 미입력 시 오늘")
     @PostMapping("/krx-daily")
     public ResponseEntity<Map<String, Object>> triggerKrxDaily(
+            Principal principal,
             @Parameter(description = "기준일 (yyyy-MM-dd)") @RequestParam(required = false) LocalDate basDt) {
         LocalDate target = basDt != null ? basDt : LocalDate.now();
         JobParametersBuilder params = new JobParametersBuilder();
         params.addString("basDt", target.toString());
         ResponseEntity<Map<String, Object>> result = runTrigger("/krx-daily", "KRX 일별 수집 완료", "KRX 일별 수집 실패", params);
+        recordManualTrigger(principal, "/krx-daily", result);
         if (result.getBody() != null && result.getBody().get("success") == Boolean.TRUE) {
             return ResponseEntity.ok(Map.of("success", true, "message", "KRX 일별 수집 완료", "basDt", target.toString()));
         }
@@ -94,11 +98,13 @@ public class TriggerController {
     @Operation(summary = "US 일별 시세 수집", description = "US 시장 일별 시세 수집을 즉시 실행. basDt 미입력 시 오늘")
     @PostMapping("/us-daily")
     public ResponseEntity<Map<String, Object>> triggerUsDaily(
+            Principal principal,
             @Parameter(description = "기준일 (yyyy-MM-dd)") @RequestParam(required = false) LocalDate basDt) {
         LocalDate target = basDt != null ? basDt : LocalDate.now();
         JobParametersBuilder params = new JobParametersBuilder();
         params.addString("basDt", target.toString());
         ResponseEntity<Map<String, Object>> result = runTrigger("/us-daily", "US 일별 수집 완료", "US 일별 수집 실패", params);
+        recordManualTrigger(principal, "/us-daily", result);
         if (result.getBody() != null && result.getBody().get("success") == Boolean.TRUE) {
             return ResponseEntity.ok(Map.of("success", true, "message", "US 일별 수집 완료", "basDt", target.toString()));
         }
@@ -107,18 +113,22 @@ public class TriggerController {
 
     @Operation(summary = "팩터 계산", description = "유니버스 필터 및 팩터(시그널) 계산을 즉시 실행")
     @PostMapping("/factor-calculation")
-    public ResponseEntity<Map<String, Object>> triggerFactorCalculation() {
-        return runTrigger("/factor-calculation", "팩터 계산 완료", "팩터 계산 실패", new JobParametersBuilder());
+    public ResponseEntity<Map<String, Object>> triggerFactorCalculation(Principal principal) {
+        ResponseEntity<Map<String, Object>> result = runTrigger("/factor-calculation", "팩터 계산 완료", "팩터 계산 실패", new JobParametersBuilder());
+        recordManualTrigger(principal, "/factor-calculation", result);
+        return result;
     }
 
     @Operation(summary = "자동매수(통합)", description = "공통 전처리 → 로보(ETF) → 파이프라인(개별종목) 순으로 통합 실행. dryRun=true면 실제 주문 없음")
     @PostMapping("/auto-buy")
     public ResponseEntity<Map<String, Object>> triggerAutoBuy(
+            Principal principal,
             @Parameter(description = "true면 실제 주문 없이 실행") @RequestParam(required = false) Boolean dryRun) {
         JobParametersBuilder params = new JobParametersBuilder();
         if (dryRun != null)
             params.addString("dryRun", dryRun.toString());
         ResponseEntity<Map<String, Object>> result = runTrigger("/auto-buy", "자동매수(통합) 완료", "자동매수(통합) 실패", params);
+        recordManualTrigger(principal, "/auto-buy", result);
         if (result.getBody() != null && result.getBody().get("success") == Boolean.TRUE) {
             return ResponseEntity
                     .ok(Map.of("success", true, "message", "자동매수(통합) 완료", "dryRun", Boolean.TRUE.equals(dryRun)));
@@ -129,12 +139,14 @@ public class TriggerController {
     @Operation(summary = "파이프라인 실행", description = "4단계 파이프라인 실행. dryRun=true면 주문 미실행")
     @PostMapping("/pipeline-execution")
     public ResponseEntity<Map<String, Object>> triggerPipelineExecution(
+            Principal principal,
             @Parameter(description = "true면 실제 주문 없이 실행") @RequestParam(required = false) Boolean dryRun) {
         JobParametersBuilder params = new JobParametersBuilder();
         if (dryRun != null)
             params.addString("dryRun", dryRun.toString());
         ResponseEntity<Map<String, Object>> result = runTrigger("/pipeline-execution", "파이프라인 실행 완료", "파이프라인 실행 실패",
                 params);
+        recordManualTrigger(principal, "/pipeline-execution", result);
         if (result.getBody() != null && result.getBody().get("success") == Boolean.TRUE) {
             return ResponseEntity
                     .ok(Map.of("success", true, "message", "파이프라인 실행 완료", "dryRun", Boolean.TRUE.equals(dryRun)));
@@ -144,30 +156,38 @@ public class TriggerController {
 
     @Operation(summary = "파이프라인 청산 평가", description = "보유 포지션 청산 규칙 평가 및 매도 시그널 시 주문 실행")
     @PostMapping("/pipeline-exit")
-    public ResponseEntity<Map<String, Object>> triggerPipelineExit() {
-        return runTrigger("/pipeline-exit", "파이프라인 청산 평가 완료", "파이프라인 청산 실패", new JobParametersBuilder());
+    public ResponseEntity<Map<String, Object>> triggerPipelineExit(Principal principal) {
+        ResponseEntity<Map<String, Object>> result = runTrigger("/pipeline-exit", "파이프라인 청산 평가 완료", "파이프라인 청산 실패", new JobParametersBuilder());
+        recordManualTrigger(principal, "/pipeline-exit", result);
+        return result;
     }
 
     @Operation(summary = "체결 확인 후 포지션 등록", description = "체결된 주문에 대해 포지션 등록")
     @PostMapping("/fill-confirmation")
-    public ResponseEntity<Map<String, Object>> triggerFillConfirmation() {
-        return runTrigger("/fill-confirmation", "체결 확인 완료", "체결 확인 실패", new JobParametersBuilder());
+    public ResponseEntity<Map<String, Object>> triggerFillConfirmation(Principal principal) {
+        ResponseEntity<Map<String, Object>> result = runTrigger("/fill-confirmation", "체결 확인 완료", "체결 확인 실패", new JobParametersBuilder());
+        recordManualTrigger(principal, "/fill-confirmation", result);
+        return result;
     }
 
     @Operation(summary = "미체결 확인", description = "PENDING N분 경과 주문에 대해 Discord 긴급 알림")
     @PostMapping("/unfilled-check")
-    public ResponseEntity<Map<String, Object>> triggerUnfilledCheck() {
-        return runTrigger("/unfilled-check", "미체결 확인 완료", "미체결 확인 실패", new JobParametersBuilder());
+    public ResponseEntity<Map<String, Object>> triggerUnfilledCheck(Principal principal) {
+        ResponseEntity<Map<String, Object>> result = runTrigger("/unfilled-check", "미체결 확인 완료", "미체결 확인 실패", new JobParametersBuilder());
+        recordManualTrigger(principal, "/unfilled-check", result);
+        return result;
     }
 
     @Operation(summary = "로보 리밸런싱", description = "로보 어드바이저 리밸런싱. dryRun=true면 백테스트만 실행·저장")
     @PostMapping("/robo-rebalance")
     public ResponseEntity<Map<String, Object>> triggerRoboRebalance(
+            Principal principal,
             @Parameter(description = "true면 실제 ETF 주문 없이 백테스트만 실행") @RequestParam(required = false) Boolean dryRun) {
         JobParametersBuilder params = new JobParametersBuilder();
         if (dryRun != null)
             params.addString("dryRun", dryRun.toString());
         ResponseEntity<Map<String, Object>> result = runTrigger("/robo-rebalance", "로보 리밸런싱 완료", "로보 리밸런싱 실패", params);
+        recordManualTrigger(principal, "/robo-rebalance", result);
         if (result.getBody() != null && result.getBody().get("success") == Boolean.TRUE) {
             return ResponseEntity
                     .ok(Map.of("success", true, "message", "로보 리밸런싱 완료", "dryRun", Boolean.TRUE.equals(dryRun)));
@@ -177,19 +197,25 @@ public class TriggerController {
 
     @Operation(summary = "일일 PnL 기록", description = "장 마감 후 계좌별 당일 수익률 기록")
     @PostMapping("/daily-pnl")
-    public ResponseEntity<Map<String, Object>> triggerDailyPnl() {
-        return runTrigger("/daily-pnl", "일일 PnL 기록 완료", "일일 PnL 실패", new JobParametersBuilder());
+    public ResponseEntity<Map<String, Object>> triggerDailyPnl(Principal principal) {
+        ResponseEntity<Map<String, Object>> result = runTrigger("/daily-pnl", "일일 PnL 기록 완료", "일일 PnL 실패", new JobParametersBuilder());
+        recordManualTrigger(principal, "/daily-pnl", result);
+        return result;
     }
 
     @Operation(summary = "장중 변동성 돌파", description = "09:00~10:00 구간 돌파 종목 매수 (설정 시)")
     @PostMapping("/intraday-breakout")
-    public ResponseEntity<Map<String, Object>> triggerIntradayBreakout() {
-        return runTrigger("/intraday-breakout", "장중 변동성 돌파 실행 완료", "장중 변동성 돌파 실패", new JobParametersBuilder());
+    public ResponseEntity<Map<String, Object>> triggerIntradayBreakout(Principal principal) {
+        ResponseEntity<Map<String, Object>> result = runTrigger("/intraday-breakout", "장중 변동성 돌파 실행 완료", "장중 변동성 돌파 실패", new JobParametersBuilder());
+        recordManualTrigger(principal, "/intraday-breakout", result);
+        return result;
     }
 
     @Operation(summary = "중기 리밸런스", description = "MEDIUM_TERM 월 1회 리밸런싱 훅 (스텁)")
     @PostMapping("/medium-term-rebalance")
-    public ResponseEntity<Map<String, Object>> triggerMediumTermRebalance() {
-        return runTrigger("/medium-term-rebalance", "중기 리밸런스 완료", "중기 리밸런스 실패", new JobParametersBuilder());
+    public ResponseEntity<Map<String, Object>> triggerMediumTermRebalance(Principal principal) {
+        ResponseEntity<Map<String, Object>> result = runTrigger("/medium-term-rebalance", "중기 리밸런스 완료", "중기 리밸런스 실패", new JobParametersBuilder());
+        recordManualTrigger(principal, "/medium-term-rebalance", result);
+        return result;
     }
 }

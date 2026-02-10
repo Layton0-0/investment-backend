@@ -21,7 +21,7 @@ API 키·계좌·거래 설정(비율·한도·자동투자 ON/OFF·로보 ON/OF
 
 ## 권한
 
-- User, Ops: 본인 계좌 읽기/쓰기. auto-execute·allow-real-execution은 읽기 전용 표시(Ops 또는 설정 하단 안내).
+- User, Admin: 본인 계좌 읽기/쓰기. auto-execute·allow-real-execution은 읽기 전용 표시(Admin 또는 설정 하단 안내).
 
 ## 연동 API
 

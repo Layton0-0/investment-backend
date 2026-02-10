@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
@@ -91,8 +92,7 @@ public class FastApiPredictionClient implements AiPredictionClient {
                                 .uri("/api/v1/predict/batch")
                                 .bodyValue(requests)
                                 .retrieve()
-                                .bodyToFlux(PredictionResponseDto.class)
-                                .collectList()
+                                .bodyToMono(new ParameterizedTypeReference<List<PredictionResponseDto>>() { })
                                 .timeout(Duration.ofMillis(timeoutMs * requests.size()))
                                 .retryWhen(Retry.backoff(maxRetryAttempts, Duration.ofMillis(100))
                                                 .doBeforeRetry(retrySignal -> log.warn("AI 배치 예측 재시도: attempt={}",

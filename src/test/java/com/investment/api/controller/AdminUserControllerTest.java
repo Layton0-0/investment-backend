@@ -50,19 +50,19 @@ class AdminUserControllerTest {
     void createAdminUser_asAdmin_returnsCreated() throws Exception {
         CreateAdminUserResponseDto response = CreateAdminUserResponseDto.builder()
                 .userId("id-1")
-                .username("ops1")
-                .role("Ops")
+                .username("admin1")
+                .role("Admin")
                 .build();
         when(adminUserService.createAdminUser(any())).thenReturn(response);
 
-        String body = "{\"username\":\"ops1\",\"password\":\"MyP@ssw0rd99\",\"role\":\"Ops\"}";
+        String body = "{\"username\":\"admin1\",\"password\":\"MyP@ssw0rd99\",\"role\":\"Admin\"}";
         mockMvc.perform(post("/api/v1/admin/users")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.userId").value("id-1"))
-                .andExpect(jsonPath("$.username").value("ops1"))
-                .andExpect(jsonPath("$.role").value("Ops"));
+                .andExpect(jsonPath("$.username").value("admin1"))
+                .andExpect(jsonPath("$.role").value("Admin"));
     }
 
 }

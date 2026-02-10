@@ -571,6 +571,12 @@ curl http://localhost:8000/
 - **로컬**: `application-local.yml`에 `spring.flyway.repair-on-validate-failure: true`가 설정되어 있으면, 검증 실패 시 자동으로 repair 후 migrate 재시도.
 - V22는 MariaDB 규칙에 맞게 `MINVALUE 1`, `START WITH 1`, `MAXVALUE 9223372036854775806`으로 정의되어 있으며, 기존 잘못된 시퀀스는 `DROP SEQUENCE IF EXISTS` 후 재생성.
 
+### DART/SEC 공시 수집과 NoClassDefFoundError
+
+**역할 이전**: DART·SEC EDGAR 공시 수집 **배치는 이제 Python investment-data-collector**에서 수행한다. Spring에서는 해당 배치 Job·Trigger가 제거되어 더 이상 해당 경로로 실행되지 않는다.
+
+**과거 증상**: Spring Batch에서 DART/SEC를 실행할 때 `NoClassDefFoundError: DartListResponseDto` / `SecSubmissionsResponseDto`가 났다면, 해당 배치는 이미 Python으로 이전되었으므로 **동일 오류는 Spring에서 재현되지 않는다**. (Python 수집기는 `POST /dart-collect`, `POST /sec-collect` 또는 `SCHEDULE_DART_SEC=1`로 동작.)
+
 ## 참고 문서
 
 - [시스템 아키텍처](../02-architecture/01-system-architecture.md)

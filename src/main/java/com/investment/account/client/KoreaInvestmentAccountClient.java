@@ -28,7 +28,9 @@ import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
+import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
 import java.math.BigDecimal;
@@ -276,7 +278,7 @@ public class KoreaInvestmentAccountClient {
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
 
-            // API 호출 (GET + query parameter)
+            // API 호출 (GET + query parameter). 401 시 DB에서 토큰 재조회 후 1회만 재시도(직접 발급 없음)
             String responseJson = webClient.get()
                     .uri(uri)
                     .headers(h -> h.addAll(headers))
@@ -284,25 +286,26 @@ public class KoreaInvestmentAccountClient {
                     .bodyToMono(String.class)
                     .timeout(Duration.ofSeconds(10))
                     .retryWhen(Retry.backoff(2, Duration.ofSeconds(1))
-                            .filter(throwable -> {
-                                if (throwable instanceof org.springframework.web.reactive.function.client.WebClientResponseException) {
-                                    org.springframework.web.reactive.function.client.WebClientResponseException ex = (org.springframework.web.reactive.function.client.WebClientResponseException) throwable;
-                                    if (ex.getStatusCode().value() == 401) {
-                                        log.warn("401 에러 발생, 토큰 재발급 시도: userId={}", LogMaskingUtil.maskUserId(userId));
-                                        try {
-                                            List<UserApiKey> apiKeys = userApiKeyRepository.findByUserId(userId);
-                                            if (!apiKeys.isEmpty()) {
-                                                tokenService.issueTokenForUser(apiKeys.get(0));
-                                            }
-                                        } catch (Exception e) {
-                                            log.error("토큰 재발급 실패: userId={}", LogMaskingUtil.maskUserId(userId), e);
-                                        }
-                                        return true;
-                                    }
-                                    return ex.getStatusCode().is5xxServerError();
-                                }
-                                return false;
-                            }))
+                            .filter(t -> t instanceof WebClientResponseException
+                                    && ((WebClientResponseException) t).getStatusCode().is5xxServerError()))
+                    .onErrorResume(WebClientResponseException.class, ex -> {
+                        if (ex.getStatusCode().value() == 401) {
+                            log.warn("401 에러 발생, DB에서 토큰 재조회 후 1회 재시도: userId={}", LogMaskingUtil.maskUserId(userId));
+                            String newToken = tokenService.getAccessToken(userId, serverType);
+                            HttpHeaders retryHeaders = KoreaInvestmentRequestBuilder.createCommonHeaders(
+                                    newToken, appKey, appSecret, trId);
+                            return webClient.get()
+                                    .uri(uri)
+                                    .headers(h -> h.addAll(retryHeaders))
+                                    .retrieve()
+                                    .bodyToMono(String.class)
+                                    .timeout(Duration.ofSeconds(10))
+                                    .retryWhen(Retry.backoff(2, Duration.ofSeconds(1))
+                                            .filter(t -> t instanceof WebClientResponseException
+                                                    && ((WebClientResponseException) t).getStatusCode().is5xxServerError()));
+                        }
+                        return Mono.error(ex);
+                    })
                     .block();
 
             if (responseJson == null) {

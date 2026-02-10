@@ -141,7 +141,7 @@ class AuthServiceTest {
         when(userApiKeyRepository.findByUserId("user-1")).thenReturn(List.of(apiKey));
         when(encryptionUtil.decrypt("enc-key")).thenReturn("plain-key");
         when(encryptionUtil.decrypt("enc-secret")).thenReturn("plain-secret");
-        when(userAccountRepository.findByUserIdAndIsDefaultTrue("user-1")).thenReturn(Optional.empty());
+        when(userAccountRepository.findByUserIdAndServerTypeAndIsDefaultTrue(eq("user-1"), eq("1"))).thenReturn(Optional.empty());
 
         MyPageResponseDto result = authService.getMyPage("user-1");
 

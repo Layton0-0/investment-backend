@@ -1,8 +1,6 @@
 package com.investment.datacollection.scheduler;
 
-import com.investment.datacollection.service.DartCollectionService;
 import com.investment.datacollection.service.KrxCollectionService;
-import com.investment.datacollection.service.SecCollectionService;
 import com.investment.datacollection.service.UsMarketCollectionService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,13 +19,7 @@ import static org.mockito.Mockito.*;
 class DataCollectionSchedulerTest {
 
     @Mock
-    private DartCollectionService dartCollectionService;
-
-    @Mock
     private KrxCollectionService krxCollectionService;
-
-    @Mock
-    private SecCollectionService secCollectionService;
 
     @Mock
     private UsMarketCollectionService usMarketCollectionService;

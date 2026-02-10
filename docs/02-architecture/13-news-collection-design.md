@@ -59,6 +59,11 @@
   - **용도**: 주가 데이터(OHLCV), 애널리스트 추정치(Consensus), 옵션 데이터.
   - **로보어드바이저 활용**: 실시간 가격 데이터 및 보조지표 산출의 베이스캠프. 'Earnings Calendar'와 'Analyst Upgrades/Downgrades' 데이터 소스로 활용. 미국장 기본 차트/지표는 Yahoo로 계산하고, **SEC EDGAR 8-K 발생 시 최우선** 로직 실행.
 
+### 2.4 구현 범위 (현재 vs 목표)
+
+- **현재 구현**: Fact(DART, SEC EDGAR) 공시 수집·TB_NEWS_ITEMS 저장, 시세(KRX, US) 수집·TB_DAILY_STOCK 등 저장. 파이프라인에는 이 원천들만 연결됨.
+- **미구현(목표)**: Speed(연합뉴스, 로이터), Buzz(네이버 금융, Yahoo Finance) 뉴스/센티멘트 수집·저장·시그널 연동은 본 문서 설계대로 추후 구현 예정. [12-auto-investment-strategy.md](./12-auto-investment-strategy.md) §7.5와 동일 기준.
+
 ---
 
 ## 3. 구현 가이드 (Implementation Tip)

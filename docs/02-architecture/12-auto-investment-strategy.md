@@ -223,7 +223,7 @@ sequenceDiagram
 
 1. **[Execution·시장]** **국내(KR)** 주문은 국내주식 주문 API(`/uapi/domestic-stock/v1/trading/order-cash`) 사용, **해외(US)** 주문은 해외주식 주문 API(`/uapi/overseas-stock/v1/trading/order`) 사용. `OrderRequestDto.market`에 따라 자동 분기.
 2. **[Logic]** 한국 전략에서 "외국인 매수"와 "RSI 과매도" 동시 미발생 시 **우선순위(분기)** 적용: Case A(모멘텀) ∪ Case B(역발상). (§5.2 Hunter)
-3. **[Execution]** 9:00 개장 직후 슬리피지 방어: 시초가/변동성 돌파 시 **유동성 300억 원 이상** (`liquidity-min-trd-val-opening`), **최유리 지정가 또는 IOC** 사용.
+3. **[Execution]** 9:00 개장 직후 슬리피지 방어: 시초가/변동성 돌파 시 **유동성 300억 원 이상** (`liquidity-min-trd-val-opening`), **최유리 지정가 또는 IOC** 사용. 구현: KR 단기(시초가/변동성 돌파) 시 `investment.pipeline.kr-opening-order-dvsn`(02=최유리, 03=IOC) 설정 시 해당 주문구분 사용. 미설정 시 지정가(00). [09-korea-investment-api-guide.md](../04-api/09-korea-investment-api-guide.md) 국내 주문 ORD_DVSN 참조.
 4. **[Strategy]** 미국 듀얼 모멘텀(중/장기)이 **Time-Cut에 의해 청산되지 않도록** 파이프라인 분리 (Time-Cut은 단기 전용).
 5. **[Risk]** 초기 운용 기간 **켈리 비활성** (`kelly-enabled: false`), **고정 자산 비율**만 사용 (`kelly-fixed-allocation-pct`).
 6. **[Fail-safe]** 매수/매도 주문 후 **체결 미확인 시 Discord 긴급 알림** (`alert-discord-webhook-url`, `unfilled-check-minutes`). 알림에 userId·계좌(마스킹)·모의/실전·증권사·URL 포함.
@@ -264,6 +264,11 @@ sequenceDiagram
 
 1. **미국장**: Yahoo Finance로 기본 차트/지표 계산. **SEC EDGAR 8-K(수시공시)** 발생 시 **최우선 순위**로 로직 실행 — 실적 서프라이즈 반응 속도 극대화.
 2. **한국장**: **Open DART API** 필수. 장 마감 후 공시·장중 '단일판매공급계약' 등은 상한가 직행 요인 → **Real-time Push** 수신 구조가 승패를 가름.
+
+### 7.5 구현 범위 (현재 vs 목표)
+
+- **현재 파이프라인 연결**: Fact(DART, SEC EDGAR)와 시세(KRX, US) 수집·저장이 구현되어 있음. 뉴스/공시는 DART·SEC 소스로 TB_NEWS_ITEMS 등에 저장되며, 유니버스·시그널 계산에 활용 가능.
+- **목표 원천(미구현)**: Speed(연합뉴스, 로이터), Buzz(네이버 금융, Yahoo Finance)는 §7.1 요약표의 확정 원천이나, 수집·시그널 연동 코드는 아직 없음. 로드맵 및 [13-news-collection-design.md](./13-news-collection-design.md) 설계대로 추후 수집·감정 분석·시그널 반영 예정.
 
 **상세**: [13-news-collection-design.md](./13-news-collection-design.md)
 

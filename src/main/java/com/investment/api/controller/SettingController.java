@@ -3,6 +3,7 @@ package com.investment.api.controller;
 import com.investment.auth.service.AuthService;
 import com.investment.common.exception.DomainException;
 import com.investment.common.exception.ErrorCode;
+import com.investment.ops.service.AuditLogService;
 import com.investment.setting.dto.SettingsAccountsResponseDto;
 import com.investment.setting.dto.SettingsAccountsUpdateRequestDto;
 import com.investment.setting.dto.TradingSettingDto;
@@ -29,6 +30,7 @@ public class SettingController {
 
     private final TradingSettingService tradingSettingService;
     private final AuthService authService;
+    private final AuditLogService auditLogService;
 
     /**
      * 설정 화면용 계좌 정보 한번에 조회 (모의·실 두 블록)
@@ -73,9 +75,15 @@ public class SettingController {
     
     @PutMapping("/{accountNo}")
     public ResponseEntity<TradingSettingDto> updateSetting(
+            Authentication authentication,
             @PathVariable @NotBlank String accountNo,
             @RequestBody @Valid TradingSettingDto dto) {
         TradingSettingDto setting = tradingSettingService.saveSetting(accountNo, dto);
+        String userId = authentication != null ? authentication.getName() : null;
+        if (userId != null) {
+            auditLogService.record(AuditLogService.EVENT_SETTING_CHANGE, userId, accountNo,
+                    "거래 설정 저장", AuditLogService.RESULT_SUCCESS, null);
+        }
         return ResponseEntity.ok(setting);
     }
 }

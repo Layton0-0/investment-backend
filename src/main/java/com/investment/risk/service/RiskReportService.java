@@ -52,12 +52,32 @@ public class RiskReportService {
         boolean killSwitch = tradingHaltService.isHaltAllOrders();
         RiskGateService.RiskGateResult gateResult = riskGateService.evaluate(null);
         List<RiskAccountSummaryDto> accounts = getAccountSummaries(userId);
+        BigDecimal totalCurrentValue = accounts.stream()
+                .map(RiskAccountSummaryDto::getCurrentValue)
+                .filter(v -> v != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal maxMddPct = accounts.stream()
+                .map(RiskAccountSummaryDto::getMdd)
+                .filter(v -> v != null)
+                .max(BigDecimal::compareTo)
+                .orElse(null);
+        BigDecimal var95Pct = null;
+        BigDecimal cvar95Pct = null;
+        if (riskProperties.getVarDailyVolPct() != null && riskProperties.getVarDailyVolPct().compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal vol = riskProperties.getVarDailyVolPct();
+            var95Pct = new BigDecimal("1.65").multiply(vol).setScale(2, RoundingMode.HALF_UP);
+            cvar95Pct = new BigDecimal("2.06").multiply(vol).setScale(2, RoundingMode.HALF_UP);
+        }
         return RiskSummaryDto.builder()
                 .killSwitchActive(killSwitch)
                 .regimeGateEnabled(riskProperties.isRegimeGateEnabled())
                 .riskGateAllowsNewBuy(gateResult.isAllowNewBuy())
                 .riskGateSizeMultiplier(gateResult.getSizeMultiplier())
                 .accounts(accounts)
+                .totalCurrentValue(totalCurrentValue)
+                .maxMddPct(maxMddPct)
+                .var95Pct(var95Pct)
+                .cvar95Pct(cvar95Pct)
                 .build();
     }
 

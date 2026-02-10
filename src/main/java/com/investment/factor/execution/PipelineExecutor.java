@@ -13,6 +13,7 @@ import com.investment.domain.repository.TradingSettingRepository;
 import com.investment.domain.repository.UserAccountRepository;
 import com.investment.factor.dto.PositionRecommendationDto;
 import com.investment.factor.service.PositionSizingService;
+import com.investment.ops.service.AuditLogService;
 import com.investment.order.dto.OrderRequestDto;
 import com.investment.order.service.OrderService;
 import com.investment.strategy.domain.StrategyType;
@@ -47,6 +48,7 @@ public class PipelineExecutor {
     private final TradingSettingRepository tradingSettingRepository;
     private final UserAccountRepository userAccountRepository;
     private final EncryptionUtil encryptionUtil;
+    private final AuditLogService auditLogService;
 
     @Value("${investment.pipeline.auto-execute:false}")
     private boolean autoExecute = false;
@@ -58,6 +60,10 @@ public class PipelineExecutor {
     /** 체결 확인 후 포지션 등록 여부 (true면 체결 확인 후, false면 주문 성공 시 즉시 등록) */
     @Value("${investment.pipeline.register-position-on-execution:false}")
     private boolean registerPositionOnExecution = false;
+
+    /** KR 시초가/변동성 돌파 시 주문구분(ORD_DVSN). 02=최유리, 03=IOC. 빈값이면 지정가(00). KR+SHORT_TERM일 때만 적용 */
+    @Value("${investment.pipeline.kr-opening-order-dvsn:}")
+    private String krOpeningOrderDvsn = "";
 
     /**
      * 계좌의 서버 타입 조회 (모의=1, 실전=0). userId·accountNo에 해당하는 UserAccount 기준.
@@ -112,6 +118,11 @@ public class PipelineExecutor {
         for (PositionRecommendationDto rec : recommendations) {
             if (rec.getRecommendedQty() <= 0)
                 continue;
+            String orderDvsn = null;
+            if ("KR".equalsIgnoreCase(market) && strategyType == StrategyType.SHORT_TERM
+                    && krOpeningOrderDvsn != null && !krOpeningOrderDvsn.isBlank()) {
+                orderDvsn = krOpeningOrderDvsn;
+            }
             OrderRequestDto request = OrderRequestDto.builder()
                     .accountNo(accountNo)
                     .symbol(rec.getSymbol())
@@ -119,6 +130,7 @@ public class PipelineExecutor {
                     .quantity((int) rec.getRecommendedQty())
                     .price(rec.getEntryPrice())
                     .market(rec.getMarket() != null ? rec.getMarket() : market)
+                    .orderDvsn(orderDvsn)
                     .build();
             if (actuallyExecute) {
                 try {
@@ -133,6 +145,9 @@ public class PipelineExecutor {
                     if ("0".equals(serverType) && !allowRealExecution) {
                         log.warn("실전 계좌 자동 실행 미허용(allow-real-execution=false), 주문 스킵: accountNo={}, symbol={}",
                                 accountNo, rec.getSymbol());
+                        auditLogService.record(AuditLogService.EVENT_REAL_ACCOUNT_GUARD_BLOCKED, userId, accountNo,
+                                "실전 계좌 자동 실행 미허용으로 주문 스킵 symbol=" + rec.getSymbol(),
+                                AuditLogService.RESULT_SUCCESS, null);
                         orderResults.add(PipelineRunResult.OrderResult.dryRun(rec.getSymbol(), rec.getRecommendedQty(),
                                 rec.getEntryPrice()));
                         continue;

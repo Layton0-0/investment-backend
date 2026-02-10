@@ -28,6 +28,8 @@ public class BatchManagementService {
     private static final String SQL_SUCCESS_COUNT = "SELECT COUNT(*) FROM BATCH_JOB_EXECUTION e INNER JOIN BATCH_JOB_INSTANCE i ON e.JOB_INSTANCE_ID = i.JOB_INSTANCE_ID WHERE i.JOB_NAME = ? AND e.STATUS = 'COMPLETED'";
     private static final String SQL_FAILURE_COUNT = "SELECT COUNT(*) FROM BATCH_JOB_EXECUTION e INNER JOIN BATCH_JOB_INSTANCE i ON e.JOB_INSTANCE_ID = i.JOB_INSTANCE_ID WHERE i.JOB_NAME = ? AND e.STATUS = 'FAILED'";
     private static final String SQL_LAST_END_TIME = "SELECT MAX(e.END_TIME) FROM BATCH_JOB_EXECUTION e INNER JOIN BATCH_JOB_INSTANCE i ON e.JOB_INSTANCE_ID = i.JOB_INSTANCE_ID WHERE i.JOB_NAME = ?";
+    /** 마지막 실패 실행의 EXIT_MESSAGE (2500자 제한이 있으므로 앞 500자만) */
+    private static final String SQL_LAST_FAILURE_MESSAGE = "SELECT e.EXIT_MESSAGE FROM BATCH_JOB_EXECUTION e INNER JOIN BATCH_JOB_INSTANCE i ON e.JOB_INSTANCE_ID = i.JOB_INSTANCE_ID WHERE i.JOB_NAME = ? AND e.STATUS = 'FAILED' ORDER BY e.END_TIME DESC LIMIT 1";
 
     private final BatchJobRegistry batchJobRegistry;
     private final JdbcTemplate jdbcTemplate;
@@ -103,6 +105,38 @@ public class BatchManagementService {
             return row != null ? row.toLocalDateTime() : null;
         } catch (Exception e) {
             log.trace("Last execution time query failed for job={}: {}", jobName, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 해당 Job의 마지막 실행 종료 시각. Ops 데이터 파이프라인 상태 API용.
+     */
+    public LocalDateTime getLastExecutionTimeForJob(String jobName) {
+        return getLastExecutionTime(jobName);
+    }
+
+    /**
+     * 해당 Job의 마지막 실패 실행 EXIT_MESSAGE. 없으면 null.
+     * Ops 데이터 파이프라인 상태 API에서 오류 요약용으로 사용.
+     */
+    public String getLastFailureMessage(String jobName) {
+        if (jobName == null || jobName.isBlank()) {
+            return null;
+        }
+        try {
+            List<String> rows = jdbcTemplate.query(SQL_LAST_FAILURE_MESSAGE,
+                    (rs, rowNum) -> {
+                        String msg = rs.getString(1);
+                        if (msg != null && msg.length() > 500) {
+                            return msg.substring(0, 500) + "...";
+                        }
+                        return msg;
+                    },
+                    jobName);
+            return (rows != null && !rows.isEmpty()) ? rows.get(0) : null;
+        } catch (Exception e) {
+            log.trace("Last failure message query failed for job={}: {}", jobName, e.getMessage());
             return null;
         }
     }
