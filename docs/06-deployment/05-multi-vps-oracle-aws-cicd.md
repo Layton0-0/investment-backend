@@ -2,9 +2,10 @@
 
 ## 개요
 
-이 문서는 **Oracle Cloud 2대**(VM.Standard.E2.1.Micro, 1 OCPU / 1GB RAM)와 **AWS Free Tier 1대**(t2.micro 또는 t3.micro, 1 vCPU / 1GB RAM)를 활용한 멀티 VPS 배포 토폴로지, 메모리 튜닝, CI/CD 파이프라인, 보안 및 체크리스트를 정리한다.
+이 문서는 **Oracle Cloud 2~3대**(VM.Standard.E2.1.Micro, 1 OCPU / 1GB RAM)와 **AWS Free Tier 1대**(t2.micro 또는 t3.micro, 1 vCPU / 1GB RAM)를 활용한 멀티 VPS 배포 토폴로지, 메모리 튜닝, CI/CD 파이프라인, 보안 및 체크리스트를 정리한다.
 
-- **현재 구성**: OCI 2노드는 **Oracle Osaka**·**Oracle Korea** 두 서버로 운영한다. 아래 "Oracle 1" = 데이터 계층(예: Osaka), "Oracle 2" = 애플리케이션 계층(예: Korea) 역할로 매핑하면 된다. AWS는 선택 사항.
+- **현재 구성**: OCI는 **Oracle Osaka**(데이터)·**Oracle Korea**(앱)·**India West (Mumbai)**(앱, 증설)로 운영. Oracle 1 = 데이터 계층(Osaka), Oracle 2 = 앱 계층(Korea), Oracle 3 = 앱 계층(Mumbai). AWS는 선택 사항.
+- **VCN/서브넷 설계**: 리전별 VCN·서브넷·Security List 상세는 [06-oci-vcn-subnet-design.md](06-oci-vcn-subnet-design.md) 참조.
 - **단일 VPS 배포**: [06-single-vps-batch-deployment.md](../08-setup-guides/06-single-vps-batch-deployment.md) 참조.
 - **인프라 저장소**: [investment-infra](../../../investment-infra/README.md).
 
@@ -16,10 +17,25 @@
 |----------|------------|--------------------------------------------|-------------------------------|
 | Oracle 1 | Oracle Osaka | 1 OCPU, 1GB RAM, Public IP·Private IP 각 1개 (문서에 실제 값 기입 금지) | Always Free (E2.1.Micro)      |
 | Oracle 2 | Oracle Korea | 1 OCPU, 1GB RAM, Public IP 1개 (문서에 실제 값 기입 금지)             | Always Free                   |
+| Oracle 3 | India West (Mumbai) | 1 OCPU, 1GB RAM, Public IP 1개 (문서에 실제 값 기입 금지)        | Always Free (E2.1.Micro, 증설) |
 | AWS      | (선택)     | 1 vCPU, 1GB RAM (t2.micro / t3.micro)                                | Free Tier 12개월              |
 
 - 실제 IP·호스트명·키 경로는 저장소·문서에 넣지 않는다. 배포/접속 시 본인 환경 값만 사용한다.
 - 1GB × 2~3노드 제약이 있으므로 서비스별 역할 분리와 메모리 튜닝이 필수이다.
+
+### 1.4 Oracle 3 (Mumbai) 프로비저닝 현황
+
+| 항목 | 값 |
+|------|-----|
+| 리전 | ap-mumbai-1 (India West) |
+| VCN | aifer-vcn |
+| Shape | VM.Standard.E2.1.Micro (1 OCPU, 1GB RAM) |
+| OS | Canonical Ubuntu 24.04 |
+| 사용자 | ubuntu |
+| 부트 볼륨 | 100 GB (기본) |
+| 프로비저닝 일자 | 2026-02-11 |
+
+Public IP는 OCI 콘솔에서 확인 후, GitHub Variables `DEPLOY_HOST_ORACLE_MUMBAI` 및 Oracle 1(Osaka) Security List(5432/6379) 허용에만 사용한다. 문서에는 기입하지 않는다.
 
 ---
 
@@ -35,21 +51,30 @@ flowchart LR
   subgraph aws [AWS Free Tier - 1GB]
     Nginx[Nginx + Frontend Static]
   end
-  subgraph oracle2 [Oracle 2 - 1GB]
-    Backend[Spring Boot Backend]
-    Pred[Prediction Service]
-    Collector[Data Collector]
+  subgraph oracle2 [Oracle 2 Korea - 1GB]
+    Backend2[Backend]
+    Pred2[Prediction]
+    Collector2[Data Collector]
   end
-  subgraph oracle1 [Oracle 1 - 1GB]
+  subgraph oracle3 [Oracle 3 Mumbai - 1GB]
+    Backend3[Backend]
+    Pred3[Prediction]
+    Collector3[Data Collector]
+  end
+  subgraph oracle1 [Oracle 1 Osaka - 1GB]
     DB[(TimescaleDB)]
     Redis[(Redis)]
   end
   User --> Nginx
-  Nginx --> Backend
-  Backend --> DB
-  Backend --> Redis
-  Backend --> Pred
-  Backend --> Collector
+  Nginx --> Backend2
+  Backend2 --> DB
+  Backend2 --> Redis
+  Backend2 --> Pred2
+  Backend2 --> Collector2
+  Backend3 --> DB
+  Backend3 --> Redis
+  Backend3 --> Pred3
+  Backend3 --> Collector3
 ```
 
 ### 2.2 노드별 역할
@@ -58,11 +83,13 @@ flowchart LR
 |----------|------------|-------------------------------------------|--------|
 | Oracle 1 | Oracle Osaka | 데이터 계층                               | TimescaleDB, Redis |
 | Oracle 2 | Oracle Korea | 애플리케이션 계층                         | Backend, prediction-service, data-collector |
+| Oracle 3 | India West (Mumbai) | 애플리케이션 계층 (증설)              | Backend, prediction-service, data-collector |
 | AWS      | (선택)     | 엣지 계층 (리버스 프록시 + 정적 프론트)   | Nginx, Frontend (정적 빌드물) |
 
-- **Oracle 1 (Osaka)**: DB·Redis만 운영. 외부 트래픽 직접 노출하지 않음.
-- **Oracle 2 (Korea)**: Backend가 Oracle 1의 DB/Redis와 Oracle 2 내부의 prediction-service, data-collector에 접속.
-- **AWS**: 사용 시 Nginx가 사용자 요청을 받고, `/api` 등은 Oracle 2 Backend로 프록시.
+- **Oracle 1 (Osaka)**: DB·Redis만 운영. 외부 트래픽 직접 노출하지 않음. 앱 노드(Korea, Mumbai)는 Oracle 1 **Public IP**로 5432/6379 접속.
+- **Oracle 2 (Korea)**: Backend가 Oracle 1의 DB/Redis(Public IP)와 Oracle 2 내부의 prediction-service, data-collector에 접속.
+- **Oracle 3 (Mumbai)**: Oracle 2와 동일한 앱 계층. Backend가 Oracle 1(Osaka) Public IP로 DB/Redis 접속. 상세 VCN·Security List는 [06-oci-vcn-subnet-design.md](06-oci-vcn-subnet-design.md) 참조.
+- **AWS**: 사용 시 Nginx가 사용자 요청을 받고, `/api` 등은 Oracle 2(또는 Oracle 3) Backend로 프록시.
 
 ### 2.3 리소스 타이트 시 대안
 
@@ -99,9 +126,10 @@ flowchart LR
 
 ## 4. 네트워크
 
-- **Oracle 1 ↔ Oracle 2**: 동일 VCN 내부라면 Private IP(예: 10.0.0.x)로 통신. Backend의 DB/Redis 연결 URL을 Oracle 1 Private IP로 설정.
-- **AWS → Oracle 2**: Nginx가 Backend로 프록시할 때 Oracle 2의 **Public IP** 사용 (또는 VPN/PrivateLink 구성 시 사설 IP).
-- **방화벽**: Oracle 1의 5432(TimescaleDB), 6379(Redis)는 Oracle 2(및 필요 시 AWS)에서만 접근 허용. SSH(22), HTTP(80), HTTPS(443)는 운영 정책에 따라 제한.
+- **동일 VCN 불가**: Oracle Osaka, Korea, India West (Mumbai)는 **서로 다른 리전**이므로 동일 VCN을 쓸 수 없다. OCI VCN은 리전 단위. 상세 설계는 [06-oci-vcn-subnet-design.md](06-oci-vcn-subnet-design.md) 참조.
+- **Oracle 1 ↔ Oracle 2 / Oracle 3**: **Public IP**로 통신. Backend의 DB/Redis 연결 URL을 **Oracle 1(Osaka) Public IP**로 설정. Oracle 1 Security List에서 Oracle 2·Oracle 3(Mumbai) **Public IP**만 5432, 6379 Ingress 허용.
+- **AWS → Oracle 2 (또는 Oracle 3)**: Nginx가 Backend로 프록시할 때 해당 앱 노드의 **Public IP** 사용.
+- **방화벽**: Oracle 1의 5432(TimescaleDB), 6379(Redis)는 Oracle 2·Oracle 3(Mumbai)(및 필요 시 AWS) **Public IP**에서만 접근 허용. SSH(22), HTTP(80), HTTPS(443)는 운영 정책에 따라 제한.
 
 ---
 
@@ -130,11 +158,14 @@ flowchart LR
 
 ### 5.3 사용 시크릿 (예시)
 
+**보안**: SSH 비밀키는 **저장소 코드/문서에 절대 커밋하거나 붙여넣지 않는다.** 아래는 **GitHub 저장소 설정 → Secrets and variables → Actions** 에서 등록하는 **Secrets** 이름이다. Secrets는 GitHub이 암호화·보관하며, 워크플로우 실행 시에만 러너 메모리로 전달되고 로그에는 마스킹된다. (CD를 쓰지 않으면 Secrets 등록 없이 로컬에서 SSH + 배포 스크립트만 사용하면 된다.)
+
 | 시크릿 이름 | 용도 |
 |-------------|------|
 | `GITHUB_TOKEN` | ghcr.io 푸시 (기본 제공) |
-| `SSH_PRIVATE_KEY_ORACLE_OSAKA` | Oracle Osaka(Oracle 1) 배포 SSH — 저장소/문서에 키 내용 넣지 않음 |
-| `SSH_PRIVATE_KEY_ORACLE_KOREA` | Oracle Korea(Oracle 2) 배포 SSH — 저장소/문서에 키 내용 넣지 않음 |
+| `SSH_PRIVATE_KEY_ORACLE_OSAKA` | Oracle Osaka(Oracle 1) 배포용 SSH 비밀키 **내용** — Settings → Actions → Secrets에만 등록 |
+| `SSH_PRIVATE_KEY_ORACLE_KOREA` | Oracle Korea(Oracle 2) 배포용 SSH 비밀키 **내용** — 동일 |
+| `SSH_PRIVATE_KEY_ORACLE_MUMBAI` | India West (Mumbai)(Oracle 3) 배포용 SSH 비밀키 **내용** — 동일 |
 | `SSH_PRIVATE_KEY_AWS` | AWS 배포 SSH (AWS 사용 시) |
 
 ---
@@ -149,13 +180,15 @@ flowchart LR
 |----------|-------------|
 | Oracle 1 | `docker compose -f docker-compose.oracle1.yml pull` (필요 시) 후 `up -d`. DB/Redis는 버전 고정 태그 사용 권장. |
 | Oracle 2 | `BACKEND_TAG=<sha> PREDICTION_TAG=<sha> DATA_COLLECTOR_TAG=<sha>` 로 env 설정 후 `docker compose -f docker-compose.oracle2.yml pull backend prediction-service data-collector && docker compose -f docker-compose.oracle2.yml up -d` |
+| Oracle 3 (Mumbai) | Oracle 2와 동일. `.env`에 `SPRING_DATASOURCE_URL`, `REDIS_HOST`(Oracle 1 Public IP), `BACKEND_TAG` 등 설정 후 `deploy-oracle2.sh` 또는 Mumbai 전용 스크립트 실행. |
 | AWS      | `FRONTEND_TAG=<sha>` 로 env 설정 후 `docker compose -f docker-compose.aws.yml pull frontend nginx && docker compose -f docker-compose.aws.yml up -d` |
 
 ### 6.2 배포 순서
 
 1. Oracle 1 (DB·Redis) — 변경이 있을 때만.
 2. Oracle 2 (Backend, prediction-service, data-collector).
-3. AWS (Frontend, Nginx).
+3. Oracle 3 (Mumbai) (동일 앱 스택).
+4. AWS (Frontend, Nginx).
 
 ### 6.3 Compose 파일 분리 (옵션 B)
 
@@ -172,8 +205,8 @@ flowchart LR
 
 ## 7. 보안
 
-- **SSH**: 배포용 키는 GitHub Secrets에만 저장. 노드에는 배포용 공개키만 등록.
-- **방화벽**: 22(SSH), 80(HTTP), 443(HTTPS)만 필요 시 개방. DB(5432), Redis(6379)는 Oracle 2(및 필요 시 AWS) IP만 허용.
+- **SSH**: 배포용 **비밀키**는 저장소 코드/문서에 넣지 않는다. GitHub Actions를 쓸 때만 **Settings → Secrets**에 등록(암호화 저장). 노드에는 배포용 **공개키**만 등록.
+- **방화벽**: 22(SSH), 80(HTTP), 443(HTTPS)만 필요 시 개방. DB(5432), Redis(6379)는 Oracle 2·Oracle 3(Mumbai)(및 필요 시 AWS) Public IP만 허용. [06-oci-vcn-subnet-design.md](06-oci-vcn-subnet-design.md) §3 참조.
 - **시크릿**: 비밀번호·API 키·DB URL 등은 저장소에 커밋하지 않는다. 노드별 `.env` 또는 GitHub Secrets → 배포 시 주입.
 
 ---
@@ -182,7 +215,7 @@ flowchart LR
 
 ### 배포 전
 
-- [ ] DB·Redis 접속 정보 및 방화벽 허용 (Oracle 1 → Oracle 2)
+- [ ] DB·Redis 접속 정보 및 방화벽 허용 (Oracle 1 → Oracle 2, Oracle 3 Mumbai Public IP)
 - [ ] 한국투자증권 API·계좌 설정(모의/실전 구분). **배포·테스트는 모의계좌만 사용**
 - [ ] `PIPELINE_AUTO_EXECUTE`, `PIPELINE_ALLOW_REAL_EXECUTION` 등 환경 변수 확인
 - [ ] Discord Webhook URL(미체결·리스크 알림 사용 시)
@@ -199,7 +232,7 @@ flowchart LR
 
 ## 9. Cursor Remote-SSH로 OCI 접속
 
-Cursor에서 OCI 서버(Oracle 1 / Oracle 2)에 직접 붙어 원격 폴더를 열고, 파일 편집·터미널·Agent 작업을 하려면 Remote-SSH를 사용한다.
+Cursor에서 OCI 서버(Oracle 1 / Oracle 2 / Oracle 3 Mumbai)에 직접 붙어 원격 폴더를 열고, 파일 편집·터미널·Agent 작업을 하려면 Remote-SSH를 사용한다.
 
 ### 9.1 전제 조건
 
@@ -217,7 +250,7 @@ Cursor에서 OCI 서버(Oracle 1 / Oracle 2)에 직접 붙어 원격 폴더를 �
 
 **파일**: `C:\Users\<사용자명>\.ssh\config`
 
-Oracle Osaka / Oracle Korea 두 서버 예시(실제 IP·키 경로는 본인 환경으로 교체). **HostName에는 꺾쇠괄호를 넣지 말고 IP만 쓴다.**
+Oracle Osaka / Oracle Korea / India West (Mumbai) 예시(실제 IP·키 경로는 본인 환경으로 교체). **HostName에는 꺾쇠괄호를 넣지 말고 IP만 쓴다.**
 
 ```text
 # Oracle Osaka (데이터 계층: DB/Redis)
@@ -235,6 +268,14 @@ Host oci-korea-jihee
     IdentityFile "YOUR_SSH_KEY_PATH_KOREA"
     ServerAliveInterval 30
     ServerAliveCountMax 5
+
+# India West Mumbai (애플리케이션 계층, Oracle 3)
+Host oci-mumbai
+    HostName YOUR_ORACLE_MUMBAI_PUBLIC_IP
+    User ubuntu
+    IdentityFile "YOUR_SSH_KEY_PATH_MUMBAI"
+    ServerAliveInterval 30
+    ServerAliveCountMax 5
 ```
 
 - `HostName`: 각 VM의 Public IP.
@@ -246,21 +287,33 @@ Host oci-korea-jihee
 ### 9.4 Cursor에서 접속 절차
 
 1. **Ctrl+Shift+P** → "Remote-SSH: Connect to Host…" 선택.
-2. 목록에서 `oci-osaka-yoon` 또는 `oci-korea-jihee` 선택.
+2. 목록에서 `oci-osaka-yoon`, `oci-korea-jihee`, 또는 `oci-mumbai` 선택.
 3. 비밀키 패스프레이즈 입력(설정한 경우).
 4. 연결 후 **열 폴더** 선택:
    - **Oracle Osaka**: `/home/ubuntu`(Ubuntu 이미지) 또는 investment-infra 클론 경로(예: `/home/ubuntu/investment-infra`). DB·Redis 설정·Compose 편집 시 사용.
    - **Oracle Korea**: `/home/ubuntu` 아래 investment-infra/ 앱 코드 경로. Backend/prediction/data-collector 배포·로그·스크립트 작업 시 사용.
+   - **Oracle 3 (Mumbai)**: `/home/ubuntu` 아래 investment-infra/ 경로. Oracle Korea와 동일 용도.
 5. 해당 호스트가 원격 워크스페이스로 열리면, 터미널·파일 편집·Agent 모두 그 서버에서 동작한다.
 
-### 9.5 노드별 작업 요약
+### 9.5 Mumbai (Oracle 3) 노드 초기 설정 (최초 1회)
+
+Mumbai E2 인스턴스(ap-mumbai-1, VCN aifer-vcn, Ubuntu 24.04, 사용자 ubuntu)를 처음 쓸 때 한 번만 수행한다. **실제 IP·키·비밀번호는 저장소에 넣지 않는다.**
+
+1. **Oracle 1(Osaka) Security List**: Mumbai 인스턴스의 **Public IP**를 TCP 5432, 6379 Ingress 허용에 추가. ([06-oci-vcn-subnet-design.md](06-oci-vcn-subnet-design.md) §3.1)
+2. **Mumbai 서버에 SSH 접속** 후 아래 중 하나 실행.
+   - **자동 스크립트**(권장): `investment-infra/scripts/setup-oracle3-mumbai.sh` — Docker·Docker Compose 설치, investment-infra 클론, `.env` 템플릿 안내.
+   - **수동**: Docker 및 Docker Compose 설치 → `git clone` investment-infra → `.env`에 `SPRING_DATASOURCE_URL`, `POSTGRES_PASSWORD`, `REDIS_HOST`(Oracle 1 Public IP), `BACKEND_TAG` 등 설정.
+3. **GitHub Actions 사용 시**: 저장소 Variables에 `DEPLOY_HOST_ORACLE_MUMBAI` = Mumbai Public IP, Secrets에 `SSH_PRIVATE_KEY_ORACLE_MUMBAI` 등록(비밀키 내용은 Settings에서만 입력).
+
+### 9.6 노드별 작업 요약
 
 | 노드          | Cursor에서 주로 하는 작업 |
 |---------------|---------------------------|
 | Oracle Osaka  | DB/Redis Compose·설정 변경, 스크립트 실행, 로그 확인 |
 | Oracle Korea  | Backend/prediction/data-collector 배포·재기동, 로그·환경 변수 확인, investment-infra 스크립트 실행 |
+| Oracle 3 (Mumbai) | Oracle Korea와 동일. 배포·재기동, 로그·환경 변수 확인. `.env`에 Oracle 1 Public IP로 DB/Redis 연결 설정. |
 
-### 9.6 Windows: SSH config 권한 오류 해결
+### 9.7 Windows: SSH config 권한 오류 해결
 
 Remote-SSH 연결 시 **"Bad owner or permissions on C:\\Users\\\<사용자명>\\.ssh\\config"** 또는 **"Try removing permissions for user: UNKNOWN\\\\UNKNOWN"** 가 나오면, OpenSSH가 config 파일의 권한을 거부한 것이다. Windows에서는 해당 파일(또는 `.ssh` 폴더)에 다른 사용자/상속된 권한이 있으면 발생한다.
 
@@ -308,6 +361,8 @@ icacls "D:\path\to\ssh-key-2.key" /grant "<사용자명>:F"
 
 ## 10. 참고 문서
 
+- [OCI VCN·서브넷 설계](06-oci-vcn-subnet-design.md)
+- [CI/CD 구현 체크리스트](07-cicd-implementation-checklist.md)
 - [단일 VPS·배치·배포 절차](../08-setup-guides/06-single-vps-batch-deployment.md)
 - [서버 스펙](03-server-specification.md)
 - [investment-infra README](../../../investment-infra/README.md)
@@ -323,3 +378,5 @@ icacls "D:\path\to\ssh-key-2.key" /grant "<사용자명>:F"
 | 1.0  | 2026-02-11 | 초안: Oracle 2대 + AWS 1대 토폴로지, CI/CD, 메모리 튜닝, 보안, 체크리스트 |
 | 1.1  | 2026-02-11 | Cursor Remote-SSH로 OCI 접속 절(§9) 및 SSH MCP 참고 문서 링크 추가 |
 | 1.2  | 2026-02-11 | 두 서버 기준 정리: Oracle Osaka / Oracle Korea 별칭·역할 매핑, 시크릿·SSH config 플레이스홀더화(민감정보 제외) |
+| 1.3  | 2026-02-11 | Oracle 3 (India West Mumbai) 증설 반영: 인프라 스펙·노드 역할·네트워크(동일 VCN 불가, Public IP)·CD·시크릿·SSH config(oci-mumbai). 06-oci-vcn-subnet-design.md 참조 추가 |
+| 1.4  | 2026-02-11 | Mumbai E2 프로비저닝 반영: ap-mumbai-1, VCN aifer-vcn, Ubuntu 24.04, 사용자 ubuntu. §9.5 Mumbai 노드 초기 설정 및 setup-oracle3-mumbai.sh 안내 추가. |
