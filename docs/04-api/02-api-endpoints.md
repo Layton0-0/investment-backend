@@ -380,9 +380,13 @@ curl -X GET "http://localhost:8080/api/v1/accounts/12345678/profit-loss?startDat
   "executedPrice": 75000.00,
   "orderTime": "2026-01-27T10:00:00",
   "executedTime": "2026-01-27T10:00:05",
-  "message": "주문이 체결되었습니다."
+  "message": "주문이 체결되었습니다.",
+  "signalType": "VOLATILITY_BREAKOUT",
+  "exitRuleType": null
 }
 ```
+- `signalType` (String, optional): 거래 사유 — 진입 시그널 유형(파이프라인 매수 시). 예: VOLATILITY_BREAKOUT, DUAL_MOMENTUM.
+- `exitRuleType` (String, optional): 거래 사유 — 청산 규칙 유형(파이프라인 매도 시). 예: ATR_TRAILING_STOP, TIME_CUT, STOP_LOSS.
 
 **에러 코드**:
 - `ORDER_NOT_FOUND`: 주문을 찾을 수 없음
@@ -403,28 +407,24 @@ curl -X GET "http://localhost:8080/api/v1/accounts/12345678/profit-loss?startDat
 - `page` (Integer, optional): 페이지 번호 (기본값: 0)
 - `size` (Integer, optional): 페이지 크기 (기본값: 20)
 
-**응답**:
+**응답** (주문 목록은 페이징 없이 배열 반환):
 ```json
-{
-  "content": [
-    {
-      "orderId": "550e8400-e29b-41d4-a716-446655440000",
-      "symbol": "005930",
-      "orderType": "BUY",
-      "quantity": 10,
-      "price": 75000.00,
-      "status": "EXECUTED",
-      "orderTime": "2026-01-27T10:00:00"
-    }
-  ],
-  "page": {
-    "number": 0,
-    "size": 20,
-    "totalElements": 100,
-    "totalPages": 5
+[
+  {
+    "orderId": "550e8400-e29b-41d4-a716-446655440000",
+    "accountNo": "12345678",
+    "symbol": "005930",
+    "orderType": "BUY",
+    "quantity": 10,
+    "price": 75000.00,
+    "status": "EXECUTED",
+    "orderTime": "2026-01-27T10:00:00",
+    "signalType": "VOLATILITY_BREAKOUT",
+    "exitRuleType": null
   }
-}
+]
 ```
+- 각 항목에 `signalType`, `exitRuleType` (optional) 포함. 파이프라인 주문이 아닌 경우 null.
 
 ---
 
@@ -496,6 +496,33 @@ curl -X GET "http://localhost:8080/api/v1/accounts/12345678/profit-loss?startDat
 **에러 코드**:
 - `INVALID_INPUT`: 잘못된 입력값
 - `INTERNAL_ERROR`: 분석 실패
+
+### 3.2 상관관계 분석
+
+**엔드포인트**: `GET /api/v1/analysis/correlation`
+
+**설명**: 계좌 포지션 또는 종목 목록의 일봉 수익률 기반 Pearson 상관계수 행렬을 반환합니다. `accountNo`가 있으면 해당 계좌 보유 종목 기준, 없으면 `symbols`·`market`·`from`·`to` 쿼리로 분석합니다. 최소 2종목·20일 이상 공통 일봉 데이터가 필요하며, 부족 시 빈 행렬을 반환합니다.
+
+**쿼리 파라미터**:
+- `accountNo` (optional): 계좌번호. 지정 시 인증 사용자의 해당 계좌 보유 종목 기준.
+- `symbols` (optional): 종목 코드 목록 (쉼표 구분). accountNo 미지정 시 필수.
+- `market` (optional): 시장 (KR/US). 기본값 US.
+- `from` (optional): 기간 시작일 (yyyy-MM-dd). 미지정 시 to 기준 60일 전.
+- `to` (optional): 기간 종료일 (yyyy-MM-dd). 미지정 시 오늘.
+
+**성공 응답 (200 OK)**:
+```json
+{
+  "market": "US",
+  "symbols": ["AAPL", "MSFT"],
+  "fromDate": "2025-12-01",
+  "toDate": "2026-02-10",
+  "matrix": [[1.0, 0.5], [0.5, 1.0]]
+}
+```
+- `matrix[i][j]`: symbols[i] vs symbols[j] 상관계수 (-1 ~ 1). 대각선은 1. 데이터 부족 시 `symbols`·`matrix`는 빈 배열.
+
+**인증**: accountNo 사용 시 `isAuthenticated()` 필요.
 
 ---
 
@@ -764,9 +791,9 @@ curl -X GET "http://localhost:8080/api/v1/accounts/12345678/profit-loss?startDat
 
 ### 7.1 배치 작업 목록 조회
 
-**엔드포인트**: `GET /api/v1/batch/jobs`
+**엔드포인트**: `GET /batch/api/jobs`
 
-**설명**: 스케줄러로 실행되는 배치 작업 목록을 조회합니다.
+**설명**: 스케줄러로 실행되는 배치 작업 목록을 조회합니다. (구현 경로는 `/batch/api/jobs`이며, SPA 프론트는 이 경로로 연동. [11-api-frontend-mapping.md](./11-api-frontend-mapping.md) §5.1 참조.)
 
 **응답**:
 ```json
@@ -946,7 +973,7 @@ curl -X POST "http://localhost:8080/api/v1/market-data/current-prices" \
 
 **엔드포인트**: `GET /api/v1/risk/summary`
 
-**설명**: 킬스위치·리스크 게이트·계좌별 일일 손실 한도·MDD·VaR/CVaR 요약을 반환합니다. 사용자(인증 주체) 기준으로 소유 계좌만 포함됩니다. `var95Pct`, `cvar95Pct`는 단순 파라메트릭(일일 변동성 가정) 기반 1일 VaR 95%, CVaR 95%(%).
+**설명**: 킬스위치·리스크 게이트·계좌별 일일 손실 한도·MDD·VaR/CVaR 요약을 반환합니다. 사용자(인증 주체) 기준으로 소유 계좌만 포함됩니다. **VaR 방법론**: `var95Pct`, `cvar95Pct`는 현재 **단순 파라메트릭**(1.65σ·2.06σ, 일일 변동성 가정) 기반 1일 VaR 95%, CVaR 95%(%)이며, 꼬리 위험 보완을 위한 역사적 시뮬레이션 또는 Monte Carlo VaR은 향후 선택 사항으로 둔다.
 
 **성공 응답 (200 OK)**: `totalCurrentValue`, `maxMddPct`, `var95Pct`, `cvar95Pct` 포함. 예:
 ```json
@@ -996,6 +1023,42 @@ curl -X POST "http://localhost:8080/api/v1/market-data/current-prices" \
 - `to` (optional): 종료일 (yyyy-MM-dd)
 
 **성공 응답 (200 OK)**: `RiskHistoryItemDto[]` (예: `[]`). 항목이 있으면 `eventType`, `accountNoMasked`, `description`, `occurredAt`(ISO-8601) 포함.
+
+### 9.4 포트폴리오 리스크 메트릭
+
+**엔드포인트**: `GET /api/v1/risk/portfolio-metrics?accountNo={accountNo}`
+
+**설명**: 단일 계좌의 VaR/CVaR/MDD·Sharpe/Sortino(일수익 시계열 있으면) 반환. 해당 계좌가 사용자 소유가 아니면 404.
+
+**인증**: `isAuthenticated()`. **응답**: `PortfolioRiskMetricsDto` (accountNoMasked, currentValue, mddPct, var95Pct, cvar95Pct, sharpeRatio, sortinoRatio).
+
+---
+
+## 9.5 대시보드 API
+
+대시보드 화면에서 성과 요약(총 평가액·MDD·Sharpe·VaR 등) 카드용 데이터를 조회합니다. **인증 필요** (`isAuthenticated()`).
+
+### 9.5.1 성과 요약
+
+**엔드포인트**: `GET /api/v1/dashboard/performance-summary`
+
+**설명**: 사용자 계좌 합산 기준 총 평가액·최대 MDD·Sharpe·Sortino·1일 VaR 95%·CVaR 95%를 반환합니다. 리스크 요약(RiskReportService.getSummary) 데이터를 대시보드용 DTO로 매핑합니다.
+
+**성공 응답 (200 OK)**:
+```json
+{
+  "totalCurrentValue": 15000000,
+  "maxMddPct": 0.12,
+  "sharpeRatio": null,
+  "sortinoRatio": null,
+  "var95Pct": 1.65,
+  "cvar95Pct": 2.06
+}
+```
+
+**DTO**: `DashboardPerformanceSummaryDto` — totalCurrentValue, maxMddPct, sharpeRatio, sortinoRatio, var95Pct, cvar95Pct. 데이터 없으면 null.
+
+**기타 API 참고**: 섹터 분석 `GET /api/v1/analysis/sector`(accountNo 또는 symbols+market), 리밸런싱 제안 `GET /api/v1/trading-portfolios/rebalance-suggestions`(accountNo, market=US) — 11-api-frontend-mapping 및 컨트롤러 스펙 참조.
 
 ---
 
@@ -1150,6 +1213,15 @@ Admin 전용 메뉴 `/ops/health`에서 DB·Redis·예측 서비스 상태 요�
 
 **DTO**: `OpsHealthDto` — `db`, `redis`, `predictionService` (각 "UP"|"DOWN"|"UNKNOWN"), `lastCheckedAt` (Instant).
 
+### 12.4 Ops 전략 거버넌스
+
+Admin 전용: 전략 거버넌스 검사 결과 이력·(market, strategyType)별 자동 매매 중단(halt) 조회 및 halt 해제. **인가**: `hasRole('ADMIN')`. 알림 이력은 기존 `GET /api/v1/ops/alerts`에서 `component=StrategyGovernance` 필터로 조회.
+
+**엔드포인트**:
+- `GET /api/v1/ops/governance/results?limit=20` — 최근 검사 결과(RUN_AT 내림차순). `limit`(1~500, 기본 20). 응답: `GovernanceCheckResultDto[]` (id, runAt, market, strategyType, mddPct, sharpeRatio, degraded, startDate, endDate, createdAt).
+- `GET /api/v1/ops/governance/halts` — 현재 활성 halt 목록(CLEARED_AT IS NULL). 응답: `GovernanceHaltDto[]` (market, strategyType, haltedAt, reason).
+- `PUT /api/v1/ops/governance/halts/{market}/{strategyType}/clear` — 해당 (market, strategyType) halt 해제. Body(선택): `{ "clearedBy": "userId" }`. 204 No Content.
+
 ---
 
 ## 13. 연말 세금·리포트 API
@@ -1192,10 +1264,12 @@ Admin 전용 메뉴 `/ops/health`에서 DB·Redis·예측 서비스 상태 요�
 | `POST /api/v1/trigger/pipeline-exit` | 보유 포지션 청산 규칙 평가 및 매도 시그널 시 주문 실행 | - |
 | `POST /api/v1/trigger/fill-confirmation` | 체결된 주문에 대해 포지션 등록 | - |
 | `POST /api/v1/trigger/unfilled-check` | PENDING N분 경과 주문에 대해 Discord 긴급 알림 | - |
+| `POST /api/v1/trigger/risk-event-alert` | 일일 손실 한도 임박·VaR 95% 초과 검사 후 Discord 리스크 이벤트 알림 발송 | - |
 | `POST /api/v1/trigger/robo-rebalance` | 로보 리밸런싱만 수동 실행 (스케줄은 자동매수 통합 사용) | `dryRun` (optional, boolean). true면 백테스트만 실행·저장, ETF 주문 없음. 응답에 `dryRun` 포함 |
 | `POST /api/v1/trigger/daily-pnl` | 장 마감 후 계좌별 당일 수익률 기록 | - |
 | `POST /api/v1/trigger/intraday-breakout` | 장중 변동성 돌파(09:00~10:00 구간) 실행 | 설정 시에만 유효 |
 | `POST /api/v1/trigger/medium-term-rebalance` | 중기(MEDIUM_TERM) 월 1회 리밸런싱 훅 (스텁) | - |
+| `POST /api/v1/trigger/strategy-governance-check` | 전략 거버넌스 검사: 최근 N개월 백테스트 실행 후 MDD/Sharpe 열화 시 Discord 알림 | - |
 
 **요청 예시**:
 ```bash
@@ -1216,6 +1290,18 @@ curl -X POST "http://localhost:8080/api/v1/trigger/pipeline-execution?dryRun=tru
 **요청 본문 (BacktestRunRequest)**: startDate, endDate, market (KR/US), strategyType (SHORT_TERM/MEDIUM_TERM/LONG_TERM), initialCapital
 
 **성공 응답 (200 OK, BacktestRunResult)**: startDate, endDate, market, strategyType, initialCapital, finalEquity, totalReturnPct, cagr, mddPct, sharpeRatio, sortinoRatio, calmarRatio, winRate, avgWin, avgLoss, profitFactor, tradeCount, winningTrades, losingTrades, equityCurve, trades (각 거래에 totalFrictionCost 포함)
+
+---
+
+### POST /api/v1/backtest/walk-forward
+
+**엔드포인트**: `POST /api/v1/backtest/walk-forward`
+
+**설명**: Walk-Forward(롤링 Out-of-Sample) 백테스트. 구간을 train/test 윈도우로 나누어 각 test 구간만 백테스트 실행 후 fold별 메트릭을 집계합니다. 전략 파라미터는 재추정하지 않고 기존 설정을 사용합니다. 오버피팅 완화·일반화 성능 추정용. 인증 필요.
+
+**요청 본문 (WalkForwardBacktestRequest)**: startDate, endDate, market, strategyType, initialCapital (필수). trainDays (기본 252), testDays (기본 63), stepDays (기본 63, testDays와 같으면 비중첩)
+
+**성공 응답 (200 OK, WalkForwardBacktestResult)**: startDate, endDate, market, strategyType, trainDays, testDays, stepDays, foldCount, folds (List&lt;BacktestRunResult&gt;), avgCagr, avgMddPct, minSharpeRatio, avgSharpeRatio, avgWinRate, avgProfitFactor
 
 ---
 
@@ -1268,3 +1354,5 @@ curl -X POST "http://localhost:8080/api/v1/trigger/pipeline-execution?dryRun=tru
 | 1.6 | 2026-02-10 | System | §12 연말 세금·리포트 API (스텁) - GET /api/v1/report/tax/summary (인증 필요, year 선택, 실데이터·PDF/CSV는 후속) |
 | 1.7 | 2026-02-10 | System | §12 Ops 감사 로그 API 추가 - GET /api/v1/ops/audit (ADMIN 전용, 페이징·eventType·기간 필터, 설정 변경·수동 트리거·실계좌 가드 차단 이벤트). §13 연말 세금 리넘버링 |
 | 1.8 | 2026-02-10 | System | §12.2 Ops 모델/예측 상태 API - GET /api/v1/ops/model/status (ADMIN 전용). §12.3 Ops 시스템 헬스 API - GET /api/v1/ops/health (ADMIN 전용, DB·Redis·예측 서비스) |
+| 1.9 | 2026-02-11 | System | §9 risk/summary VaR 방법론 명시 — 현재 파라메트릭(1.65σ·2.06σ), 역사적/Monte Carlo VaR은 선택 사항 (기획 고도화) |
+| 1.10 | 2026-02-11 | System | §12.4 Ops 전략 거버넌스 API — GET /api/v1/ops/governance/results, GET /api/v1/ops/governance/halts, PUT …/halts/{market}/{strategyType}/clear (ADMIN 전용, 검사 결과·halt 조회/해제) |

@@ -27,4 +27,14 @@ public interface EmergencyAlertService {
          */
         void sendFailureAlert(String title, String message, String userId, String accountNo,
                         String serverType, String broker, String baseUrl);
+
+        /**
+         * 리스크 이벤트 알림 (일일 손실 한도 임박, VaR 초과 등).
+         * Discord 발송 후 TB_ALERT_LOG에 저장.
+         *
+         * @param level     INFO, WARNING, ERROR
+         * @param component 발신 컴포넌트 (예: DailyLossApproaching, VarExceeded)
+         * @param message   알림 본문 (계좌·수치는 마스킹 후 포함)
+         */
+        void sendRiskEventAlert(String level, String component, String message);
 }

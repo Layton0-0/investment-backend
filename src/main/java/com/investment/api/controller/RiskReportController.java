@@ -2,6 +2,7 @@ package com.investment.api.controller;
 
 import com.investment.common.exception.DomainException;
 import com.investment.common.exception.ErrorCode;
+import com.investment.risk.dto.PortfolioRiskMetricsDto;
 import com.investment.risk.dto.RiskHistoryItemDto;
 import com.investment.risk.dto.RiskLimitsDto;
 import com.investment.risk.dto.RiskSummaryDto;
@@ -9,6 +10,7 @@ import com.investment.risk.service.RiskReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.HttpStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -46,6 +48,20 @@ public class RiskReportController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<RiskLimitsDto> getLimits() {
         RiskLimitsDto dto = riskReportService.getLimits();
+        return ResponseEntity.ok(dto);
+    }
+
+    @Operation(summary = "포트폴리오 리스크 메트릭", description = "단일 계좌의 VaR/CVaR/MDD·Sharpe/Sortino(데이터 있으면) 반환.")
+    @GetMapping("/portfolio-metrics")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<PortfolioRiskMetricsDto> getPortfolioRiskMetrics(
+            Principal principal,
+            @Parameter(description = "계좌번호") @RequestParam String accountNo) {
+        String userId = getUserId(principal);
+        PortfolioRiskMetricsDto dto = riskReportService.getPortfolioRiskMetrics(userId, accountNo);
+        if (dto == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
         return ResponseEntity.ok(dto);
     }
 

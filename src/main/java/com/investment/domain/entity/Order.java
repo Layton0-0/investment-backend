@@ -78,6 +78,14 @@ public class Order {
     @Column(name = "POSITION_STRATEGY_TYPE", length = 20)
     private String positionStrategyType;
 
+    /** 거래 사유: 진입 시그널 유형 (파이프라인 매수 시). 예: VOLATILITY_BREAKOUT, DUAL_MOMENTUM */
+    @Column(name = "SIGNAL_TYPE", length = 64)
+    private String signalType;
+
+    /** 거래 사유: 청산 규칙 유형 (파이프라인 매도 시). 예: ATR_TRAILING_STOP, TIME_CUT, STOP_LOSS */
+    @Column(name = "EXIT_RULE_TYPE", length = 64)
+    private String exitRuleType;
+
     @Column(name = "CREATED_AT", nullable = false)
     private LocalDateTime createdAt;
 
@@ -172,6 +180,16 @@ public class Order {
         this.positionBasDt = null;
         this.positionMarket = null;
         this.positionStrategyType = null;
+    }
+
+    /** 거래 사유: 진입 시그널 유형 설정 (파이프라인 매수 시). */
+    public void setSignalType(String signalType) {
+        this.signalType = signalType;
+    }
+
+    /** 거래 사유: 청산 규칙 유형 설정 (파이프라인 매도 시). */
+    public void setExitRuleType(String exitRuleType) {
+        this.exitRuleType = exitRuleType;
     }
 
     public enum OrderType {

@@ -9,7 +9,11 @@ import com.investment.domain.repository.UserAccountRepository;
 import com.investment.factor.service.DailyLossLimitService;
 import com.investment.factor.service.RiskGateService;
 import com.investment.domain.repository.TradingSettingRepository;
-import com.investment.risk.dto.*;
+import com.investment.risk.dto.PortfolioRiskMetricsDto;
+import com.investment.risk.dto.RiskAccountSummaryDto;
+import com.investment.risk.dto.RiskHistoryItemDto;
+import com.investment.risk.dto.RiskLimitsDto;
+import com.investment.risk.dto.RiskSummaryDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -78,6 +82,56 @@ public class RiskReportService {
                 .maxMddPct(maxMddPct)
                 .var95Pct(var95Pct)
                 .cvar95Pct(cvar95Pct)
+                .sharpeRatio(null)
+                .sortinoRatio(null)
+                .build();
+    }
+
+    /**
+     * 단일 계좌 포트폴리오 리스크 메트릭 (VaR/CVaR/Sharpe/Sortino).
+     * 해당 계좌가 사용자 소유가 아니면 null 반환.
+     */
+    @Transactional(readOnly = true)
+    public PortfolioRiskMetricsDto getPortfolioRiskMetrics(String userId, String accountNo) {
+        if (userId == null || accountNo == null) {
+            return null;
+        }
+        List<com.investment.domain.entity.TradingSetting> settings = tradingSettingRepository.findByUserIdOrderByAccountNo(userId);
+        com.investment.domain.entity.TradingSetting setting = settings.stream()
+                .filter(s -> accountNo.equals(s.getAccountNo()))
+                .findFirst()
+                .orElse(null);
+        if (setting == null) {
+            return null;
+        }
+        String accNo = setting.getAccountNo();
+        LocalDate today = LocalDate.now();
+        BigDecimal opening = dailyLossLimitService.getOpeningBalance(accNo, today);
+        BigDecimal current = dailyLossLimitService.getCurrentPortfolioValue(accNo);
+        BigDecimal mdd = null;
+        Optional<com.investment.domain.entity.PortfolioPeak> peakOpt = portfolioPeakRepository.findByAccountNo(accNo);
+        if (peakOpt.isPresent() && current != null && current.compareTo(BigDecimal.ZERO) > 0) {
+            com.investment.domain.entity.PortfolioPeak peak = peakOpt.get();
+            BigDecimal peakVal = peak.getPeakValue();
+            if (peakVal != null && peakVal.compareTo(BigDecimal.ZERO) > 0) {
+                mdd = peakVal.subtract(current).divide(peakVal, 6, RoundingMode.HALF_UP).max(BigDecimal.ZERO);
+            }
+        }
+        BigDecimal var95Pct = null;
+        BigDecimal cvar95Pct = null;
+        if (riskProperties.getVarDailyVolPct() != null && riskProperties.getVarDailyVolPct().compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal vol = riskProperties.getVarDailyVolPct();
+            var95Pct = new BigDecimal("1.65").multiply(vol).setScale(2, RoundingMode.HALF_UP);
+            cvar95Pct = new BigDecimal("2.06").multiply(vol).setScale(2, RoundingMode.HALF_UP);
+        }
+        return PortfolioRiskMetricsDto.builder()
+                .accountNoMasked(LogMaskingUtil.maskAccountNo(accNo))
+                .currentValue(current)
+                .mddPct(mdd)
+                .var95Pct(var95Pct)
+                .cvar95Pct(cvar95Pct)
+                .sharpeRatio(null)
+                .sortinoRatio(null)
                 .build();
     }
 

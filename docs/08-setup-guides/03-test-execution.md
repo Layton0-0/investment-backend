@@ -41,6 +41,12 @@
 .\gradlew.bat test --no-daemon --tests "com.investment.factor.service.PositionSizingServiceTest.getRecommendations_withHalfKelly_adjustsPositionSize"
 ```
 
+## 한국투자증권 API 연동 테스트
+
+- 한국투자증권 API를 쓰는 테스트·수동 검증은 **env에 있는 모의계좌**로만 수행한다.
+- **실계좌는 사용하지 않는다.** (실거래 호출·주문 방지)  
+  상세: [한국투자증권 API 가이드 §테스트·수동 검증 시 계좌](../04-api/09-korea-investment-api-guide.md#테스트수동-검증-시-계좌).
+
 ## 참고
 
 - 빌드/테스트 리포트: `build/reports/tests/test/index.html`

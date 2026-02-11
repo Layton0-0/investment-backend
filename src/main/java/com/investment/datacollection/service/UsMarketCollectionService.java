@@ -32,6 +32,8 @@ import java.util.Map;
  * investment.data.us.collector-url 설정 시 Docker us-daily-collector 서비스를 HTTP로
  * 호출.
  * 미설정 시 yfinance-script-path로 로컬 스크립트 실행. 둘 다 미설정 시 스텁(0 반환).
+ * <p>수정주가 정책(ADR 19): 저장·팩터·백테스트는 수정주가만 사용. yfinance는 adjusted OHLC를
+ * 반환하므로(스크립트에서 auto_adjust=True) 저장되는 가격은 수정주가이다.
  */
 @Slf4j
 @Service

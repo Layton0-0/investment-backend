@@ -181,11 +181,13 @@ public class PipelineExitScheduler {
                         .quantity(signal.getQuantity())
                         .price(signal.getCurrentPrice())
                         .market(positionMarket)
+                        .exitRuleType(signal.getReason())
                         .build();
                 orderService.executeOrderForPipeline(sellRequest, userId);
 
                 strategyPositionRepository.findById(signal.getPositionId()).ifPresent(pos -> {
                     pos.close(today, signal.getCurrentPrice());
+                    pos.setExitRuleType(signal.getReason());
                     strategyPositionRepository.save(pos);
                 });
                 log.info("청산 주문 실행 및 포지션 마감: positionId={}, symbol={}, reason={}",

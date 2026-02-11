@@ -33,4 +33,10 @@ public class RiskProperties {
 
     /** VaR/CVaR 단순 파라메트릭용 일일 변동성 가정 (%). 기본 1.0 = 1%. 0 또는 미설정 시 VaR/CVaR 미산출 */
     private BigDecimal varDailyVolPct;
+
+    /** 리스크 이벤트 알림: 일일 손실 한도 대비 이 비율(0~1) 도달 시 알림. 기본 0.8 = 80% 도달 시 */
+    private BigDecimal alertMddThresholdPct = new BigDecimal("0.8");
+
+    /** 리스크 이벤트 알림: VaR 95% 초과 시 Discord 알림 사용 여부. 기본 true */
+    private boolean alertVarExceedEnabled = true;
 }

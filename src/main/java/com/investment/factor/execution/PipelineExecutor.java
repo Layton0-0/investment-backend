@@ -131,6 +131,7 @@ public class PipelineExecutor {
                     .price(rec.getEntryPrice())
                     .market(rec.getMarket() != null ? rec.getMarket() : market)
                     .orderDvsn(orderDvsn)
+                    .signalType(rec.getMethod())
                     .build();
             if (actuallyExecute) {
                 try {
@@ -185,6 +186,7 @@ public class PipelineExecutor {
                                 .atrMultiplier(DEFAULT_ATR_MULTIPLIER)
                                 .timeCutDays(timeCutDays)
                                 .targetReturnPct(targetReturnPct)
+                                .signalType(rec.getMethod())
                                 .build();
                         strategyPositionRepository.save(position);
                         log.debug("파이프라인 주문 성공 (포지션 즉시 등록): symbol={}, qty={}, price={}",
@@ -274,6 +276,7 @@ public class PipelineExecutor {
                 .atrMultiplier(DEFAULT_ATR_MULTIPLIER)
                 .timeCutDays(timeCutDays)
                 .targetReturnPct(targetReturnPct)
+                .signalType(order.getSignalType())
                 .build();
         strategyPositionRepository.save(position);
 

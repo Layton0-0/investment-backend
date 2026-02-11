@@ -99,4 +99,50 @@ class BacktestServiceTest {
             assertThat(e.getMessage()).contains("initialCapital");
         }
     }
+
+    @Test
+    @DisplayName("스트레스 시나리오 2020-03 코로나 구간 요청 시 정상 완료 (권장 없으면 거래 0건)")
+    void run_stressScenario2020Covid_completesWithoutError() {
+        when(positionSizingService.getRecommendations(any(LocalDate.class), eq("KR"), any(), any(BigDecimal.class)))
+                .thenReturn(Collections.emptyList());
+
+        BacktestRunRequest request = BacktestRunRequest.builder()
+                .startDate(LocalDate.of(2020, 2, 24))
+                .endDate(LocalDate.of(2020, 4, 30))
+                .market("KR")
+                .strategyType("SHORT_TERM")
+                .initialCapital(new BigDecimal("100000000"))
+                .build();
+
+        BacktestRunResult result = backtestService.run(request);
+
+        assertThat(result.getStartDate()).isEqualTo(LocalDate.of(2020, 2, 24));
+        assertThat(result.getEndDate()).isEqualTo(LocalDate.of(2020, 4, 30));
+        assertThat(result.getFinalEquity()).isEqualByComparingTo(new BigDecimal("100000000"));
+        assertThat(result.getEquityCurve()).isNotEmpty();
+        assertThat(result.getTradeCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("스트레스 시나리오 2022-01~06 금리 인상기 구간 요청 시 정상 완료 (권장 없으면 거래 0건)")
+    void run_stressScenario2022RateHike_completesWithoutError() {
+        when(positionSizingService.getRecommendations(any(LocalDate.class), eq("US"), any(), any(BigDecimal.class)))
+                .thenReturn(Collections.emptyList());
+
+        BacktestRunRequest request = BacktestRunRequest.builder()
+                .startDate(LocalDate.of(2022, 1, 3))
+                .endDate(LocalDate.of(2022, 6, 30))
+                .market("US")
+                .strategyType("SHORT_TERM")
+                .initialCapital(new BigDecimal("100000000"))
+                .build();
+
+        BacktestRunResult result = backtestService.run(request);
+
+        assertThat(result.getStartDate()).isEqualTo(LocalDate.of(2022, 1, 3));
+        assertThat(result.getEndDate()).isEqualTo(LocalDate.of(2022, 6, 30));
+        assertThat(result.getFinalEquity()).isEqualByComparingTo(new BigDecimal("100000000"));
+        assertThat(result.getEquityCurve()).isNotEmpty();
+        assertThat(result.getTradeCount()).isZero();
+    }
 }

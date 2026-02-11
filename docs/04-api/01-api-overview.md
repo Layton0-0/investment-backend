@@ -72,6 +72,8 @@
 - `GET /api/v1/orders` - 주문 목록 조회
 - `DELETE /api/v1/orders/{orderId}` - 주문 취소
 
+주문 조회 응답에는 거래 사유 추적용 optional 필드 `signalType`(진입 시그널 유형), `exitRuleType`(청산 규칙 유형)이 포함된다. 파이프라인 요약(`GET /api/v1/pipeline/summary`)의 보유 포지션 목록(`openPositionList`)에도 동일 필드가 포함된다.
+
 ### 3.3 전략 API
 - `GET /api/v1/strategies/{accountNo}` - 전략 목록 조회 (쿼리: `market` 선택, KR/US)
 - `GET /api/v1/strategies/{accountNo}/{strategyType}` - 전략 상세 조회 (쿼리: `market` 선택)
@@ -82,6 +84,8 @@
 
 ### 3.4 분석 API
 - `POST /api/v1/analysis` - 종목 분석. 내부적으로 AI 예측 서비스에 요청 시 **optional** 로 일별 시세(series)·현재가(currentPrice)를 전달하면 LSTM 추론을 사용할 수 있음(미전달 또는 모델 미로드 시 Mock 응답).
+- `GET /api/v1/analysis/sector` - 섹터 분석 (accountNo 또는 symbols+market). 포트폴리오 페이지 섹터 비중·수익 기여도.
+- `GET /api/v1/analysis/correlation` - 상관관계 분석 (accountNo 또는 symbols+market+from+to). 일봉 수익률 기반 Pearson 상관계수 행렬. 최소 2종목·20일 이상 데이터 필요.
 
 ### 3.5 설정 API
 - `GET /api/v1/settings/{accountNo}` - 거래 설정 조회
@@ -102,6 +106,7 @@
 
 ### 3.10 백테스트 API
 - `POST /api/v1/backtest` - 백테스트 실행 (body: startDate, endDate, market, strategyType, initialCapital). 응답: 메트릭(MDD·CAGR·Sharpe·Sortino·Calmar·승률·손익비)·수익 곡선·거래 목록(거래별 totalFrictionCost 포함). 마찰 비용은 `investment.fees` 설정 적용. 인증 필요.
+- `POST /api/v1/backtest/walk-forward` - Walk-Forward(롤링 OOS) 백테스트. train/test 구간 분리 후 각 test 구간만 실행·fold별 메트릭 집계. trainDays·testDays·stepDays(기본 252·63·63). 오버피팅 완화·일반화 성능 추정용. 인증 필요.
 - `POST /api/v1/backtest/robo` - 로보 어드바이저 백테스트 실행 (body: startDate, endDate, initialCapital, optional: assetSymbols, momentumMonths, maWindowDays, topN, rebalanceFrequency, commPct, slipPct 등). 요청에 commPct/slipPct가 없으면 `investment.fees`(미국 ETF round-trip·TAF) 적용, 있으면 해당 값으로 오버라이드. 응답: 메트릭(CAGR·MDD·Sharpe·Calmar·Turnover)·수익 곡선·벤치마크 곡선·리밸런싱 이력. 인증 필요.
 - `GET /api/v1/backtest/robo/last-pre-execution?accountNo=xxx` - 실행 전 백테스트 최근 결과 조회 (통과/미통과·MDD·Sharpe·runAt). 인증 필요.
 
@@ -111,6 +116,9 @@
 - `GET /api/v1/ops/audit` - 감사 로그 조회 (페이징·이벤트유형·기간 필터). 설정 변경·수동 트리거·실계좌 가드 차단 이벤트. userId/accountNo 마스킹 저장. 인가: `hasRole('ADMIN')`.
 - `GET /api/v1/ops/model/status` - 모델/예측 상태 조회. 예측 서비스(AI) 헬스·설정 URL 표시(마스킹)·마지막 체크 시각. 인가: `hasRole('ADMIN')`.
 - `GET /api/v1/ops/health` - 시스템 헬스 요약. DB·Redis·예측 서비스 상태(UP/DOWN/UNKNOWN). 인가: `hasRole('ADMIN')`.
+- `GET /api/v1/ops/governance/results` - 전략 거버넌스 검사 결과 이력(RUN_AT 내림차순, limit). 인가: `hasRole('ADMIN')`.
+- `GET /api/v1/ops/governance/halts` - 전략 거버넌스 활성 halt 목록. 인가: `hasRole('ADMIN')`.
+- `PUT /api/v1/ops/governance/halts/{market}/{strategyType}/clear` - 해당 (market, strategyType) halt 해제. Body 선택: `{ "clearedBy": "userId" }`. 인가: `hasRole('ADMIN')`.
 
 ### 3.12 연말 세금·리포트 API
 - `GET /api/v1/report/tax/summary` - 연말 세금 요약. 쿼리: `year` (선택). 응답: year, domesticRealizedGainLoss, overseasRealizedGainLoss, dividendTotal, estimatedTax, disclaimer. **집계 근거**: 인증 사용자 소유 계좌에 대해 한국투자증권 기간별손익조회(realizedProfitLoss)를 해당 연도 구간으로 호출해 합산. 국내/해외 구분은 계좌별 API 응답 또는 서버타입 기준(모의/실 동일). 배당(dividendTotal)은 별도 수집 전까지 null. 예상 세금(estimatedTax)은 실현손익 가정 공식(국내 과세 표준 단순 적용) 추정이며 세무 자문 아님. PDF/CSV export·Hometax 연동은 별도 엔드포인트. 인증 필요.

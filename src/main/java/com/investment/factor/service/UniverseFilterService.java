@@ -10,8 +10,10 @@ import com.investment.domain.repository.EarningsSurpriseRepository;
 import com.investment.domain.repository.SectorReturnRepository;
 import com.investment.domain.repository.SymbolSectorRepository;
 import com.investment.domain.repository.UniverseRepository;
+import com.investment.marketdata.client.KoreaInvestmentRankClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +39,10 @@ public class UniverseFilterService {
     private final SymbolSectorRepository symbolSectorRepository;
     private final EarningsSurpriseRepository earningsSurpriseRepository;
 
+    /** 순위 API(거래량 순위) 연동. provider=korea-investment일 때만 빈 존재. 미존재 시 volume rank 필터 스킵 */
+    @Autowired(required = false)
+    private KoreaInvestmentRankClient rankClient;
+
     /** 유동성 최소 거래대금 (원). 공통 Liquidity Cut-off */
     @Value("${investment.factor.liquidity-min-trd-val:1000000000}")
     private long liquidityMinTrdVal = 1_000_000_000L;
@@ -59,6 +65,17 @@ public class UniverseFilterService {
 
     @Value("${investment.factor.pb-value-max:0.9}")
     private double pbValueMax = 0.9;
+
+    /** KR 유니버스에 거래량 순위(순위분석 API) 교집합 적용 여부. true 시 volume-rank-user-id 필요 */
+    @Value("${investment.factor.volume-rank-enabled:false}")
+    private boolean volumeRankEnabled = false;
+
+    @Value("${investment.factor.volume-rank-user-id:}")
+    private String volumeRankUserId = "";
+
+    /** 거래량 순위 상위 N건만 유니버스와 교집합 (volume-rank-enabled 시) */
+    @Value("${investment.factor.volume-rank-limit:200}")
+    private int volumeRankLimit = 200;
 
     /**
      * 기준일·시장에 대해 유니버스 필터 실행.
@@ -83,8 +100,10 @@ public class UniverseFilterService {
         // 2. 시장별 추가 필터 적용
         List<String> finalSymbols;
         if ("KR".equals(market)) {
-            // 한국: Sector Relative Strength 필터 (현재 스텁)
-            List<String> sectorPassed = filterBySectorRelativeStrength(basDt, market, liquidityPassed);
+            // 한국: 선택적 거래량 순위(순위분석 API) 교집합
+            List<DailyStock> afterVolumeRank = filterByVolumeRankIfEnabled(liquidityPassed);
+            // Sector Relative Strength 필터
+            List<String> sectorPassed = filterBySectorRelativeStrength(basDt, market, afterVolumeRank);
             // P/B 저평가 필터 (0.8~0.9): 데이터 소스 확정 후 적용. 현재 스텁(통과)
             finalSymbols = filterByPbValue(basDt, market, sectorPassed);
         } else if ("US".equals(market)) {
@@ -113,6 +132,40 @@ public class UniverseFilterService {
         universeRepository.saveAll(toSave);
         log.info("유니버스 필터 완료: basDt={}, market={}, count={}", basDt, market, toSave.size());
         return toSave.size();
+    }
+
+    /**
+     * KR 유니버스에 거래량 순위(순위분석 API) 교집합 적용.
+     * volume-rank-enabled=true, volume-rank-user-id 설정, rankClient 존재 시에만 적용.
+     * API 미설정·실패 시 유동성 통과 종목 그대로 반환.
+     */
+    private List<DailyStock> filterByVolumeRankIfEnabled(List<DailyStock> liquidityPassed) {
+        if (!volumeRankEnabled || volumeRankUserId == null || volumeRankUserId.isBlank() || rankClient == null) {
+            return liquidityPassed;
+        }
+        try {
+            List<String> rankSymbols = rankClient.getVolumeRank(volumeRankUserId, "1", "J", volumeRankLimit)
+                    .stream()
+                    .map(com.investment.marketdata.dto.VolumeRankItemDto::getSymbol)
+                    .filter(s -> s != null && !s.isBlank())
+                    .collect(Collectors.toList());
+            if (rankSymbols.isEmpty()) {
+                return liquidityPassed;
+            }
+            Set<String> rankSet = rankSymbols.stream().collect(Collectors.toSet());
+            List<DailyStock> filtered = liquidityPassed.stream()
+                    .filter(d -> rankSet.contains(d.getSymbol()))
+                    .collect(Collectors.toList());
+            if (filtered.isEmpty()) {
+                log.debug("거래량 순위 교집합: 유니버스와 겹치는 종목 없음, 유동성 통과 종목만 사용. basDt=KR");
+                return liquidityPassed;
+            }
+            log.debug("거래량 순위 교집합 적용: 유동성 {} -> {} 종목", liquidityPassed.size(), filtered.size());
+            return filtered;
+        } catch (Exception e) {
+            log.warn("거래량 순위 API 호출 실패, 유동성 통과 종목만 사용: {}", e.getMessage());
+            return liquidityPassed;
+        }
     }
 
     /**

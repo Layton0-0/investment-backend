@@ -113,6 +113,14 @@ public class BatchJobRegistry {
                                                 .triggerPath("/api/v1/trigger/unfilled-check")
                                                 .build(),
                                 BatchJobDefinition.builder()
+                                                .id("risk-event-alert")
+                                                .name("리스크 이벤트 알림")
+                                                .description("장중 평일 10분마다 일일 손실 한도 임박·VaR 95% 초과 검사 후 Discord 알림 발송.")
+                                                .cronExpression("0 */10 9-15 * * MON-FRI")
+                                                .timeZone(TZ)
+                                                .triggerPath("/api/v1/trigger/risk-event-alert")
+                                                .build(),
+                                BatchJobDefinition.builder()
                                                 .id("medium-term-rebalance")
                                                 .name("중기 리밸런스")
                                                 .description("매월 1일 08:30 KST에 중기 전략 리밸런스를 실행합니다(스텁).")
@@ -143,6 +151,14 @@ public class BatchJobRegistry {
                                                 .cronExpression(null)
                                                 .timeZone(TZ)
                                                 .triggerPath("/api/v1/trigger/robo-rebalance")
+                                                .build(),
+                                BatchJobDefinition.builder()
+                                                .id("strategy-governance-check")
+                                                .name("전략 거버넌스 검사")
+                                                .description("매월 1일 02:00 KST에 최근 N개월 백테스트 실행 후 MDD/Sharpe 열화 시 Discord 알림.")
+                                                .cronExpression("0 0 2 1 * *")
+                                                .timeZone(TZ)
+                                                .triggerPath("/api/v1/trigger/strategy-governance-check")
                                                 .build());
         }
 

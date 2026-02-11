@@ -129,6 +129,14 @@ public class BatchJobBeansConfig {
                                 step(jobRepository, tx, "unfilled-order-check-step", tasklet));
         }
 
+        @Bean(name = "risk-event-alert")
+        public Job riskEventAlertJob(JobRepository jobRepository,
+                        PlatformTransactionManager tx,
+                        RiskEventAlertTasklet tasklet) {
+                return job(jobRepository, "risk-event-alert",
+                                step(jobRepository, tx, "risk-event-alert-step", tasklet));
+        }
+
         @Bean(name = "medium-term-rebalance")
         public Job mediumTermRebalanceJob(JobRepository jobRepository,
                         PlatformTransactionManager tx,
@@ -159,5 +167,13 @@ public class BatchJobBeansConfig {
                         RoboRebalanceTasklet tasklet) {
                 return job(jobRepository, "robo-rebalance",
                                 step(jobRepository, tx, "robo-rebalance-step", tasklet));
+        }
+
+        @Bean(name = "strategy-governance-check")
+        public Job strategyGovernanceCheckJob(JobRepository jobRepository,
+                        PlatformTransactionManager tx,
+                        StrategyGovernanceCheckTasklet tasklet) {
+                return job(jobRepository, "strategy-governance-check",
+                                step(jobRepository, tx, "strategy-governance-check-step", tasklet));
         }
 }

@@ -261,7 +261,7 @@ public class KoreaInvestmentAccountClient {
                     Map.of(
                             "AFHR_FLPR_YN", "N", // 시간외단일가여부
                             "OFL_YN", "", // 오프라인여부
-                            "INQR_DVSN", "02", // 조회구분 (02: 종목별)
+                            "INQR_DVSN", "01", // 조회구분 (01: 대출일별, 02: 종목별는 2026-02-11 공지로 제한됨)
                             "UNPR_DVSN", "01", // 단가구분 (01: 기본)
                             "FUND_STTL_ICLD_YN", "N", // 펀드결제분포함여부
                             "FNCG_AMT_AUTO_RDPT_YN", "N", // 융자금액자동상환여부
@@ -549,7 +549,7 @@ public class KoreaInvestmentAccountClient {
                 Map.of(
                         "AFHR_FLPR_YN", "N",
                         "OFL_YN", "",
-                        "INQR_DVSN", "02",
+                        "INQR_DVSN", "01", // 01: 대출일별 (02: 종목별는 2026-02-11 공지로 제한됨)
                         "UNPR_DVSN", "01",
                         "FUND_STTL_ICLD_YN", "N",
                         "FNCG_AMT_AUTO_RDPT_YN", "N",

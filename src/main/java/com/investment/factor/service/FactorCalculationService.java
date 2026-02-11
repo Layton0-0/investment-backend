@@ -28,6 +28,8 @@ import org.springframework.util.StringUtils;
  * 팩터(시그널) 계산 엔진.
  * 이격도(Disparity), 변동성 돌파(Volatility Breakout), 유동성(Liquidity) 산출 후
  * TB_SIGNAL_SCORE 저장.
+ * <p>PIT·Look-ahead 방지(ADR 20): findByMarketAndBasDtBetween(market, fromDt, basDt)로 basDt 이전·당일만
+ * 사용. 시그널은 basDt 기준으로 해당 일자 종료 시점까지 가용한 데이터만 사용.
  */
 @Slf4j
 @Service

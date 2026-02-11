@@ -54,6 +54,12 @@ export KOREA_INVESTMENT_SERVER_TYPE=1
 export MARKET_DATA_USE_MOCK_DATA=true
 ```
 
+### 테스트·수동 검증 시 계좌
+
+- **한국투자증권 API 관련 테스트**는 env에 설정한 **모의계좌(serverType=1)** 로 진행한다.
+- **실계좌(serverType=0)는 테스트에 사용하지 않는다.** (실거래 API 호출·주문 실행 방지)
+- 모의계좌 App Key/Secret·계좌번호는 env 또는 설정 파일에 두고, 테스트·로컬 실행 시 해당 계좌만 사용하면 된다.
+
 ## 한국투자증권 API 특징
 
 - **인증 방식**: OAuth 2.0 (App Key, App Secret)
@@ -147,7 +153,7 @@ String symbol = "삼성전자"; // 자동으로 "005930"으로 변환
 - **HTTP 메서드**: **GET**
 - **파라미터 전달**: **URI query parameter** (JSON body 아님)
 
-예: `GET /uapi/domestic-stock/v1/trading/inquire-balance?CANO=12345678&ACNT_PRDT_CD=01&INQR_DVSN=02&...`
+예: `GET /uapi/domestic-stock/v1/trading/inquire-balance?CANO=12345678&ACNT_PRDT_CD=01&INQR_DVSN=01&...`
 
 ### 공통 파라미터 (조회 API는 query parameter로 전달)
 
@@ -162,9 +168,9 @@ String symbol = "삼성전자"; // 자동으로 "005930"으로 변환
 
 **사용 예시** (Map을 URI query parameter로 사용):
 ```java
-// 공통 파라미터 Map 생성 후 GET 요청의 query parameter로 전달
+// 공통 파라미터 Map 생성 후 GET 요청의 query parameter로 전달 (주식잔고조회는 INQR_DVSN=01 사용)
 Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createAccountRequestBody(
-    accountNo, Map.of("INQR_DVSN", "02", "PDNO", "005930"));
+    accountNo, Map.of("INQR_DVSN", "01", "PDNO", "005930"));
 URI uri = buildUriWithQueryParams(baseUrl, PATH_INQUIRE_BALANCE, queryParams);
 webClient.get().uri(uri).headers(...).retrieve()...
 ```
@@ -192,11 +198,11 @@ requestBody.put("FID_PERIOD_DIV_CODE", "D"); // 기간분할코드 (D: 일봉, W
 HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
     accessToken, appKey, appSecret, trId);
 
-// 계좌 관련 조회 API: 파라미터 Map 생성 후 GET 요청의 query parameter로 사용
+// 계좌 관련 조회 API: 파라미터 Map 생성 후 GET 요청의 query parameter로 사용 (주식잔고조회는 INQR_DVSN=01)
 Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createAccountRequestBody(
     accountNo, 
     Map.of(
-        "INQR_DVSN", "02",  // API별 고유 파라미터
+        "INQR_DVSN", "01",  // 주식잔고조회: 01(대출일별). 02(종목별)는 2026-02-11 공지로 제한됨
         "AFHR_FLPR_YN", "N"
     )
 );
@@ -218,6 +224,7 @@ webClient.get().uri(uri).headers(h -> h.addAll(headers)).retrieve()...
 - **엔드포인트**: `/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice`
 - **지원 기간**: 일봉, 주봉, 월봉
 - **필수 파라미터**: `FID_COND_MRKT_DIV_CODE`, `FID_INPUT_ISCD`, `FID_INPUT_DATE_1`, `FID_INPUT_DATE_2`, `FID_PERIOD_DIV_CODE`, `FID_ORG_ADJ_PRC` (0: 수정주가, 1: 원주가)
+- **수정주가 정책(ADR 19)**: 전략·팩터·백테스트용 일봉은 수정주가만 사용. 본 API 호출 시 **`FID_ORG_ADJ_PRC=0`(수정주가)** 를 사용한다. 원주가는 차트 UI 표시용으로만 사용 가능.
 
 ### 응답 구조
 
@@ -368,6 +375,58 @@ public class KoreaInvestmentWebSocketClient {
 - 초과 유량에 대한 과금 정책은 현재 없습니다.
 - 추가 유량이 필요한 경우: 다른 계좌 API 신청 등록하여 발급받은 앱정보(appkey, appsecret)로 이용
 
+### KIS Open API 실전 구축 (Phase 요약)
+
+| 구분 | 내용 | 구현·설정 |
+|------|------|------------|
+| **토큰 장전 갱신** | 장 시작 30분 전(기본 08:30 KST) 전 사용자·모의/실 serverType별 Access Token 강제 갱신 | `TokenRefreshScheduler`, `investment.market-data.korea-investment.token.pre-market-refresh-enabled`, `pre-market-refresh-cron` |
+| **Throttling·주문 큐** | 실전 초당 주문 2~10회 제한 준수, 동시 시그널 시 주문 순차 처리 | `OrderRequestQueue`, `OrderExecutor`, `investment.market-data.korea-investment.throttle.*` (enabled, orders-per-second, queue-max-size, reject-when-full) |
+| **순위분석·투자자 매매동향** | 거래량 순위(주도주 유니버스), 시장별 투자자 매매동향(일별)·수급 점수 | `KoreaInvestmentRankClient`(getVolumeRank, getInvestorDailyByMarket). path/TR_ID 미설정 시 빈 리스트. **설정**: MCP volume_rank·inquire_investor_daily_by_market으로 path·TR_ID 확인 후 `investment.market-data.korea-investment.rank-api`에 설정. 예: volume-rank-path `/uapi/domestic-stock/v1/quotations/volume-rank`, volume-rank-tr-id 실전 `FHPST01710000`/모의 `FHKST01710000`; investor-daily-path·investor-daily-tr-id는 시세분석 API 문서 확인. 유니버스·수급 연동 시 해당 값 설정 후 사용. |
+| **WebSocket 실시간** | 실시간 호가(asking_price_total), 체결통보(ccnl_notice) | `KoreaInvestmentWebSocketClient` 인터페이스, `NoOpKoreaInvestmentWebSocketClient`(enabled=false), `KoreaInvestmentWebSocketClientImpl`(enabled=true). MCP asking_price_total·ccnl_notice 반영. `websocket.enabled=true` 시 실제 구현체 사용. path·quote-tr-id(H0GASP0)·ccnl-notice-tr-id(H0GAMT0)·approval-key(선택) 설정. |
+
+### 순위분석·투자자 매매동향 API (path·TR_ID)
+
+MCP `volume_rank`, `inquire_investor_daily_by_market` 검색으로 확인한 스펙 기준. **요청 방식**: 모두 **GET** + query parameter.
+
+| API | path | TR_ID (실전) | TR_ID (모의) | 용도·연동 |
+|-----|------|--------------|--------------|-----------|
+| **거래량순위** | `/uapi/domestic-stock/v1/quotations/volume-rank` | `FHPST01710000` | `FHKST01710000` | 주도주·유니버스: 거래대금 상위 종목. 파라미터: `FID_COND_MRKT_DIV_CODE`(J:주식), `FID_DATA_CNT`(건수). `KoreaInvestmentRankClient.getVolumeRank`. 유니버스 연동: `investment.factor.volume-rank-enabled=true`, `volume-rank-user-id` 설정 시 `UniverseFilterService`에서 KR 유니버스와 교집합 적용. |
+| **시장별 투자자매매동향(일별)** | `/uapi/domestic-stock/v1/quotations/inquire-investor-daily-by-market` | `FHPST03010100` | `FHKST03010100` | 시장 수급·분위. 파라미터: `FID_STT_DATE`, `FID_END_DATE`(yyyyMMdd). `KoreaInvestmentRankClient.getInvestorDailyByMarket`. 수급 강도·시그널 보조 지표로 활용 가능(현재 TB_ORDER_FLOW 기반 Smart Money Intensity와 병행). |
+
+- **설정**: `investment.market-data.korea-investment.rank-api` 아래 `volume-rank-path`, `volume-rank-tr-id`, `investor-daily-path`, `investor-daily-tr-id`에 위 값 설정. 미설정 시 각 메서드는 빈 리스트 반환.
+- **실전/모의 구분**: 서버 타입(serverType)에 따라 호출 시 base URL(실전/모의)과 TR_ID(실전/모의)를 일치시켜야 함. 현재 구현은 **단일 TR_ID**만 설정하므로, 실전·모의를 같이 쓰는 경우 환경별로 다른 값 설정(환경변수 등) 권장.
+
+### WebSocket approval_key 발급 (REST)
+
+실시간 WebSocket 구독 시 **approval_key**가 필요한 경우, REST API로 발급 후 `investment.market-data.korea-investment.websocket.approval-key`에 설정한다.
+
+- **엔드포인트**: `POST /oauth2/Approval`
+- **Base URL**: 실전 `https://openapi.koreainvestment.com:9443`, 모의 `https://openapivts.koreainvestment.com:29443`
+- **요청**: Content-Type `application/json`. (접근토큰 또는 appkey/appsecret 등 포털 OAuth 문서 명세 확인.)
+- **응답**: 발급된 `approval_key` 값을 WebSocket 구독 메시지의 `header.approval_key`에 넣어 사용.
+- **구현**: `KoreaInvestmentWebSocketClientImpl`은 설정에 `approval-key`가 있으면 구독 시 `header.approval_key`로 전달. 미설정 시 해당 필드 생략(일부 환경에서는 접근토큰만으로 구독 가능).
+- **상세**: [한국투자증권 API 포털](https://apiportal.koreainvestment.com/) OAuth·WebSocket 문서 참조.
+
+### WebSocket 설정 예시 (실제 구현체 사용 시)
+
+`investment.market-data.korea-investment.websocket.enabled=true` 로 두면 `KoreaInvestmentWebSocketClientImpl` 이 사용된다.
+
+```yaml
+investment:
+  market-data:
+    korea-investment:
+      websocket:
+        enabled: true
+        path: /tryitout
+        quote-tr-id: H0GASP0      # 실시간 호가(통합). MCP asking_price_total
+        ccnl-notice-tr-id: H0GAMT0 # 실시간 체결통보. MCP ccnl_notice
+        connect-wait-ms: 1000
+        subscription-interval-ms: 200
+        approval-key: ""           # REST로 발급받아 설정(공식 문서 확인)
+```
+
+연결 순서: `connect(userId, serverType)` → (1초 대기) → `subscribeQuote` / `subscribeCcnlNotice`. 구독 간격 0.2초 이내 권장.
+
 ### Rate Limiter 적용
 
 본 시스템에서는 Resilience4j RateLimiter를 사용하여 API 유량 제한을 자동으로 준수합니다:
@@ -430,11 +489,17 @@ Java 17을 사용하는 경우 기본적으로 TLS 1.2 이상을 지원하므로
 
 #### 1. 주식잔고조회
 - **TR ID**: `TTTC8434R` (실거래) / `VTTC8434R` (모의투자)
-- **엔드포인트**: `/uapi/domestic-stock/v1/trading/inquire-balance`
+- **엔드포인트**: `/uapi/domestic-stock/v1/trading/inquire-balance` (v1_국내주식-006)
 - **요청 방식**: **GET** + query parameter
 - **기능**: 계좌 잔고 정보 및 보유 종목 목록 조회
 - **사용 클래스**: `KoreaInvestmentAccountClient.inquireBalance()`
+- **INQR_DVSN**: **01(대출일별)**만 사용. 02(종목별)는 2026-02-11 공지로 제한되어 `INPUT INVALID_CHECK_INQR_DVSN` 오류가 발생하므로 사용하지 않음.
 - **시장(KR/US) 구분**: 보유 종목 응답에 거래소 구분 필드(`excg_dvsn_cd` 등)가 있으면 KRX→KR, NASD/NYSE/AMEX→US로 매핑하여 `AccountPositionDto.market`에 설정.
+
+> **공지 (2026-02-11)**  
+> 대상 API: 주식잔고조회 [v1_국내주식-006]. 대상 필드: INQR_DVSN.  
+> 02(종목별) 호출 시 `ERROR : INPUT INVALID_CHECK_INQR_DVSN` 발생 → 01(대출일별)로 입력해 사용.  
+> 변경 시점: 2026-02-11 KRX 장 개시 직후. (Open API·MTS 등 서비스 매체 내 잔고조회 원활화 목적)
 
 #### 1-2. 해외주식 현재잔고(체결기준) 조회
 - **TR ID**: `CTRP6504R` (실거래) / `VTRP6504R` (모의투자)

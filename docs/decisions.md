@@ -21,6 +21,10 @@
 15. [TimescaleDB 전환](#15-timescaledb-전환)
 16. [Alpha-Risk-Execution 분리 및 Portfolio/Risk 레이어 도입](#16-alpha-risk-execution-분리-및-portfoliorisk-레이어-도입)
 17. [관리자 계정 생성·로그인 정책](#17-관리자-계정-생성로그인-정책)
+18. [KIS Open API 실전 구축](#18-kis-open-api-실전-구축-토큰-장전주문-큐순위투자자websocket)
+19. [데이터 정합성 (수정주가)](#19-데이터-정합성-수정주가)
+20. [Point-in-Time 및 Look-ahead 방지](#20-point-in-time-및-look-ahead-방지)
+21. [전략 거버넌스·중단 원칙](#21-전략-거버넌스중단-원칙)
 
 ---
 
@@ -546,6 +550,9 @@ API 설계 표준 수립 필요
 - [한국투자증권 API 가이드](./04-api/09-korea-investment-api-guide.md): 조회 API GET·query parameter 명시, 개발 시 MCP 사용 안내.
 - [.cursor/rules/MCP.mdc](../.cursor/rules/MCP.mdc): 한국투자증권 API 개발 시 MCP 무조건 사용 규칙.
 
+### 한국투자증권 API 변경 대응
+- **2026-02-11**: 주식잔고조회(v1_국내주식-006) INQR_DVSN 02(종목별) 제한 → 01(대출일별) 사용. 공지에 따라 `KoreaInvestmentAccountClient.inquireBalance`, `verifyAccountByCredentials` 및 API 가이드 예시를 01로 수정. 상세: [09-korea-investment-api-guide.md §주식잔고조회](./04-api/09-korea-investment-api-guide.md).
+
 ---
 
 ## 15. TimescaleDB 전환
@@ -618,6 +625,89 @@ API 설계 표준 수립 필요
 
 ---
 
+## 18. KIS Open API 실전 구축 (토큰 장전·주문 큐·순위/투자자·WebSocket)
+
+**결정일**: 2026-02-11  
+**상태**: 확정  
+**결정**: 한국투자증권 API 실전 운용을 위해 토큰 장전 갱신·주문 Throttling/큐·순위·투자자 REST·WebSocket 스켈레톤을 도입한다.
+
+### 배경
+실전/모의 환경에서 API 제한 준수·당일 거래 안정성·퀀트 스코어링(유니버스·수급)·실시간 시세/체결 연동이 필요하다.
+
+### 결정 사항
+- **토큰 장전 갱신**: 장 시작 30분 전(기본 08:30 KST, cron) 전 사용자·모의/실 serverType별 Access Token 강제 갱신. `TokenRefreshScheduler`, `KoreaInvestmentTokenService.forceRefreshAllTokensForMarketOpen()`.
+- **주문 큐·Throttling**: 주문 경로 앞단에 인메모리 `OrderRequestQueue`(BlockingQueue + 단일 소비자 + Resilience4j RateLimiter). 설정: throttle.enabled, orders-per-second, queue-max-size, reject-when-full.
+- **순위·투자자 API**: `KoreaInvestmentRankClient`(거래량 순위, 시장별 투자자 매매동향 일별). path/TR_ID는 MCP(volume_rank, inquire_investor_daily_by_market) 확인 후 application.yml rankApi에 설정. **실전 후속(2026-02-11)**: 기본 path·TR_ID를 application.yml에 반영(거래량순위 `/uapi/domestic-stock/v1/quotations/volume-rank`, FHKST01710000/FHPST01710000; 시장별 투자자 `/uapi/domestic-stock/v1/quotations/inquire-investor-daily-by-market`, FHKST03010100/FHPST03010100). 유니버스 연동: `UniverseFilterService`에서 `investment.factor.volume-rank-enabled`, `volume-rank-user-id` 설정 시 KR 유니버스에 거래량 순위 교집합 적용.
+- **WebSocket**: `KoreaInvestmentWebSocketClient` 인터페이스(실시간 호가·체결통보 구독/해제/연결). `NoOpKoreaInvestmentWebSocketClient`(enabled=false), `KoreaInvestmentWebSocketClientImpl`(enabled=true). MCP asking_price_total·ccnl_notice 반영. path·quote-tr-id·ccnl-notice-tr-id·approval-key(선택) 설정. **실전 후속(2026-02-11)**: approval_key REST 발급 연동. `KoreaInvestmentTokenClient.getApprovalKey(accessToken, serverType)`(POST /oauth2/Approval), `KoreaInvestmentTokenService.getApprovalKey(userId, serverType)`. WebSocket Impl에서 `approval-key-fetch-enabled=true` 시 연결 시 REST로 발급 후 구독 메시지에 사용. 상세: 09-korea-investment-api-guide.md §WebSocket approval_key 발급.
+
+### 제한 사항
+- 실전·모의 동시 사용 시 TR_ID는 환경별로 다르므로(실전 FHPST*, 모의 FHKST*) 환경변수 등으로 분리 설정 권장.
+- WebSocket approval_key REST 응답 포맷은 포털 문서 기준이며, 미지원 시 설정에서 직접 입력.
+
+### 영향
+- MarketDataProperties: token.pre-market-refresh-*, throttle.*, rankApi.*, websocket.*(approvalKeyFetchEnabled 추가)
+- OrderService: OrderRequestQueue 주입·enabled 시 submit 경로 사용
+- UniverseFilterService: 선택적 KoreaInvestmentRankClient·volume-rank-enabled·volume-rank-user-id
+- 09-korea-investment-api-guide.md 실전 구축·순위/투자자 path·TR_ID·approval_key 발급, decisions.md 본 ADR
+
+**참고**: [09-korea-investment-api-guide.md §실전 구축](./04-api/09-korea-investment-api-guide.md), [02-development-status.md](./09-planning/02-development-status.md).
+
+---
+
+## 19. 데이터 정합성 (수정주가)
+
+**결정일**: 2026-02-11  
+**상태**: 확정  
+**결정**: 백테스트·팩터 계산은 **수정주가(adjusted price)** 만 사용한다. 원주가는 차트 표시 등에만 사용 가능하다.
+
+### 배경
+원주가로 백테스트하면 주식 분할·배당 시 수익률·MDD가 왜곡되어 결과가 무효가 된다. [minimum-architecture-requirement.md](./01-requirements/minimum-architecture-requirement.md)에서 "Raw prices destroy backtests"로 명시되어 있다.
+
+### 결정 사항
+- **일봉 저장·팩터 계산·백테스트 입력**: 수정주가만 사용. 한투 API 사용 시 `FID_ORG_ADJ_PRC=0`(수정주가) 사용.
+- **원주가**: 차트 표시·UI용으로만 사용 가능. 전략 검증·시그널 계산에는 사용하지 않는다.
+
+### 영향
+- [00-strategy-registry.md](./02-architecture/00-strategy-registry.md) §1.1, [02-development-status.md](./09-planning/02-development-status.md) 수정주가 파이프라인 필수 반영, [roadmap.md](./roadmap.md) Phase 5.2.
+
+---
+
+## 20. Point-in-Time 및 Look-ahead 방지
+
+**결정일**: 2026-02-11  
+**상태**: 확정  
+**결정**: 시그널·백테스트는 **해당 일자(bas_dt) 시점까지 가용한 데이터만** 사용한다. Look-ahead(미래 정보 유입) 금지.
+
+### 배경
+백테스트에서 미래 정보가 섞이면 수익률이 과대평가되어 실전과 괴리가 발생한다. 퀀트 시스템 규칙상 "백테스트는 해당 일자 당시 가용 정보만 사용"해야 한다.
+
+### 결정 사항
+- **Point-in-Time (PIT)**: 시그널 계산·백테스트 시 bas_dt 종료 시점까지 공개된 데이터만 사용.
+- **Look-ahead bias 방지**: 당일 종가로 진입/청산 판단 시, 당일 종가는 해당 일자 백테스트 루프에서 시뮬레이션 종료 후에만 사용.
+
+### 영향
+- [00-strategy-registry.md](./02-architecture/00-strategy-registry.md) §1.1, [02-development-status.md](./09-planning/02-development-status.md) PIT 정책 반영.
+
+---
+
+## 21. 전략 거버넌스·중단 원칙
+
+**결정일**: 2026-02-11  
+**상태**: 확정  
+**결정**: 전략이 더 이상 말이 안 되면 **즉시 거래 중단**한다. 전략 버전 스택에 결과·교훈을 채우고, 성과 열화 시 검토·거래 중단 여부를 결정한다.
+
+### 배경
+퀀트 시스템 규칙([Quant-Trading-System.mdc](../.cursor/rules/Quant-Trading-System.mdc)): "If a strategy stops making sense, it stops trading—immediately." 버전 스택의 "결과·교훈"이 대부분 "미검증"인 상태에서는 운영 원칙이 문서화되어 있지 않았다.
+
+### 결정 사항
+- **전략 중단 원칙**: 전략이 말이 안 되면 즉시 거래 중단. 정기 백테스트 재실행·MDD/Sharpe 열화 시 검토 후 거래 중단 여부 결정.
+- **버전 스택**: 전략·팩터 변경 시 [00-strategy-registry.md](./02-architecture/00-strategy-registry.md) 버전 스택에 결과·교훈을 기입해 실패 사례를 참고할 수 있게 한다.
+
+### 영향
+- [00-strategy-registry.md](./02-architecture/00-strategy-registry.md) §1.1, [12-auto-investment-strategy.md](./02-architecture/12-auto-investment-strategy.md) §6.2 체크리스트 항목 13, [02-development-status.md](./09-planning/02-development-status.md) 진행예정.
+
+---
+
 ## 참고 문서
 
 - [시스템 아키텍처](./02-architecture/01-system-architecture.md)
@@ -636,3 +726,6 @@ API 설계 표준 수립 필요
 | 1.3 | 2026-01-30 | System | ADR 14 한국투자증권 API 요청 방식(GET+query) 및 MCP 필수 사용, 작업 중 문서 업데이트 규칙 반영 |
 | 1.4 | 2026-02-06 | System | ADR 15 TimescaleDB 전환, ADR 16 Alpha-Risk-Execution·Portfolio/Risk 레이어 도입 |
 | 1.5 | 2026-02-06 | System | ADR 17 관리자 계정 생성·로그인 정책 (공개 회원가입 없음, 부트스트랩·ADMIN 전용 API·JWT role 반영) |
+| 1.6 | 2026-02-11 | System | ADR 18 KIS Open API 실전 구축 (토큰 장전 갱신·주문 큐·순위/투자자 API·WebSocket 스켈레톤) |
+| 1.7 | 2026-02-11 | System | 한국투자증권 API 변경 대응: 주식잔고조회 INQR_DVSN 02 제한 → 01(대출일별) 사용 (ADR 14 하위) |
+| 1.8 | 2026-02-11 | System | ADR 19 데이터 정합성(수정주가), ADR 20 Point-in-Time·Look-ahead 방지, ADR 21 전략 거버넌스·중단 원칙 추가 (기획 고도화 퀀트 관점) |

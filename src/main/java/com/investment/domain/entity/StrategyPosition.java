@@ -77,6 +77,14 @@ public class StrategyPosition {
     @Column(name = "EXIT_PRICE", precision = 20, scale = 4)
     private BigDecimal exitPrice;
 
+    /** 거래 사유: 진입 시그널 유형. 예: VOLATILITY_BREAKOUT, DUAL_MOMENTUM */
+    @Column(name = "SIGNAL_TYPE", length = 64)
+    private String signalType;
+
+    /** 거래 사유: 청산 규칙 유형. 예: ATR_TRAILING_STOP, TIME_CUT, STOP_LOSS */
+    @Column(name = "EXIT_RULE_TYPE", length = 64)
+    private String exitRuleType;
+
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) {
@@ -89,7 +97,7 @@ public class StrategyPosition {
             StrategyType strategyType, LocalDate entryDt, BigDecimal entryPrice, int quantity,
             BigDecimal trailingHigh, BigDecimal priorLow, BigDecimal atrMultiplier, int timeCutDays,
             BigDecimal targetReturnPct,
-            LocalDateTime createdAt, LocalDate exitDt, BigDecimal exitPrice) {
+            LocalDateTime createdAt, LocalDate exitDt, BigDecimal exitPrice, String signalType, String exitRuleType) {
         this.id = id;
         this.accountNo = accountNo;
         this.symbol = symbol;
@@ -106,6 +114,12 @@ public class StrategyPosition {
         this.createdAt = createdAt != null ? createdAt : LocalDateTime.now();
         this.exitDt = exitDt;
         this.exitPrice = exitPrice;
+        this.signalType = signalType;
+        this.exitRuleType = exitRuleType;
+    }
+
+    public void setExitRuleType(String exitRuleType) {
+        this.exitRuleType = exitRuleType;
     }
 
     public boolean isOpen() {

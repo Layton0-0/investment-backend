@@ -22,6 +22,9 @@ import java.util.stream.Collectors;
 
 /**
  * 백테스트 엔진 — 과거 일봉·시그널로 4단계 파이프라인 재생, 메트릭 산출.
+ * <p>PIT·Look-ahead 방지(ADR 20): 일자별 루프에서 해당 date의 종가/고가/저가는 date 일자 데이터만
+ * 조회(getClose/getHigh/getLow(date,date)). 매수 권장은 getRecommendations(date)로 basDt=date 시그널·일봉만 사용.
+ * 당일 종가 진입/청산은 해당 일자 시뮬레이션 내에서만 당일 가격 참조.
  */
 @Slf4j
 @Service

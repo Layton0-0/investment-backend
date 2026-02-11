@@ -352,4 +352,37 @@ class OrderServiceTest {
                 assertTrue(exception.getMessage().contains("Kill Switch"));
                 verify(orderRepository, never()).save(any(Order.class));
         }
+
+        @Test
+        void getOrder_includesSignalTypeAndExitRuleType() {
+                String orderId = java.util.UUID.randomUUID().toString();
+                Order order = Order.builder()
+                                .accountNo("1234567890")
+                                .symbol("005930")
+                                .orderType(Order.OrderType.BUY)
+                                .quantity(10)
+                                .price(new BigDecimal("70000.00"))
+                                .status(Order.OrderStatus.EXECUTED)
+                                .build();
+                try {
+                        java.lang.reflect.Field idField = Order.class.getDeclaredField("id");
+                        idField.setAccessible(true);
+                        idField.set(order, orderId);
+                        java.lang.reflect.Field orderTimeField = Order.class.getDeclaredField("orderTime");
+                        orderTimeField.setAccessible(true);
+                        orderTimeField.set(order, java.time.LocalDateTime.now());
+                } catch (Exception e) {
+                        throw new RuntimeException(e);
+                }
+                order.setSignalType("VOLATILITY_BREAKOUT");
+                order.setExitRuleType("ATR_TRAILING_STOP");
+
+                when(orderRepository.findByIdAndAccountNo(orderId, "1234567890")).thenReturn(Optional.of(order));
+
+                OrderResponseDto response = orderService.getOrder(orderId, "1234567890");
+
+                assertNotNull(response);
+                assertEquals("VOLATILITY_BREAKOUT", response.getSignalType());
+                assertEquals("ATR_TRAILING_STOP", response.getExitRuleType());
+        }
 }

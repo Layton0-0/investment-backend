@@ -12,7 +12,7 @@
 ## 주요 상호작용
 
 - [지금 실행] → 트리거 API(예: POST /api/v1/trigger/...) → 성공/실패 피드백. 2중 확인(실제 주문 가능 시).
-- 페이지 로드 → GET /api/v1/batch/jobs.
+- 페이지 로드 → GET /batch/api/jobs (실제 구현 경로).
 
 ## 상태/에러
 
@@ -24,4 +24,4 @@
 
 ## 연동 API
 
-- GET /api/v1/batch/jobs, POST /api/v1/trigger/... (경로는 02-api-endpoints 참조).
+- GET /batch/api/jobs, POST /api/v1/trigger/... (경로는 02-api-endpoints 참조).

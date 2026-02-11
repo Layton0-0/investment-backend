@@ -5,6 +5,7 @@ import com.investment.domain.entity.SignalScore;
 import com.investment.domain.repository.DailyStockRepository;
 import com.investment.domain.repository.SignalScoreRepository;
 import com.investment.factor.dto.PositionRecommendationDto;
+import com.investment.news.service.NewsSignalService;
 import com.investment.strategy.domain.StrategyType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -25,6 +26,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("PositionSizingService")
@@ -34,6 +36,8 @@ class PositionSizingServiceTest {
         private SignalScoreRepository signalScoreRepository;
         @Mock
         private DailyStockRepository dailyStockRepository;
+        @Mock
+        private NewsSignalService newsSignalService;
 
         @InjectMocks
         private PositionSizingService positionSizingService;
@@ -43,6 +47,7 @@ class PositionSizingServiceTest {
                 ReflectionTestUtils.setField(positionSizingService, "positionRiskPct", new BigDecimal("0.01"));
                 ReflectionTestUtils.setField(positionSizingService, "kellyP", new BigDecimal("0.6"));
                 ReflectionTestUtils.setField(positionSizingService, "kellyB", new BigDecimal("2.0"));
+                lenient().when(newsSignalService.getSymbolsWithSignalNews(any(), any())).thenReturn(java.util.Set.of());
         }
 
         @Test
@@ -121,5 +126,40 @@ class PositionSizingServiceTest {
 
                 // then
                 assertThat(recommendations).isEmpty();
+        }
+
+        @Test
+        @DisplayName("리스크 기반 캡 적용 시 종목당 권장 금액이 cap 초과하지 않음")
+        void getRecommendations_withRiskBasedCap_capsPerSymbol() {
+                LocalDate basDt = LocalDate.of(2026, 1, 30);
+                String market = "KR";
+                BigDecimal totalCapital = new BigDecimal("100000000"); // 1억, 5% = 500만
+                ReflectionTestUtils.setField(positionSizingService, "riskBasedCapEnabled", true);
+                ReflectionTestUtils.setField(positionSizingService, "riskBasedCapMaxPct", new BigDecimal("0.05"));
+
+                SignalScore s1 = SignalScore.builder().basDt(basDt).symbol("005930").market(market).factorType("DISPARITY").score(BigDecimal.ONE).build();
+                SignalScore s2 = SignalScore.builder().basDt(basDt).symbol("000660").market(market).factorType("DISPARITY").score(BigDecimal.ONE).build();
+                when(signalScoreRepository.findByBasDtAndMarketOrderBySymbol(eq(basDt), eq(market), any(Pageable.class)))
+                                .thenReturn(List.of(s1, s2));
+
+                List<DailyStock> history1 = new ArrayList<>();
+                List<DailyStock> history2 = new ArrayList<>();
+                for (int i = 0; i < 40; i++) {
+                        LocalDate d = basDt.minusDays(39 - i);
+                        BigDecimal c = new BigDecimal("70000").add(new BigDecimal(i * 50));
+                        history1.add(DailyStock.builder().basDt(d).symbol("005930").market(market).highPrice(c.add(BigDecimal.valueOf(500))).lowPrice(c.subtract(BigDecimal.valueOf(500))).closePrice(c).build());
+                        history2.add(DailyStock.builder().basDt(d).symbol("000660").market(market).highPrice(c.add(BigDecimal.valueOf(500))).lowPrice(c.subtract(BigDecimal.valueOf(500))).closePrice(c).build());
+                }
+                when(dailyStockRepository.findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(eq("005930"), eq(market), any(LocalDate.class), any(LocalDate.class))).thenReturn(history1);
+                when(dailyStockRepository.findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(eq("000660"), eq(market), any(LocalDate.class), any(LocalDate.class))).thenReturn(history2);
+
+                List<PositionRecommendationDto> recommendations = positionSizingService.getRecommendations(
+                                basDt, market, StrategyType.LONG_TERM, totalCapital);
+
+                BigDecimal capAmt = totalCapital.multiply(new BigDecimal("0.05"));
+                assertThat(recommendations).isNotEmpty();
+                for (PositionRecommendationDto rec : recommendations) {
+                        assertThat(rec.getRecommendedAmt()).isLessThanOrEqualTo(capAmt.add(BigDecimal.ONE));
+                }
         }
 }

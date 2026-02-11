@@ -120,7 +120,7 @@
 
 1. **데이터 수집**: Yahoo Finance API(미국), KRX/OpenDart API(한국) 연동. (§7 확정 원천만 파이프라인 연결)
 2. **팩터 계산 엔진**: 2단계 시그널 수식을 Python(Pandas/Numpy)으로 구현, **매일 장 시작 전** 종목별 점수 산출.
-3. **백테스팅 (필수)**: 과거 10년 데이터로 알고리즘 시뮬레이션. 특히 **2020년 코로나 폭락장**, **2022년 금리 인상기** 방어율 검증.
+3. **백테스팅 (필수)**: 과거 10년 데이터로 알고리즘 시뮬레이션. 특히 **2020년 코로나 폭락장**, **2022년 금리 인상기** 방어율 검증. 스트레스 시나리오 정의·실행 방법·검증 기준 및 결과 기록은 [backtest-stress-results.md](./backtest-stress-results.md) 참조.
 
 **상세**: [roadmap.md](../roadmap.md)
 
@@ -233,6 +233,15 @@ sequenceDiagram
 10. **모의계좌 실제 실행**: 모의 앱키·계좌 인증 완료, `PIPELINE_ALLOW_REAL_EXECUTION=false`(기본)로 실전 계좌 자동 실행 미허용. 실전 계좌 자동 실행은 `PIPELINE_ALLOW_REAL_EXECUTION=true`로만 허용.
 11. **모의 Rate Limit**: 한국투자증권 모의투자 1초당 2건 제한 인지. 스케줄(09:10 실행·장중 청산·체결 확인) 확인.
 12. **로보 ETF 주문**: 로보 리밸런싱 시 `RoboRebalanceExecutor`가 해외(US) 보유 비중 조회 후 목표 비중과 비교해 ETF 매수/매도 주문 생성·`OrderService.executeOrderForPipeline` 호출. `investment.backtest.robo.execute-orders`(false 기본)·`min-order-amount-usd`(50). VIX·거시 지표는 `MacroIndicatorProvider`·`investment.risk.macro-indicator-url`(선택)로 파이프라인 실행 전 레짐 게이트에 반영.
+13. **전략 거버넌스·중단 원칙**: 전략이 더 이상 말이 안 되면 **즉시 거래 중단**. 정기 백테스트 재실행·MDD/Sharpe 열화 시 검토 후 거래 중단 여부 결정. [00-strategy-registry.md](./00-strategy-registry.md) §1.1 데이터·백테스트 원칙 참조.
+
+**전략 거버넌스·중단 원칙 (상세 플로우)**
+
+- **원칙**: 전략이 더 이상 말이 안 되면 즉시 거래 중단. 데이터·백테스트 원칙은 [00-strategy-registry.md](./00-strategy-registry.md) §1.1 참조.
+- **정기 검토**: 권장 주기(예: 월 1회 또는 분기 1회)로 **Walk-Forward 또는 단일 구간 백테스트** 재실행. 최근 구간(예: 최근 12개월) 메트릭 수집.
+- **열화 기준**: (1) MDD가 목표(-15%)를 상회하거나 최근 백테스트 대비 현저히 악화, (2) Sharpe 비율이 일정 기간 0 이하 또는 현저히 하락, (3) 승률·손익비가 Half-Kelly 적용 조건(승률 60%·손익비 2:1) 미달 지속.
+- **조치**: 열화 확인 시 **자동 매매 중단**(설정에서 자동 매매 OFF 또는 Kill Switch 활용) 후 원인 분석. 전략 파라미터·유니버스·데이터 품질 점검 후 재검증 완료 전까지 실거래 재개 금지.
+- **구현 완료(1차·2차)**: Batch Job `strategy-governance-check`, 수동 트리거 `POST /api/v1/trigger/strategy-governance-check`, 열화 시 Discord 알림(리스크 이벤트). 설정: `investment.governance.*` (lookback-months, mdd-threshold-pct, sharpe-min, alert-only, auto-halt-on-degradation). **2차**: 검사 결과 TB_GOVERNANCE_CHECK_RESULT 저장; 열화 시 alert-only=false·auto-halt-on-degradation=true이면 (market, strategyType)별 TB_GOVERNANCE_HALT 등록. 파이프라인 실행 스케줄러가 halt 조합에 대해 run 스킵. Admin API: GET /api/v1/ops/governance/results(최근 결과), GET /api/v1/ops/governance/halts(활성 halt), PUT …/halts/{market}/{strategyType}/clear(해제). 알림 이력은 기존 GET /api/v1/ops/alerts에서 component=StrategyGovernance 필터로 조회.
 
 ---
 
@@ -330,3 +339,4 @@ REST API는 호출 제한(초당 횟수)이 있어 공격형 트레이딩에 불
 | 1.0 | 2026-01-29 | System | 초기 자동투자 전략 명세 작성 — 4단계 파이프라인·시장별 알고리즘·원천·KIS 실전 구축 반영 |
 | 1.1 | 2026-01-31 | System | 전략 통합 문서 분리·기간별 전략 반영 — 상세 수식·파라미터는 [00-strategy-registry.md](./00-strategy-registry.md) 참조로 정리 |
 | 1.2 | 2026-02-01 | System | §6.2 자동투자 프로세스 플로우 추가 — 스케줄 요약·시퀀스 다이어그램·실제 주문 활성화 체크리스트; 후속 개발에 auto-execute 설정 명시 |
+| 1.3 | 2026-02-11 | System | 기획 고도화(퀀트 관점): §6.2 체크리스트에 전략 거버넌스·중단 원칙(항목 13) 추가 — 정기 백테스트·MDD/Sharpe 열화 시 검토. |

@@ -97,6 +97,14 @@ public class PositionSizingService {
     @Value("${investment.factor.position-cap-per-symbol-pct:10}")
     private BigDecimal positionCapPerSymbolPct = new BigDecimal("10");
 
+    /** 리스크 기반 포지션 사이징: 종목당 비중 상한 적용 여부 (기본 false) */
+    @Value("${investment.factor.risk-based-cap-enabled:false}")
+    private boolean riskBasedCapEnabled = false;
+
+    /** 리스크 기반 캡 적용 시 종목당 최대 비중 (0.05 = 5%) */
+    @Value("${investment.factor.risk-based-cap-max-pct:0.05}")
+    private BigDecimal riskBasedCapMaxPct = new BigDecimal("0.05");
+
     /** 일일 최대 신규 매수 종목 수 (0이면 미적용) */
     @Value("${investment.factor.max-new-positions-per-day:10}")
     private int maxNewPositionsPerDay = 10;
@@ -198,6 +206,10 @@ public class PositionSizingService {
             out = applyHalfKelly(out, totalCapital, strategyType);
             // 변동성 역가중 적용
             out = applyInverseVolatilityWeighting(out, totalCapital, fromDt, market);
+            // 리스크 기반 포지션 사이징: 종목당 비중 상한 (설정 시)
+            if (riskBasedCapEnabled && riskBasedCapMaxPct != null && riskBasedCapMaxPct.compareTo(BigDecimal.ZERO) > 0) {
+                out = applyRiskBasedCap(out, totalCapital);
+            }
             // 일일 최대 신규 매수 종목 수 상한
             if (maxNewPositionsPerDay > 0 && out.size() > maxNewPositionsPerDay) {
                 out = new ArrayList<>(out.subList(0, maxNewPositionsPerDay));
@@ -543,6 +555,46 @@ public class PositionSizingService {
         }
         int count = sorted.size() - start;
         return count > 0 ? sum.divide(BigDecimal.valueOf(count), 4, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+    }
+
+    /**
+     * 리스크 기반 포지션 사이징: 종목당 비중 상한(cap) 적용.
+     * 설정된 risk-based-cap-max-pct(예: 5%)를 초과하는 권장 금액을 캡한다.
+     *
+     * @param recommendations Half-Kelly·변동성 역가중 적용 후 목록
+     * @param totalCapital    총 투자 가능 자산
+     * @return 캡 적용된 포지션 목록
+     */
+    private List<PositionRecommendationDto> applyRiskBasedCap(
+            List<PositionRecommendationDto> recommendations, BigDecimal totalCapital) {
+        if (recommendations.isEmpty() || totalCapital == null || totalCapital.compareTo(BigDecimal.ZERO) <= 0
+                || riskBasedCapMaxPct == null || riskBasedCapMaxPct.compareTo(BigDecimal.ZERO) <= 0) {
+            return recommendations;
+        }
+        BigDecimal capAmt = totalCapital.multiply(riskBasedCapMaxPct).setScale(0, RoundingMode.DOWN);
+        List<PositionRecommendationDto> capped = new ArrayList<>();
+        for (PositionRecommendationDto rec : recommendations) {
+            BigDecimal amt = rec.getRecommendedAmt().min(capAmt);
+            if (rec.getEntryPrice() == null || rec.getEntryPrice().compareTo(BigDecimal.ZERO) <= 0) {
+                capped.add(rec);
+                continue;
+            }
+            long qty = amt.divide(rec.getEntryPrice(), 0, RoundingMode.DOWN).longValue();
+            if (qty <= 0) {
+                continue;
+            }
+            capped.add(PositionRecommendationDto.builder()
+                    .basDt(rec.getBasDt())
+                    .symbol(rec.getSymbol())
+                    .market(rec.getMarket())
+                    .recommendedAmt(rec.getEntryPrice().multiply(BigDecimal.valueOf(qty)))
+                    .recommendedQty(qty)
+                    .method(rec.getMethod())
+                    .entryPrice(rec.getEntryPrice())
+                    .stopLoss(rec.getStopLoss())
+                    .build());
+        }
+        return capped;
     }
 
     private List<PositionRecommendationDto> applyInverseVolatilityWeighting(

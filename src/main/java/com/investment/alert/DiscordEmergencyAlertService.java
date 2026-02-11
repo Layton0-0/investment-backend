@@ -90,6 +90,18 @@ public class DiscordEmergencyAlertService implements EmergencyAlertService {
         sendToDiscord(content);
     }
 
+    @Override
+    public void sendRiskEventAlert(String level, String component, String message) {
+        if (discordWebhookUrl == null || discordWebhookUrl.isBlank()) {
+            log.debug("Discord Webhook URL 미설정, 리스크 이벤트 알림 스킵");
+            return;
+        }
+        String safeLevel = (level != null && !level.isBlank()) ? level : "WARNING";
+        String safeComponent = (component != null && !component.isBlank()) ? component : "RiskEvent";
+        persistAlert(safeLevel, safeComponent, message);
+        sendToDiscord(message);
+    }
+
     private void persistAlert(String level, String component, String message) {
         try {
             alertLogRepository.save(AlertLog.of(Instant.now(), level, component, message));

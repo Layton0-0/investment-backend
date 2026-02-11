@@ -10,9 +10,21 @@
 
 | 항목 | 내용 |
 |------|------|
-| **현재 전략 문서 버전** | v1.9 |
-| **최종 갱신일** | 2026-02-02 |
+| **현재 전략 문서 버전** | v1.10 |
+| **최종 갱신일** | 2026-02-11 |
 | **코드 참조** | `factor.service.*`, `factor.execution.ExitRuleService`, `application.yml` (investment.factor, investment.fees, investment.pipeline) |
+
+### 1.1 데이터·백테스트 원칙 (필수)
+
+- **Point-in-Time (PIT)**: 백테스트 및 시그널 계산 시 **해당 일자(bas_dt) 종료 시점까지 가용한 데이터만** 사용한다. 미래 정보 사용 금지.
+- **Look-ahead bias 방지**: 당일 종가로 진입/청산 판단 시, 당일 종가는 해당 일자 백테스트 루프에서 시뮬레이션 종료 후에만 사용한다.
+- **수정주가**: 일봉 저장·팩터 계산·백테스트 입력은 **수정주가만** 사용. 원주가는 차트 표시 등에만 사용 가능. [decisions.md](../decisions.md) 데이터 정합성 ADR 참조.
+  - **원천별 적용**: (1) 한투 API 일봉 차트: `FID_ORG_ADJ_PRC=0`(수정주가) 고정. (2) KR: KRX 일별매매정보 원천; 수정주가 반영 여부는 KRX 공식 문서 참조. (3) US: yfinance `auto_adjust=True`로 수정주가 수집. TB_DAILY_STOCK 저장값은 위 정책에 따른다.
+- **백테스트-실전 분리**: 백테스트에 사용한 데이터는 실거래 의사결정에 그대로 재사용하지 않는다(클린 데이터 vs 라이브 데이터 분리).
+- **Survivorship (생존자 편향)**: 유니버스는 당일 상장 종목만 포함하는 것을 기본으로 하며, 백테스트 시에는 과거 유니버스 스냅샷(TB_UNIVERSE·TB_DAILY_STOCK 구조에 맞게)을 사용한다. 상장폐지·델리스트 종목 포함 여부는 설계 선택으로 문서화한다.
+- **전략 거버넌스·중단 원칙**: 전략이 더 이상 말이 안 되면 **즉시 거래 중단**한다. 버전 스택에 결과·교훈을 채우고, 정기 백테스트 재실행·MDD/Sharpe 열화 시 검토 후 거래 중단 여부를 결정한다.
+- **전략 거버넌스 자동화(1차·2차)**: Batch Job `strategy-governance-check`(매월 1일 02:00 KST, 수동 트리거 가능). 최근 N개월(설정: `investment.governance.lookback-months`) 백테스트 실행 후 MDD·Sharpe 열화 기준(`mdd-threshold-pct`, `sharpe-min`) 초과 시 Discord 알림 발송. **1차**: 알림만. **2차 완료**: 검사 결과 TB_GOVERNANCE_CHECK_RESULT 저장; 열화 시 `investment.governance.alert-only=false`·`auto-halt-on-degradation=true`이면 (market, strategyType)별 halt 등록(TB_GOVERNANCE_HALT). 파이프라인 실행 시 halt 조합 스킵. Admin API: 최근 검사 결과·활성 halt 목록 조회, halt 해제(GET /api/v1/ops/governance/results, GET /api/v1/ops/governance/halts, PUT …/halts/{market}/{strategyType}/clear).
+- **PIT·Look-ahead 검증 완료**: BacktestService(일자별 date만 조회·getRecommendations(date)), FactorCalculationService(findByMarketAndBasDtBetween(..., basDt)), RoboBacktestService·RoboAllocationEngine(asOfDate 이전·당일만 조회)에서 bas_dt 시점까지 가용 데이터만 사용함을 코드 검증함.
 
 ---
 
@@ -44,6 +56,12 @@
 ### 2.5 변동성 역가중 (Inverse Volatility Weighting)
 
 - 비중 ∝ 1/σ (σ: 해당 종목 역사적 변동성). 변동성 큰 종목은 비중 축소.
+
+### 2.5.1 리스크 기반 포지션 사이징 (옵션, v1.10)
+
+- **역할**: Half-Kelly·변동성 역가중 적용 후, 종목당 비중 상한(cap)을 추가로 적용해 단일 종목 집중 리스크를 제한.
+- **설정**: `investment.factor.risk-based-cap-enabled` (기본 false), `investment.factor.risk-based-cap-max-pct` (기본 0.05 = 5%). 활성화 시 각 권장 금액이 `totalCapital × risk-based-cap-max-pct`를 초과하지 않도록 캡.
+- **구현**: `PositionSizingService.applyRiskBasedCap`. 파이프라인·트레이딩 포트폴리오에서 `getRecommendations` 호출 시 설정이 켜져 있으면 자동 적용.
 
 ### 2.6 AI/LSTM 활용 방침
 
@@ -204,6 +222,7 @@
 | Half-Kelly | f* = (bp−q)/b, 50% 적용 | kelly-p: 0.6, kelly-b: 2.0 | PositionSizingService.applyHalfKelly |
 | 미국 갭 스킵 | 전일 종가 대비 갭 N% 이상 시 진입 스킵 | us-gap-up-skip-pct: 5 | PositionSizingService.filterByUsGapUpSkip |
 | Discord 긴급 알림 | 미체결 N분 경과 시 Discord Webhook 발송 | alert-discord-webhook-url, alert-base-url, unfilled-check-minutes: 1 | EmergencyAlertService, UnfilledOrderCheckScheduler |
+| 리스크 이벤트 알림 | 일일 손실 한도 임박(한도 대비 N% 도달)·VaR 95% 초과 시 Discord 발송 | investment.risk.alert-mdd-threshold-pct: 0.8, alert-var-exceed-enabled: true | RiskEventAlertService, RiskEventAlertTasklet (Batch risk-event-alert, 장중 10분마다) |
 | 시드 배분 | 계좌별 단기/중기/장기 비율(합=1), 기본 20/40/40 | TB_TRADING_SETTINGS SHORT/MEDIUM/LONG_TERM_RATIO, maxInvestmentAmount, autoTradingEnabled | PipelineExecutionScheduler(자동투자 ON 계좌만) |
 | 단기 -3% Trailing | 현재가 ≤ trailingHigh×0.97 시 매도 | short-term-trailing-pct: 3 | ExitRuleService.evaluateShortTermTrailingStop |
 | 한국 단기/스윙 -5% 손절 | 현재가 ≤ entryPrice×0.95 시 매도 | short-term-kr-stop-loss-pct: 5 | ExitRuleService.evaluateKrFixedStopLoss |
@@ -239,6 +258,8 @@
 | v1.6 | 2026-02-02 | US | 로보 어드바이저 | 동적 자산배분 백테스트(모멘텀·MA 필터·변동성 역가중·월/분기 리밸런싱·Turnover). RoboAllocationEngine·RoboBacktestService·POST /api/v1/backtest/robo. 실행 전 백테스트(Go/No-Go)·RoboRebalanceScheduler·RoboRebalanceExecutor. TB_TRADING_SETTINGS ROBO_ADVISOR_ENABLED(V17) | 미검증 | 로보 리밸런싱은 목표 비중 로깅만, ETF 주문 연동 추후 |
 | v1.7 | 2026-02-02 | KR, US | 월스트리트 정렬 | 한국: 외국인 5일 연속+저평가(P/B 0.8~0.9)+RSI 과매도 진입; 청산 -5%·전저점 이탈·RSI≥70 익절. 미국: 듀얼 모멘텀(노트) 모드 — 절대 SPY 12M vs T-bill, 상대 섹터 ETF 6M 상위 2개. ExitRuleService KR 전용 규칙, RoboAllocationEngine 모드 분기, strategy-registry·12-auto-investment-strategy 문서 반영 | 미검증 | Hunter(KR)·Surfer(US) 전략 명시 |
 | v1.8 | 2026-02-02 | KR, US | 자동매매 직전 점검 | Time-Cut 단기(SHORT_TERM) 전용·중/장기 제외. 한국 Hunter 분기(Case A 모멘텀 ∪ Case B 역발상). 시초가 유동성 opening(300억). 켈리 초기 고정 비율(kelly-enabled·kelly-fixed-allocation-pct). 미국 갭 상승 스킵(us-gap-up-skip-pct). 미체결 N분 경과 시 Discord 긴급 알림(UnfilledOrderCheckScheduler·EmergencyAlertService). | 미검증 | Go/No-Go 체크리스트 반영 |
+| v1.10 | 2026-02-11 | KR, US | 자금 관리·분석 | 리스크 기반 포지션 사이징 옵션(risk-based-cap-enabled·risk-based-cap-max-pct). 상관관계 분석 API GET /api/v1/analysis/correlation(일봉 수익률 Pearson 상관계수 행렬). | 미검증 | 고급 분석·포트폴리오 2차(상관관계·리스크 기반 캡) |
+| v1.12 | 2026-02-11 | KR, US | 백테스트 | Walk-Forward(롤링 OOS) 백테스트. train/test 구간 분리 후 각 test 구간만 BacktestService로 실행·fold별 메트릭 집계. POST /api/v1/backtest/walk-forward. 오버피팅 완화·일반화 성능 추정용. | 미검증 | Walk-Forward 1차 구현 |
 
 ---
 
@@ -255,3 +276,5 @@
 | 1.6 | 2026-02-02 | 로보 어드바이저 동적 자산배분 백테스트·실행 전 검증·§3.2.1·§6·버전 스택 v1.6 추가 |
 | 1.7 | 2026-02-02 | 월스트리트 정렬: 한국 5일 연속·P/B·RSI 과매도·-5%·전저점·RSI70 청산; 미국 듀얼 모멘텀(절대 12M vs T-bill·상대 6M 섹터 2개)·§3·§6·버전 스택 v1.7 추가 |
 | 1.8 | 2026-02-02 | 자동매매 직전 점검: Time-Cut 단기 전용·Hunter 분기(Case A/B)·시초가 유동성 opening·켈리 초기 고정 비율·미국 갭 스킵·Discord 긴급 알림·§2·§3·§6·버전 스택 v1.8 추가 |
+| 1.10 | 2026-02-11 | §2.5.1 리스크 기반 포지션 사이징 옵션·버전 스택 v1.10 추가. 상관관계 분석 API(02-api-endpoints·01-api-overview·11-api-frontend-mapping) 반영. |
+| 1.11 | 2026-02-11 | §1.1 데이터·백테스트 원칙 추가 — PIT·Look-ahead 방지·수정주가·백테스트-실전 분리·Survivorship·전략 거버넌스·중단 원칙. |

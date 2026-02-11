@@ -134,6 +134,47 @@ public class KoreaInvestmentTokenClient {
     }
 
     /**
+     * WebSocket 구독용 approval_key 발급.
+     * POST /oauth2/Approval, Authorization: Bearer {accessToken}.
+     * 응답에 approval_key가 있으면 반환, 없으면 빈 문자열.
+     *
+     * @param accessToken 접근토큰 (Bearer로 전달)
+     * @param serverType  "1": 모의투자, "0": 실거래
+     * @return approval_key 또는 빈 문자열
+     */
+    public Mono<String> getApprovalKey(String accessToken, String serverType) {
+        if (accessToken == null || accessToken.isBlank()) {
+            return Mono.just("");
+        }
+        String baseUrl = "1".equals(serverType != null ? serverType : "1") ? BASE_URL_VIRTUAL : BASE_URL_REAL;
+        URI uri = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/oauth2/Approval")
+                .build()
+                .toUri();
+        return webClient.post()
+                .uri(uri)
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("Authorization", "Bearer " + accessToken)
+                .bodyValue(Map.of())
+                .exchangeToMono(response -> {
+                    if (response.statusCode().is2xxSuccessful()) {
+                        return response.bodyToMono(Map.class)
+                                .map(body -> {
+                                    Object key = body != null ? body.get("approval_key") : null;
+                                    return key != null ? key.toString() : "";
+                                })
+                                .defaultIfEmpty("");
+                    }
+                    return Mono.just("");
+                })
+                .timeout(Duration.ofSeconds(10))
+                .onErrorResume(e -> {
+                    log.warn("approval_key 발급 실패(WebSocket 구독 시 설정에서 직접 입력 가능): {}", e.getMessage());
+                    return Mono.just("");
+                });
+    }
+
+    /**
      * 에러 응답 본문에서 메시지 추출
      * JSON 형식인 경우 파싱하여 메시지 추출, 그렇지 않으면 원본 반환
      */

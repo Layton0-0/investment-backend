@@ -5,6 +5,8 @@ import com.investment.domain.repository.TradingSettingRepository;
 import com.investment.factor.execution.PipelineExecutor;
 import com.investment.factor.service.DailyLossLimitService;
 import com.investment.factor.service.RiskGateService;
+import com.investment.governance.GovernanceHaltService;
+import com.investment.strategy.domain.StrategyType;
 import com.investment.strategy.engine.MacroIndicatorProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,6 +38,8 @@ class PipelineExecutionSchedulerTest {
     private DailyLossLimitService dailyLossLimitService;
     @Mock
     private MacroIndicatorProvider macroIndicatorProvider;
+    @Mock
+    private GovernanceHaltService governanceHaltService;
 
     @InjectMocks
     private PipelineExecutionScheduler pipelineExecutionScheduler;
@@ -86,11 +90,37 @@ class PipelineExecutionSchedulerTest {
         when(riskGateService.evaluate(any())).thenReturn(RiskGateService.RiskGateResult.allow(BigDecimal.ONE));
         when(dailyLossLimitService.getCurrentPortfolioValue(anyString())).thenReturn(new BigDecimal("10000000"));
         when(dailyLossLimitService.isNewBuyAllowed(anyString())).thenReturn(true);
+        when(governanceHaltService.isHalted(anyString(), anyString())).thenReturn(false);
         ReflectionTestUtils.setField(pipelineExecutionScheduler, "autoExecute", false);
 
         pipelineExecutionScheduler.runNow(null);
 
         verify(pipelineExecutor, times(6)).run(eq(LocalDate.now().minusDays(1)), anyString(), eq("1234567890"),
-                any(), any(BigDecimal.class), eq(true));
+                any(StrategyType.class), any(BigDecimal.class), eq(true));
+    }
+
+    @Test
+    @DisplayName("governance halt인 (market, strategyType)은 해당 run 스킵")
+    void runScheduledPipeline_governanceHalt_skipsThatRun() {
+        TradingSetting setting = TradingSetting.builder()
+                .accountNo("1234567890")
+                .maxInvestmentAmount(new BigDecimal("10000000"))
+                .minInvestmentAmount(BigDecimal.valueOf(10000))
+                .defaultCurrency("KRW")
+                .autoTradingEnabled(true)
+                .build();
+        when(tradingSettingRepository.findAllByAutoTradingEnabledTrue()).thenReturn(List.of(setting));
+        when(macroIndicatorProvider.getCurrentIndicators()).thenReturn(Optional.empty());
+        when(riskGateService.evaluate(any())).thenReturn(RiskGateService.RiskGateResult.allow(BigDecimal.ONE));
+        when(dailyLossLimitService.getCurrentPortfolioValue(anyString())).thenReturn(new BigDecimal("10000000"));
+        when(dailyLossLimitService.isNewBuyAllowed(anyString())).thenReturn(true);
+        when(governanceHaltService.isHalted(anyString(), anyString())).thenReturn(false);
+        when(governanceHaltService.isHalted(eq("KR"), eq("SHORT_TERM"))).thenReturn(true);
+        ReflectionTestUtils.setField(pipelineExecutionScheduler, "autoExecute", false);
+
+        pipelineExecutionScheduler.runNow(null);
+
+        verify(pipelineExecutor, times(5)).run(any(), anyString(), anyString(), any(StrategyType.class), any(BigDecimal.class), anyBoolean());
+        verify(governanceHaltService, atLeast(1)).isHalted("KR", "SHORT_TERM");
     }
 }

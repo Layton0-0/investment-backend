@@ -1,8 +1,11 @@
 package com.investment.api.controller;
 
 import com.investment.backtest.BacktestService;
+import com.investment.backtest.WalkForwardBacktestService;
 import com.investment.backtest.dto.BacktestRunRequest;
 import com.investment.backtest.dto.BacktestRunResult;
+import com.investment.backtest.dto.WalkForwardBacktestRequest;
+import com.investment.backtest.dto.WalkForwardBacktestResult;
 import com.investment.backtest.robo.RoboBacktestService;
 import com.investment.backtest.robo.RoboPreExecutionResultStore;
 import com.investment.backtest.robo.dto.CollectUsDailyRequest;
@@ -38,6 +41,7 @@ import java.util.Set;
 public class BacktestController {
 
     private final BacktestService backtestService;
+    private final WalkForwardBacktestService walkForwardBacktestService;
     private final RoboBacktestService roboBacktestService;
     private final RoboPreExecutionResultStore preExecutionResultStore;
     private final UsMarketCollectionService usMarketCollectionService;
@@ -47,6 +51,14 @@ public class BacktestController {
     @PostMapping
     public ResponseEntity<BacktestRunResult> run(@RequestBody @Valid BacktestRunRequest request) {
         BacktestRunResult result = backtestService.run(request);
+        return ResponseEntity.ok(result);
+    }
+
+    @Operation(summary = "Walk-Forward(롤링 OOS) 백테스트", description = "train/test 구간 분리 후 각 test 구간만 백테스트 실행·fold별 메트릭 집계. 오버피팅 완화·일반화 성능 추정용.")
+    @PostMapping("/walk-forward")
+    public ResponseEntity<WalkForwardBacktestResult> runWalkForward(
+            @RequestBody @Valid WalkForwardBacktestRequest request) {
+        WalkForwardBacktestResult result = walkForwardBacktestService.run(request);
         return ResponseEntity.ok(result);
     }
 

@@ -11,8 +11,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * KRX 일별 시세 (TB_DAILY_STOCK)
- * 팩터 계산용 OHLCV·거래대금 저장.
+ * 일별 시세 (TB_DAILY_STOCK).
+ * 팩터 계산·백테스트 입력용 OHLCV·거래대금 저장.
+ * <p>저장되는 가격은 수정주가(adjusted price) 정책을 따른다. 원주가는 차트 표시 등에만 사용 가능.
+ * KR: KRX 일별매매정보 또는 한투 API(FID_ORG_ADJ_PRC=0), US: yfinance adjusted. ADR 19 참조.
  */
 @Entity
 @Table(name = "TB_DAILY_STOCK", indexes = {

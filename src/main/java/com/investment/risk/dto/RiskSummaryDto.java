@@ -36,4 +36,8 @@ public class RiskSummaryDto {
     private BigDecimal var95Pct;
     /** 1일 CVaR 95% (Expected Shortfall, %). 단순 파라메트릭 추정, 없으면 null */
     private BigDecimal cvar95Pct;
+    /** Sharpe 비율 (연율화, 일수익 시계열 있으면 산출). 데이터 없으면 null */
+    private BigDecimal sharpeRatio;
+    /** Sortino 비율 (연율화, 일수익 시계열 있으면 산출). 데이터 없으면 null */
+    private BigDecimal sortinoRatio;
 }

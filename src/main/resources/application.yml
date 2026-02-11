@@ -182,6 +182,12 @@ investment:
     position-cap-per-symbol-pct: ${FACTOR_POSITION_CAP_PER_SYMBOL_PCT:10}
     # 일일 최대 신규 매수 종목 수 (0이면 미적용). 파이프라인에서 권장 목록 자르기
     max-new-positions-per-day: ${FACTOR_MAX_NEW_POSITIONS_PER_DAY:10}
+    # 리스크 기반 포지션 사이징: 종목당 비중 상한 (기본 비활성). true 시 risk-based-cap-max-pct 적용
+    risk-based-cap-enabled: ${FACTOR_RISK_BASED_CAP_ENABLED:false}
+    risk-based-cap-max-pct: ${FACTOR_RISK_BASED_CAP_MAX_PCT:0.05}  # 종목당 최대 비중 (5%). 0.05 = 5%
+  # 분석 API (상관관계 등)
+  analysis:
+    correlation-lookback-days: ${INVESTMENT_ANALYSIS_CORRELATION_LOOKBACK_DAYS:60}
   # 리스크 게이트·일일 손실 한도 (전문 투자자 흐름 P0)
   risk:
     regime-gate-enabled: ${INVESTMENT_RISK_REGIME_GATE_ENABLED:false}
@@ -192,6 +198,20 @@ investment:
     var-daily-vol-pct: ${INVESTMENT_RISK_VAR_DAILY_VOL_PCT:1}
     # 거시경제 지표 API URL (선택). GET JSON 예: {"vix": 18.5}. 미설정 시 VIX 미제공.
     macro-indicator-url: ${INVESTMENT_RISK_MACRO_INDICATOR_URL:}
+    # 리스크 이벤트 알림: 일일 손실 한도 대비 이 비율(0~1) 도달 시 알림. 0.8 = 80% 도달 시
+    alert-mdd-threshold-pct: ${INVESTMENT_RISK_ALERT_MDD_THRESHOLD_PCT:0.8}
+    # 리스크 이벤트 알림: VaR 95% 초과 시 Discord 알림 사용 여부
+    alert-var-exceed-enabled: ${INVESTMENT_RISK_ALERT_VAR_EXCEED_ENABLED:true}
+  # 전략 거버넌스: 정기 백테스트·MDD/Sharpe 열화 시 Discord 알림 (매월 1일 02:00 KST, 수동 트리거 가능)
+  governance:
+    enabled: ${INVESTMENT_GOVERNANCE_ENABLED:true}
+    lookback-months: ${INVESTMENT_GOVERNANCE_LOOKBACK_MONTHS:12}
+    mdd-threshold-pct: ${INVESTMENT_GOVERNANCE_MDD_THRESHOLD_PCT:-15}
+    sharpe-min: ${INVESTMENT_GOVERNANCE_SHARPE_MIN:0}
+    default-capital: ${INVESTMENT_GOVERNANCE_DEFAULT_CAPITAL:100000000}
+    alert-only: ${INVESTMENT_GOVERNANCE_ALERT_ONLY:true}
+    # 2차: 열화 시 (market, strategyType)별 halt 등록. true이고 alert-only=false일 때만 halt 등록 (기본 false)
+    auto-halt-on-degradation: ${INVESTMENT_GOVERNANCE_AUTO_HALT_ON_DEGRADATION:false}
   # 4단계 파이프라인 실행. auto-execute=false 시 주문 생성 없이 dry-run만.
   pipeline:
     auto-execute: ${PIPELINE_AUTO_EXECUTE:false}
@@ -295,6 +315,33 @@ investment:
       app-secret: ${KOREA_INVESTMENT_APP_SECRET:}
       server-type: ${KOREA_INVESTMENT_SERVER_TYPE:1}  # 1: 모의투자, 0: 실거래
       use-token-cache: ${KOREA_INVESTMENT_USE_TOKEN_CACHE:true}
+      # 장 시작 30분 전 토큰 자동 갱신 (08:30 KST, 평일)
+      token:
+        pre-market-refresh-enabled: ${KOREA_INVESTMENT_PRE_MARKET_REFRESH_ENABLED:true}
+        pre-market-refresh-cron: ${KOREA_INVESTMENT_PRE_MARKET_REFRESH_CRON:0 30 8 * * MON-FRI}
+      # 주문 API Throttling·큐 (실전 초당 2~10회, 모의 2회 제한 준수)
+      throttle:
+        enabled: ${KOREA_INVESTMENT_THROTTLE_ENABLED:true}
+        orders-per-second: ${KOREA_INVESTMENT_ORDERS_PER_SECOND:5}
+        queue-max-size: ${KOREA_INVESTMENT_ORDER_QUEUE_MAX_SIZE:500}
+        reject-when-full: ${KOREA_INVESTMENT_ORDER_REJECT_WHEN_FULL:true}
+      # 순위분석·투자자 매매동향 (path/TR_ID: 09-korea-investment-api-guide.md §순위분석·투자자 API 참조)
+      # 실전 사용 시 volume-rank-tr-id: FHPST01710000, investor-daily-tr-id: FHPST03010100 로 오버라이드
+      rank-api:
+        volume-rank-path: ${KOREA_INVESTMENT_VOLUME_RANK_PATH:/uapi/domestic-stock/v1/quotations/volume-rank}
+        volume-rank-tr-id: ${KOREA_INVESTMENT_VOLUME_RANK_TR_ID:FHKST01710000}
+        investor-daily-path: ${KOREA_INVESTMENT_INVESTOR_DAILY_PATH:/uapi/domestic-stock/v1/quotations/inquire-investor-daily-by-market}
+        investor-daily-tr-id: ${KOREA_INVESTMENT_INVESTOR_DAILY_TR_ID:FHKST03010100}
+      # WebSocket 실시간 호가·체결통보 (enabled=true 시 실제 구현체 사용)
+      websocket:
+        enabled: ${KOREA_INVESTMENT_WEBSOCKET_ENABLED:false}
+        path: ${KOREA_INVESTMENT_WEBSOCKET_PATH:/tryitout}
+        quote-tr-id: ${KOREA_INVESTMENT_WEBSOCKET_QUOTE_TR_ID:H0GASP0}
+        ccnl-notice-tr-id: ${KOREA_INVESTMENT_WEBSOCKET_CCNL_NOTICE_TR_ID:H0GAMT0}
+        connect-wait-ms: ${KOREA_INVESTMENT_WEBSOCKET_CONNECT_WAIT_MS:1000}
+        subscription-interval-ms: ${KOREA_INVESTMENT_WEBSOCKET_SUBSCRIPTION_INTERVAL_MS:200}
+        approval-key: ${KOREA_INVESTMENT_WEBSOCKET_APPROVAL_KEY:}
+        approval-key-fetch-enabled: ${KOREA_INVESTMENT_WEBSOCKET_APPROVAL_KEY_FETCH_ENABLED:false}
   trading:
     max-investment-amount: ${MAX_INVESTMENT_AMOUNT:1000000}
     min-investment-amount: ${MIN_INVESTMENT_AMOUNT:10000}

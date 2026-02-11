@@ -43,6 +43,12 @@ public class OrderResponseDto {
     private LocalDateTime orderTime;
     
     private String message;
+
+    /** 거래 사유: 진입 시그널 유형 (파이프라인 매수 시). 예: VOLATILITY_BREAKOUT, DUAL_MOMENTUM */
+    private String signalType;
+
+    /** 거래 사유: 청산 규칙 유형 (파이프라인 매도 시). 예: ATR_TRAILING_STOP, TIME_CUT, STOP_LOSS */
+    private String exitRuleType;
     
     public enum OrderStatus {
         PENDING,    // 대기중

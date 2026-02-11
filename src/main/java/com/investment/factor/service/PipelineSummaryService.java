@@ -147,6 +147,8 @@ public class PipelineSummaryService {
                 .quantity(p.getQuantity())
                 .entryPrice(p.getEntryPrice())
                 .entryDt(p.getEntryDt())
+                .signalType(p.getSignalType())
+                .exitRuleType(p.getExitRuleType())
                 .build();
     }
 }

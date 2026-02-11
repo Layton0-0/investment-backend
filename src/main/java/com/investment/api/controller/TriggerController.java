@@ -178,6 +178,14 @@ public class TriggerController {
         return result;
     }
 
+    @Operation(summary = "리스크 이벤트 알림", description = "일일 손실 한도 임박·VaR 95% 초과 검사 후 Discord 알림 발송")
+    @PostMapping("/risk-event-alert")
+    public ResponseEntity<Map<String, Object>> triggerRiskEventAlert(Principal principal) {
+        ResponseEntity<Map<String, Object>> result = runTrigger("/risk-event-alert", "리스크 이벤트 알림 검사 완료", "리스크 이벤트 알림 실패", new JobParametersBuilder());
+        recordManualTrigger(principal, "/risk-event-alert", result);
+        return result;
+    }
+
     @Operation(summary = "로보 리밸런싱", description = "로보 어드바이저 리밸런싱. dryRun=true면 백테스트만 실행·저장")
     @PostMapping("/robo-rebalance")
     public ResponseEntity<Map<String, Object>> triggerRoboRebalance(
@@ -216,6 +224,14 @@ public class TriggerController {
     public ResponseEntity<Map<String, Object>> triggerMediumTermRebalance(Principal principal) {
         ResponseEntity<Map<String, Object>> result = runTrigger("/medium-term-rebalance", "중기 리밸런스 완료", "중기 리밸런스 실패", new JobParametersBuilder());
         recordManualTrigger(principal, "/medium-term-rebalance", result);
+        return result;
+    }
+
+    @Operation(summary = "전략 거버넌스 검사", description = "최근 N개월 백테스트 실행 후 MDD/Sharpe 열화 시 Discord 알림 발송")
+    @PostMapping("/strategy-governance-check")
+    public ResponseEntity<Map<String, Object>> triggerStrategyGovernanceCheck(Principal principal) {
+        ResponseEntity<Map<String, Object>> result = runTrigger("/strategy-governance-check", "전략 거버넌스 검사 완료", "전략 거버넌스 검사 실패", new JobParametersBuilder());
+        recordManualTrigger(principal, "/strategy-governance-check", result);
         return result;
     }
 }

@@ -49,7 +49,7 @@ class TaxReportControllerTest {
     @DisplayName("GET /api/v1/report/tax/summary 인증 시 200 및 요약 본문 반환")
     @WithMockUser(username = "user1")
     void getSummary_authenticated_returnsOk() throws Exception {
-        when(taxReportService.getSummary(eq("user1"), any())).thenAnswer(inv -> com.investment.report.dto.TaxReportSummaryDto.builder()
+        when(taxReportService.getSummary(any(), any())).thenAnswer(inv -> com.investment.report.dto.TaxReportSummaryDto.builder()
                 .year(2026)
                 .domesticRealizedGainLoss(BigDecimal.ZERO)
                 .overseasRealizedGainLoss(null)

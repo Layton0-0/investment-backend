@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -95,5 +96,60 @@ class KoreaInvestmentTokenServiceTest {
         verify(tokenClient, times(1)).issueAccessToken("appKey", "appSecret", SERVER_TYPE);
         verify(tokenRepository, times(1)).save(argThat(token ->
                 USER_ID.equals(token.getUserId()) && SERVER_TYPE.equals(token.getServerType())));
+    }
+
+    @Test
+    @DisplayName("forceRefreshAllTokensForMarketOpen - 한국투자증권 사용자만 토큰 강제 갱신")
+    void forceRefreshAllTokensForMarketOpen_refreshesOnlyKoreaInvestmentUsers() {
+        UserApiKey koreaUser = UserApiKey.builder()
+                .userId(USER_ID)
+                .brokerType(BrokerType.KOREA_INVESTMENT)
+                .serverType(SERVER_TYPE)
+                .appKeyEncrypted("enc-appKey")
+                .appSecretEncrypted("enc-appSecret")
+                .build();
+        when(userApiKeyRepository.findAll()).thenReturn(List.of(koreaUser));
+        when(tokenRepository.findByUserIdAndServerType(USER_ID, SERVER_TYPE)).thenReturn(Optional.empty());
+        when(encryptionUtil.decrypt("enc-appKey")).thenReturn("appKey");
+        when(encryptionUtil.decrypt("enc-appSecret")).thenReturn("appSecret");
+        when(encryptionUtil.encrypt("new-token")).thenReturn("enc-new-token");
+        when(tokenClient.issueAccessToken(eq("appKey"), eq("appSecret"), eq(SERVER_TYPE)))
+                .thenReturn(Mono.just("new-token"));
+
+        tokenService.forceRefreshAllTokensForMarketOpen();
+
+        verify(tokenClient, times(1)).issueAccessToken(any(), any(), any());
+        verify(tokenRepository, times(1)).save(any(KoreaInvestmentToken.class));
+    }
+
+    @Test
+    @DisplayName("forceRefreshTokenForUser - 기존 토큰 있어도 항상 API 호출 후 저장")
+    void forceRefreshTokenForUser_alwaysCallsApiAndSaves() {
+        UserApiKey userApiKey = UserApiKey.builder()
+                .userId(USER_ID)
+                .brokerType(BrokerType.KOREA_INVESTMENT)
+                .serverType(SERVER_TYPE)
+                .appKeyEncrypted("enc-appKey")
+                .appSecretEncrypted("enc-appSecret")
+                .build();
+        KoreaInvestmentToken existingToken = KoreaInvestmentToken.builder()
+                .userId(USER_ID)
+                .serverType(SERVER_TYPE)
+                .accessTokenEncrypted("old-enc")
+                .expiresAt(System.currentTimeMillis() + 3600_000)
+                .issuedAt(LocalDateTime.now())
+                .build();
+
+        when(tokenRepository.findByUserIdAndServerType(USER_ID, SERVER_TYPE)).thenReturn(Optional.of(existingToken));
+        when(encryptionUtil.decrypt("enc-appKey")).thenReturn("appKey");
+        when(encryptionUtil.decrypt("enc-appSecret")).thenReturn("appSecret");
+        when(encryptionUtil.encrypt("new-token")).thenReturn("enc-new-token");
+        when(tokenClient.issueAccessToken(eq("appKey"), eq("appSecret"), eq(SERVER_TYPE)))
+                .thenReturn(Mono.just("new-token"));
+
+        tokenService.forceRefreshTokenForUser(userApiKey);
+
+        verify(tokenClient, times(1)).issueAccessToken("appKey", "appSecret", SERVER_TYPE);
+        verify(tokenRepository, times(1)).save(existingToken);
     }
 }

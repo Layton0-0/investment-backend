@@ -1,7 +1,11 @@
 package com.investment.tradingportfolio.controller;
 
+import com.investment.tradingportfolio.dto.RebalanceSuggestionsDto;
 import com.investment.tradingportfolio.dto.TradingPortfolioDto;
+import com.investment.tradingportfolio.service.RebalanceSuggestionsService;
 import com.investment.tradingportfolio.service.TradingPortfolioService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.BatchStatus;
@@ -12,8 +16,10 @@ import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.context.ApplicationContext;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -29,6 +35,7 @@ public class TradingPortfolioController {
     private static final String TRADING_PORTFOLIO_JOB_ID = "trading-portfolio-generator";
 
     private final TradingPortfolioService tradingPortfolioService;
+    private final RebalanceSuggestionsService rebalanceSuggestionsService;
     private final JobLauncher jobLauncher;
     private final ApplicationContext applicationContext;
 
@@ -87,6 +94,18 @@ public class TradingPortfolioController {
         }
         TradingPortfolioDto portfolio = tradingPortfolioService.getPortfolioByDate(targetDate);
         return ResponseEntity.ok(portfolio);
+    }
+
+    @Operation(summary = "리밸런싱 제안", description = "로보 어드바이저 목표 비중 대비 매수/매도 제안 목록 (뷰 전용). US 시장만 목표 비중 지원.")
+    @GetMapping("/rebalance-suggestions")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<RebalanceSuggestionsDto> getRebalanceSuggestions(
+            Principal principal,
+            @Parameter(description = "계좌번호") @RequestParam String accountNo,
+            @Parameter(description = "시장 (KR/US)") @RequestParam(defaultValue = "US") String market) {
+        String userId = principal != null ? principal.getName() : null;
+        RebalanceSuggestionsDto dto = rebalanceSuggestionsService.getSuggestions(userId, accountNo, market);
+        return ResponseEntity.ok(dto);
     }
 }
 

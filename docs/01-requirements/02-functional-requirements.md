@@ -211,7 +211,7 @@
 - **주요 배치**:
   - 전략 실행 스케줄러 (StrategyScheduler)
   - 트레이딩 포트폴리오 생성 스케줄러 (TradingPortfolioScheduler)
-- **API**: `GET /api/v1/batch/jobs`
+- **API**: `GET /batch/api/jobs` (실제 구현 경로. API 개요·엔드포인트 문서 참조.)
 
 ## 문서 변경 이력
 

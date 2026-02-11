@@ -19,6 +19,8 @@ import java.util.*;
 
 /**
  * 로보 어드바이저 백테스트 엔진 — 과거 일봉으로 동적 자산배분 재생, 메트릭·수익 곡선·리밸런싱 이력 산출.
+ * <p>PIT·Look-ahead 방지(ADR 20): 일자별 current에서 getClose(symbol, current)는 current 일자만 조회.
+ * RoboAllocationEngine은 asOfDate 기준 findByBasDtBetween(..., from, asOfDate)로 asOfDate 이전·당일만 사용.
  */
 @Slf4j
 @Service

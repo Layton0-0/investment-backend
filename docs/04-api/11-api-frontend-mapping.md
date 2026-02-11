@@ -47,6 +47,8 @@
 | GET | `/api/v1/user/accounts/main` | 메인 계좌 조회 |
 | GET | `/api/v1/user/accounts/{accountId}` | 계좌 상세 |
 | PUT | `/api/v1/user/accounts/{accountId}/main` | 메인 계좌 설정 |
+| **대시보드 (DashboardController)** | | |
+| GET | `/api/v1/dashboard/performance-summary` | 성과 요약 (총 평가액·MDD·Sharpe·VaR 등) |
 | **파이프라인 (PipelineController)** | | |
 | GET | `/api/v1/pipeline/summary` | 파이프라인 요약 조회 |
 | **트리거 (TriggerController)** | | |
@@ -97,6 +99,10 @@
 | GET | `/api/v1/ops/model/status` | 모델/예측 상태 조회 (ADMIN 전용) |
 | **Ops 시스템 헬스 (OpsHealthController)** | | |
 | GET | `/api/v1/ops/health` | 시스템 헬스 요약 (ADMIN 전용) |
+| **Ops 전략 거버넌스 (OpsGovernanceController)** | | |
+| GET | `/api/v1/ops/governance/results` | 전략 거버넌스 검사 결과 이력 (ADMIN 전용, limit) |
+| GET | `/api/v1/ops/governance/halts` | 전략 거버넌스 활성 halt 목록 (ADMIN 전용) |
+| PUT | `/api/v1/ops/governance/halts/{market}/{strategyType}/clear` | halt 해제 (ADMIN 전용, body 선택 clearedBy) |
 | **연말 세금·리포트 (TaxReportController)** | | |
 | GET | `/api/v1/report/tax/summary` | 연말 세금 요약 (year 쿼리, 실데이터 집계) |
 | GET | `/api/v1/report/tax/summary/export` | 연말 세금 요약 내보내기 (year, format=csv\|pdf) |
@@ -113,42 +119,55 @@
 | POST /api/v1/auth/login | authApi.login | LoginPage, AuthContext | 응답에 role 포함, 로그인 후 역할은 서버 반환값 사용 |
 | POST /api/v1/auth/verify-account | authApi.verifyAccount | RegisterPage | |
 | GET /api/v1/auth/mypage | authApi.getMyPage | MyPage | |
-| PUT /api/v1/auth/mypage | (없음) | - | **미연동** |
+| PUT /api/v1/auth/mypage | authApi.updateMyPage | MyPage | |
 | POST /api/v1/auth/logout | authApi.logout | AuthContext | |
 | GET /api/v1/accounts/{accountNo}/assets | accountApi.getAccountAssets | useDashboardData, Dashboard | |
 | GET /api/v1/accounts/{accountNo}/positions | accountApi.getPositions | useDashboardData, Dashboard | |
-| GET balance, buyable-amount, sellable-quantity, order-history, profit-loss | (없음) | - | **미연동** (필요 시 accountApi 확장) |
-| GET /api/v1/orders | ordersApi.getOrders | useDashboardData, Market(Orders), Dashboard | |
+| GET balance, buyable-amount, sellable-quantity, order-history, profit-loss | accountApi.getBalance, getBuyableAmount, getSellableQuantity, getOrderHistory, getProfitLoss | (필요 시 상세 화면) | 연동 완료 |
+| GET /api/v1/orders | ordersApi.getOrders | useDashboardData, Market(Orders), Dashboard. 응답 각 항목에 signalType·exitRuleType(거래 사유) 포함, 주문 목록·대시보드 주문 테이블에 시그널 유형·청산 규칙 컬럼 표시 | |
 | DELETE /api/v1/orders/{orderId} | ordersApi.cancelOrder | Market(Orders) | |
-| POST /api/v1/orders | (없음) | - | **미연동** (주문 실행) |
-| GET /api/v1/orders/{orderId} | (없음) | - | **미연동** |
+| POST /api/v1/orders | ordersApi.placeOrder | Market(Orders) | |
+| GET /api/v1/orders/{orderId} | ordersApi.getOrder | 주문 상세·재시도 시 (404 시 null). 응답에 signalType·exitRuleType(거래 사유) 포함 | 연동 완료 |
 | GET /api/v1/strategies/{accountNo} | strategyApi.getStrategies | Investment(Strategy) | |
+| GET /api/v1/strategies/{accountNo}/{strategyType} | strategyApi.getStrategy | Investment(Strategy) 상세 모달 | 연동 완료 |
+| POST /api/v1/strategies | strategyApi.createOrUpdateStrategy | Investment(Strategy) 전략 추가/편집 모달 | 연동 완료 |
+| PUT /api/v1/strategies/{accountNo}/{strategyType}/status | strategyApi.updateStrategyStatus | Investment(Strategy) 상세 모달 상태 변경 | 연동 완료 |
 | POST activate | strategyApi.activateStrategy | Investment(Strategy) | |
 | POST stop | strategyApi.stopStrategy | Investment(Strategy) | |
-| GET 상세, POST 생성/업데이트, PUT status | (없음) | - | **미연동** |
 | GET /api/v1/settings/accounts | settingsApi.getSettingsAccounts | useSettingsAccounts, Settings | |
 | PUT /api/v1/settings/accounts | settingsApi.updateSettingsAccounts | Settings | |
 | GET /api/v1/settings/{accountNo} | settingsApi.getSettingByAccountNo | useDashboardData, Dashboard | |
-| PUT /api/v1/settings/{accountNo} | (없음) | - | **미연동** (거래 설정 저장) |
+| PUT /api/v1/settings/{accountNo} | settingsApi.updateSetting | Settings(자동투자 설정 탭) | |
 | GET /api/v1/user/accounts/main | userAccountsApi.getMainAccount | useDashboardData, Market, Investment | |
-| GET 목록, GET {id}, PUT main | (없음) | - | **미연동** |
-| GET /api/v1/pipeline/summary | pipelineApi.getPipelineSummary | useDashboardData, Investment(AutoInvest) | |
+| GET /api/v1/user/accounts | userAccountsApi.getAccounts | System(Settings) 등록된 계좌 목록 | 연동 완료 |
+| GET /api/v1/user/accounts/{accountId} | userAccountsApi.getAccount | (필요 시 상세 조회) | 연동 완료 |
+| PUT /api/v1/user/accounts/{accountId}/main | userAccountsApi.setMainAccount | System(Settings) 메인으로 설정 버튼 | 연동 완료 |
+| GET /api/v1/dashboard/performance-summary | dashboardApi.getPerformanceSummary | useDashboardData, Dashboard 성과 요약 카드 | 연동 완료 |
+| GET /api/v1/pipeline/summary | pipelineApi.getPipelineSummary | useDashboardData, Investment(AutoInvest). 응답 openPositionList에 signalType·exitRuleType 포함, 자동투자 현황 보유 포지션 테이블에 시그널 유형·청산 규칙 컬럼 표시 | |
 | POST /api/v1/trigger/* | triggerApi.trigger(path) | Admin(Batch) | path: dart-collect, sec-collect, factor-calculation, auto-buy, pipeline-execution 등. 버튼 라벨 "지금 실행" |
 | GET /api/v1/news | newsApi.getNews | Market(News) | |
-| POST /api/v1/news/collect | (없음) | - | **미연동** |
+| POST /api/v1/news/collect | newsApi.collectNews | Market(News) | |
 | GET /api/v1/signals | signalsApi.getSignals | Investment(AutoInvest) | |
 | GET /api/v1/trading-portfolios/today | tradingPortfolioApi.getTodayPortfolio | Market(Portfolio) | |
-| GET date/{date}, latest, POST generate | (없음) | - | **미연동** |
+| GET date/{date}, latest, POST generate | tradingPortfolioApi.getPortfolioByDate, getLatestPortfolios, generatePortfolio | Market(Portfolio) | |
 | POST /api/v1/backtest | backtestApi.runBacktest | System(Backtest) | |
-| POST robo, GET last-pre-execution, POST collect-us-daily | (없음) | - | **미연동** |
-| POST /api/v1/analysis | (없음) | - | **미연동** |
-| GET/POST /api/v1/market-data/* | (없음) | - | **미연동** |
+| POST robo, GET last-pre-execution, POST collect-us-daily | backtestApi.runRoboBacktest, getLastPreExecution, collectUsDaily | System(Backtest) | |
+| POST /api/v1/analysis | analysisApi.analyze | Market(Portfolio) 종목 분석 모달 | 연동 완료 |
+| GET /api/v1/analysis/sector | analysisApi.getSectorAnalysis | Market(Portfolio) 섹터 분석 카드 | 연동 완료 |
+| GET /api/v1/analysis/correlation | analysisApi.getCorrelationAnalysis | Market(Portfolio) 상관관계 카드 | 연동 완료 |
+| GET /api/v1/risk/portfolio-metrics | riskApi.getPortfolioRiskMetrics | Market(Portfolio) 리스크 메트릭 카드 | 연동 완료 |
+| GET /api/v1/trading-portfolios/rebalance-suggestions | tradingPortfolioApi.getRebalanceSuggestions | Market(Portfolio) 리밸런싱 제안 카드 | 연동 완료 |
+| GET /api/v1/market-data/current-price/{symbol} | marketDataApi.getCurrentPrice | Market(Portfolio) 종목 분석 모달 현재가 | 연동 완료 |
+| POST /api/v1/market-data/current-prices | marketDataApi.getCurrentPrices | 다중 종목 현재가 위젯(선택) | 연동 완료 |
 | GET /batch/api/jobs | batchApi.getBatchJobs | Admin(Batch) | **SPA 연동** (문서상 /api/v1/batch/jobs 아님) |
 | GET /api/v1/ops/data-pipeline/status | opsApi.getDataPipelineStatus | Admin(Ops 데이터 파이프라인 /ops/data) | 연동 완료 |
 | GET /api/v1/ops/alerts | opsApi.getAlerts | Admin(Ops 알림센터 /ops/alerts) | 연동 완료 |
 | GET /api/v1/ops/audit | opsApi.getAuditLogs | Admin(Ops 감사 로그 /ops/audit) | 연동 완료 |
 | GET /api/v1/ops/model/status | opsApi.getModelStatus | Admin(Ops 모델/예측 /ops/model) | 연동 완료 |
 | GET /api/v1/ops/health | opsApi.getHealth | Admin(Ops 시스템 헬스 /ops/health) | 연동 완료 |
+| GET /api/v1/ops/governance/results | opsApi.getGovernanceResults | Admin(Ops 전략 거버넌스 /ops/governance) | 백엔드 준비 완료, 프론트 화면 선택 |
+| GET /api/v1/ops/governance/halts | opsApi.getGovernanceHalts | Admin(Ops 전략 거버넌스 /ops/governance) | 동일 |
+| PUT /api/v1/ops/governance/halts/{market}/{strategyType}/clear | opsApi.clearGovernanceHalt | Admin(Ops 전략 거버넌스 /ops/governance) | 동일 |
 | GET /api/v1/report/tax/summary | reportApi.getTaxSummary | TaxReportPage | 연말 세금·리포트 화면 |
 | GET /api/v1/report/tax/summary/export | reportApi.downloadTaxSummaryExport (window.open) | TaxReportPage | CSV/PDF 다운로드 |
 
@@ -158,20 +177,20 @@
 
 | 라우트 | 컴포넌트/페이지 | 사용 API |
 |--------|-----------------|----------|
-| `/` | Dashboard | userAccountsApi.getMainAccount, accountApi.getAccountAssets, accountApi.getPositions, ordersApi.getOrders, pipelineApi.getPipelineSummary, settingsApi.getSettingByAccountNo |
+| `/` | Dashboard | userAccountsApi.getMainAccount, accountApi.getAccountAssets, accountApi.getPositions, ordersApi.getOrders, pipelineApi.getPipelineSummary, settingsApi.getSettingByAccountNo, dashboardApi.getPerformanceSummary |
 | `/login` | LoginPage | authApi.login |
 | `/signup` | RegisterPage | authApi.signup, authApi.verifyAccount |
-| `/mypage` | MyPage | authApi.getMyPage |
+| `/mypage` | MyPage | authApi.getMyPage, authApi.updateMyPage |
 | `/auto-invest` | AutoInvest | userAccountsApi.getMainAccount, pipelineApi.getPipelineSummary, signalsApi.getSignals, strategyApi.getStrategies (등) |
 | `/strategies/kr`, `/strategies/us` | Strategy | userAccountsApi.getMainAccount, strategyApi.getStrategies, strategyApi.activateStrategy, strategyApi.stopStrategy |
-| `/news` | News | newsApi.getNews |
-| `/portfolio` | Portfolio | tradingPortfolioApi.getTodayPortfolio |
-| `/orders` | Orders | userAccountsApi.getMainAccount, ordersApi.getOrders, ordersApi.cancelOrder |
+| `/news` | News | newsApi.getNews, newsApi.collectNews |
+| `/portfolio` | Portfolio | tradingPortfolioApi.getTodayPortfolio, getPortfolioByDate, getLatestPortfolios, generatePortfolio, getRebalanceSuggestions, analysisApi.analyze, getSectorAnalysis, marketDataApi.getCurrentPrice, riskApi.getPortfolioRiskMetrics (종목 분석·섹터·리스크·리밸런싱 제안 카드) |
+| `/orders` | Orders | userAccountsApi.getMainAccount, ordersApi.getOrders, ordersApi.placeOrder, ordersApi.cancelOrder |
 | `/batch` | Batch | triggerApi.trigger, batchApi.getBatchJobs |
-| `/backtest` | Backtest | backtestApi.runBacktest |
-| `/settings` | Settings | useSettingsAccounts(getSettingsAccounts, updateSettingsAccounts) |
+| `/backtest` | Backtest | backtestApi.runBacktest, runRoboBacktest, getLastPreExecution, collectUsDaily |
+| `/settings` | Settings | useSettingsAccountsAll(getSettingsAccounts, updateSettingsAccounts), settingsApi.getSettingByAccountNo, updateSetting, userAccountsApi.getAccounts, setMainAccount (등록된 계좌·메인 설정) |
 | `/report/tax` | TaxReportPage | reportApi.getTaxSummary |
-| `/risk`, `/ops/*` | OpsPage (OpsDashboard) | riskApi.getRiskSummary, getRiskLimits, getRiskHistory (/risk); Batch에서만 트리거; /ops/data에서 opsApi.getDataPipelineStatus 연동 완료 |
+| `/risk`, `/ops/*` | OpsPage (OpsDashboard) | riskApi.getRiskSummary, getRiskLimits, getRiskHistory (/risk); Batch에서만 트리거; /ops/data에서 opsApi.getDataPipelineStatus; /ops/governance(선택)에서 opsApi.getGovernanceResults, getGovernanceHalts, clearGovernanceHalt 연동 |
 
 ---
 
@@ -181,16 +200,16 @@
 
 | 메뉴(라우트) | 필요한 백엔드 API | 이미 연동 | 미연동/미구현 |
 |-------------|-------------------|----------|---------------|
-| 대시보드 `/dashboard` | 메인 계좌(모의·실), 자산·포지션·주문·파이프라인 요약·거래 설정 | getMainAccount, getAccountAssets, getPositions, getOrders, getPipelineSummary, getSettingByAccountNo | - |
+| 대시보드 `/dashboard` | 메인 계좌(모의·실), 자산·포지션·주문·파이프라인 요약·거래 설정·성과 요약 | getMainAccount, getAccountAssets, getPositions, getOrders, getPipelineSummary, getSettingByAccountNo, getPerformanceSummary | - |
 | 자동투자 현황 `/auto-invest` | 메인 계좌, 파이프라인 요약, 시그널, 전략 목록 | 동일 | - |
-| 국내/미국 전략 `/strategies/kr`, `/strategies/us` | 메인 계좌, 전략 목록·활성화·중지 | 동일 | 전략 상세·생성/업데이트·status (§4.2 P2 이하) |
-| 뉴스·이벤트 `/news` | 뉴스 목록, 수집 실행 | getNews | POST news/collect (§4.2) |
-| 포트폴리오 `/portfolio` | 오늘·날짜별·최신·수동 생성 | getTodayPortfolio | date/latest/generate (§4.2) |
-| 주문·체결 `/orders` | 메인 계좌, 주문 목록·취소 | 동일 | POST 주문 실행 (§4.2) |
+| 국내/미국 전략 `/strategies/kr`, `/strategies/us` | 메인 계좌, 전략 목록·상세·활성화·중지·생성/편집·status | getStrategies, getStrategy, createOrUpdateStrategy, updateStrategyStatus, activateStrategy, stopStrategy | - |
+| 뉴스·이벤트 `/news` | 뉴스 목록, 수집 실행 | getNews, collectNews | - |
+| 포트폴리오 `/portfolio` | 오늘·날짜별·최신·수동 생성·섹터·리스크·리밸런싱·상관관계 | getTodayPortfolio, getPortfolioByDate, getLatestPortfolios, generatePortfolio, getSectorAnalysis, getPortfolioRiskMetrics, getRebalanceSuggestions, getCorrelationAnalysis | - |
+| 주문·체결 `/orders` | 메인 계좌, 주문 목록·취소·실행 | getOrders, cancelOrder, placeOrder | - |
 | 스케줄 현황 `/batch` | 배치 작업 목록, 트리거 | getBatchJobs, triggerApi | - |
-| 백테스트 `/backtest` | 백테스트 실행, 로보 3종 | runBacktest | 로보 last-pre-execution, collect-us-daily (§4.2) |
-| 설정 `/settings` | 계좌 설정 조회·저장, 거래 설정 조회·저장 | getSettingsAccounts, updateSettingsAccounts, getSettingByAccountNo | PUT settings/{accountNo} (§4.2) |
-| 마이페이지 `/mypage` | 마이페이지 조회·수정 | getMyPage | PUT mypage (§4.2) |
+| 백테스트 `/backtest` | 백테스트 실행, 로보 3종 | runBacktest, runRoboBacktest, getLastPreExecution, collectUsDaily | - |
+| 설정 `/settings` | 계좌 설정 조회·저장, 거래 설정 조회·저장, 등록된 계좌 목록·메인 설정 | getSettingsAccounts, updateSettingsAccounts, getSettingByAccountNo, updateSetting, getAccounts, setMainAccount | - |
+| 마이페이지 `/mypage` | 마이페이지 조회·수정 | getMyPage, updateMyPage | - |
 | **Admin 전용** | | | |
 | 데이터 파이프라인 `/ops/data` | 파이프라인 원천별 수집 상태·최근 기준일·오류 요약 | getDataPipelineStatus (opsApi) | - |
 | 알림센터 `/ops/alerts` | 알림 목록·설정 | getAlerts (opsApi) | - |
@@ -199,6 +218,7 @@
 | 연말 세금·리포트 `/report/tax` | 연도별 세금 요약(실현손익·배당·면책)·CSV/PDF 내보내기 | getTaxSummary, downloadTaxSummaryExport (reportApi) | 연동 완료 |
 | 모델/예측 `/ops/model` | 예측 모델 상태·결과 | getModelStatus (opsApi) | 연동 완료 |
 | 시스템 헬스 `/ops/health` | 서비스·DB·캐시 헬스 | getHealth (opsApi) | 연동 완료 |
+| 전략 거버넌스 `/ops/governance` | 검사 결과·활성 halt·halt 해제 | getGovernanceResults, getGovernanceHalts, clearGovernanceHalt (opsApi) | 백엔드 연동 가능, 프론트 화면은 선택 |
 
 **순차 개발**: §4.2 우선순위(P0~P3)와 위 표의 미연동 항목을 메뉴 단위로 묶어, 02-development-status.md "진행예정"에 순차 개발 계획으로 반영한다.
 
@@ -222,9 +242,9 @@
 | **P1** | POST `/api/v1/orders` | Orders 화면 "수동 주문" 폼 제출 시 호출 | 연동 완료 |
 | **P2** | POST `/api/v1/news/collect` | 뉴스 화면 "수집 실행" 버튼 | 연동 완료 |
 | **P2** | 트레이딩 포트폴리오 date/latest/generate | 포트폴리오 화면 날짜별 조회·최신 목록·수동 생성 버튼 | 연동 완료 |
-| **P3** | 분석·시장 데이터 API | 전용 화면 또는 위젯 추가 시 연동 | 미연동 |
+| **P3** | 분석·시장 데이터 API | 전용 화면 또는 위젯 추가 시 연동 | 연동 완료 (종목 분석 모달·현재가) |
 
-보완 완료 시 위 표의 상태를 "연동 완료"로 갱신하고 §2 프론트엔드 매핑 테이블에 해당 행을 추가한다.
+위 P0~P3 항목은 모두 연동 완료되었으며, §2 프론트엔드 매핑 테이블에 해당 행이 반영되어 있다.
 
 ---
 
@@ -234,3 +254,5 @@
 |------|------|----------|
 | 1.0 | 2026-02-05 | 최초 작성: API 목록, 프론트 매핑 테이블, 라우트별 요약, 불일치·누락 정리 |
 | 1.1 | 2026-02-05 | §4 메뉴(라우트)별 백엔드 API 필요·연동 현황 추가, Admin 전용 메뉴별 정리, §4→§5 번호 조정 |
+| 1.2 | 2026-02-10 | Phase 1 연동: 전략 상세·생성·PUT status (strategyApi), 분석·시장데이터 (analysisApi·marketDataApi) 종목 분석 모달 반영. §2·§4·§5.2 갱신. |
+| 1.3 | 2026-02-11 | Phase 1 검증: §2 매핑 테이블에 PUT mypage, POST orders, PUT settings/{accountNo}, POST news/collect, 트레이딩 포트폴리오 date/latest/generate, 로보 백테스트 3종 연동 정보 반영. §3·§4 메뉴별/라우트별 연동 현황 정리. |

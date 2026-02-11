@@ -1,6 +1,7 @@
 package com.investment.marketdata.service;
 
 import com.investment.common.security.EncryptionUtil;
+import com.investment.common.security.LogMaskingUtil;
 import com.investment.domain.entity.BrokerType;
 import com.investment.domain.entity.KoreaInvestmentToken;
 import com.investment.domain.entity.UserApiKey;
@@ -77,6 +78,88 @@ public class KoreaInvestmentTokenService {
         }
 
         log.info("한국투자증권 토큰 발급 완료: 총 {}명", userApiKeys.size());
+    }
+
+    /**
+     * 장 시작 전(권장: 30분 전) 전 사용자·모의/실 serverType별 토큰 강제 갱신.
+     * 기존 토큰 유효 여부와 관계없이 API를 호출해 새 토큰을 발급·저장합니다.
+     * TokenRefreshScheduler에서 cron으로 호출합니다.
+     */
+    @Transactional
+    public void forceRefreshAllTokensForMarketOpen() {
+        log.info("한국투자증권 장전 토큰 갱신 시작");
+
+        List<UserApiKey> userApiKeys = userApiKeyRepository.findAll();
+        int refreshed = 0;
+
+        for (UserApiKey userApiKey : userApiKeys) {
+            if (userApiKey.getBrokerType() == BrokerType.KOREA_INVESTMENT) {
+                try {
+                    forceRefreshTokenForUser(userApiKey);
+                    refreshed++;
+                } catch (Exception e) {
+                    log.error("장전 토큰 갱신 실패: userId={}, serverType={}",
+                            userApiKey.getUserId(), userApiKey.getServerType(), e);
+                }
+            }
+        }
+
+        log.info("한국투자증권 장전 토큰 갱신 완료: {}건 갱신", refreshed);
+    }
+
+    /**
+     * 단일 사용자·서버타입에 대해 토큰을 강제 재발급하여 저장.
+     * 유효 여부를 보지 않고 항상 API 호출 후 DB에 저장합니다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void forceRefreshTokenForUser(UserApiKey userApiKey) {
+        String userId = userApiKey.getUserId();
+        String serverType = userApiKey.getServerType() != null ? userApiKey.getServerType() : "1";
+
+        String appKey;
+        String appSecret;
+        try {
+            appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
+            appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
+        } catch (RuntimeException e) {
+            log.error("API 키 복호화 실패: userId={}, error={}", userId, e.getMessage());
+            throw new RuntimeException("API 키 복호화 실패: userId=" + userId, e);
+        }
+
+        String accessToken;
+        try {
+            accessToken = tokenClient.issueAccessToken(appKey, appSecret, serverType).block(Duration.ofSeconds(30));
+            if (accessToken == null) {
+                throw new RuntimeException("토큰 발급 실패: userId=" + userId);
+            }
+        } catch (Exception e) {
+            log.error("토큰 발급 중 오류: userId={}, serverType={}", userId, serverType, e);
+            throw new RuntimeException("토큰 발급 실패: userId=" + userId, e);
+        }
+
+        String encryptedToken = encryptionUtil.encrypt(accessToken);
+        long expiresAt = System.currentTimeMillis() + (23 * 60 * 60 * 1000); // 23시간
+
+        KoreaInvestmentToken existingToken = tokenRepository.findByUserIdAndServerType(userId, serverType).orElse(null);
+        if (existingToken != null) {
+            existingToken.updateToken(encryptedToken, expiresAt);
+            tokenRepository.save(existingToken);
+        } else {
+            KoreaInvestmentToken token = KoreaInvestmentToken.builder()
+                    .userId(userId)
+                    .serverType(serverType)
+                    .accessTokenEncrypted(encryptedToken)
+                    .expiresAt(expiresAt)
+                    .issuedAt(LocalDateTime.now())
+                    .build();
+            tokenRepository.save(token);
+        }
+
+        long now = System.currentTimeMillis();
+        recentTokenIssuance.put(issuanceKey(userId, serverType), now);
+        lastIssuanceTimeByUserId.put(userId, now);
+
+        log.debug("장전 토큰 갱신 완료: userId={}, serverType={}", userId, serverType);
     }
 
     /**
@@ -367,6 +450,34 @@ public class KoreaInvestmentTokenService {
                     .orElseThrow(() -> new RuntimeException("토큰 발급 후 조회 실패: userId=" + userId));
 
             return encryptionUtil.decrypt(token.getAccessTokenEncrypted());
+        }
+    }
+
+    /**
+     * WebSocket 구독용 approval_key 발급.
+     * REST POST /oauth2/Approval 호출. 실패 시 빈 문자열 반환.
+     *
+     * @param userId     사용자 ID
+     * @param serverType "1": 모의투자, "0": 실거래
+     * @return approval_key 또는 빈 문자열
+     */
+    public String getApprovalKey(String userId, String serverType) {
+        String st = serverType != null ? serverType : "1";
+        String accessToken;
+        try {
+            accessToken = getAccessToken(userId, st);
+        } catch (Exception e) {
+            log.warn("approval_key 발급을 위한 토큰 조회 실패: userId={}", LogMaskingUtil.maskUserId(userId), e);
+            return "";
+        }
+        if (accessToken == null || accessToken.isBlank()) {
+            return "";
+        }
+        try {
+            return tokenClient.getApprovalKey(accessToken, st).block(Duration.ofSeconds(10));
+        } catch (Exception e) {
+            log.warn("approval_key 발급 실패: userId={}", LogMaskingUtil.maskUserId(userId), e);
+            return "";
         }
     }
 }

@@ -16,6 +16,8 @@ import com.investment.order.dto.OrderRequestDto;
 import com.investment.order.dto.OrderResponseDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -46,12 +48,16 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class OrderService {
+public class OrderService implements OrderExecutor {
 
     private final OrderRepository orderRepository;
     private final TradingSettingRepository tradingSettingRepository;
     private final KoreaInvestmentOrderClient orderClient;
     private final ComplianceEngine complianceEngine;
+
+    @Lazy
+    @Autowired(required = false)
+    private OrderRequestQueue orderRequestQueue;
 
     /**
      * 주문 실행
@@ -77,7 +83,11 @@ public class OrderService {
         log.info("주문 실행 요청: accountNo={}, symbol={}, type={}, quantity={}, price={}",
                 LogMaskingUtil.maskAccountNo(request.getAccountNo()), request.getSymbol(), request.getOrderType(),
                 request.getQuantity(), request.getPrice());
-        return executeOrderInternal(request, getCurrentUserId());
+        String userId = getCurrentUserId();
+        if (orderRequestQueue != null && orderRequestQueue.isEnabled()) {
+            return orderRequestQueue.submit(request, userId);
+        }
+        return executeOrderInternal(request, userId);
     }
 
     @SuppressWarnings("unused")
@@ -103,6 +113,14 @@ public class OrderService {
         log.info("파이프라인 주문 실행: accountNo={}, symbol={}, type={}, userId={}",
                 LogMaskingUtil.maskAccountNo(request.getAccountNo()), request.getSymbol(), request.getOrderType(),
                 LogMaskingUtil.maskUserId(userId));
+        if (orderRequestQueue != null && orderRequestQueue.isEnabled()) {
+            return orderRequestQueue.submit(request, userId);
+        }
+        return executeOrderInternal(request, userId);
+    }
+
+    @Override
+    public OrderResponseDto execute(OrderRequestDto request, String userId) {
         return executeOrderInternal(request, userId);
     }
 
@@ -148,6 +166,12 @@ public class OrderService {
                 .price(request.getPrice())
                 .status(Order.OrderStatus.PENDING)
                 .build();
+        if (request.getSignalType() != null) {
+            order.setSignalType(request.getSignalType());
+        }
+        if (request.getExitRuleType() != null) {
+            order.setExitRuleType(request.getExitRuleType());
+        }
 
         try {
             // 국내(KR): orderDvsn 있으면 사용, 없으면 지정가(00). 해외(US)는 지정가 00 유지.
@@ -320,6 +344,8 @@ public class OrderService {
                 .status(convertToDtoStatus(order.getStatus()))
                 .orderTime(order.getOrderTime())
                 .message(order.getMessage())
+                .signalType(order.getSignalType())
+                .exitRuleType(order.getExitRuleType())
                 .build();
     }
 

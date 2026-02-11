@@ -11,6 +11,22 @@
 ## 1. 완료 (Completed)
 
 ### 도메인·DB·API
+- [x] **거래 사유 API·화면 노출**  
+  주문·포지션 응답에 `signalType`, `exitRuleType` 추가. OrderResponseDto·OpenPositionItemDto 확장, GET /api/v1/orders(목록·단건)·파이프라인 요약(보유 포지션) 반영. 프론트: 주문 목록/상세·대시보드·자동투자 현황 포지션 테이블에 시그널 유형·청산 규칙 컬럼 표시. [02-api-endpoints.md](../04-api/02-api-endpoints.md), [11-api-frontend-mapping.md](../04-api/11-api-frontend-mapping.md) 갱신.
+- [x] **전략 거버넌스 자동화(1차)**  
+  Batch Job `strategy-governance-check`(매월 1일 02:00 KST), 수동 트리거 `POST /api/v1/trigger/strategy-governance-check`. StrategyGovernanceCheckService·StrategyGovernanceCheckTasklet: 최근 N개월 KR/US × SHORT_TERM/MEDIUM_TERM 백테스트 실행 후 MDD·Sharpe 열화 시 EmergencyAlertService로 Discord 알림. 설정 `investment.governance.*`(enabled, lookback-months, mdd-threshold-pct, sharpe-min, default-capital, alert-only). [00-strategy-registry.md](../02-architecture/00-strategy-registry.md) §1.1, [12-auto-investment-strategy.md](../02-architecture/12-auto-investment-strategy.md) §6.2, [02-api-endpoints.md](../04-api/02-api-endpoints.md) 반영.
+- [x] **전략 거버넌스 자동화(2차)**  
+  검사 결과 TB_GOVERNANCE_CHECK_RESULT 저장, 열화 시(alert-only=false·auto-halt-on-degradation=true) (market, strategyType)별 TB_GOVERNANCE_HALT 등록. GovernanceHaltService(isHalted, setHalt, clearHalt, getActiveHalts, getRecentResults). PipelineExecutionScheduler에서 halt 조합 run 스킵. Admin API: GET /api/v1/ops/governance/results, GET /api/v1/ops/governance/halts, PUT …/halts/{market}/{strategyType}/clear. Flyway V31, 00-strategy-registry·12-auto-investment-strategy·02-api-endpoints·01-api-overview·11-api-frontend-mapping 반영.
+- [x] **리스크 이벤트 알림 (일일 MDD 한도 임박·VaR 95% 초과)**  
+  RiskEventAlertService·RiskEventAlertTasklet·Batch Job risk-event-alert(장중 10분마다). EmergencyAlertService.sendRiskEventAlert 확장, Discord+TB_ALERT_LOG. 설정 investment.risk.alert-mdd-threshold-pct(0.8), alert-var-exceed-enabled(true). POST /api/v1/trigger/risk-event-alert. 00-strategy-registry·02-api-endpoints·02-development-status 반영.
+- [x] **단일 VPS·배치·배포 절차 문서화**  
+  06-single-vps-batch-deployment.md 신설: 배포 전제·스케줄 구조·Job/Cron 요약·배포·모니터링·복구·체크리스트.
+- [x] **Oracle Cloud 2대 + AWS Free Tier 1대 기반 CI/CD·배포 문서화**  
+  [05-multi-vps-oracle-aws-cicd.md](../06-deployment/05-multi-vps-oracle-aws-cicd.md) 신설: 멀티 VPS 토폴로지(데이터/앱/엣지 계층), 메모리 튜닝, CI(GitHub Actions)·CD(노드별 배포·롤백), 보안·체크리스트. investment-infra README·단일 VPS 문서·배포 스크립트 연동.
+- [x] **Cursor OCI 서버 접속 환경 (Remote-SSH + SSH MCP)**  
+  05-multi-vps-oracle-aws-cicd.md §9: Cursor Remote-SSH로 Oracle 1/Oracle 2 접속(SSH config 예시, 접속 절차, 노드별 작업 요약). [07-cursor-oci-ssh-mcp.md](../08-setup-guides/07-cursor-oci-ssh-mcp.md) 신설: 로컬 Cursor에서 OCI 원격 명령(exec/sudo-exec)용 SSH MCP(tufantunc/ssh-mcp) 설정·env·도구 설명. .cursor/mcp.json.template에 ssh-mcp-oracle-osaka-yoon, ssh-mcp-oracle-korea-jihee 항목 추가(Ubuntu·호스트별 키 경로). 05-screen-test-and-mcp-guide.md MCP 표에 SSH MCP 선택 항목 반영.
+- [x] **한국투자증권 주식잔고조회 INQR_DVSN 제한 대응 (2026-02-11 공지)**  
+  주식잔고조회 API INQR_DVSN 02(종목별) 제한에 따라 01(대출일별)로 변경. `KoreaInvestmentAccountClient.inquireBalance`, `verifyAccountByCredentials` 및 [09-korea-investment-api-guide.md](../04-api/09-korea-investment-api-guide.md) 예시·주식잔고조회 섹션 반영.
 - [x] **슈퍼관리자(yoon) DB 지정**  
   Flyway V26: TB_USERS에서 USERNAME='yoon'인 계정의 ROLE을 'Admin'으로 고정. 해당 계정을 메인 슈퍼관리자로 DB에 반영. 비밀번호 동기화는 `SUPER_ADMIN_PASSWORD` env(또는 `investment.security.super-admin.password`) 설정 시 기동 시 한 번만 `SuperAdminSeeder`가 갱신.
 - [x] **관리자 계정 생성·로그인 정책 (플랜 구현)**  
@@ -35,6 +51,8 @@
   DART report_nm 등 긴 보고서명 저장 시 50자 초과 오류 방지. DB V11(EVENT_TYPE VARCHAR(500)), NewsItem.MAX_EVENT_TYPE_LENGTH·truncateEventType, InternalDataCollectionController(수집기→Spring 수신)에서 eventType 500자 truncate 적용. (V11 롤백 스크립트는 Flyway·마이그레이션 정리로 제거됨. 필요 시 git history 참조.)
 - [x] **캐시 키 정리**  
   CacheConfig에 CACHE_CURRENT_PRICE 정의, RealtimeMarketDataService에서 상수 사용.
+- [x] **KIS Open API 실전 구축 (Phase 4·3·2·1 스켈레톤·문서)**  
+  **Phase 4**: TokenRefreshScheduler(장 시작 30분 전 토큰 갱신), KoreaInvestmentTokenService.forceRefreshAllTokensForMarketOpen, pre-market-refresh-cron. **Phase 3**: OrderRequestQueue(BlockingQueue+RateLimiter), OrderExecutor, throttle.* 설정. **Phase 2**: KoreaInvestmentRankClient(getVolumeRank, getInvestorDailyByMarket), RankApiProperties, path/TR_ID 미설정 시 빈 리스트; MCP volume_rank·inquire_investor_daily_by_market 확인 후 설정. **Phase 1**: KoreaInvestmentWebSocketClient 인터페이스, NoOpKoreaInvestmentWebSocketClient(미구현). **문서**: 09-korea-investment-api-guide.md 실전 구축 요약, decisions.md ADR 18.
 
 ### 화면·메뉴
 - [x] **한국투자증권 토큰 과다 발급 방지**  
@@ -93,6 +111,8 @@
   smart-portfolio-pal과 동일한 레이아웃·메뉴·라우트 구조로 정리. **훅**: `useAccountType`(URL `serverType` 쿼리 ↔ AuthContext 동기화). **레이아웃**: AppShell 제거, AppLayout(AppHeader + AppMenu + AccountTabs + max-w-[1200px] 본문) 적용. **라우트**: 페이지 단위 매핑, `/report/tax`(TaxReportPage) 추가, Ops 개별 경로(`/ops/data`, `/ops/alerts` 등) 유지·path 기반 OpsPage subPage 분기. **페이지**: DashboardPage, AutoInvestPage, StrategyPage(/strategies/:market), NewsPage, PortfolioPage, OrdersPage, BatchPage, BacktestPage, SettingsPage, TaxReportPage(스텁), OpsPage(기존). 메뉴: User 메뉴 + 연말 세금·리포트 + Admin 전용(Admin 역할 시). 테스트: AppRoutes(랜딩/대시보드/연말리포트 인증 시 렌더) 보강. [01-screen-menu-spec.md](01-screen-menu-spec.md), [10-design-ai-full-prompt.md](03-figma-wireframes/10-design-ai-full-prompt.md) 반영.
 - [x] **설정 페이지 smart-portfolio-pal 디자인 전면 반영 (investment-front)**  
   설정 화면을 개편 디자인에 맞춰 전면 적용. **탭**: "계좌·API 연결" | "자동투자 설정" (shadcn Tabs). **계좌 탭**: 모의계좌 카드·실계좌 카드 각각 표시(연결됨/미등록 배지, API Key/Secret/계좌번호/Current Password, 카드별 [저장]). **자동투자 탭**: 계좌 0개 시 빈 상태 + [계좌 설정으로 가기] CTA; 1~2개 시 세그먼트(모의계좌|실계좌) + 선택 타입별 폼(자동 매매·로보 토글, 최소/최대 투자금, 단·중·장기 비율, [저장]); 서버 설정 읽기 전용 카드(PIPELINE_AUTO_EXECUTE, PIPELINE_ALLOW_REAL_EXECUTION). **훅**: `useSettingsAccountsAll` 추가(virtual/real 동시 조회·타입별 저장). [10-design-ai-full-prompt.md §5.10](03-figma-wireframes/10-design-ai-full-prompt.md), [01-screen-menu-spec.md §3.8](01-screen-menu-spec.md) 반영.
+- [x] **화면 테스트 및 MCP 구성 (시니어 QA)**  
+  MCP 템플릿 정리: filesystem 경로를 `auto-investment-project` 루트로 통일, notion/local-maria/figma 제거(OFF 권장). Playwright E2E: `investment-frontend`에 `@playwright/test`, `e2e/landing.spec.ts`, `e2e/login.spec.ts`, `playwright.config.ts`, `npm run e2e` 스크립트 추가. 규칙: test-code-after-agent-by-plan.mdc에 프론트/화면 변경 시 cursor-ide-browser 또는 Playwright E2E 실행 권장 문구 추가. 문서: [05-screen-test-and-mcp-guide.md](../08-setup-guides/05-screen-test-and-mcp-guide.md) (MCP ON/OFF, cursor-ide-browser 사용, Playwright·스모크 안내). API 스모크: `scripts/smoke-api.ps1` (-Port 8083/8084, GET /actuator/health). 프론트 dialog.tsx 잘못된 임포트(@radix-ui/react-dialog@1.1.6 등) 수정.
 
 ### 인프라·운영
 - [x] **Flyway 도입 및 기존 마이그레이션 SQL 정리**  
@@ -217,16 +237,28 @@
   RiskSummaryDto에 var95Pct·cvar95Pct 추가. RiskReportService에서 investment.risk.var-daily-vol-pct 기반 단순 파라메트릭(1.65σ·2.06σ) 1일 VaR 95%·CVaR 95% 산출. 프론트 /risk 화면에 VaR(95%)·CVaR(95%) 카드 표시. 02-api-endpoints §9 응답 필드 반영.
 - [x] **로보어드바이저 사용자 플로우 명확화**  
   랜딩: 한 줄 문구 "나 대신 투자해주는 고수익 로보어드바이저" 정합·CTA(시작하기/로그인) 유지. 대시보드 계좌 0개 시 "설정에서 계좌를 연결해주세요" + [설정으로 가기](serverType 쿼리). 자동투자 현황 계좌 미연결 시 동일 문구 + [설정으로 가기]. DashboardAccountCard 자동투자 OFF 시 "자동매매를 켜면 로보가 대신 매매합니다" + [설정으로 가기] 기존 유지. 설정 탭 계좌 0개 빈 상태 + [계좌 설정으로 가기] 기존 유지. 00-robo-advisor-product-summary 부족 문단 갱신.
+- [x] **Phase 1 메뉴별 API 순차 (전략 상세·생성·status, 분석·시장데이터 연동)**  
+  **전략**: strategyApi에 getStrategy, createOrUpdateStrategy, updateStrategyStatus 추가. StrategyDto·StrategyStatusUpdateDto 타입 백엔드 정합. 국내/미국 전략 페이지에 상세 모달(상태 변경)·전략 추가/편집 모달 연동. **P3**: analysisApi.analyze, marketDataApi.getCurrentPrice·getCurrentPrices 신규. 포트폴리오 화면에 종목 분석 모달(심볼·기간·현재가 조회·AI 분석) 연동. 11-api-frontend-mapping §2·§4·§5.2, 02-development-status 완료 반영.
+- [x] **Phase 1 API·프론트 매핑 문서 정합 (§2·§4 갱신)**  
+  코드 검증 결과 반영: 11-api-frontend-mapping.md §2 테이블에 PUT mypage, POST orders, PUT settings/{accountNo}, POST news/collect, 트레이딩 포트폴리오 date/latest/generate, 로보 백테스트 3종의 실제 프론트 모듈·사용 위치 반영. §3 라우트별·§4 메뉴별 연동 현황에서 미연동 문구 제거. §5.2 안내 문구 갱신.
+- [x] **고급 분석·포트폴리오 (Brain) 1차**  
+  **섹터 분석**: GET `/api/v1/analysis/sector` (accountNo 또는 symbols+market), SectorAnalysisService·SymbolSectorRepository, 포트폴리오 페이지 섹터 비중·수익 기여도 카드. **포트폴리오 리스크 메트릭**: GET `/api/v1/risk/portfolio-metrics?accountNo=`, RiskReportService.getPortfolioRiskMetrics, VaR/CVaR/MDD·Sharpe/Sortino, 포트폴리오 페이지 리스크 카드. **리밸런싱 제안**: GET `/api/v1/trading-portfolios/rebalance-suggestions?accountNo=&market=US`, RebalanceSuggestionsService(Rebalancer+RoboAllocationEngine), 포트폴리오 페이지 US 리밸런싱 제안 카드. 02-api-endpoints·11-api-frontend-mapping 반영.
+- [x] **Phase 1 미연동 API 정리**  
+  **주문 단건**: ordersApi.getOrder(orderId, accountNo), 404 시 null. **계좌 상세 5종**: accountApi에 getBalance, getBuyableAmount, getSellableQuantity, getOrderHistory, getProfitLoss 및 DTO 추가(404/400 시 null 또는 빈 배열). **user/accounts**: userAccountsApi에 getAccounts(serverType), getAccount(accountId), setMainAccount(accountId), AccountListResponseDto·UserAccountDto. 설정 페이지 "등록된 계좌" 카드에서 모의/실 계좌 목록·메인으로 설정 버튼 연동. 11-api-frontend-mapping §2 미연동 제거·갱신.
+- [x] **대시보드 성과 요약 API·프론트 연동**  
+  GET `/api/v1/dashboard/performance-summary` (DashboardController), RiskReportService.getSummary 기반 DashboardPerformanceSummaryDto(총 평가액·MDD·Sharpe·Sortino·VaR·CVaR). dashboardApi.getPerformanceSummary, useDashboardData에서 병렬 조회, Dashboard 페이지에 성과 요약 카드(총 평가액·MDD·Sharpe·VaR) 표시. 02-api-endpoints·11-api-frontend-mapping 반영.
+- [x] **고급 분석·포트폴리오 2차 (상관관계·리스크 기반 포지션 사이징)**  
+  **상관관계 분석**: CorrelationAnalysisService·GET `/api/v1/analysis/correlation` (accountNo 또는 symbols+market+from+to). TB_DAILY_STOCK 일봉 수익률 기반 Pearson 상관계수 행렬, 최소 2종목·20일 이상 데이터. **리스크 기반 포지션 사이징**: PositionSizingService.applyRiskBasedCap(종목당 비중 상한), investment.factor.risk-based-cap-enabled(false)·risk-based-cap-max-pct(0.05). 파이프라인·트레이딩 포트폴리오 getRecommendations 내 적용. 00-strategy-registry §2.5.1·v1.10, 02-api-endpoints §3.2, 01-api-overview·11-api-frontend-mapping 반영.
+- [x] **수정주가(Adjuster) 파이프라인 — Phase 2 필수**  
+  일봉 저장·팩터·백테스트 입력은 수정주가만 사용. 한투 API getChartData에서 FID_ORG_ADJ_PRC=0(수정주가) 고정. US: yfinance 스크립트 auto_adjust=True. KR: KrxCollectionService·DailyStock 엔티티에 수정주가 정책 주석. 00-strategy-registry §1.1 원천별 적용 요약·09-korea-investment-api-guide 수정주가 정책 문구 추가. ADR 19 반영.
+- [x] **PIT·Look-ahead 방지 정책 검증**  
+  BacktestService·FactorCalculationService·RoboBacktestService·RoboAllocationEngine에서 bas_dt(또는 asOfDate/date) 시점까지 가용 데이터만 조회함을 코드 검증. 클래스 주석 및 00-strategy-registry §1.1 "PIT·Look-ahead 검증 완료" 요약 추가. ADR 20 반영.
+- [x] **백테스트 스트레스 검증 (필수)**  
+  2020-03(코로나 폭락)·2022-01~06(금리 인상기) 구간 시나리오 정의·검증 기준·실행 방법 문서화. [backtest-stress-results.md](../02-architecture/backtest-stress-results.md) 신설, 12-auto-investment-strategy §6 링크 추가. 실제 실행 결과는 해당 구간 데이터 수집 후 POST /api/v1/backtest로 실행하여 동 문서에 기입.
 
 ### 자동투자 프로세스·활성화 체크리스트
 
 실제 자동 매수/매도 주문이 나가게 하려면: **(1)** 설정 화면(/settings)에서 거래 설정 저장, **자동 매매 ON**, 최대 투자금액·단기/중기/장기 비율 입력. **(2)** 서버/환경에서 `PIPELINE_AUTO_EXECUTE=true` 또는 `investment.pipeline.auto-execute: true` 설정(기본값 false이면 dry-run만 동작). **(3)** 모의계좌 권장(실전 전 2주 테스트). **(4)** 실전 계좌 자동 실행은 `PIPELINE_ALLOW_REAL_EXECUTION=true`(또는 `investment.pipeline.allow-real-execution: true`)로만 허용(기본값 false). 상세 플로우·스케줄은 [12-auto-investment-strategy §6.2](../02-architecture/12-auto-investment-strategy.md#62-자동투자-프로세스-플로우) 참조.
-
----
-
-## 2. 진행중 (In progress)
-
-- (없음)
 
 ---
 
@@ -242,14 +274,22 @@
 ### 데이터·파이프라인 (Data Engine)
 
 - [ ] **뉴스·공시 파이프라인 (확정 원천만) — 1차 완료, Speed/Buzz 후속**  
-  1차 완료: DART 키워드 포착·SEC 8-K 최우선·시그널 반영(NewsSignalService·포지션 사이징 우선 정렬). **후속**: 연합뉴스·Reuters·네이버 금융·Yahoo Buzz 수집·NLP·감정/중요도 분석, 전략 시그널 점수 반영 강화.
-- [ ] **수정주가·Feature Store 강화 (필요 시)**  
-  수정주가(Adjuster) 파이프라인 반영, Feature Store 전처리·저장 강화.
+  1차 완료: DART 키워드 포착·SEC 8-K 최우선·시그널 반영(NewsSignalService·포지션 사이징 우선 정렬). **후속**: 연합뉴스·Reuters·네이버 금융·Yahoo Buzz 수집·NLP·감정/중요도 분석, 전략 시그널 점수 반영 강화. (데이터 품질·백테스트 검증 완료 후 진행.)
+- [x] **Walk-Forward / Out-of-Sample (권장)**  
+  WalkForwardBacktestService·POST `/api/v1/backtest/walk-forward`. train/test 구간 분리 후 각 test 구간만 BacktestService로 실행·fold별 메트릭 집계(avgCagr·avgMddPct·minSharpeRatio 등). 전략 파라미터 재추정 없음. 오버피팅 완화·일반화 성능 추정용. 00-strategy-registry v1.12, 02-api-endpoints·01-api-overview 반영.
+- [x] **거래 사유(Trade Reason) 추적**  
+  TB_ORDERS·TB_STRATEGY_POSITION에 SIGNAL_TYPE·EXIT_RULE_TYPE 컬럼 추가(V30). Order·StrategyPosition 엔티티·OrderRequestDto 확장. PipelineExecutor 매수 시 rec.getMethod()를 signalType으로 주문/포지션 저장; PipelineExitScheduler 청산 시 result.getReason()을 exitRuleType으로 주문/포지션 저장. API·화면 노출은 후속.
+- [x] **전략 거버넌스·중단 원칙**  
+  [12-auto-investment-strategy.md](../02-architecture/12-auto-investment-strategy.md) §6.2 체크리스트 항목 13 및 **전략 거버넌스·중단 원칙 (상세 플로우)** 반영: 정기 백테스트 재실행·MDD/Sharpe 열화 기준·조치(자동 매매 중단·원인 분석)·후속(Admin 경고/정지 트리거). 00-strategy-registry §1.1 참조.
+- [x] **리스크 이벤트 알림 (선택)**  
+  일일 손실 한도 임박(한도 대비 80% 도달)·VaR 95% 초과 시 `RiskEventAlertService`가 `EmergencyAlertService.sendRiskEventAlert`로 Discord 발송 및 TB_ALERT_LOG 저장. Batch Job `risk-event-alert`(장중 평일 10분마다), `POST /api/v1/trigger/risk-event-alert`. 설정 `investment.risk.alert-mdd-threshold-pct`, `alert-var-exceed-enabled`. 00-strategy-registry·02-api-endpoints 반영.
 
 ### 전략·포트폴리오 (Brain)
 
-- [ ] **고급 분석·포트폴리오**  
-  섹터 분석, 상관관계·리스크 메트릭(VaR/CVaR, Sharpe/Sortino), 리밸런싱 자동화, 리스크 기반 포지션 사이징.
+- [x] **고급 분석·포트폴리오 (1차)**  
+  섹터 분석 API·포트폴리오 리스크 메트릭·리밸런싱 제안 API 및 프론트 포트폴리오 연동 완료.
+- [x] **고급 분석·포트폴리오 2차**  
+  상관관계 분석 API·리스크 기반 포지션 사이징 확장 완료. 프론트 포트폴리오 페이지 상관관계 카드/테이블 연동 완료(계좌 없음·2종목 미만·20일 미만 데이터 안내 문구 포함).
 
 ### 리스크·컴플라이언스 (Risk Guard)
 
@@ -260,15 +300,19 @@
 
 ### 실행·게이트웨이 (Execution / Gateway)
 
-- [ ] **KIS Open API 실전 구축**  
-  **WebSocket 우선**: 실시간 호가/체결가(Tick) 구독, 변동성 돌파 시그널 0.1초 단위 감시; 체결 Push 수신 시 익절/손절 대기 로직 즉시 활성화. **REST 퀀트 스코어링**: 국내 순위 분석 API(거래대금·등락률 상위)→주도주 유니버스 매일 아침 갱신; 투자자별 매매동향 API→10분 단위 수급 점수; 미국 해외주식 기간별 시세(환율 포함)·데이터 정합성. **리스크**: Throttling(실전 초당 20회, 주문 2~10회)→주문 요청 큐(메시지 큐 RabbitMQ 등) 순차 처리; Access Token **장 시작 30분 전** Crontab 자동 갱신. **시드·주문**: 국내 지정가·최유리 지정가, 예수금 30~50% 변동성 비중; 미국 실시간 시세(유료)·시장가, 통합증거금; 모의투자 2주 테스트 후 실전.
+- [x] **KIS Open API 실전 확장 (WebSocket 구현·순위 API 문서화)**  
+  **WebSocket**: `KoreaInvestmentWebSocketClientImpl` 추가(enabled=true 시). 실시간 호가(quote-tr-id H0GASP0)·체결통보(ccnl-notice-tr-id H0GAMT0)·연결/구독 간격 준수. path·approval-key(선택) 설정. NoOp(기본)·Impl 조건부 등록. **순위/투자자 API**: path·TR_ID 미설정 시 빈 리스트(기존 동작). 09-korea-investment-api-guide에 volume-rank·investor-daily path/TR_ID 설정 안내 및 유니버스·수급 연동 설명 반영. decisions.md ADR 18 갱신. 단위 테스트: NoOpKoreaInvestmentWebSocketClientTest, KoreaInvestmentWebSocketClientImplTest.
+- [x] **KIS Open API 실전 후속 (approval_key·순위 path·유니버스 연동)**  
+  **WebSocket approval_key**: POST /oauth2/Approval 호출 추가. `KoreaInvestmentTokenClient.getApprovalKey`, `KoreaInvestmentTokenService.getApprovalKey`. `KoreaInvestmentWebSocketClientImpl`에서 `approval-key-fetch-enabled` 시 연결 시 REST 발급 후 구독 메시지에 사용. **순위/투자자 API**: application.yml에 path·TR_ID 기본값 반영(거래량순위·시장별 투자자). 09-korea-investment-api-guide에 §순위분석·투자자 API(path·TR_ID)·§WebSocket approval_key 발급 추가. **유니버스 연동**: `UniverseFilterService`에 선택적 `KoreaInvestmentRankClient` 주입, `investment.factor.volume-rank-enabled`, `volume-rank-user-id`, `volume-rank-limit` 설정 시 KR 유니버스에 거래량 순위 교집합 적용. ADR 18 실전 후속·제한 사항 갱신.
+- [ ] **KIS Open API 실전 구축 (추가 후속)**  
+  **향후**: 실서버 연동 검증; 미국 해외주식 기간별 시세(Phase 5). 시드·주문·통합증거금·모의 2주 테스트 후 실전은 [12-auto-investment-strategy](../02-architecture/12-auto-investment-strategy.md) §8 참조.
 - [ ] **다중 계좌·실시간 스트리밍**  
   다중 계좌 관리, WebSocket 시세·알림, 통합 포트폴리오 뷰.
 
 ### 프론트·대시보드
 
 - [ ] **대시보드·UX**  
-  자동투자 현황 파이프라인 실데이터·시그널/보유 포지션 테이블은 완료. 대시보드: 계좌 요약(국내·미국 구분), 자동투자 상태 카드. 실시간 차트, 성과 분석, 반응형·모바일.
+  자동투자 현황 파이프라인 실데이터·시그널/보유 포지션 테이블은 완료. 대시보드: 계좌 요약(국내·미국 구분), 자동투자 상태 카드, **성과 요약 API 연동 완료**(총 평가액·MDD·Sharpe·VaR 카드). 후속: 실시간 차트, 반응형·모바일.
 - [ ] **모바일 앱 (선택)**  
   iOS/Android, 푸시 알림.
 
@@ -281,8 +325,8 @@
 
 - [ ] **성능 최적화 (2차·선택)**  
   쿼리·캐싱·비동기 추가 적용. 시장 데이터·종목 분석·계좌 조회 응답 시간 목표(평균 500ms, 95%ile 1초) 측정·튜닝.
-- [ ] **단일 VPS·Cron/배치·배포 절차 문서화**  
-  모니터링·복구 절차 보강(이미 일부 있으면 정리).
+- [x] **단일 VPS·Cron/배치·배포 절차 문서화**  
+  [08-setup-guides/06-single-vps-batch-deployment.md](../08-setup-guides/06-single-vps-batch-deployment.md) 신설: 단일 VPS 배포 전제, BatchJobRegistry·BatchJobScheduler 기반 스케줄 구조, Job·Cron·트리거 경로 요약, 배포 절차·모니터링·복구·체크리스트.
 
 ---
 
@@ -346,3 +390,9 @@
 | 1.35 | 2026-02-10 | 완료: Tax 리포트 화면 (/report/tax) 연동 — TaxReportPage getTaxSummary 연동·연도 기본값(현재 연도)·11-api-frontend-mapping §1~§4 반영. |
 | 1.36 | 2026-02-10 | 완료: 로보어드바이저 사용자 플로우 명확화 — 랜딩 한 줄 문구 정합, 대시보드/자동투자 현황 빈 상태 "설정에서 계좌를 연결해주세요" + 설정으로 가기(serverType 유지), 00-robo-advisor-product-summary 부족 문단 갱신. |
 | 1.37 | 2026-02-10 | 완료: Ops 모델/예측·시스템 헬스 API 및 프론트 연동 — GET /api/v1/ops/model/status, GET /api/v1/ops/health (ADMIN), OpsModelController·OpsHealthController·서비스·DTO, 프론트 getModelStatus·getHealth·ModelView·HealthView API 연동. 01-api-overview §3.11, 02-api-endpoints §12.2·§12.3, 11-api-frontend-mapping §2·§4 갱신. |
+| 1.38 | 2026-02-10 | 완료: Phase 1 메뉴별 API 순차 — 전략 getStrategy·createOrUpdateStrategy·updateStrategyStatus·상세/편집 모달, analysisApi·marketDataApi·종목 분석 모달. 11-api-frontend-mapping §2·§4·§5.2, 본 문서 완료 항목 추가. |
+| 1.39 | 2026-02-11 | 완료: Phase 1 API·프론트 매핑 문서 정합 — 11-api-frontend-mapping §2 테이블에 PUT mypage, POST orders, PUT settings/{accountNo}, POST news/collect, 트레이딩 포트폴리오 date/latest/generate, 로보 백테스트 3종 연동 정보 반영. §3·§4 메뉴별/라우트별 연동 현황 정리. |
+| 1.40 | 2026-02-11 | 완료: KIS Open API 실전 확장 — WebSocket 실제 구현체(KoreaInvestmentWebSocketClientImpl), 순위/투자자 API path·TR_ID 설정 안내(09-korea-investment-api-guide), ADR 18·진행예정 항목 갱신. NoOp·Impl 단위 테스트 추가. |
+| 1.41 | 2026-02-11 | 완료: KIS Open API 실전 후속 — WebSocket approval_key REST 발급(KoreaInvestmentTokenClient/TokenService), Impl approval-key-fetch-enabled·연결 시 발급 사용. 순위/투자자 path·TR_ID 기본값(application.yml)·가이드 §순위분석·투자자 API·§approval_key 발급. UniverseFilterService 거래량 순위 연동(volume-rank-enabled·volume-rank-user-id). ADR 18 실전 후속·제한 사항 갱신. |
+| 1.42 | 2026-02-11 | 기획 고도화(퀀트 관점): 수정주가 Phase 2 필수·PIT·Look-ahead 방지·스트레스 검증(2020/2022)·Walk-Forward(권장)·거래 사유 추적·전략 중단 원칙·리스크 알림(선택) 진행예정 반영. |
+| 1.43 | 2026-02-11 | Phase 2 Quant Engine 구현: 수정주가 파이프라인(한투 FID_ORG_ADJ_PRC=0, US yfinance auto_adjust=True, KR/KRX·DailyStock 주석), PIT·Look-ahead 검증(BacktestService·FactorCalculationService·RoboBacktestService 주석·00-strategy-registry §1.1), 백테스트 스트레스 검증(backtest-stress-results.md 시나리오 정의·검증 기준·BacktestServiceTest 스트레스 구간 테스트 추가). 진행예정에서 수정주가·PIT·스트레스 항목 완료로 이동. |

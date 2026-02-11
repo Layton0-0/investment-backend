@@ -27,6 +27,14 @@ public interface DailyStockRepository extends JpaRepository<DailyStock, DailySto
             @Param("fromDt") LocalDate fromDt,
             @Param("toDt") LocalDate toDt);
 
+    /** 상관관계 분석: 시장·종목 목록·기간별 일봉 조회 (수익률 계산용). */
+    @Query("SELECT d FROM DailyStock d WHERE d.market = :market AND d.symbol IN :symbols AND d.basDt BETWEEN :fromDt AND :toDt ORDER BY d.basDt ASC, d.symbol")
+    List<DailyStock> findByMarketAndSymbolInAndBasDtBetweenOrderByBasDtAsc(
+            @Param("market") String market,
+            @Param("symbols") List<String> symbols,
+            @Param("fromDt") LocalDate fromDt,
+            @Param("toDt") LocalDate toDt);
+
     @Query("SELECT d FROM DailyStock d WHERE d.basDt = :basDt AND d.market = :market AND d.trdVal IS NOT NULL AND d.trdVal >= :minTrdVal ORDER BY d.symbol")
     List<DailyStock> findByBasDtAndMarketAndTrdValGreaterThanEqual(
             @Param("basDt") LocalDate basDt,

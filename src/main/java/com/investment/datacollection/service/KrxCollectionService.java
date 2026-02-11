@@ -19,6 +19,8 @@ import java.util.Map;
 /**
  * KRX 일별 시세 수집 → TB_DAILY_STOCK 저장.
  * API 응답 OutBlock_1의 Map 키는 서비스별로 상이할 수 있으므로 여러 키명을 시도해 파싱한다.
+ * <p>수정주가 정책(ADR 19): 일봉 저장·팩터·백테스트는 수정주가만 사용. KRX 유가증권 일별매매정보
+ * 원천이며, 수정주가 반영 여부는 KRX 공식 문서 참조. 한투 API 일봉 조회 시에는 FID_ORG_ADJ_PRC=0(수정주가) 사용.
  */
 @Slf4j
 @Service

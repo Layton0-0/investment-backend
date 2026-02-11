@@ -1,10 +1,12 @@
 package com.investment.factor.scheduler;
 
+import com.investment.common.security.LogMaskingUtil;
 import com.investment.domain.entity.TradingSetting;
 import com.investment.domain.repository.TradingSettingRepository;
 import com.investment.factor.execution.PipelineExecutor;
 import com.investment.factor.service.DailyLossLimitService;
 import com.investment.factor.service.RiskGateService;
+import com.investment.governance.GovernanceHaltService;
 import com.investment.strategy.domain.StrategyType;
 import com.investment.strategy.engine.MacroIndicatorProvider;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +39,7 @@ public class PipelineExecutionScheduler {
     private final RiskGateService riskGateService;
     private final DailyLossLimitService dailyLossLimitService;
     private final MacroIndicatorProvider macroIndicatorProvider;
+    private final GovernanceHaltService governanceHaltService;
 
     @Value("${investment.pipeline.auto-execute:false}")
     private boolean autoExecute = false;
@@ -104,12 +107,22 @@ public class PipelineExecutionScheduler {
 
     private void runPipelineForAccount(LocalDate basDt, String accountNo,
             BigDecimal shortCapital, BigDecimal midCapital, BigDecimal longCapital, boolean dryRun) {
-        pipelineExecutor.run(basDt, "KR", accountNo, StrategyType.SHORT_TERM, shortCapital, dryRun);
-        pipelineExecutor.run(basDt, "KR", accountNo, StrategyType.MEDIUM_TERM, midCapital, dryRun);
-        pipelineExecutor.run(basDt, "KR", accountNo, StrategyType.LONG_TERM, longCapital, dryRun);
-        pipelineExecutor.run(basDt, "US", accountNo, StrategyType.SHORT_TERM, shortCapital, dryRun);
-        pipelineExecutor.run(basDt, "US", accountNo, StrategyType.MEDIUM_TERM, midCapital, dryRun);
-        pipelineExecutor.run(basDt, "US", accountNo, StrategyType.LONG_TERM, longCapital, dryRun);
+        runIfNotHalted(basDt, "KR", accountNo, StrategyType.SHORT_TERM, shortCapital, dryRun);
+        runIfNotHalted(basDt, "KR", accountNo, StrategyType.MEDIUM_TERM, midCapital, dryRun);
+        runIfNotHalted(basDt, "KR", accountNo, StrategyType.LONG_TERM, longCapital, dryRun);
+        runIfNotHalted(basDt, "US", accountNo, StrategyType.SHORT_TERM, shortCapital, dryRun);
+        runIfNotHalted(basDt, "US", accountNo, StrategyType.MEDIUM_TERM, midCapital, dryRun);
+        runIfNotHalted(basDt, "US", accountNo, StrategyType.LONG_TERM, longCapital, dryRun);
         log.debug("파이프라인 실행 완료: accountNo={}, basDt={}, dryRun={}", accountNo, basDt, dryRun);
+    }
+
+    private void runIfNotHalted(LocalDate basDt, String market, String accountNo,
+            StrategyType strategyType, BigDecimal capital, boolean dryRun) {
+        if (governanceHaltService.isHalted(market, strategyType.name())) {
+            log.info("파이프라인 실행 스킵: governance halt, market={}, strategyType={}, accountNo={}",
+                    market, strategyType, LogMaskingUtil.maskAccountNo(accountNo));
+            return;
+        }
+        pipelineExecutor.run(basDt, market, accountNo, strategyType, capital, dryRun);
     }
 }

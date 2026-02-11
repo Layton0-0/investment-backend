@@ -18,7 +18,7 @@
 
 ### 2.1 minimum-architecture-requirement.md
 
-퀀트 트레이딩 시스템(QTS)을 **한국 개인 투자자**용으로, 기관급 로직과 저비용 인프라로 설계한다. **Asymmetric Sophistication**: 전략·리스크·포트폴리오는 헤지펀드 수준, 물리 인프라는 단일 VPS·Docker Compose·TimescaleDB·Cron 수준으로 유지한다. 백엔드 핵심 모듈은 Gateway(KIS Adapter), Data Engine(수집·수정주가·Feature Store), Brain(시그널·옵티마이저·리밸런서), Risk Guard(Kill Switch·비중 한도·MDD 게이트), Execution(스마트 라우팅)이다. 국내 거래세·해외 양도세를 반영한 Tax-Aware Alpha, ML은 오프라인 학습·경량 추론만 배포한다. Phase 1(Foundation) → Phase 2(Quant Engine) → Phase 3(Intelligence & Tax) 순으로 개발한다.
+퀀트 트레이딩 시스템(QTS)을 **한국 개인 투자자**용으로, 기관급 로직과 저비용 인프라로 설계한다. **Asymmetric Sophistication**: 전략·리스크·포트폴리오는 헤지펀드 수준, 물리 인프라는 단일 VPS·Docker Compose·TimescaleDB·Cron 수준으로 유지한다. 백엔드 핵심 모듈은 Gateway(KIS Adapter), Data Engine(수집·수정주가·Feature Store), Brain(시그널·옵티마이저·리밸런서), Risk Guard(Kill Switch·비중 한도·MDD 게이트), Execution(스마트 라우팅)이다. 국내 거래세·해외 양도세를 반영한 Tax-Aware Alpha, ML은 오프라인 학습·경량 추론만 배포한다. Phase 1(Foundation) → Phase 2(Quant Engine) → Phase 3(Intelligence & Tax) 순으로 개발하며, **Phase 2에서는 데이터 정합성(수정주가·Point-in-Time)·백테스트 스트레스 검증을 필수**로 둔다. ([decisions.md](../decisions.md) ADR 19·20·21, [02-development-status.md](../09-planning/02-development-status.md) 참조.)
 
 ### 2.2 기획요청.md
 
@@ -42,7 +42,7 @@
 | **Risk Guard** | Compliance·Kill Switch·Exposure Limit | `core.engine.risk`(ComplianceEngine), `risk`(TradingHaltService, PortfolioPeakService) | 구현됨. VaR·연말 손실 한도 등 진행예정. |
 | **Execution** | Smart Order Router | `order`(OrderService, executeOrderForPipeline), KR/US 분기 | 구현됨. 실전 Throttling·WebSocket은 장기. |
 
-**인프라**: 단일 VPS·Docker Compose·TimescaleDB(PostgreSQL)·Cron/Spring Scheduler·GitHub Actions 배포 — [investment-infra](../investment-infra), [02-development-status.md](../09-planning/02-development-status.md)의 TimescaleDB 전환 완료와 정합.
+**인프라**: 단일 VPS·Docker Compose·TimescaleDB(PostgreSQL)·Cron/Spring Scheduler·GitHub Actions 배포 — [investment-infra](../../../investment-infra), [02-development-status.md](../09-planning/02-development-status.md)의 TimescaleDB 전환 완료와 정합. **멀티 VPS(Oracle 2대 + AWS 1대)** 구성 및 CI/CD는 [06-deployment/05-multi-vps-oracle-aws-cicd.md](../06-deployment/05-multi-vps-oracle-aws-cicd.md) 참조.
 
 ---
 
@@ -67,3 +67,4 @@
 | 버전 | 일자 | 변경 내용 |
 |------|------|-----------|
 | 1.0 | 2026-02-06 | 초기 작성 — 기준 문서 3종 지정·요약·논리 레이어 매핑·관련 문서 참조 관계. |
+| 1.1 | 2026-02-11 | Phase 2 필수: 데이터 정합성(수정주가·PIT)·백테스트 스트레스 검증 문구 추가. ADR 19·20·21 참조. |
