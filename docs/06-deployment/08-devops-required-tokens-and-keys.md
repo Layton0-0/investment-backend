@@ -40,7 +40,29 @@ CD 워크플로우는 **investment-infra** 저장소의 `.github/workflows/cd.ym
 
 - 배포하지 않을 노드는 해당 Variable을 **비워 두면** CD에서 해당 step이 스킵된다.
 
-### 1.3 CD 정상화 상태 (정리)
+### 1.3 최종 확인용 체크리스트 (CD 실행 전)
+
+CD를 처음 실행하기 전에 아래를 확인한다.
+
+| 구분 | 항목 | 확인 |
+|------|------|------|
+| **Secrets** | `SSH_PRIVATE_KEY_ORACLE_OSAKA` (Oracle 1 배포 시) | Settings → Secrets and variables → Actions → Secrets |
+| | `SSH_PRIVATE_KEY_ORACLE_KOREA` (Oracle 2 배포 시) | 동일 |
+| | `SSH_PRIVATE_KEY_ORACLE_MUMBAI` (Oracle 3 배포 시) | 동일 |
+| | `SSH_PRIVATE_KEY_AWS` (AWS 배포 시) | 동일 |
+| | `GHCR_PULL_TOKEN` (이미지가 private일 때) | 동일 |
+| **Variables** | `DEPLOY_HOST_ORACLE_OSAKA` (Public IP 또는 호스트명) | Settings → Variables |
+| | `DEPLOY_HOST_ORACLE_KOREA` | 동일 |
+| | `DEPLOY_HOST_ORACLE_MUMBAI` | 동일 |
+| | `DEPLOY_HOST_AWS` (선택) | 동일 |
+| | `DEPLOY_USER` (기본 ubuntu, 미설정 시 ubuntu 사용) | 동일 |
+| **노드** | 각 배포 대상 노드에 investment-infra 클론됨 | SSH로 `ls ~/investment-infra` 확인 |
+| | 각 노드에 .env 설정됨 (07-cicd-implementation-checklist §3.5 참조) | `./scripts/check-node-ready.sh` |
+| **이미지** | GHCR에 backend / prediction-service / data-collector (및 필요 시 frontend) 이미지 존재 | 각 서비스 레포 main 푸시로 CI 1회 실행 후 확인 |
+
+위가 모두 충족된 뒤 **Actions → CD → Run workflow** 로 배포한다.
+
+### 1.4 CD 정상화 상태 (정리)
 
 - **트리거**: `push` to main (경로 무시: `**.md`, `docs/**`) 또는 `workflow_dispatch`.
 - **노드별 실행**: Variables에 `DEPLOY_HOST_*`가 설정된 노드만 해당 step 실행. Secrets에 `SSH_PRIVATE_KEY_*`, (private 이미지 사용 시) `GHCR_PULL_TOKEN` 필요.
@@ -51,7 +73,7 @@ CD 워크플로우는 **investment-infra** 저장소의 `.github/workflows/cd.ym
 
 **Oracle 2/3 deploy 단계**: 첫 풀 시 prediction-service 이미지(~2.9GB) 때문에 오래 걸릴 수 있음. `cd.yml`에서 해당 SSH 단계 `command_timeout`을 15m으로 두었음. **Oracle 3 (Mumbai)**에서 `dial tcp ...:22: i/o timeout`이 나오면 GitHub Actions 러너에서 해당 호스트로 SSH 접속이 안 되는 것이므로, VM 기동 여부·방화벽/보안 그룹(22 포트)·네트워크를 점검한다.
 
-### 1.4 Agent가 CD 푸시 후 직접 확인하려면
+### 1.5 Agent가 CD 푸시 후 직접 확인하려면
 
 **방법 1 — GitHub CLI (권장)**  
 로컬에 [GitHub CLI](https://cli.github.com/) 설치 후 `gh auth login` 실행.  
@@ -97,7 +119,7 @@ Cursor MCP에 **GitHub Actions Trigger MCP**를 추가하면 Agent가 워크플�
 
 - **권장**: `latest` 또는 `sha-<7자리>` (예: `sha-abc1234`).  
   각 서비스 레포 CI가 푸시하는 태그와 맞춰야 한다.  
-  - Backend/Frontend/Prediction/Data-collector CI는 `ghcr.io/<owner>/investment-backend:sha-${{ github.sha }}` 형태로 푸시.
+  - Backend/Frontend/Prediction/Data-collector CI는 `sha-<전체SHA>`, `sha-<7자리>`, `latest` 세 가지 태그로 푸시.
 - **CD 입력**: `workflow_dispatch` 시 입력한 `image_tag` 또는 push 시 기본값.  
   investment-infra의 cd.yml에서는 기본값을 `latest` 또는 `sha-${GITHUB_SHA::7}` 형태로 사용할 수 있다.  
   **멀티 레포**이므로 “통합 배포 시점”에 맞출 태그(예: backend main 브랜치 최신 SHA)를 수동으로 입력하거나, infra 쪽에서 고정 정책을 두고 사용한다.
@@ -152,3 +174,4 @@ Secrets/Variables(§1) 세팅이 끝났으면 아래 순서로 CD를 실행한�
 | 1.0 | 2026-02-12 | 초안: DevOps 구축 시 필요한 토큰·키·Variables·REGISTRY/이미지 태그 정리 |
 | 1.1 | 2026-02-12 | §4 배포 파이프라인 실행 (방법 A) 절차·검증 방법 추가. §5·§6 번호 조정. |
 | 1.2 | 2026-02-12 | §3.3 DB 비밀번호: .env 전용·동기화 안내만 유지, 구체 규칙 제거(공개 대비). |
+| 1.3 | 2026-02-12 | §1.3 최종 확인용 체크리스트(CD 실행 전) 추가. §1.4·§1.5 번호 조정. §3.1 이미지 태그 7자리 반영. |

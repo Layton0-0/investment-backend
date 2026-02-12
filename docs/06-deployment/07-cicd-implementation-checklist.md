@@ -74,6 +74,42 @@
 - [x] investment-infra: `.env.example` 제공(필수 변수 목록만, 값 없음). 각 노드에서 복사 후 .env 설정.
 - [x] 05-multi-vps-oracle-aws-cicd.md: Oracle 3(Mumbai), 시크릿, CD 순서, SSH config(oci-mumbai) 반영.
 
+### 3.5 SSH로 노드 점검 절차
+
+CD가 성공하려면 각 노드에 **investment-infra 클론·Docker·.env**가 선행되어야 한다. SSH(수동 또는 Cursor SSH MCP)로 아래 순서를 실행한다.
+
+- **Oracle 1 (Osaka)**  
+  1. `cd ~ && ls -la investment-infra` — 없으면 `git clone <investment-infra URL> investment-infra`  
+  2. `cd investment-infra && ./scripts/check-node-ready.sh`  
+  3. `.env` 없으면 `cp .env.example .env` 후 `POSTGRES_PASSWORD`, `POSTGRES_USER`, `POSTGRES_DB` 설정  
+  4. (선택) `./scripts/deploy-oracle1.sh` 로 데이터 계층 기동 확인  
+
+- **Oracle 2 (Korea)**  
+  1. 클론 여부 확인 후 `check-node-ready.sh` 실행  
+  2. `.env`에 `SPRING_DATASOURCE_URL`(Oracle 1 Public IP 기반 JDBC URL), `REDIS_HOST`(Oracle 1 Public IP), `POSTGRES_PASSWORD`, `REGISTRY`, `BACKEND_TAG` 등 설정  
+  3. 수동 1회 배포 검증: `export BACKEND_TAG=latest PREDICTION_TAG=latest DATA_COLLECTOR_TAG=latest && ./scripts/set-env-tags.sh && ./scripts/deploy-oracle2.sh`  
+
+- **Oracle 3 (Mumbai)**  
+  - 동일: 클론 → check-node-ready → .env(SPRING_DATASOURCE_URL, REDIS_HOST = Oracle 1 Public IP) → set-env-tags + deploy-oracle3-mumbai.sh  
+
+Mumbai 노드도 Cursor SSH MCP에 `ssh-mcp-oracle-mumbai-yoon`을 등록해 두었다면, Osaka/Korea와 동일하게 원격으로 `check-node-ready.sh` 및 배포 검증이 가능하다.
+
+SSH MCP 키 경로 오류 등으로 원격 실행이 불가하면, 터미널에서 SSH로 접속한 뒤 위 명령을 수동 실행한다.
+
+### 3.6 CI/CD 전체 점검 요약
+
+| 구분 | 항목 | 상태/비고 |
+|------|------|-----------|
+| **CI** | investment-backend ci.yml | push main/dev, PR → test, bootJar, Docker push (sha-전체, sha-7자리, latest) |
+| | investment-front ci.yml | push main, PR → npm ci/build/test, Docker push (investment-frontend) |
+| | investment-data-collector ci.yml | push main, PR → pip install, Docker push |
+| | investment-prediction-service ci.yml | push main, PR → pip install, pytest, Docker push |
+| **CD** | investment-infra cd.yml | workflow_dispatch + push main → Oracle 1 → 2 → 3 → AWS(선택), Verify 2/3 |
+| | Oracle 3 (Mumbai) | Deploy + Verify 실패 시 워크플로우 실패 |
+| **Secrets** | SSH_PRIVATE_KEY_ORACLE_OSAKA/KOREA/MUMBAI, (선택) AWS, GHCR_PULL_TOKEN | 08 §1.1 참조 |
+| **Variables** | DEPLOY_HOST_ORACLE_OSAKA/KOREA/MUMBAI, (선택) DEPLOY_HOST_AWS, DEPLOY_USER | 08 §1.2 참조 |
+| **노드 준비** | Oracle 1/2/3 각각 investment-infra 클론, .env, check-node-ready.sh 통과 | §3.5 순서대로 SSH 또는 MCP로 점검 |
+
 ---
 
 ## 4. 참고 문서
@@ -92,3 +128,5 @@
 | 1.0 | 2026-02-11 | 초안: CI/CD 갭 정리, 권장 구조, 구현 체크리스트 |
 | 1.1 | 2026-02-12 | §1 갭 정리·§3.3 CD 워크플로우 현황 반영(배포 후 검증·시크릿/변수 문서 링크). §4 참고 문서에 08-devops-required-tokens-and-keys.md 추가. |
 | 1.2 | 2026-02-12 | §3.1 사전 점검 완료 처리. CD에 배포 전 git fetch/reset 추가·Oracle 1은 deploy-oracle1.sh 사용. §3.4 .env.example·스크립트 목록 반영. |
+| 1.3 | 2026-02-12 | §3.5 SSH로 노드 점검 절차 추가 (Oracle 1/2/3 순서·check-node-ready·.env·수동 1회 배포). |
+| 1.4 | 2026-02-12 | §3.6 CI/CD 전체 점검 요약 추가. §3.5 Mumbai SSH MCP(ssh-mcp-oracle-mumbai-yoon) 안내 추가. |
