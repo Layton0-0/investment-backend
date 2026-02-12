@@ -23,6 +23,7 @@ CD 워크플로우는 **investment-infra** 저장소의 `.github/workflows/cd.ym
 | `SSH_PRIVATE_KEY_ORACLE_KOREA` | Oracle Korea(Oracle 2) SSH 배포 | 동일 |
 | `SSH_PRIVATE_KEY_ORACLE_MUMBAI` | India West (Mumbai, Oracle 3) SSH 배포 | 동일 |
 | `SSH_PRIVATE_KEY_AWS` | AWS SSH 배포 (AWS 사용 시) | 동일 |
+| `GHCR_PULL_TOKEN` | GHCR private 이미지 pull (Oracle 2/3, AWS) | GitHub PAT. 권한: **read:packages**. 이미지가 private일 때만 필요. 없으면 해당 step에서 docker login 생략. |
 
 - **등록 방법**: GitHub 저장소 → Settings → Secrets and variables → Actions → New repository secret.  
 - **값**: PEM 형식 비밀키 파일 전체 내용을 복사해 붙여넣기. **문서·코드에는 절대 넣지 않는다.**
@@ -78,7 +79,12 @@ CD 워크플로우는 **investment-infra** 저장소의 `.github/workflows/cd.ym
   예: 저장소가 `myorg/investment-backend`이면 `REGISTRY=ghcr.io/myorg`.
 - **이유**: 이미지 풀 경로가 `ghcr.io/<owner>/investment-backend:latest` 등이 되어야 하므로, `<owner>` 부분을 REGISTRY에 넣는다.
 - 노드별 `.env`에 `REGISTRY`, `BACKEND_TAG`, `PREDICTION_TAG`, `DATA_COLLECTOR_TAG`, `FRONTEND_TAG` 및 DB/Redis 연결 정보를 설정한다.  
-  (실제 비밀번호·IP는 저장소에 커밋하지 않는다.)
+  (실제 비밀번호·IP는 저장소에 커밋하지 않는다.) investment-infra 루트에 `.env.example`이 있으니 복사 후 값만 채운다.
+
+### 3.3 DB 비밀번호 (노드 .env)
+
+- **비밀번호는 .env에서만 설정**하며, 값은 저장소에 커밋하지 않는다. (공개 시에도 규칙·예시를 문서에 적지 않는다.)
+- **Oracle 1 (TimescaleDB)** 와 **Oracle 2 (Backend)** 는 같은 DB를 사용하므로, 두 노드의 `.env`에 넣는 `POSTGRES_PASSWORD`는 **동일한 값**이어야 한다.
 
 ---
 
@@ -116,3 +122,4 @@ Secrets/Variables(§1) 세팅이 끝났으면 아래 순서로 CD를 실행한�
 |------|------|-----------|
 | 1.0 | 2026-02-12 | 초안: DevOps 구축 시 필요한 토큰·키·Variables·REGISTRY/이미지 태그 정리 |
 | 1.1 | 2026-02-12 | §4 배포 파이프라인 실행 (방법 A) 절차·검증 방법 추가. §5·§6 번호 조정. |
+| 1.2 | 2026-02-12 | §3.3 DB 비밀번호: .env 전용·동기화 안내만 유지, 구체 규칙 제거(공개 대비). |
