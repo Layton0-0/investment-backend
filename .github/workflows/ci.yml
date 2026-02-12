@@ -26,6 +26,9 @@ jobs:
 
       - name: Run tests
         run: ./gradlew test --no-daemon
+        env:
+          GRADLE_OPTS: ''
+          JAVA_OPTS: ''
 
       - name: Build JAR
         run: ./gradlew bootJar --no-daemon
