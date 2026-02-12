@@ -21,15 +21,15 @@
 
 ## 3. 설정 (Cursor)
 
-프로젝트 템플릿: [.cursor/mcp.json.template](../../.cursor/mcp.json.template)(`ssh-mcp-oracle-osaka-yoon`, `ssh-mcp-oracle-korea-jihee` 항목 포함).  
+프로젝트 템플릿: [.cursor/mcp.json.template](../../.cursor/mcp.json.template)(`ssh-mcp-oracle-osaka-yoon`, `ssh-mcp-oracle-korea-jihee`, `ssh-mcp-oracle-mumbai-yoon` 항목 포함).  
 실제 사용 시 **복사해 `C:\Users\<사용자명>\.cursor\mcp.json`으로 두고**, 아래 플레이스홀더를 본인 환경에 맞게 바꾼다.
 
 - **시크릿**: SSH 비밀키 경로, 호스트 IP, sudo 비밀번호는 **저장소에 커밋하지 않는다.** `mcp.json`은 사용자 홈 `.cursor`에만 두고 Git에 올리지 않는다.
-- **호스트별**로 Oracle Osaka / Oracle Korea를 구분해 두 개 등록한다(`ssh-mcp-oracle-osaka-yoon`, `ssh-mcp-oracle-korea-jihee`). 각각 `--host`, `--key`를 다르게 둘 수 있다.
+- **호스트별**로 Oracle Osaka / Oracle Korea / Oracle Mumbai를 구분해 등록한다(`ssh-mcp-oracle-osaka-yoon`, `ssh-mcp-oracle-korea-jihee`, `ssh-mcp-oracle-mumbai-yoon`). 각각 `--host`, `--key`를 다르게 둘 수 있다. **Mumbai 노드도 동일하게 MCP에 등록하면 Agent가 배포·점검 시 사용 가능**하다.
 
 ### 3.1 mcp.json 예시 (플레이스홀더)
 
-Oracle Osaka (yoon) / Oracle Korea (jihee) 두 호스트:
+Oracle Osaka (yoon) / Oracle Korea (jihee) / Oracle Mumbai (yoon) 호스트:
 
 ```json
 "ssh-mcp-oracle-osaka-yoon": {
@@ -61,15 +61,47 @@ Oracle Osaka (yoon) / Oracle Korea (jihee) 두 호스트:
     "--timeout=60000",
     "--maxChars=none"
   ]
+},
+"ssh-mcp-oracle-mumbai-yoon": {
+  "type": "stdio",
+  "command": "npx",
+  "args": [
+    "-y",
+    "ssh-mcp",
+    "--",
+    "--host=YOUR_ORACLE_MUMBAI_PUBLIC_IP",
+    "--port=22",
+    "--user=ubuntu",
+    "--key=YOUR_SSH_KEY_PATH_MUMBAI",
+    "--timeout=60000",
+    "--maxChars=none"
+  ]
 }
 ```
 
-- `YOUR_ORACLE_OSAKA_PUBLIC_IP` / `YOUR_ORACLE_KOREA_PUBLIC_IP`: 각 OCI VM Public IP.
+- `YOUR_ORACLE_OSAKA_PUBLIC_IP` / `YOUR_ORACLE_KOREA_PUBLIC_IP` / `YOUR_ORACLE_MUMBAI_PUBLIC_IP`: 각 OCI VM Public IP.
 - `ubuntu`: Ubuntu 이미지 기본 사용자. Oracle Linux면 `opc`.
-- `YOUR_SSH_KEY_PATH_OSAKA` / `YOUR_SSH_KEY_PATH_KOREA`: Windows에서 각 호스트용 비밀키 경로(절대 경로). **경로에 공백이 있으면 반드시 따옴표로 감싼다**(예: `"--key=\"D:/OneDrive - HKNC/path/to/key.key\""`). 그렇지 않으면 `'ssh-mcp'는(은) 내부 또는 외부 명령...` 오류로 MCP가 시작되지 않는다.
+- `YOUR_SSH_KEY_PATH_OSAKA` / `YOUR_SSH_KEY_PATH_KOREA` / `YOUR_SSH_KEY_PATH_MUMBAI`: Windows에서 각 호스트용 비밀키 **절대 경로**. 아래 §3.2·§5.3 규칙을 지켜야 MCP가 정상 동작한다.
 - `--timeout`: 밀리초. 기본 60000(1분).
 - `--maxChars=none`: 명령 길이 제한 해제(필요 시).
 - sudo가 필요하면 `"--sudoPassword=..."` 추가(보안상 저장소에 넣지 말 것).
+
+### 3.2 SSH MCP가 정상 동작하기 위한 키 경로 규칙 (필수)
+
+다음을 지키지 않으면 **ENOENT** 또는 `C:\Users\<사용자명>\` 가 경로 앞에 붙는 오류**가 난다.
+
+1. **`--key=` 뒤에는 따옴표를 넣지 않는다.**  
+   - 잘못: `"--key=\"D:/path/to/key.key\""`  
+   - 올바름: `"--key=D:/path/to/key.key"`
+2. **경로는 반드시 슬래시(`/`)만 사용한다.**  
+   - 예: `D:/OneDrive - HKNC/study/cloud/key/oci_osaka.key`  
+   - 백슬래시(`\`)는 사용하지 않는다.
+3. **경로에 공백이 있으면** 일부 환경에서 인자가 잘려서 실패할 수 있다. 이 경우 **키 파일을 공백 없는 경로로 복사**한 뒤 그 경로를 쓴다.  
+   - 수동: `copy "D:\OneDrive - HKNC\study\cloud\key\oci_osaka.key" %USERPROFILE%\.ssh\oci_osaka.key`  
+   - 또는 프로젝트 루트에서: `.\scripts\setup-ssh-keys-for-mcp.ps1 -OsakaKey "D:\path\to\osaka.key" -KoreaKey "D:\path\to\korea.key" -MumbaiKey "D:\path\to\mumbai.key"` 실행 후, 출력된 `--key=` 값을 mcp.json에 넣는다.  
+   - mcp.json에는 `"--key=C:/Users/YOUR_USERNAME/.ssh/oci_osaka.key"` (실제 사용자명으로 교체, 슬래시 사용).
+
+템플릿에서는 `"--key=YOUR_SSH_KEY_PATH_OSAKA"` 형태로 두었으므로, `YOUR_SSH_KEY_PATH_OSAKA` 자리에 위 규칙을 만족하는 경로 한 덩어리만 넣으면 된다.
 
 ---
 
@@ -99,10 +131,10 @@ MCP가 시작되지 않고 위 오류가 나오면:
   "command": "ssh-mcp",
   "args": [
     "--",
-    "--host=146.56.98.230",
+    "--host=YOUR_ORACLE_KOREA_PUBLIC_IP",
     "--port=22",
     "--user=ubuntu",
-    "--key=\"D:/OneDrive - HKNC/study/cloud/key/neekly/layton/e2/ssh-key-2025-07-22.key\"",
+    "--key=C:/Users/YOUR_USERNAME/.ssh/oci_korea.key",
     "--timeout=60000",
     "--maxChars=none"
   ]
@@ -111,7 +143,20 @@ MCP가 시작되지 않고 위 오류가 나오면:
 
 ### 5.2 경로에 공백이 있을 때
 
-`--key=` 뒤 경로에 공백이 있으면 반드시 따옴표로 감싼다: `"--key=\"D:/OneDrive - HKNC/path/to/key.key\""`
+경로에 공백이 있으면 §3.2대로 **키를 공백 없는 경로(예: `%USERPROFILE%\.ssh\oci_osaka.key`)로 복사**하고, 그 경로를 슬래시로 써서 `--key=C:/Users/...` 로 넣는 것을 권장한다. `--key=` 값 안에 따옴표를 넣으면 오히려 ENOENT가 날 수 있다.
+
+### 5.3 ENOENT: C:\Users\... 가 키 경로 앞에 붙는 오류
+
+**증상**: MCP 실행 시 `ENOENT: no such file or directory, open 'C:\Users\HNW\"D:\OneDrive - HKNC\...'` 처럼, 사용자 홈이 키 경로 앞에 붙은 잘못된 경로로 파일을 열려고 한다.
+
+**원인**: `--key=` 인자 값에 **따옴표를 넣었거나**, 경로가 상대 경로로 해석되어 홈이 앞에 붙은 경우.
+
+**조치**:
+1. mcp.json에서 해당 호스트의 `args` 배열 안 **`--key=`** 항목을 찾는다.
+2. **따옴표 제거**: `"--key=\"D:/...\""` → `"--key=D:/..."`
+3. **경로는 슬래시만 사용**: `D:/OneDrive - HKNC/...` (백슬래시 사용 금지).
+4. 그래도 실패하면 키를 공백 없는 경로로 복사 후 §3.2 예시처럼 `C:/Users/<사용자명>/.ssh/oci_osaka.key` 형태로 지정한다.
+5. Cursor를 재시작한 뒤 MCP를 다시 사용한다.
 
 ---
 

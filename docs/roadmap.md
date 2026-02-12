@@ -132,7 +132,7 @@
 
 #### 5.2 전략 확장 (시장·기간별)
 - [ ] **수정주가(Adjuster) 파이프라인 — Phase 2 Quant Engine 필수** — 일봉 저장·팩터 계산·백테스트 입력은 수정주가만 사용. 원주가는 차트 표시 등에만 사용. 상세: [개발 진행 현황](09-planning/02-development-status.md), [decisions.md](decisions.md) 데이터 정합성 ADR.
-- [ ] **백테스트 스트레스 검증** — 2020-03(코로나 폭락), 2022-01~06(금리 인상기) 구간 MDD·청산 규칙·리스크 게이트 검증 및 결과 문서화.
+- [ ] **백테스트 스트레스 검증** — 2020-03(코로나 폭락), 2022-01~06(금리 인상기) 구간 MDD·청산 규칙·리스크 게이트 검증 및 결과 문서화. 시나리오·검증 기준·실행 방법은 [backtest-stress-results.md](02-architecture/backtest-stress-results.md)에 문서화 완료; 실제 실행 결과는 해당 구간 데이터 수집 후 동 문서 §3에 기입. [개발 진행 현황](09-planning/02-development-status.md) 진행예정 참조.
 - [ ] **Walk-Forward 또는 Train/Test 기간 분리 백테스트** (권장) — 전략별 p·b 추정 시 오버피팅 방지.
 - [x] 팩터 계산 엔진 (구축 로드맵 2단계) — KRX 일별 저장·이격도·변동성 돌파·유동성·GET /api/v1/signals·자동투자 현황 시그널 연동
 - [x] 4단계 파이프라인 (1차) — 유니버스(유동성)·시그널 유니버스 필터·PositionSizingService·PipelineExecutor·ExitRuleService(Time-Cut). 상세: [개발 진행 현황](09-planning/02-development-status.md)

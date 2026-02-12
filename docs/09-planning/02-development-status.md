@@ -25,6 +25,8 @@
   [05-multi-vps-oracle-aws-cicd.md](../06-deployment/05-multi-vps-oracle-aws-cicd.md) 신설: 멀티 VPS 토폴로지(데이터/앱/엣지 계층), 메모리 튜닝, CI(GitHub Actions)·CD(노드별 배포·롤백), 보안·체크리스트. investment-infra README·단일 VPS 문서·배포 스크립트 연동.
 - [x] **Cursor OCI 서버 접속 환경 (Remote-SSH + SSH MCP)**  
   05-multi-vps-oracle-aws-cicd.md §9: Cursor Remote-SSH로 Oracle 1/Oracle 2 접속(SSH config 예시, 접속 절차, 노드별 작업 요약). [07-cursor-oci-ssh-mcp.md](../08-setup-guides/07-cursor-oci-ssh-mcp.md) 신설: 로컬 Cursor에서 OCI 원격 명령(exec/sudo-exec)용 SSH MCP(tufantunc/ssh-mcp) 설정·env·도구 설명. .cursor/mcp.json.template에 ssh-mcp-oracle-osaka-yoon, ssh-mcp-oracle-korea-jihee 항목 추가(Ubuntu·호스트별 키 경로). 05-screen-test-and-mcp-guide.md MCP 표에 SSH MCP 선택 항목 반영.
+- [x] **DevOps 구축: 토큰/키 문서·노드 점검 스크립트·CD 헬스체크**  
+  [08-devops-required-tokens-and-keys.md](../06-deployment/08-devops-required-tokens-and-keys.md) 신설: GitHub Actions Secrets/Variables·로컬 SSH MCP·이미지 태그/REGISTRY 정리. .cursor/mcp.json.template·07-cursor-oci-ssh-mcp.md에 Oracle Mumbai(ssh-mcp-oracle-mumbai-yoon) 추가. investment-infra/scripts/check-node-ready.sh: 노드별 investment-infra 존재·Docker·.env 필수 변수 점검. cd.yml에 Oracle 2/3 배포 후 Backend actuator/health 검증 step 추가. 07-cicd-implementation-checklist·scripts/README.md 반영.
 - [x] **한국투자증권 주식잔고조회 INQR_DVSN 제한 대응 (2026-02-11 공지)**  
   주식잔고조회 API INQR_DVSN 02(종목별) 제한에 따라 01(대출일별)로 변경. `KoreaInvestmentAccountClient.inquireBalance`, `verifyAccountByCredentials` 및 [09-korea-investment-api-guide.md](../04-api/09-korea-investment-api-guide.md) 예시·주식잔고조회 섹션 반영.
 - [x] **슈퍼관리자(yoon) DB 지정**  
@@ -245,6 +247,10 @@
   **섹터 분석**: GET `/api/v1/analysis/sector` (accountNo 또는 symbols+market), SectorAnalysisService·SymbolSectorRepository, 포트폴리오 페이지 섹터 비중·수익 기여도 카드. **포트폴리오 리스크 메트릭**: GET `/api/v1/risk/portfolio-metrics?accountNo=`, RiskReportService.getPortfolioRiskMetrics, VaR/CVaR/MDD·Sharpe/Sortino, 포트폴리오 페이지 리스크 카드. **리밸런싱 제안**: GET `/api/v1/trading-portfolios/rebalance-suggestions?accountNo=&market=US`, RebalanceSuggestionsService(Rebalancer+RoboAllocationEngine), 포트폴리오 페이지 US 리밸런싱 제안 카드. 02-api-endpoints·11-api-frontend-mapping 반영.
 - [x] **Phase 1 미연동 API 정리**  
   **주문 단건**: ordersApi.getOrder(orderId, accountNo), 404 시 null. **계좌 상세 5종**: accountApi에 getBalance, getBuyableAmount, getSellableQuantity, getOrderHistory, getProfitLoss 및 DTO 추가(404/400 시 null 또는 빈 배열). **user/accounts**: userAccountsApi에 getAccounts(serverType), getAccount(accountId), setMainAccount(accountId), AccountListResponseDto·UserAccountDto. 설정 페이지 "등록된 계좌" 카드에서 모의/실 계좌 목록·메인으로 설정 버튼 연동. 11-api-frontend-mapping §2 미연동 제거·갱신.
+- [x] **Phase 1 Ops 전략 거버넌스 프론트 연동**  
+  Admin 전용 `/ops/governance` 라우트·메뉴 추가. opsApi에 getGovernanceResults(limit), getGovernanceHalts(), clearGovernanceHalt(market, strategyType, clearedBy) 연동. GovernanceView: 검사 결과 이력 테이블(limit 20), 활성 halt 목록·halt 해제 버튼. 11-api-frontend-mapping §4 전략 거버넌스 행 연동 완료 반영.
+- [x] **Phase 1 메뉴별 API·프론트 순차 검토 완료**  
+  11-api-frontend-mapping §4·§5.2 기준으로 메뉴(라우트)별 백엔드 API 필요·연동 현황 검토. 미연동·미구현 항목 없음 확인. 순차 개발 시 다음 우선순위는 신규 메뉴/기능 추가 시 해당 문서 §4·§5.2 갱신 후 진행.
 - [x] **대시보드 성과 요약 API·프론트 연동**  
   GET `/api/v1/dashboard/performance-summary` (DashboardController), RiskReportService.getSummary 기반 DashboardPerformanceSummaryDto(총 평가액·MDD·Sharpe·Sortino·VaR·CVaR). dashboardApi.getPerformanceSummary, useDashboardData에서 병렬 조회, Dashboard 페이지에 성과 요약 카드(총 평가액·MDD·Sharpe·VaR) 표시. 02-api-endpoints·11-api-frontend-mapping 반영.
 - [x] **고급 분석·포트폴리오 2차 (상관관계·리스크 기반 포지션 사이징)**  
@@ -270,6 +276,8 @@
 
 - [ ] **메뉴별 백엔드 개발 순차 진행**  
   [11-api-frontend-mapping.md §4](../04-api/11-api-frontend-mapping.md) 메뉴(라우트)별 백엔드 API 필요·연동 현황 및 §5.2 미구현·미연동 우선순위를 기준으로, 백엔드 개발이 필요한 메뉴를 하나씩 구현(API 추가·수정 → 프론트 연동 → 문서 갱신). Admin 전용 메뉴(데이터 파이프라인, 알림센터, 리스크, 모델/예측, 감사 로그, 시스템 헬스)는 각 메뉴별 필요한 백엔드 기능을 11-api-frontend-mapping에 나열한 대로 순차 진행.
+- [ ] **백테스트 스트레스 결과 기입(데이터 수집 후)**  
+  [backtest-stress-results.md](../02-architecture/backtest-stress-results.md) §3: 스트레스 구간(2020-02~04 코로나 폭락, 2022-01~06 금리 인상기)에 대한 TB_DAILY_STOCK·TB_SIGNAL_SCORE 수집(백필 또는 수동) 후 POST /api/v1/backtest 실행하여 MDD·CAGR·청산 횟수·거래 수 등 결과를 해당 문서 §3.1·§3.2 표에 기입. 데이터 점검 방법은 backtest-stress-results.md §4 참조.
 
 ### 데이터·파이프라인 (Data Engine)
 
@@ -396,3 +404,4 @@
 | 1.41 | 2026-02-11 | 완료: KIS Open API 실전 후속 — WebSocket approval_key REST 발급(KoreaInvestmentTokenClient/TokenService), Impl approval-key-fetch-enabled·연결 시 발급 사용. 순위/투자자 path·TR_ID 기본값(application.yml)·가이드 §순위분석·투자자 API·§approval_key 발급. UniverseFilterService 거래량 순위 연동(volume-rank-enabled·volume-rank-user-id). ADR 18 실전 후속·제한 사항 갱신. |
 | 1.42 | 2026-02-11 | 기획 고도화(퀀트 관점): 수정주가 Phase 2 필수·PIT·Look-ahead 방지·스트레스 검증(2020/2022)·Walk-Forward(권장)·거래 사유 추적·전략 중단 원칙·리스크 알림(선택) 진행예정 반영. |
 | 1.43 | 2026-02-11 | Phase 2 Quant Engine 구현: 수정주가 파이프라인(한투 FID_ORG_ADJ_PRC=0, US yfinance auto_adjust=True, KR/KRX·DailyStock 주석), PIT·Look-ahead 검증(BacktestService·FactorCalculationService·RoboBacktestService 주석·00-strategy-registry §1.1), 백테스트 스트레스 검증(backtest-stress-results.md 시나리오 정의·검증 기준·BacktestServiceTest 스트레스 구간 테스트 추가). 진행예정에서 수정주가·PIT·스트레스 항목 완료로 이동. |
+| 1.44 | 2026-02-12 | 기획 정합 퀀트 개발 진행: Phase 1 메뉴별 API·프론트 순차 검토 완료(11-api-frontend-mapping §4·§5.2 미연동 항목 없음). 백테스트 스트레스 결과 기입(데이터 수집 후) 진행예정 추가, backtest-stress-results.md §4 데이터 점검 방법·§3 이슈·비고 안내 보강. roadmap.md 백테스트 스트레스 검증 항목과 development-status·backtest-stress-results 정합. |

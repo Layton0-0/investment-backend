@@ -15,9 +15,9 @@
 
 | 리소스   | 별칭(예)   | 스펙                                       | 비고                          |
 |----------|------------|--------------------------------------------|-------------------------------|
-| Oracle 1 | Oracle Osaka | 1 OCPU, 1GB RAM, Public IP·Private IP 각 1개 (문서에 실제 값 기입 금지) | Always Free (E2.1.Micro)      |
-| Oracle 2 | Oracle Korea | 1 OCPU, 1GB RAM, Public IP 1개 (문서에 실제 값 기입 금지)             | Always Free                   |
-| Oracle 3 | India West (Mumbai) | 1 OCPU, 1GB RAM, Public IP 1개 (문서에 실제 값 기입 금지)        | Always Free (E2.1.Micro, 증설) |
+| Oracle 1 | Oracle Osaka | 1 OCPU, 1GB RAM, Public IP·Private IP 각 1개 (문서에 실제 값 기입 금지) 50GB volume | Always Free (E2.1.Micro)      |
+| Oracle 2 | Oracle Korea | 1 OCPU, 1GB RAM, Public IP 1개 (문서에 실제 값 기입 금지)    50GB volume         | Always Free                   |
+| Oracle 3 | India West (Mumbai) | 1 OCPU, 1GB RAM, Public IP 1개 (문서에 실제 값 기입 금지)    100GB volume    | Always Free (E2.1.Micro, 증설) |
 | AWS      | (선택)     | 1 vCPU, 1GB RAM (t2.micro / t3.micro)                                | Free Tier 12개월              |
 
 - 실제 IP·호스트명·키 경로는 저장소·문서에 넣지 않는다. 배포/접속 시 본인 환경 값만 사용한다.
@@ -363,6 +363,7 @@ icacls "D:\path\to\ssh-key-2.key" /grant "<사용자명>:F"
 
 - [OCI VCN·서브넷 설계](06-oci-vcn-subnet-design.md)
 - [CI/CD 구현 체크리스트](07-cicd-implementation-checklist.md)
+- [DevOps 구축 시 필요한 토큰·키 정리](08-devops-required-tokens-and-keys.md)
 - [단일 VPS·배치·배포 절차](../08-setup-guides/06-single-vps-batch-deployment.md)
 - [서버 스펙](03-server-specification.md)
 - [investment-infra README](../../../investment-infra/README.md)

@@ -39,7 +39,7 @@
 | CAGR % | | |
 | 청산 횟수 | | |
 | 거래 수 | | |
-| 이슈·비고 | | 데이터 부재 시 "구간 내 일봉/시그널 없음" 등 |
+| 이슈·비고 | 해당 구간 TB_DAILY_STOCK·TB_SIGNAL_SCORE 수집 후 POST /api/v1/backtest로 실행하여 위 값을 기입. 데이터 부재 시 거래 0건·수익 곡선 평평·"구간 내 일봉/시그널 없음" 기록. | |
 
 ### 3.2 금리 인상기 (2022-01-03 ~ 2022-06-30)
 
@@ -52,12 +52,23 @@
 | CAGR % | | |
 | 청산 횟수 | | |
 | 거래 수 | | |
-| 이슈·비고 | | |
+| 이슈·비고 | 동일. 해당 구간 데이터 수집 후 백테스트 실행·결과 기입. 데이터 부재 시 위와 동일 처리. | |
 
 ---
 
-## 4. 참조
+## 4. 데이터 점검 방법
+
+스트레스 구간 실행 전 해당 시장·기간 데이터 유무를 확인할 수 있다.
+
+- **원천별 최근 기준일**: Admin 전용 `GET /api/v1/ops/data-pipeline/status` 응답의 KR/US `latestBasDt`(또는 동일 정보)로 각 시장 최근 수집 일자를 확인. 2020-02~04, 2022-01~06 구간이 포함되려면 과거 일봉 수집(백필) 또는 수동 수집이 선행되어야 함.
+- **DB 직접 확인(운영자)**: `TB_DAILY_STOCK`에서 `MARKET='KR'` 또는 `'US'`, `BAS_DT` BETWEEN 시나리오 구간으로 건수 조회. `TB_SIGNAL_SCORE` 동일 구간·시장 조회. 0건이면 백테스트 실행 시 거래 0건·평평한 수익 곡선이 나오므로, 결과 표에 "데이터 부재"로 기입.
+- **실행 순서**: 데이터 확보 후 인증된 사용자가 `POST /api/v1/backtest` (Body: startDate, endDate, market, strategyType, initialCapital) 호출 → 응답 메트릭(MDD·CAGR·청산 횟수·거래 수)을 §3.1·§3.2 표에 기입.
+
+---
+
+## 5. 참조
 
 - [00-strategy-registry.md §1.1](./00-strategy-registry.md) — 데이터·백테스트 원칙
 - [02-development-status.md](../09-planning/02-development-status.md) — 완료·진행예정
 - [02-api-endpoints.md §백테스트](../04-api/02-api-endpoints.md) — POST /api/v1/backtest 스펙
+- [02-development-status.md §3 진행예정](../09-planning/02-development-status.md) — 스트레스 구간 데이터 수집 후 결과 기입 태스크

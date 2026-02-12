@@ -218,7 +218,7 @@
 | 연말 세금·리포트 `/report/tax` | 연도별 세금 요약(실현손익·배당·면책)·CSV/PDF 내보내기 | getTaxSummary, downloadTaxSummaryExport (reportApi) | 연동 완료 |
 | 모델/예측 `/ops/model` | 예측 모델 상태·결과 | getModelStatus (opsApi) | 연동 완료 |
 | 시스템 헬스 `/ops/health` | 서비스·DB·캐시 헬스 | getHealth (opsApi) | 연동 완료 |
-| 전략 거버넌스 `/ops/governance` | 검사 결과·활성 halt·halt 해제 | getGovernanceResults, getGovernanceHalts, clearGovernanceHalt (opsApi) | 백엔드 연동 가능, 프론트 화면은 선택 |
+| 전략 거버넌스 `/ops/governance` | 검사 결과·활성 halt·halt 해제 | getGovernanceResults, getGovernanceHalts, clearGovernanceHalt (opsApi) | - |
 
 **순차 개발**: §4.2 우선순위(P0~P3)와 위 표의 미연동 항목을 메뉴 단위로 묶어, 02-development-status.md "진행예정"에 순차 개발 계획으로 반영한다.
 
@@ -244,7 +244,7 @@
 | **P2** | 트레이딩 포트폴리오 date/latest/generate | 포트폴리오 화면 날짜별 조회·최신 목록·수동 생성 버튼 | 연동 완료 |
 | **P3** | 분석·시장 데이터 API | 전용 화면 또는 위젯 추가 시 연동 | 연동 완료 (종목 분석 모달·현재가) |
 
-위 P0~P3 항목은 모두 연동 완료되었으며, §2 프론트엔드 매핑 테이블에 해당 행이 반영되어 있다.
+위 P0~P3 항목은 모두 연동 완료되었으며, §2 프론트엔드 매핑 테이블에 해당 행이 반영되어 있다. **Phase 1 순차 검토(기획 정합)**: §4·§5.2 기준 검토 완료, 현재 미연동·미구현 항목 없음.
 
 ---
 
@@ -256,3 +256,5 @@
 | 1.1 | 2026-02-05 | §4 메뉴(라우트)별 백엔드 API 필요·연동 현황 추가, Admin 전용 메뉴별 정리, §4→§5 번호 조정 |
 | 1.2 | 2026-02-10 | Phase 1 연동: 전략 상세·생성·PUT status (strategyApi), 분석·시장데이터 (analysisApi·marketDataApi) 종목 분석 모달 반영. §2·§4·§5.2 갱신. |
 | 1.3 | 2026-02-11 | Phase 1 검증: §2 매핑 테이블에 PUT mypage, POST orders, PUT settings/{accountNo}, POST news/collect, 트레이딩 포트폴리오 date/latest/generate, 로보 백테스트 3종 연동 정보 반영. §3·§4 메뉴별/라우트별 연동 현황 정리. |
+| 1.4 | 2026-02-12 | Phase 1 Ops 전략 거버넌스 프론트 연동: §4 전략 거버넌스 행 미연동 → 연동 완료(getGovernanceResults, getGovernanceHalts, clearGovernanceHalt). |
+| 1.5 | 2026-02-12 | Phase 1 순차 검토(기획 정합): §4·§5.2 기준 검토 완료, 미연동·미구현 항목 없음 문구 추가. |
