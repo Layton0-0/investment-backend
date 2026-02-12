@@ -40,6 +40,33 @@ CD 워크플로우는 **investment-infra** 저장소의 `.github/workflows/cd.ym
 
 - 배포하지 않을 노드는 해당 Variable을 **비워 두면** CD에서 해당 step이 스킵된다.
 
+### 1.3 CD 정상화 상태 (정리)
+
+- **트리거**: `push` to main (경로 무시: `**.md`, `docs/**`) 또는 `workflow_dispatch`.
+- **노드별 실행**: Variables에 `DEPLOY_HOST_*`가 설정된 노드만 해당 step 실행. Secrets에 `SSH_PRIVATE_KEY_*`, (private 이미지 사용 시) `GHCR_PULL_TOKEN` 필요.
+- **이미지**: REGISTRY는 `ghcr.io/<owner 소문자>`, CD에서 자동 설정. 스크립트 실행 비트는 reset 후 `chmod +x scripts/*.sh`로 보정.
+- **확인**: 로컬에서 `gh auth login` 후 `gh run watch --exit-status`로 성공/실패 확인 가능. 규칙: [.cursor/rules/cd-push-and-verify.mdc](../../.cursor/rules/cd-push-and-verify.mdc).
+
+**CD에서 "manifest unknown" 나올 때**: 해당 이미지가 GHCR에 아직 없음. **investment-backend**, **investment-prediction-service**, **investment-data-collector**(, **investment-frontend**) 각 레포에서 **CI를 한 번씩 main에 푸시**해 `latest` 이미지를 GHCR에 올린 뒤 CD를 다시 돌린다.
+
+### 1.4 Agent가 CD 푸시 후 직접 확인하려면
+
+**방법 1 — GitHub CLI (권장)**  
+로컬에 [GitHub CLI](https://cli.github.com/) 설치 후 `gh auth login` 실행.  
+이후 Agent(Cursor)가 `investment-infra` 푸시를 한 뒤 다음으로 실행 결과를 확인할 수 있다.
+
+- `gh run list --workflow=cd.yml --limit 1` (최근 CD run)
+- `gh run watch <run-id> --exit-status` (해당 run 완료까지 대기, 성공/실패 반환)
+
+토큰 권한: `workflow`(또는 repo) 있으면 됨.
+
+**방법 2 — GitHub Actions MCP**  
+Cursor MCP에 **GitHub Actions Trigger MCP**를 추가하면 Agent가 워크플로우 실행·상태 조회를 할 수 있다.
+
+- 패키지: `@nextdrive/github-action-trigger-mcp` (npx로 실행 가능)
+- 설정: 사용자 MCP 설정 파일에 서버 추가, `GITHUB_PERSONAL_ACCESS_TOKEN`(또는 `GITHUB_TOKEN`) 설정. 토큰 권한에 `workflow` 포함.
+- 프로젝트 규칙: [.cursor/rules/cd-push-and-verify.mdc](../../.cursor/rules/cd-push-and-verify.mdc) 참고. **gh가 설치돼 있으면** 한 번 `gh auth login` 후 Agent가 푸시·`gh run watch`로 CD 결과까지 확인 가능.
+
 ---
 
 ## 2. 로컬 Cursor SSH MCP
