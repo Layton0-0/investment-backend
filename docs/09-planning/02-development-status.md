@@ -27,6 +27,12 @@
   05-multi-vps-oracle-aws-cicd.md §9: Cursor Remote-SSH로 Oracle 1/Oracle 2 접속(SSH config 예시, 접속 절차, 노드별 작업 요약). [07-cursor-oci-ssh-mcp.md](../08-setup-guides/07-cursor-oci-ssh-mcp.md) 신설: 로컬 Cursor에서 OCI 원격 명령(exec/sudo-exec)용 SSH MCP(tufantunc/ssh-mcp) 설정·env·도구 설명. .cursor/mcp.json.template에 ssh-mcp-oracle-osaka-yoon, ssh-mcp-oracle-korea-jihee 항목 추가(Ubuntu·호스트별 키 경로). 05-screen-test-and-mcp-guide.md MCP 표에 SSH MCP 선택 항목 반영.
 - [x] **DevOps 구축: 토큰/키 문서·노드 점검 스크립트·CD 헬스체크**  
   [08-devops-required-tokens-and-keys.md](../06-deployment/08-devops-required-tokens-and-keys.md) 신설: GitHub Actions Secrets/Variables·로컬 SSH MCP·이미지 태그/REGISTRY 정리. .cursor/mcp.json.template·07-cursor-oci-ssh-mcp.md에 Oracle Mumbai(ssh-mcp-oracle-mumbai-yoon) 추가. investment-infra/scripts/check-node-ready.sh: 노드별 investment-infra 존재·Docker·.env 필수 변수 점검. cd.yml에 Oracle 2/3 배포 후 Backend actuator/health 검증 step 추가. 07-cicd-implementation-checklist·scripts/README.md 반영.
+- [x] **CI/CD 마무리: .env.example·CD 배포 전 갱신·Oracle 1 스크립트 통일**  
+  investment-infra `.env.example` 추가(필수 변수 목록만, 값 없음). cd.yml: 각 노드 배포 전 `git fetch origin && git reset --hard origin/main`으로 최신 compose/스크립트 반영, Oracle 1은 `deploy-oracle1.sh` 사용하도록 통일. 07-cicd-implementation-checklist §3.1·§3.4 완료 처리 및 변경 이력 갱신. 08 문서에 .env.example 안내 추가.
+- [x] **CD 워크플로우 정상화 (concurrency·timeout·헬스 재시도)**  
+  investment-infra cd.yml: `concurrency`(cd-deploy-${{ github.ref }}, cancel-in-progress), job `timeout-minutes: 20`, Oracle 2/3 Verify 단계에서 Backend 기동 대기(최대 90초, 10초 간격 재시도) 후 actuator/health 검증. 푸시 시 CD 정상 트리거·실패 시 원인 파악 용이.
+- [x] **OCI 노드 구조 문서화·기존 구조 정리 (OCI 매크로 유지)**  
+  [09-oci-node-structure.md](../06-deployment/09-oci-node-structure.md) 신설: Oracle 1(Osaka)·2(Korea) 홈 디렉터리 구조 파악, OCI·매크로 관련 항목(예: .oci, jenkins_home/token-macro) 유지 정책, 정리 대상·수행 내용 정리. Osaka: ~/docker-compose 전체 삭제(sudo). Korea: output*.log·docker-compose/duckling·osaka/.ssh 등 삭제, ~/.oci·docker-compose/osaka/.oci 유지.
 - [x] **한국투자증권 주식잔고조회 INQR_DVSN 제한 대응 (2026-02-11 공지)**  
   주식잔고조회 API INQR_DVSN 02(종목별) 제한에 따라 01(대출일별)로 변경. `KoreaInvestmentAccountClient.inquireBalance`, `verifyAccountByCredentials` 및 [09-korea-investment-api-guide.md](../04-api/09-korea-investment-api-guide.md) 예시·주식잔고조회 섹션 반영.
 - [x] **슈퍼관리자(yoon) DB 지정**  

@@ -49,9 +49,9 @@
 
 ### 3.1 사전 점검
 
-- [ ] 각 서비스 레포에 Dockerfile 존재: backend(문서 예시 또는 실제), front, data-collector, prediction-service(있음).
-- [ ] 이미지 이름: `investment-frontend` vs `investment-front` 통일 (docker-compose.aws.yml 등).
-- [ ] CD 워크플로우 위치 결정: investment-infra 레포 또는 상위 레포에서 "이미지 태그만 받아 SSH 배포" 구조로 문서화.
+- [x] 각 서비스 레포에 Dockerfile 존재: backend, frontend, data-collector, prediction-service 모두 있음.
+- [x] 이미지 이름: `investment-frontend`로 통일 (docker-compose.aws.yml·oracle2 등).
+- [x] CD 워크플로우: investment-infra 레포 cd.yml에서 이미지 태그 입력 후 SSH 배포. 배포 전 `git fetch && git reset --hard origin/main`으로 최신 compose/스크립트 반영.
 
 ### 3.2 CI 워크플로우 (서비스별)
 
@@ -65,12 +65,13 @@
 - [x] **위치**: `investment-infra/.github/workflows/cd.yml`. 트리거: `workflow_dispatch`(입력 image_tag), push to main.
 - [x] job: Oracle 1 → Oracle 2 → Oracle 3 (Mumbai) → AWS(선택). 각 노드에서 `investment-infra` 경로로 SSH 후 set-env-tags + deploy 스크립트 실행.
 - [x] **배포 후 검증**: Oracle 2 / Oracle 3 배포 직후 `curl -sf http://localhost:8080/actuator/health` 로 Backend 헬스체크. 실패 시 워크플로우 실패.
-- [ ] **시크릿 등록**: 저장소 **Settings → Secrets and variables → Actions**에서만 등록. SSH 비밀키 **내용**을 붙여넣기(코드/문서에 절대 넣지 않음). GitHub이 암호화 보관·워크플로우 실행 시에만 사용. 이름: `SSH_PRIVATE_KEY_ORACLE_OSAKA`, `SSH_PRIVATE_KEY_ORACLE_KOREA`, `SSH_PRIVATE_KEY_ORACLE_MUMBAI`, (선택) `SSH_PRIVATE_KEY_AWS`. **전체 목록·안내**: [08-devops-required-tokens-and-keys.md](08-devops-required-tokens-and-keys.md).
-- [ ] **저장소 변수**: Settings → Variables. 호스트/IP는 **Variables**에 두고(Secrets 아님): `DEPLOY_HOST_ORACLE_OSAKA`, `DEPLOY_HOST_ORACLE_KOREA`, `DEPLOY_HOST_ORACLE_MUMBAI`, (선택) `DEPLOY_HOST_AWS`, (선택) `DEPLOY_USER`(기본 ubuntu). 배포할 노드만 설정하면 해당 단계만 실행됨. **전체 목록**: [08-devops-required-tokens-and-keys.md](08-devops-required-tokens-and-keys.md).
+- [ ] **시크릿 등록**(운영자 작업): 저장소 **Settings → Secrets and variables → Actions**에서만 등록. SSH 비밀키 **내용**을 붙여넣기(코드/문서에 절대 넣지 않음). 이름: `SSH_PRIVATE_KEY_ORACLE_OSAKA`, `SSH_PRIVATE_KEY_ORACLE_KOREA`, `SSH_PRIVATE_KEY_ORACLE_MUMBAI`, (선택) `SSH_PRIVATE_KEY_AWS`. **전체 목록·안내**: [08-devops-required-tokens-and-keys.md](08-devops-required-tokens-and-keys.md).
+- [ ] **저장소 변수**(운영자 작업): Settings → Variables. `DEPLOY_HOST_ORACLE_OSAKA`, `DEPLOY_HOST_ORACLE_KOREA`, `DEPLOY_HOST_ORACLE_MUMBAI`, (선택) `DEPLOY_HOST_AWS`, (선택) `DEPLOY_USER`(기본 ubuntu). 배포할 노드만 설정하면 해당 단계만 실행됨. **전체 목록**: [08-devops-required-tokens-and-keys.md](08-devops-required-tokens-and-keys.md).
 
 ### 3.4 배포 스크립트·문서
 
-- [x] investment-infra: `deploy-oracle3-mumbai.sh` 존재 및 scripts/README.md 반영.
+- [x] investment-infra: `deploy-oracle1.sh`, `deploy-oracle2.sh`, `deploy-oracle3-mumbai.sh`, `deploy-aws.sh`, `set-env-tags.sh`, `check-node-ready.sh` 존재. scripts/README.md 반영.
+- [x] investment-infra: `.env.example` 제공(필수 변수 목록만, 값 없음). 각 노드에서 복사 후 .env 설정.
 - [x] 05-multi-vps-oracle-aws-cicd.md: Oracle 3(Mumbai), 시크릿, CD 순서, SSH config(oci-mumbai) 반영.
 
 ---
@@ -90,3 +91,4 @@
 |------|------|-----------|
 | 1.0 | 2026-02-11 | 초안: CI/CD 갭 정리, 권장 구조, 구현 체크리스트 |
 | 1.1 | 2026-02-12 | §1 갭 정리·§3.3 CD 워크플로우 현황 반영(배포 후 검증·시크릿/변수 문서 링크). §4 참고 문서에 08-devops-required-tokens-and-keys.md 추가. |
+| 1.2 | 2026-02-12 | §3.1 사전 점검 완료 처리. CD에 배포 전 git fetch/reset 추가·Oracle 1은 deploy-oracle1.sh 사용. §3.4 .env.example·스크립트 목록 반영. |

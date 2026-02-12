@@ -49,6 +49,8 @@ CD 워크플로우는 **investment-infra** 저장소의 `.github/workflows/cd.ym
 
 **CD에서 "manifest unknown" 나올 때**: 해당 이미지가 GHCR에 아직 없음. **investment-backend**, **investment-prediction-service**, **investment-data-collector**(, **investment-frontend**) 각 레포에서 **CI를 한 번씩 main에 푸시**해 `latest` 이미지를 GHCR에 올린 뒤 CD를 다시 돌린다.
 
+**Oracle 2/3 deploy 단계**: 첫 풀 시 prediction-service 이미지(~2.9GB) 때문에 오래 걸릴 수 있음. `cd.yml`에서 해당 SSH 단계 `command_timeout`을 15m으로 두었음. **Oracle 3 (Mumbai)**에서 `dial tcp ...:22: i/o timeout`이 나오면 GitHub Actions 러너에서 해당 호스트로 SSH 접속이 안 되는 것이므로, VM 기동 여부·방화벽/보안 그룹(22 포트)·네트워크를 점검한다.
+
 ### 1.4 Agent가 CD 푸시 후 직접 확인하려면
 
 **방법 1 — GitHub CLI (권장)**  
