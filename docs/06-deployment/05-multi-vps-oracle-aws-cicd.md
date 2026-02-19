@@ -2,9 +2,12 @@
 
 ## 개요
 
-이 문서는 **Oracle Cloud 2~3대**(VM.Standard.E2.1.Micro, 1 OCPU / 1GB RAM)와 **AWS Free Tier 1대**(t2.micro 또는 t3.micro, 1 vCPU / 1GB RAM)를 활용한 멀티 VPS 배포 토폴로지, 메모리 튜닝, CI/CD 파이프라인, 보안 및 체크리스트를 정리한다.
+이 문서는 **Oracle Cloud 2~3대**(VM.Standard.E2.1.Micro, 1 OCPU / 1GB RAM)와 **AWS 1대**(2GB RAM, 30GB EBS 권장)를 활용한 멀티 VPS 배포 토폴로지, 메모리 튜닝, CI/CD 파이프라인, 보안 및 체크리스트를 정리한다.
 
-- **현재 구성**: OCI는 **Oracle Osaka**(데이터)·**Oracle Korea**(앱)·**India West (Mumbai)**(앱, 증설)로 운영. Oracle 1 = 데이터 계층(Osaka), Oracle 2 = 앱 계층(Korea), Oracle 3 = 앱 계층(Mumbai). AWS는 선택 사항.
+- **현재 구성**: OCI는 **Oracle Osaka**(데이터)·**Oracle Korea**(엣지 또는 앱)·**India West (Mumbai)**(매크로 전용). **AWS = API 계층**(Backend, prediction-service, data-collector, nginx api) — 2GB RAM, 30GB EBS 인스턴스 사용 시. Oracle 2/3 = 엣지(Frontend, nginx) 또는 기존 앱 계층.
+- **Compose 파일명**: region-role 구분. `docker-compose.oracle1-osaka-data.yml`, `docker-compose.oracle2-korea-app.yml`, `docker-compose.oracle3-mumbai-macro.yml`, `docker-compose.aws-seoul-api.yml`. [scripts/README.md](https://github.com/Layton0-0/investment-infra/blob/main/scripts/README.md) 참조.
+- **모니터링**: 노드별 메모리·컨테이너 확인은 `investment-infra/scripts/monitor-node-resources.sh` 실행 (수동 또는 cron).
+- **로컬 데스크탑**: 토폴로지 포함 2안은 [12-local-desktop-topology-options.md](12-local-desktop-topology-options.md) 참조.
 - **VCN/서브넷 설계**: 리전별 VCN·서브넷·Security List 상세는 [06-oci-vcn-subnet-design.md](06-oci-vcn-subnet-design.md) 참조.
 - **단일 VPS 배포**: [06-single-vps-batch-deployment.md](../08-setup-guides/06-single-vps-batch-deployment.md) 참조.
 - **인프라 저장소**: [investment-infra](../../../investment-infra/README.md).
@@ -18,9 +21,10 @@
 | Oracle 1 | Oracle Osaka | 1 OCPU, 1GB RAM, Public IP·Private IP 각 1개 (문서에 실제 값 기입 금지) 50GB volume | Always Free (E2.1.Micro)      |
 | Oracle 2 | Oracle Korea | 1 OCPU, 1GB RAM, Public IP 1개 (문서에 실제 값 기입 금지)    50GB volume         | Always Free                   |
 | Oracle 3 | India West (Mumbai) | 1 OCPU, 1GB RAM, Public IP 1개 (문서에 실제 값 기입 금지)    100GB volume    | Always Free (E2.1.Micro, 증설) |
-| AWS      | (선택)     | 1 vCPU, 1GB RAM (t2.micro / t3.micro)                                | Free Tier 12개월              |
+| AWS      | AWS 서울 (API 계층) | **2GB RAM, 30GB EBS** (t3.small / **t3a.small** 권장) | API 스택 전용. t3a.small은 x86·비용 약 10% 절감. |
 
-- 실제 IP·호스트명·키 경로는 저장소·문서에 넣지 않는다. 배포/접속 시 본인 환경 값만 사용한다.
+- 실제 IP·호스트명·키 경로는 저장소·문서에 넣지 않는다.
+- **AWS 인스턴스 권장**: API 스택(Backend, prediction, data-collector, nginx)을 올릴 때는 **t3a.small**(2 vCPU, 2GB RAM, x86) 또는 t3.small 권장. 2GB·30GB는 현재 설계와 동일. 배포/접속 시 본인 환경 값만 사용한다.
 - 1GB × 2~3노드 제약이 있으므로 서비스별 역할 분리와 메모리 튜닝이 필수이다.
 
 ### 1.4 Oracle 3 (Mumbai) 프로비저닝 현황
@@ -41,6 +45,8 @@ Public IP는 OCI 콘솔에서 확인 후, GitHub Variables `DEPLOY_HOST_ORACLE_M
 
 ## 2. 노드 역할 분리
 
+**정책**: 무거운 워크로드(API 스택)는 AWS, OCI 1GB 노드는 데이터·엣지·매크로만 담당한다.
+
 ### 2.1 토폴로지 다이어그램
 
 ```mermaid
@@ -48,33 +54,29 @@ flowchart LR
   subgraph internet [Internet]
     User[User]
   end
-  subgraph aws [AWS Free Tier - 1GB]
-    Nginx[Nginx + Frontend Static]
-  end
   subgraph oracle2 [Oracle 2 Korea - 1GB]
-    Backend2[Backend]
-    Pred2[Prediction]
-    Collector2[Data Collector]
+    NginxApp2[Nginx+Frontend]
   end
   subgraph oracle3 [Oracle 3 Mumbai - 1GB]
-    Backend3[Backend]
-    Pred3[Prediction]
-    Collector3[Data Collector]
+    Jenkins[Jenkins macro]
+  end
+  subgraph aws [AWS 2GB 30GB]
+    NginxApi[Nginx API]
+    Backend[Backend]
+    Pred[Prediction]
+    Collector[Data Collector]
   end
   subgraph oracle1 [Oracle 1 Osaka - 1GB]
     DB[(TimescaleDB)]
     Redis[(Redis)]
   end
-  User --> Nginx
-  Nginx --> Backend2
-  Backend2 --> DB
-  Backend2 --> Redis
-  Backend2 --> Pred2
-  Backend2 --> Collector2
-  Backend3 --> DB
-  Backend3 --> Redis
-  Backend3 --> Pred3
-  Backend3 --> Collector3
+  User --> NginxApp2
+  NginxApp2 -->|"/api proxy"| NginxApi
+  NginxApi --> Backend
+  Backend --> DB
+  Backend --> Redis
+  Backend --> Pred
+  Backend --> Collector
 ```
 
 ### 2.2 노드별 역할
@@ -82,16 +84,28 @@ flowchart LR
 | 노드     | 별칭(예)   | 역할                                      | 서비스 |
 |----------|------------|-------------------------------------------|--------|
 | Oracle 1 | Oracle Osaka | 데이터 계층                               | TimescaleDB, Redis |
-| Oracle 2 | Oracle Korea | 애플리케이션 계층                         | Backend, prediction-service, data-collector |
-| Oracle 3 | India West (Mumbai) | 애플리케이션 계층 (증설)              | Backend, prediction-service, data-collector |
-| AWS      | (선택)     | 엣지 계층 (리버스 프록시 + 정적 프론트)   | Nginx, Frontend (정적 빌드물) |
+| AWS      | AWS 서울     | **API 계층** (2GB RAM, 30GB EBS)          | Backend, prediction-service, data-collector, nginx(api) |
+| Oracle 2 | Oracle Korea | **엣지** (Frontend + nginx)               | Frontend, nginx — /api는 AWS로 프록시 |
+| Oracle 3 | India West (Mumbai) | **매크로 전용**                         | Jenkins (token-macro 등) |
 
-- **Oracle 1 (Osaka)**: DB·Redis만 운영. 외부 트래픽 직접 노출하지 않음. 앱 노드(Korea, Mumbai)는 Oracle 1 **Public IP**로 5432/6379 접속.
-- **Oracle 2 (Korea)**: Backend가 Oracle 1의 DB/Redis(Public IP)와 Oracle 2 내부의 prediction-service, data-collector에 접속.
-- **Oracle 3 (Mumbai)**: Oracle 2와 동일한 앱 계층. Backend가 Oracle 1(Osaka) Public IP로 DB/Redis 접속. 상세 VCN·Security List는 [06-oci-vcn-subnet-design.md](06-oci-vcn-subnet-design.md) 참조.
-- **AWS**: 사용 시 Nginx가 사용자 요청을 받고, `/api` 등은 Oracle 2(또는 Oracle 3) Backend로 프록시.
+- **Oracle 1 (Osaka)**: DB·Redis만 운영. **단일 장애점(SPOF)** — 해당 노드 장애 시 전체 API 불가. 스왑·백업·복구 절차 필수. Oracle 2/3·AWS는 Oracle 1 **Public IP**로 5432/6379 접속.
+- **AWS**: API 스택 전부. Backend가 Oracle 1(Osaka) Public IP로 DB/Redis 접속. **api.*** 도메인 → AWS Public IP.
+- **Oracle 2 (Korea)**: 엣지 전환 시 Frontend + nginx만. `/api` 요청은 AWS API 서버로 proxy_pass. **app.*** 도메인. (기존 앱 계층 유지 시에는 Backend 등 Oracle 2에서 운영.)
+- **Oracle 3 (Mumbai)**: **매크로 전용.** Jenkins만 운영. 앱 스택은 배포하지 않음.
 
-### 2.3 리소스 타이트 시 대안
+### 2.3 SSH로 수행할 작업 (매크로 이전·정리)
+
+매크로를 Mumbai로 통합한 뒤, 각 노드에서 아래를 실행한다. (Cursor/Agent가 SSH MCP로 수행하거나, 수동 SSH로 동일 명령 실행.)
+
+| 노드 | 작업 | 비고 |
+|------|------|------|
+| **Oracle 1 (Osaka)** | Jenkins 컨테이너·이미지 제거 | `docker ps -a` / `docker images \| grep jenkins` 후 `docker rm`·`docker rmi`. **완료 예시**: Jenkins 이미지 `docker-compose_jenkins:latest` 제거 완료. |
+| **Oracle 2 (Korea)** | Jenkins 컨테이너·이미지가 있으면 제거 | 동일 방식. 접속 불가 시 접속 가능해지면 실행. |
+| **Oracle 3 (Mumbai)** | ① `investment-infra` 최신 반영 (`git pull`) ② `./jenkins_home` 준비 (비어 있거나 Osaka에서 rsync/scp로 복사) ③ `./scripts/deploy-oracle3-mumbai.sh` 실행 | 매크로 전용 compose `docker-compose.oracle3-mumbai-macro.yml` 사용. [setup-oracle3-mumbai.sh](https://github.com/Layton0-0/investment-infra/blob/main/scripts/setup-oracle3-mumbai.sh) Next steps 참조. |
+
+- Korea·Mumbai SSH 타임아웃 시: 네트워크/방화벽 확인 후 동일 명령을 수동으로 실행하면 된다.
+
+### 2.4 리소스 타이트 시 대안
 
 - Oracle 2에서 **prediction-service** 또는 **data-collector** 중 하나만 기동하고, 나머지는 Backend 설정에서 URL 비활성 또는 스킵.
 - 또는 AWS에 prediction-service만 두고 Oracle 2에는 Backend + data-collector만 두는 구성으로 조정 가능.
@@ -100,13 +114,50 @@ flowchart LR
 
 ## 3. 메모리 튜닝
 
+### 3.0 스왑 설정 (모든 노드)
+
+**RAM 용량을 고려한 스왑 증설 정책**: 데이터 노드(Oracle 1)는 2GB 이상 권장(실제 10GB 적용 사례 있음). 1GB 앱/엣지 노드(Oracle 2·3)는 2GB, 2GB 노드(AWS API 계층)는 2GB 권장. 모든 노드에서 OOM 방지를 위해 스왑을 보수적으로 설정한다.
+
+1GB 노드(Oracle 1·2·3)는 기본 시스템만으로 약 400MB 사용이 예상되므로, **OOM 방지를 위해 모든 서버에서 스왑을 보수적으로 설정**한다. AWS(2GB)도 피크 완충을 위해 스왑 권장.
+
+#### 노드별 스왑 현황 (확인 일자: 2026-02-19)
+
+| 노드 | 별칭(예) | 권장 스왑 | 확인 결과 | 비고 |
+|------|----------|-----------|-----------|------|
+| Oracle 1 | Oracle Osaka | 2GB 이상 | **10GB** 적용됨 | 기존 설정 유지. |
+| Oracle 2 | Oracle Korea | **2GB** | **2GB** 적용됨 | 유지. |
+| Oracle 3 | India West (Mumbai) | **2GB** | SSH 타임아웃으로 미확인 | 접속 가능 시 아래 절차로 2GB 적용 권장. |
+| AWS | AWS 서울 (API 계층) | **2GB** | **2GB** 적용됨 (당일 적용) | 보수적 완충용. |
+
+- 확인 명령: `free -m`, `swapon --show`
+
+#### 스왑 설정 절차 (미적용 노드 또는 신규 노드)
+
+아래는 **root 또는 sudo** 로 한 번만 실행한다. 기존 `/swapfile`이 있으면 크기만 확인하고, 없거나 부족하면 새로 생성한다.
+
+```bash
+# 2GB 스왑 파일 생성 (보수적으로 넉넉히; 필요 시 4G로 변경 가능)
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+
+# 재부팅 후에도 유지
+grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+- **확인**: `free -m` 에서 Swap 행에 2048(또는 설정한 용량) 표시.
+- 상세·트러블슈팅: [04-minimal-cost-setup.md](04-minimal-cost-setup.md) § 메모리 부족 시 참조.
+
 ### 3.1 Oracle 1 (TimescaleDB + Redis)
+
+- **SPOF 주의**: Oracle 1은 데이터 계층의 **단일 장애점(SPOF)** 이다. 해당 노드 장애 시 API·엣지가 정상이어도 서비스 불가. 스왑·백업·복구 runbook([13-oracle1-recovery-runbook.md](13-oracle1-recovery-runbook.md)) 필수.
 
 | 구성 요소   | 권장 설정 | 비고 |
 |-------------|-----------|------|
-| TimescaleDB | `shared_buffers = 256MB`, `max_connections = 20` | 1GB 노드에서 DB 전용으로 여유 확보 |
-| Redis       | `maxmemory 128mb`, `maxmemory-policy allkeys-lru` | 256MB까지 가능하나 128MB로 시작 권장 |
-| 스왑        | 1~2GB 스왑 파일 권장 | OOM 방지 |
+| TimescaleDB | **`shared_buffers = 128MB`**, `max_connections = 20` | 1GB 노드에서 256MB는 위험. 128MB로 안전하게 운영. |
+| Redis       | `maxmemory 128mb`, `maxmemory-policy allkeys-lru` | 256MB까지 가능하나 128MB로 시작 권장. AOF 권장(appendonly yes). |
+| 스왑        | **2GB** 스왑 파일 권장 | OOM 방지. |
 
 ### 3.2 Oracle 2 (Backend + prediction + data-collector)
 
@@ -118,18 +169,18 @@ flowchart LR
 
 동시에 셋을 모두 올리면 1GB를 초과할 수 있으므로, 초기에는 prediction 또는 data-collector 중 하나만 기동하거나, 둘 다 128MB limit으로 모니터링 후 조정한다.
 
-### 3.3 AWS (Nginx + Frontend)
+### 3.3 AWS (API 스택)
 
-- Nginx와 정적 프론트만 서빙하므로 메모리 부담이 적다. 별도 튜닝 없이 기본값으로 운영 가능.
+- **2GB RAM, 30GB EBS** 기준: Backend(-Xmx384m) + prediction + data-collector + nginx(api) ≈ 850MB~1.3GB. 2GB면 여유 있음. 인스턴스는 **t3a.small**(x86, 비용 약 10% 절감) 또는 t3.small 권장.
 
 ---
 
 ## 4. 네트워크
 
 - **동일 VCN 불가**: Oracle Osaka, Korea, India West (Mumbai)는 **서로 다른 리전**이므로 동일 VCN을 쓸 수 없다. OCI VCN은 리전 단위. 상세 설계는 [06-oci-vcn-subnet-design.md](06-oci-vcn-subnet-design.md) 참조.
-- **Oracle 1 ↔ Oracle 2 / Oracle 3**: **Public IP**로 통신. Backend의 DB/Redis 연결 URL을 **Oracle 1(Osaka) Public IP**로 설정. Oracle 1 Security List에서 Oracle 2·Oracle 3(Mumbai) **Public IP**만 5432, 6379 Ingress 허용.
-- **AWS → Oracle 2 (또는 Oracle 3)**: Nginx가 Backend로 프록시할 때 해당 앱 노드의 **Public IP** 사용.
-- **방화벽**: Oracle 1의 5432(TimescaleDB), 6379(Redis)는 Oracle 2·Oracle 3(Mumbai)(및 필요 시 AWS) **Public IP**에서만 접근 허용. SSH(22), HTTP(80), HTTPS(443)는 운영 정책에 따라 제한.
+- **Oracle 1 ↔ Oracle 2 / Oracle 3 / AWS**: **Public IP**로 통신. Backend(또는 AWS API 스택)의 DB/Redis 연결 URL을 **Oracle 1(Osaka) Public IP**로 설정. Oracle 1 Security List에서 Oracle 2·Oracle 3(Mumbai)·**AWS Public IP**를 5432, 6379 Ingress 허용에 **반드시** 추가. ([06-oci-vcn-subnet-design.md](06-oci-vcn-subnet-design.md) §3.1)
+- **엣지 → API**: Oracle 2/3 Nginx가 `/api` 요청을 AWS API 서버(Backend)로 프록시할 때 AWS **Public IP** 또는 **api.*** 도메인 사용.
+- **방화벽**: Oracle 1의 5432(TimescaleDB), 6379(Redis)는 Oracle 2·Oracle 3(Mumbai)·**AWS** **Public IP**에서만 접근 허용. SSH(22), HTTP(80), HTTPS(443)는 운영 정책에 따라 제한.
 
 ---
 
@@ -178,23 +229,25 @@ flowchart LR
 
 | 노드     | CD 시 할 일 |
 |----------|-------------|
-| Oracle 1 | `docker compose -f docker-compose.oracle1.yml pull` (필요 시) 후 `up -d`. DB/Redis는 버전 고정 태그 사용 권장. |
-| Oracle 2 | `BACKEND_TAG=<sha> PREDICTION_TAG=<sha> DATA_COLLECTOR_TAG=<sha>` 로 env 설정 후 `docker compose -f docker-compose.oracle2.yml pull backend prediction-service data-collector && docker compose -f docker-compose.oracle2.yml up -d` |
-| Oracle 3 (Mumbai) | Oracle 2와 동일. `.env`에 `SPRING_DATASOURCE_URL`, `REDIS_HOST`(Oracle 1 Public IP), `BACKEND_TAG` 등 설정 후 `deploy-oracle2.sh` 또는 Mumbai 전용 스크립트 실행. |
-| AWS      | `FRONTEND_TAG=<sha>` 로 env 설정 후 `docker compose -f docker-compose.aws.yml pull frontend nginx && docker compose -f docker-compose.aws.yml up -d` |
+| Oracle 1 | `docker compose -f docker-compose.oracle1-osaka-data.yml pull` (필요 시) 후 `up -d`. DB/Redis는 버전 고정 태그 사용 권장. |
+| Oracle 2 | `BACKEND_TAG=<sha>` 등 env 설정 후 `docker compose -f docker-compose.oracle2-korea-app.yml pull backend prediction-service data-collector nginx && up -d`. `deploy-oracle2.sh` 사용. |
+| Oracle 3 (Mumbai) | **매크로만.** `deploy-oracle3-mumbai.sh` → `docker-compose.oracle3-mumbai-macro.yml` (Jenkins). 앱 스택 없음. |
+| AWS (API 계층) | `.env`에 Oracle 1 Public IP(SPRING_DATASOURCE_URL, REDIS_HOST) 설정 후 `deploy-aws-api-stack.sh` — `docker-compose.aws-seoul-api-stack.yml` (backend, prediction-service, data-collector, nginx). |
+| AWS (엣지만)   | `FRONTEND_TAG=<sha>` 로 env 설정 후 `docker compose -f docker-compose.aws-seoul-api.yml pull frontend nginx && up -d`. |
 
 ### 6.2 배포 순서
 
 1. Oracle 1 (DB·Redis) — 변경이 있을 때만.
-2. Oracle 2 (Backend, prediction-service, data-collector).
-3. Oracle 3 (Mumbai) (동일 앱 스택).
+2. Oracle 2 (Backend, prediction-service, data-collector, nginx).
+3. Oracle 3 (Mumbai) (매크로: Jenkins만).
 4. AWS (Frontend, Nginx).
 
 ### 6.3 Compose 파일 분리 (옵션 B)
 
-- 노드별 파일: `docker-compose.oracle1.yml`, `docker-compose.oracle2.yml`, `docker-compose.aws.yml` (investment-infra 루트에 위치).
-- 각 파일에는 해당 노드에서 기동할 서비스만 정의. 이미지 태그는 환경 변수(`BACKEND_TAG`, `FRONTEND_TAG` 등)로 주입.
-- 배포 스크립트: `investment-infra/scripts/deploy-oracle1.sh`, `deploy-oracle2.sh`, `deploy-aws.sh`, `set-env-tags.sh`. 사용법은 [scripts/README.md](../../../investment-infra/scripts/README.md) 참조.
+- 노드별 파일: `docker-compose.oracle1-osaka-data.yml`, `docker-compose.oracle2-korea-app.yml`, `docker-compose.oracle2-korea-edge.yml`(엣지 전용), `docker-compose.oracle3-mumbai-macro.yml`, `docker-compose.aws-seoul-api.yml`, `docker-compose.aws-seoul-api-stack.yml`(AWS API 계층) (investment-infra 루트). 파일명으로 region-role 구분.
+- 각 파일에는 해당 노드에서 기동할 서비스만 정의. 이미지 태그는 환경 변수로 주입.
+- **Oracle 2/3 엣지 전환**: API를 AWS로 이전한 뒤 Oracle 2(·3)에서 Backend·prediction·data-collector 제거 시 `docker-compose.oracle2-korea-edge.yml` + `deploy-oracle2-edge.sh` 사용. nginx는 `nginx/conf.d.edge/edge-app.conf`만 로드하며, **location /api** 는 AWS(api.\* 도메인)로 proxy_pass. app.\* DNS는 Oracle 2 또는 3 Public IP.
+- 배포 스크립트: `deploy-oracle1.sh`, `deploy-oracle2.sh`, `deploy-oracle2-edge.sh`, `deploy-aws-api-stack.sh`, `deploy-aws.sh`, `set-env-tags.sh`. 사용법은 [scripts/README.md](../../../investment-infra/scripts/README.md) 참조.
 
 ### 6.4 롤백
 
@@ -215,7 +268,9 @@ flowchart LR
 
 ### 배포 전
 
-- [ ] DB·Redis 접속 정보 및 방화벽 허용 (Oracle 1 → Oracle 2, Oracle 3 Mumbai Public IP)
+- [ ] **스왑**: 1GB OCI 노드(Oracle 1·2·3) 및 AWS에서 스왑 2GB 이상 설정·활성화 확인 (`free -m`, §3.0 참조).
+- [ ] DB·Redis 접속 정보 및 방화벽 허용 (Oracle 1 → Oracle 2, Oracle 3 Mumbai, **AWS** Public IP). [06-oci-vcn-subnet-design.md](06-oci-vcn-subnet-design.md) §3.1.
+- [ ] Oracle 1 복구 runbook: [13-oracle1-recovery-runbook.md](13-oracle1-recovery-runbook.md).
 - [ ] 한국투자증권 API·계좌 설정(모의/실전 구분). **배포·테스트는 모의계좌만 사용**
 - [ ] `PIPELINE_AUTO_EXECUTE`, `PIPELINE_ALLOW_REAL_EXECUTION` 등 환경 변수 확인
 - [ ] Discord Webhook URL(미체결·리스크 알림 사용 시)
@@ -250,7 +305,7 @@ Cursor에서 OCI 서버(Oracle 1 / Oracle 2 / Oracle 3 Mumbai)에 직접 붙어 
 
 **파일**: `C:\Users\<사용자명>\.ssh\config`
 
-Oracle Osaka / Oracle Korea / India West (Mumbai) 예시(실제 IP·키 경로는 본인 환경으로 교체). **HostName에는 꺾쇠괄호를 넣지 말고 IP만 쓴다.**
+Oracle Osaka / Oracle Korea / India West (Mumbai) 예시(실제 IP·키 경로는 본인 환경으로 교체). **HostName**에는 꺾쇠괄호를 넣지 말고 **Public IP 또는 호스트명(도메인)**을 쓴다. 호스트명 사용 시 DNS가 해당 노드 IP로 풀이되어야 한다. 자세한 도메인·DNS 설정은 [11-dns-and-domain-setup.md](11-dns-and-domain-setup.md) 참조.
 
 ```text
 # Oracle Osaka (데이터 계층: DB/Redis)
@@ -278,7 +333,7 @@ Host oci-mumbai
     ServerAliveCountMax 5
 ```
 
-- `HostName`: 각 VM의 Public IP.
+- `HostName`: 각 VM의 Public IP 또는 호스트명(예: api.example.com). 호스트명 사용 시 DNS 풀이 필요 ([11-dns-and-domain-setup.md](11-dns-and-domain-setup.md)).
 - `User`: Oracle Linux `opc`, Ubuntu `ubuntu`.
 - `IdentityFile`: 실제 비밀키 경로(예: `~/.ssh/oci_oracle.pem`). **경로에 공백이 있으면 반드시 큰따옴표로 감싼다**(예: `IdentityFile "D:/OneDrive - HKNC/path/to/key.key"`). 그렇지 않으면 "keyword identityfile extra arguments at end of line" 오류로 SSH가 config를 거부한다.
 - `ServerAliveInterval` / `ServerAliveCountMax`: 연결 끊김 방지.
@@ -357,13 +412,43 @@ icacls "D:\path\to\ssh-key-2.key" /grant "<사용자명>:F"
 
 6. **OneDrive 등 동기화 폴더**에 `.ssh`를 두었다면, 동기화가 권한을 바꿀 수 있다. 가능하면 `.ssh`는 사용자 프로필(`C:\Users\<사용자명>\.ssh`)에 두고, 키 파일만 다른 드라이브를 쓰는 편이 안정적이다.
 
+### 9.8 "Failed to install server within the timeout" 해결
+
+Remote-SSH로 접속 시 **"Waiting for server to install. Timeout: 30000ms"** 후 **"Failed to install server within the timeout"** 가 나오면, Cursor가 원격에 Cursor 서버를 설치하는 단계에서 30초 안에 완료되지 않은 것이다. OCI처럼 해외/고지연 환경에서는 자주 발생할 수 있다.
+
+**조치 순서:**
+
+1. **SSH 접속 자체 확인**  
+   터미널에서 `ssh -T oci-korea-jihee` 실행. 접속·쉘 프롬프트까지 정상이면 SSH는 동작 중이다.
+
+2. **Cursor 연결 타임아웃 늘리기**  
+   Cursor **설정**(Ctrl+,) → 우측 상단 `settings.json` 열기 → 다음 추가 또는 수정:
+   ```json
+   "remote.SSH.connectTimeout": 300
+   ```
+   (단위: 초. 300 = 5분. 느린 네트워크면 600 등으로 더 늘려도 됨.)
+
+3. **네트워크·VPN 점검**  
+   Tailscale·WireGuard 등 VPN 사용 시 최신 버전으로 업데이트 후 재시도. 포럼 사례에선 VPN 업데이트 후 해결된 경우가 있다. 회사 프록시가 있다면 `remote.SSH.httpProxy` / `remote.SSH.httpsProxy` 설정 여부 확인.
+
+4. **재시도**  
+   타임아웃 늘린 뒤 Remote-SSH로 다시 접속. 최초 1회는 원격 서버 다운로드 때문에 1~3분 걸릴 수 있다.
+
+5. **임시 스크립트 삭제 실패(EBUSY)**  
+   로그에 `Error deleting random file ... cursor_remote_install_*.sh: EBUSY` 가 나와도 연결 실패와는 무관하다. Cursor를 완전히 종료한 뒤 `D:\works\etc\temp\` 에서 해당 `cursor_remote_install_*.sh` 파일을 수동 삭제하면 된다.
+
+6. **원격에서 명령만 실행할 때**  
+   파일 편집·원격 터미널 없이 **배포·로그 조회 등 명령만** 쓰면 [SSH MCP](07-cursor-oci-ssh-mcp.md)(`ssh-mcp-oracle-korea-jihee`)로 대체할 수 있다. MCP는 원격 Cursor 서버 설치가 필요 없어 타임아웃 문제가 없다.
+
 ---
 
-## 10. 참고 문서
+## 10. 참고 문서 (06-deployment 진입·관련)
 
-- [OCI VCN·서브넷 설계](06-oci-vcn-subnet-design.md)
-- [CI/CD 구현 체크리스트](07-cicd-implementation-checklist.md)
+- [OCI VCN·서브넷 설계](06-oci-vcn-subnet-design.md) — Security List·스왑 참조
+- [CI/CD 구현 체크리스트](07-cicd-implementation-checklist.md) — 노드 점검·스왑·토폴로지 참조
 - [DevOps 구축 시 필요한 토큰·키 정리](08-devops-required-tokens-and-keys.md)
+- [CI/CD·방화벽 점검](10-cicd-firewall-checklist.md) — Oracle 1 → Oracle 2·3·AWS 5432/6379
+- [최소 비용 설정](04-minimal-cost-setup.md) — 스왑 예시(멀티 VPS는 본문 §3.0 참조)
 - [단일 VPS·배치·배포 절차](../08-setup-guides/06-single-vps-batch-deployment.md)
 - [서버 스펙](03-server-specification.md)
 - [investment-infra README](../../../investment-infra/README.md)
@@ -381,3 +466,7 @@ icacls "D:\path\to\ssh-key-2.key" /grant "<사용자명>:F"
 | 1.2  | 2026-02-11 | 두 서버 기준 정리: Oracle Osaka / Oracle Korea 별칭·역할 매핑, 시크릿·SSH config 플레이스홀더화(민감정보 제외) |
 | 1.3  | 2026-02-11 | Oracle 3 (India West Mumbai) 증설 반영: 인프라 스펙·노드 역할·네트워크(동일 VCN 불가, Public IP)·CD·시크릿·SSH config(oci-mumbai). 06-oci-vcn-subnet-design.md 참조 추가 |
 | 1.4  | 2026-02-11 | Mumbai E2 프로비저닝 반영: ap-mumbai-1, VCN aifer-vcn, Ubuntu 24.04, 사용자 ubuntu. §9.5 Mumbai 노드 초기 설정 및 setup-oracle3-mumbai.sh 안내 추가. |
+| 1.5  | 2026-02-19 | AWS 인스턴스(2GB RAM, 30GB EBS) 실행 반영. AWS = API 계층, Oracle 2/3 = 엣지 토폴로지·다이어그램. Oracle 1 SPOF 경고, shared_buffers 128MB, 스왑 2GB, t3a.small 권장. 13-oracle1-recovery-runbook.md, AWS API 스택 compose·deploy·setup, Oracle 2 엣지 전용 compose·deploy, DNS api.* → AWS. |
+| 1.6  | 2026-02-19 | §9.8 추가: Remote-SSH "Failed to install server within the timeout" 해결(connectTimeout, 네트워크/VPN, EBUSY, SSH MCP 대안). |
+| 1.7  | 2026-02-19 | §3.0 스왑 설정: 노드별 스왑 현황(확인 일자 2026-02-19), 설정 절차, 배포 전 체크리스트에 스왑 확인 항목 추가. AWS 2GB 스왑 적용 반영. |
+| 1.8  | 2026-02-19 | §3.0 RAM 용량을 고려한 스왑 증설 정책 문단 추가(데이터 노드 2GB 이상·1GB 노드 2GB·AWS 2GB). |

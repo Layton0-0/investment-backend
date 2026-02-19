@@ -47,7 +47,7 @@
 
 | 방향 | 소스/대상 | 프로토콜·포트 | 용도 |
 |------|-----------|---------------|------|
-| Ingress | Oracle 2(Korea) Public IP/32, Oracle 3(Mumbai) Public IP/32 (및 추가 앱 노드) | TCP 5432 | TimescaleDB |
+| Ingress | Oracle 2(Korea) Public IP/32, Oracle 3(Mumbai) Public IP/32, **AWS Public IP/32** (및 추가 앱 노드) | TCP 5432 | TimescaleDB |
 | Ingress | 동일 | TCP 6379 | Redis |
 | Ingress | 관리자 IP 또는 배포 runner IP | TCP 22 | SSH |
 | Egress | 0.0.0.0/0 | All | 패키지/이미지 등 |
@@ -71,12 +71,13 @@
 ### 3.4 크로스 리전 통신
 
 - Korea·Mumbai 앱 노드의 Backend가 Oracle 1(Osaka)에 접속할 때 **Oracle 1의 Public IP**를 사용한다.
-- **Oracle 1 Security List**에서 **Oracle 2 + Oracle 3(Mumbai) Public IP**를 TCP 5432, 6379 Ingress에 허용해야 한다. 증설 시 새 앱 노드 Public IP를 동일하게 추가한다.
+- **Oracle 1 Security List**에서 **Oracle 2 + Oracle 3(Mumbai) + AWS Public IP**를 TCP 5432, 6379 Ingress에 허용해야 한다. 증설 시 새 앱 노드 Public IP를 동일하게 추가한다.
 
 ---
 
 ## 4. E2 서버 증설 시 배치
 
+- **스왑·메모리 튜닝**(노드별 권장 스왑): [05-multi-vps-oracle-aws-cicd.md](05-multi-vps-oracle-aws-cicd.md) §3 참조.
 - **동일 스펙**: VM.Standard.E2.1.Micro (1 OCPU, 1GB RAM). Always Free 한도 확인.
 - **India West (Mumbai) — 프로비저닝 완료**: ap-mumbai-1, VCN aifer-vcn, VM.Standard.E2.1.Micro, Ubuntu 24.04, 사용자 ubuntu. 역할은 앱 계층(Oracle 3). **필수**: Oracle 1(Osaka) Security List에 Mumbai 인스턴스 **Public IP**를 TCP 5432, 6379 Ingress에 추가. 배포 전 investment-infra 클론 및 Docker·.env 설정은 [05-multi-vps-oracle-aws-cicd.md](05-multi-vps-oracle-aws-cicd.md) §Mumbai 노드 초기 설정 또는 `investment-infra/scripts/setup-oracle3-mumbai.sh` 참조.
 - **기타 증설**: 앱 2호기는 Korea 또는 Mumbai Public 서브넷에 추가. 데이터 전용 추가는 Osaka에 추가. 모든 앱 노드 Public IP를 Oracle 1 Security List 5432/6379 허용 대상에 포함한다.

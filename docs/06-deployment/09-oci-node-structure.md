@@ -2,7 +2,7 @@
 
 ## 개요
 
-Oracle 1(Osaka)·Oracle 2(Korea)·Oracle 3(Mumbai) 각 노드의 홈 디렉터리 구조를 파악한 결과와, **OCI 매크로 관련 항목을 제외한** 기존 구조 정리 기준을 정리한다. 실제 IP·호스트명은 문서에 기입하지 않는다.
+Oracle 1(Osaka)·Oracle 2(Korea)·Oracle 3(Mumbai) 각 노드의 홈 디렉터리 구조를 파악한 결과와, **OCI 매크로 관련 항목을 제외한** 기존 구조 정리 기준을 정리한다. **노드 역할(토폴로지)**은 [05-multi-vps-oracle-aws-cicd.md §2](05-multi-vps-oracle-aws-cicd.md) 참조. 실제 IP·호스트명은 문서에 기입하지 않는다.
 
 ---
 
@@ -36,7 +36,7 @@ Oracle 1(Osaka)·Oracle 2(Korea)·Oracle 3(Mumbai) 각 노드의 홈 디렉터�
 
 ---
 
-## 2. Oracle 2 (Korea) — 애플리케이션 계층
+## 2. Oracle 2 (Korea) — 엣지 (역할 상세는 05 §2 참조)
 
 ### 2.1 파악된 구조 (정리 전)
 

@@ -375,8 +375,10 @@ aws ce get-cost-and-usage \
 
 ### 메모리 부족 시
 
+**멀티 VPS 노드별 권장 스왑(RAM 고려)**은 [05-multi-vps-oracle-aws-cicd.md](05-multi-vps-oracle-aws-cicd.md) §3.0 참조.
+
 ```bash
-# 스왑 파일 생성
+# 스왑 파일 생성 (단일 VPS/로컬 예시, 4G)
 sudo fallocate -l 4G /swapfile
 sudo chmod 600 /swapfile
 sudo mkswap /swapfile

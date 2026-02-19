@@ -67,6 +67,7 @@
 - [x] **배포 후 검증**: Oracle 2 / Oracle 3 배포 직후 `curl -sf http://localhost:8080/actuator/health` 로 Backend 헬스체크. 실패 시 워크플로우 실패.
 - [ ] **시크릿 등록**(운영자 작업): 저장소 **Settings → Secrets and variables → Actions**에서만 등록. SSH 비밀키 **내용**을 붙여넣기(코드/문서에 절대 넣지 않음). 이름: `SSH_PRIVATE_KEY_ORACLE_OSAKA`, `SSH_PRIVATE_KEY_ORACLE_KOREA`, `SSH_PRIVATE_KEY_ORACLE_MUMBAI`, (선택) `SSH_PRIVATE_KEY_AWS`. **전체 목록·안내**: [08-devops-required-tokens-and-keys.md](08-devops-required-tokens-and-keys.md).
 - [ ] **저장소 변수**(운영자 작업): Settings → Variables. `DEPLOY_HOST_ORACLE_OSAKA`, `DEPLOY_HOST_ORACLE_KOREA`, `DEPLOY_HOST_ORACLE_MUMBAI`, (선택) `DEPLOY_HOST_AWS`, (선택) `DEPLOY_USER`(기본 ubuntu). 배포할 노드만 설정하면 해당 단계만 실행됨. **전체 목록**: [08-devops-required-tokens-and-keys.md](08-devops-required-tokens-and-keys.md).
+- **CI/CD·방화벽 점검 요약**: [10-cicd-firewall-checklist.md](10-cicd-firewall-checklist.md) — CI 상태 표, CD 사전 조건, 방화벽/Security List 작업 정리.
 
 ### 3.4 배포 스크립트·문서
 
@@ -76,7 +77,7 @@
 
 ### 3.5 SSH로 노드 점검 절차
 
-CD가 성공하려면 각 노드에 **investment-infra 클론·Docker·.env**가 선행되어야 한다. SSH(수동 또는 Cursor SSH MCP)로 아래 순서를 실행한다.
+CD가 성공하려면 각 노드에 **investment-infra 클론·Docker·.env**가 선행되어야 한다. **스왑 설정(모든 노드)**: [05 §3.0](05-multi-vps-oracle-aws-cicd.md) 노드별 스왑 현황·설정 절차 참조. **배포 역할(토폴로지)**: [05 §2](05-multi-vps-oracle-aws-cicd.md) (AWS=API 계층, Oracle 2=엣지, Oracle 3=매크로) 참조. SSH(수동 또는 Cursor SSH MCP)로 아래 순서를 실행한다.
 
 - **Oracle 1 (Osaka)**  
   1. `cd ~ && ls -la investment-infra` — 없으면 `git clone <investment-infra URL> investment-infra`  
@@ -109,6 +110,8 @@ SSH MCP 키 경로 오류 등으로 원격 실행이 불가하면, 터미널에�
 | **Secrets** | SSH_PRIVATE_KEY_ORACLE_OSAKA/KOREA/MUMBAI, (선택) AWS, GHCR_PULL_TOKEN | 08 §1.1 참조 |
 | **Variables** | DEPLOY_HOST_ORACLE_OSAKA/KOREA/MUMBAI, (선택) DEPLOY_HOST_AWS, DEPLOY_USER | 08 §1.2 참조 |
 | **노드 준비** | Oracle 1/2/3 각각 investment-infra 클론, .env, check-node-ready.sh 통과 | §3.5 순서대로 SSH 또는 MCP로 점검 |
+| **스왑** | 모든 노드 스왑 설정·확인 | 05 §3.0 노드별 스왑 현황·설정 절차 참조 |
+| **Verify Oracle 2** | CD 배포 후 Backend 헬스체크 | Oracle 1(Osaka) Security List에서 Oracle 2(Korea) IP로 TCP 5432(및 6379) 인바운드 허용 시 정상 통과. |
 
 ---
 
@@ -130,3 +133,5 @@ SSH MCP 키 경로 오류 등으로 원격 실행이 불가하면, 터미널에�
 | 1.2 | 2026-02-12 | §3.1 사전 점검 완료 처리. CD에 배포 전 git fetch/reset 추가·Oracle 1은 deploy-oracle1.sh 사용. §3.4 .env.example·스크립트 목록 반영. |
 | 1.3 | 2026-02-12 | §3.5 SSH로 노드 점검 절차 추가 (Oracle 1/2/3 순서·check-node-ready·.env·수동 1회 배포). |
 | 1.4 | 2026-02-12 | §3.6 CI/CD 전체 점검 요약 추가. §3.5 Mumbai SSH MCP(ssh-mcp-oracle-mumbai-yoon) 안내 추가. |
+| 1.5 | 2026-02-13 | §3.3 10-cicd-firewall-checklist.md 링크 추가 (CI 상태·방화벽 정리). |
+| 1.6 | 2026-02-19 | §3.5 스왑·토폴로지(05 §2·§3.0) 참조 추가. §3.6 Verify Oracle 2 문구(Security List 5432/6379 허용 시 정상 통과) 및 스왑 행 추가. |

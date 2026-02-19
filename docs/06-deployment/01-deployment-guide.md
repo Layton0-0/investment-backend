@@ -267,6 +267,10 @@ GET /actuator/metrics
 - 최소 권한 원칙 적용
 - SSL/TLS 연결 사용 (권장)
 
+## 관련 문서
+
+- **멀티 VPS 배포**(노드 역할·스왑·CI/CD): [05-multi-vps-oracle-aws-cicd.md](05-multi-vps-oracle-aws-cicd.md)
+
 ## 문서 변경 이력
 
 | 버전 | 일자 | 작성자 | 변경 내용 |
