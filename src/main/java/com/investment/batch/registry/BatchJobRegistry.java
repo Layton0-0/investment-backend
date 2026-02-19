@@ -65,6 +65,22 @@ public class BatchJobRegistry {
                                                 .triggerPath("/api/v1/trigger/us-daily")
                                                 .build(),
                                 BatchJobDefinition.builder()
+                                                .id("krx-daily-backfill")
+                                                .name("KRX 일별 시세 백필")
+                                                .description("스트레스 구간 등 과거 기간 KRX 일별 시세 수집. from/to 파라미터 필수.")
+                                                .cronExpression(null)
+                                                .timeZone(TZ)
+                                                .triggerPath("/api/v1/trigger/krx-daily-backfill")
+                                                .build(),
+                                BatchJobDefinition.builder()
+                                                .id("us-daily-backfill")
+                                                .name("US 일별 시세 백필")
+                                                .description("스트레스 구간 등 과거 기간 US 일별 시세 수집. from/to 파라미터 필수.")
+                                                .cronExpression(null)
+                                                .timeZone(TZ)
+                                                .triggerPath("/api/v1/trigger/us-daily-backfill")
+                                                .build(),
+                                BatchJobDefinition.builder()
                                                 .id("factor-calculation")
                                                 .name("팩터 계산")
                                                 .description("매일 장 시작 전(08:00 KST) 유니버스 필터 및 팩터(시그널) 계산을 실행합니다.")

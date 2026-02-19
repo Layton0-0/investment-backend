@@ -81,6 +81,22 @@ public class BatchJobBeansConfig {
                                 step(jobRepository, tx, "us-daily-step", tasklet));
         }
 
+        @Bean(name = "krx-daily-backfill")
+        public Job krxDailyBackfillJob(JobRepository jobRepository,
+                        PlatformTransactionManager tx,
+                        KrxDailyBackfillTasklet tasklet) {
+                return job(jobRepository, "krx-daily-backfill",
+                                step(jobRepository, tx, "krx-daily-backfill-step", tasklet));
+        }
+
+        @Bean(name = "us-daily-backfill")
+        public Job usDailyBackfillJob(JobRepository jobRepository,
+                        PlatformTransactionManager tx,
+                        UsDailyBackfillTasklet tasklet) {
+                return job(jobRepository, "us-daily-backfill",
+                                step(jobRepository, tx, "us-daily-backfill-step", tasklet));
+        }
+
         @Bean(name = "factor-calculation")
         public Job factorCalculationJob(JobRepository jobRepository,
                         PlatformTransactionManager tx,

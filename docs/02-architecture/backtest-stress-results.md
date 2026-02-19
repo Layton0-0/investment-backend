@@ -66,9 +66,39 @@
 
 ---
 
-## 5. 참조
+## 5. 스트레스 구간 데이터 백필
+
+해당 구간 TB_DAILY_STOCK이 없을 때 **과거 일봉 백필** 후 팩터 계산을 실행하면 스트레스 백테스트가 가능하다.
+
+### 5.1 백필 API (인증 필요)
+
+| 트리거 | 메서드 | 쿼리 파라미터 | 설명 |
+|--------|--------|----------------|------|
+| KRX 일별 백필 | POST /api/v1/trigger/krx-daily-backfill | from (yyyy-MM-dd), to (yyyy-MM-dd) | 해당 기간 KRX 일별 시세 수집 → TB_DAILY_STOCK (MARKET=KR) |
+| US 일별 백필 | POST /api/v1/trigger/us-daily-backfill | from (yyyy-MM-dd), to (yyyy-MM-dd) | 해당 기간 US 일별 시세 수집 → TB_DAILY_STOCK (MARKET=US) |
+
+- **KR**: KRX Open API 인증키(`investment.data.krx.auth-key`) 설정 필요. [04-krx-api-required.md](../08-setup-guides/04-krx-api-required.md) 참조.
+- **US**: yfinance 스크립트 경로(`investment.data.us.yfinance-script-path`) 등 US 수집 설정 필요. [02-development-status.md](../09-planning/02-development-status.md) US 일별 수집 항목 참조.
+
+### 5.2 백필 후 팩터 계산
+
+일봉만 저장하면 시그널이 없으므로, 백필 직후 **팩터 계산**을 실행해 TB_SIGNAL_SCORE를 채운다.
+
+- `POST /api/v1/trigger/factor-calculation` (기준일 없이 실행 시 최근 일자 기준. 구간 백필만 했을 경우 해당 구간 일봉이 DB에 있으면 팩터 계산 시 그 일자들을 포함할 수 있음. 구현에 따라 전체 재계산 또는 기간 지정 여부는 코드 확인.)
+
+### 5.3 스크립트 사용 예 (PowerShell)
+
+프로젝트 루트 `scripts/backfill-stress-periods.ps1` 이 스트레스 구간(코로나·금리 인상기) KR/US 백필을 순차 호출한다.
+
+- **사용법**: Backend 기동 후 로그인·쿠키 또는 Bearer 토큰으로 인증. `.\scripts\backfill-stress-periods.ps1 -BaseUrl "http://localhost:8083" -BearerToken "…"` 또는 `-WebSession $session`.
+- **순서**: 스크립트 실행 → (필요 시) 팩터 계산 트리거 → §4로 데이터 점검 → `POST /api/v1/backtest` 실행 → §3 표 기입.
+
+---
+
+## 6. 참조
 
 - [00-strategy-registry.md §1.1](./00-strategy-registry.md) — 데이터·백테스트 원칙
 - [02-development-status.md](../09-planning/02-development-status.md) — 완료·진행예정
 - [02-api-endpoints.md §백테스트](../04-api/02-api-endpoints.md) — POST /api/v1/backtest 스펙
 - [02-development-status.md §3 진행예정](../09-planning/02-development-status.md) — 스트레스 구간 데이터 수집 후 결과 기입 태스크
+- [02-api-endpoints.md §트리거 API](../04-api/02-api-endpoints.md) — krx-daily-backfill, us-daily-backfill

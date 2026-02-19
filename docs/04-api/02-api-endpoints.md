@@ -1258,6 +1258,8 @@ Admin 전용: 전략 거버넌스 검사 결과 이력·(market, strategyType)�
 | `POST /api/v1/trigger/sec-collect` | SEC EDGAR 공시 수집 즉시 실행 | - |
 | `POST /api/v1/trigger/krx-daily` | KRX 일별 시세 수집 즉시 실행 | `basDt` (optional, yyyy-MM-dd). 미입력 시 오늘 |
 | `POST /api/v1/trigger/us-daily` | US 시장 일별 시세 수집 즉시 실행 | `basDt` (optional). 미입력 시 오늘. 응답에 `saved` 포함 |
+| `POST /api/v1/trigger/krx-daily-backfill` | KRX 일별 시세 기간 백필 (스트레스 구간 등) | `from`, `to` (required, yyyy-MM-dd) |
+| `POST /api/v1/trigger/us-daily-backfill` | US 일별 시세 기간 백필 (스트레스 구간 등) | `from`, `to` (required, yyyy-MM-dd) |
 | `POST /api/v1/trigger/factor-calculation` | 유니버스 필터 및 팩터(시그널) 계산 즉시 실행 | - |
 | `POST /api/v1/trigger/auto-buy` | 자동매수(통합): 공통 전처리 → 로보(ETF) → 파이프라인(개별종목) 순 실행 | `dryRun` (optional, boolean). true면 실제 주문 없이 실행. 응답에 `dryRun` 포함 |
 | `POST /api/v1/trigger/pipeline-execution` | 4단계 파이프라인만 수동 실행 (스케줄은 자동매수 통합 사용) | `dryRun` (optional, boolean). true면 실제 주문 없이 실행. 응답에 `dryRun` 포함 |

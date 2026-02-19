@@ -111,6 +111,40 @@ public class TriggerController {
         return result;
     }
 
+    @Operation(summary = "KRX 일별 시세 백필", description = "과거 기간 KRX 일별 시세 수집(스트레스 구간 등). from·to 필수.")
+    @PostMapping("/krx-daily-backfill")
+    public ResponseEntity<Map<String, Object>> triggerKrxDailyBackfill(
+            Principal principal,
+            @Parameter(description = "시작일 (yyyy-MM-dd)", required = true) @RequestParam LocalDate from,
+            @Parameter(description = "종료일 (yyyy-MM-dd)", required = true) @RequestParam LocalDate to) {
+        JobParametersBuilder params = new JobParametersBuilder();
+        params.addString("fromDate", from.toString());
+        params.addString("toDate", to.toString());
+        ResponseEntity<Map<String, Object>> result = runTrigger("/krx-daily-backfill", "KRX 백필 완료", "KRX 백필 실패", params);
+        recordManualTrigger(principal, "/krx-daily-backfill", result);
+        if (result.getBody() != null && result.getBody().get("success") == Boolean.TRUE) {
+            return ResponseEntity.ok(Map.of("success", true, "message", "KRX 백필 완료", "from", from.toString(), "to", to.toString()));
+        }
+        return result;
+    }
+
+    @Operation(summary = "US 일별 시세 백필", description = "과거 기간 US 일별 시세 수집(스트레스 구간 등). from·to 필수.")
+    @PostMapping("/us-daily-backfill")
+    public ResponseEntity<Map<String, Object>> triggerUsDailyBackfill(
+            Principal principal,
+            @Parameter(description = "시작일 (yyyy-MM-dd)", required = true) @RequestParam LocalDate from,
+            @Parameter(description = "종료일 (yyyy-MM-dd)", required = true) @RequestParam LocalDate to) {
+        JobParametersBuilder params = new JobParametersBuilder();
+        params.addString("fromDate", from.toString());
+        params.addString("toDate", to.toString());
+        ResponseEntity<Map<String, Object>> result = runTrigger("/us-daily-backfill", "US 백필 완료", "US 백필 실패", params);
+        recordManualTrigger(principal, "/us-daily-backfill", result);
+        if (result.getBody() != null && result.getBody().get("success") == Boolean.TRUE) {
+            return ResponseEntity.ok(Map.of("success", true, "message", "US 백필 완료", "from", from.toString(), "to", to.toString()));
+        }
+        return result;
+    }
+
     @Operation(summary = "팩터 계산", description = "유니버스 필터 및 팩터(시그널) 계산을 즉시 실행")
     @PostMapping("/factor-calculation")
     public ResponseEntity<Map<String, Object>> triggerFactorCalculation(Principal principal) {

@@ -67,6 +67,28 @@ public class KrxCollectionService {
     }
 
     /**
+     * 기간 백필: from ~ to 각 거래일마다 collectAndSave 호출.
+     * 스트레스 구간(2020-02~04, 2022-01~06) 등 과거 일봉 수집용.
+     *
+     * @param from 시작일
+     * @param to   종료일
+     * @return 수집·저장한 총 건수
+     */
+    @Transactional
+    public int collectAndSaveRange(LocalDate from, LocalDate to) {
+        if (from.isAfter(to)) {
+            log.warn("KRX 기간 백필 스킵: from > to, from={}, to={}", from, to);
+            return 0;
+        }
+        int total = 0;
+        for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
+            total += collectAndSave(d);
+        }
+        log.info("KRX 기간 백필 완료: from={}, to={}, totalSaved={}", from, to, total);
+        return total;
+    }
+
+    /**
      * Map 한 행을 DailyStock으로 변환.
      * KRX API 필드명 변형(camelCase/snake_case/한글 등)에 대응하기 위해 여러 키를 시도한다.
      */

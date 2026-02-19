@@ -413,8 +413,13 @@ sudo ufw enable
 
 ```bash
 sudo apt install certbot
+# 단일 도메인
 sudo certbot --nginx -d yourdomain.com
+# 서브도메인 여러 개 (예: api / app)
+sudo certbot --nginx -d api.yourdomain.com -d app.yourdomain.com
 ```
+
+- 도메인·서브도메인별 nginx·Certbot 상세 절차는 [11-dns-and-domain-setup.md](11-dns-and-domain-setup.md) 참조.
 
 ## 비용 비교
 

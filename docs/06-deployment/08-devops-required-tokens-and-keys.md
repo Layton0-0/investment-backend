@@ -38,6 +38,7 @@ CD 워크플로우는 **investment-infra** 저장소의 `.github/workflows/cd.ym
 | `DEPLOY_HOST_AWS` | AWS 호스트 (선택) | 동일 |
 | `DEPLOY_USER` | SSH 로그인 사용자 | 기본값 `ubuntu` (Oracle Linux면 `opc`) |
 
+- **호스트명(도메인) 사용 시**: 해당 이름이 DNS에서 해당 노드의 Public IP로 풀이되어야 CD SSH 연결이 가능하다. 도메인·DNS 설정은 [11-dns-and-domain-setup.md](11-dns-and-domain-setup.md) 참조.
 - 배포하지 않을 노드는 해당 Variable을 **비워 두면** CD에서 해당 step이 스킵된다.
 
 ### 1.3 최종 확인용 체크리스트 (CD 실행 전)

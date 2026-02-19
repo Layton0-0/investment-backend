@@ -257,6 +257,10 @@
   Admin 전용 `/ops/governance` 라우트·메뉴 추가. opsApi에 getGovernanceResults(limit), getGovernanceHalts(), clearGovernanceHalt(market, strategyType, clearedBy) 연동. GovernanceView: 검사 결과 이력 테이블(limit 20), 활성 halt 목록·halt 해제 버튼. 11-api-frontend-mapping §4 전략 거버넌스 행 연동 완료 반영.
 - [x] **Phase 1 메뉴별 API·프론트 순차 검토 완료**  
   11-api-frontend-mapping §4·§5.2 기준으로 메뉴(라우트)별 백엔드 API 필요·연동 현황 검토. 미연동·미구현 항목 없음 확인. 순차 개발 시 다음 우선순위는 신규 메뉴/기능 추가 시 해당 문서 §4·§5.2 갱신 후 진행.
+- [x] **백테스트 스트레스 백필 API·가이드**  
+  KRX/US 일별 기간 백필 Job(krx-daily-backfill, us-daily-backfill)·TriggerController POST /api/v1/trigger/krx-daily-backfill, /us-daily-backfill (from, to 쿼리). KrxCollectionService.collectAndSaveRange(from, to) 추가. backtest-stress-results.md §5 스트레스 구간 데이터 백필(API·스크립트 사용법) 추가. 02-api-endpoints 트리거 표·BatchJobRegistry 반영.
+- [x] **Phase 6 대시보드·UX 1차 (성과 분석 심화)**  
+  대시보드 "성과 요약" 섹션 정리·Sortino·CVaR 95% 카드 추가. 총 평가액·MDD·Sharpe·Sortino·VaR·CVaR 6종 퀀트 메트릭 표시. roadmap Phase 6.1 성과 분석 대시보드 [x] 처리.
 - [x] **대시보드 성과 요약 API·프론트 연동**  
   GET `/api/v1/dashboard/performance-summary` (DashboardController), RiskReportService.getSummary 기반 DashboardPerformanceSummaryDto(총 평가액·MDD·Sharpe·Sortino·VaR·CVaR). dashboardApi.getPerformanceSummary, useDashboardData에서 병렬 조회, Dashboard 페이지에 성과 요약 카드(총 평가액·MDD·Sharpe·VaR) 표시. 02-api-endpoints·11-api-frontend-mapping 반영.
 - [x] **고급 분석·포트폴리오 2차 (상관관계·리스크 기반 포지션 사이징)**  
@@ -326,7 +330,7 @@
 ### 프론트·대시보드
 
 - [ ] **대시보드·UX**  
-  자동투자 현황 파이프라인 실데이터·시그널/보유 포지션 테이블은 완료. 대시보드: 계좌 요약(국내·미국 구분), 자동투자 상태 카드, **성과 요약 API 연동 완료**(총 평가액·MDD·Sharpe·VaR 카드). 후속: 실시간 차트, 반응형·모바일.
+  자동투자 현황 파이프라인 실데이터·시그널/보유 포지션 테이블은 완료. 대시보드: 계좌 요약(국내·미국 구분), 자동투자 상태 카드, **성과 요약 섹션·6종 메트릭**(총 평가액·MDD·Sharpe·Sortino·VaR·CVaR) 연동 완료. 후속: 실시간 차트 확장, 앱 내 알림, 반응형·모바일.
 - [ ] **모바일 앱 (선택)**  
   iOS/Android, 푸시 알림.
 
@@ -411,3 +415,4 @@
 | 1.42 | 2026-02-11 | 기획 고도화(퀀트 관점): 수정주가 Phase 2 필수·PIT·Look-ahead 방지·스트레스 검증(2020/2022)·Walk-Forward(권장)·거래 사유 추적·전략 중단 원칙·리스크 알림(선택) 진행예정 반영. |
 | 1.43 | 2026-02-11 | Phase 2 Quant Engine 구현: 수정주가 파이프라인(한투 FID_ORG_ADJ_PRC=0, US yfinance auto_adjust=True, KR/KRX·DailyStock 주석), PIT·Look-ahead 검증(BacktestService·FactorCalculationService·RoboBacktestService 주석·00-strategy-registry §1.1), 백테스트 스트레스 검증(backtest-stress-results.md 시나리오 정의·검증 기준·BacktestServiceTest 스트레스 구간 테스트 추가). 진행예정에서 수정주가·PIT·스트레스 항목 완료로 이동. |
 | 1.44 | 2026-02-12 | 기획 정합 퀀트 개발 진행: Phase 1 메뉴별 API·프론트 순차 검토 완료(11-api-frontend-mapping §4·§5.2 미연동 항목 없음). 백테스트 스트레스 결과 기입(데이터 수집 후) 진행예정 추가, backtest-stress-results.md §4 데이터 점검 방법·§3 이슈·비고 안내 보강. roadmap.md 백테스트 스트레스 검증 항목과 development-status·backtest-stress-results 정합. |
+| 1.45 | 2026-02-19 | 로드맵·문서 동기화(roadmap Phase 5.1·5.2 완료 [x]). 백테스트 스트레스 백필: krx-daily-backfill·us-daily-backfill Job·API·KrxCollectionService.collectAndSaveRange·backtest-stress-results.md §5 백필 가이드. Phase 6 대시보드 성과 분석 심화: 성과 요약 섹션·Sortino·CVaR 카드·roadmap 6.1 성과 분석 [x]. |

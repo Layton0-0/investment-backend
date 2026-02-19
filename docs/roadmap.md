@@ -124,23 +124,23 @@
 **목표**: 고급 분석 기능 및 전략 확장. 자동투자 4단계 파이프라인·시장(KR/US)별 알고리즘·뉴스 파이프라인 반영.
 
 #### 5.1 고급 분석 기능
-- [ ] 섹터 분석 기능
-- [ ] 상관관계 분석
-- [ ] 리스크 메트릭 강화
+- [x] 섹터 분석 기능 — GET /api/v1/analysis/sector·포트폴리오 섹터 비중·수익 기여도
+- [x] 상관관계 분석 — GET /api/v1/analysis/correlation·리스크 기반 포지션 사이징
+- [x] 리스크 메트릭 강화 — VaR/CVaR·포트폴리오 리스크 메트릭·리밸런싱 제안 API
 
 **예상 완료일**: 2026년 6월
 
 #### 5.2 전략 확장 (시장·기간별)
-- [ ] **수정주가(Adjuster) 파이프라인 — Phase 2 Quant Engine 필수** — 일봉 저장·팩터 계산·백테스트 입력은 수정주가만 사용. 원주가는 차트 표시 등에만 사용. 상세: [개발 진행 현황](09-planning/02-development-status.md), [decisions.md](decisions.md) 데이터 정합성 ADR.
-- [ ] **백테스트 스트레스 검증** — 2020-03(코로나 폭락), 2022-01~06(금리 인상기) 구간 MDD·청산 규칙·리스크 게이트 검증 및 결과 문서화. 시나리오·검증 기준·실행 방법은 [backtest-stress-results.md](02-architecture/backtest-stress-results.md)에 문서화 완료; 실제 실행 결과는 해당 구간 데이터 수집 후 동 문서 §3에 기입. [개발 진행 현황](09-planning/02-development-status.md) 진행예정 참조.
-- [ ] **Walk-Forward 또는 Train/Test 기간 분리 백테스트** (권장) — 전략별 p·b 추정 시 오버피팅 방지.
+- [x] **수정주가(Adjuster) 파이프라인 — Phase 2 Quant Engine 필수** — 일봉 저장·팩터 계산·백테스트 입력은 수정주가만 사용. 원주가는 차트 표시 등에만 사용. 상세: [개발 진행 현황](09-planning/02-development-status.md), [decisions.md](decisions.md) 데이터 정합성 ADR.
+- [ ] **백테스트 스트레스 검증** — 시나리오·검증 기준·실행 방법은 [backtest-stress-results.md](02-architecture/backtest-stress-results.md)에 문서화 완료. **실행 결과 기입은 해당 구간(2020-02~04·2022-01~06) 데이터 수집 후** 동 문서 §3에 기입 시 본 항목 완료([x] 처리). [개발 진행 현황](09-planning/02-development-status.md) 진행예정 참조.
+- [x] **Walk-Forward 또는 Train/Test 기간 분리 백테스트** (권장) — WalkForwardBacktestService·POST /api/v1/backtest/walk-forward 구현 완료.
 - [x] 팩터 계산 엔진 (구축 로드맵 2단계) — KRX 일별 저장·이격도·변동성 돌파·유동성·GET /api/v1/signals·자동투자 현황 시그널 연동
 - [x] 4단계 파이프라인 (1차) — 유니버스(유동성)·시그널 유니버스 필터·PositionSizingService·PipelineExecutor·ExitRuleService(Time-Cut). 상세: [개발 진행 현황](09-planning/02-development-status.md)
-- [ ] 시장(Market KR/US) 차원 도입 — 전략·유니버스·시그널 시장별 분리
-- [ ] 중기 전략 (MEDIUM_TERM) 구현
-- [ ] 장기 전략 (LONG_TERM) 구현
+- [x] 시장(Market KR/US) 차원 도입 — 전략·유니버스·시그널 시장별 분리·PipelineSummary·기간별 청산·자금관리
+- [x] 중기 전략 (MEDIUM_TERM) 구현 — -10% 손절·Time-Cut·시그널 상위 10% 등 (상세: 개발 진행 현황)
+- [ ] 장기 전략 (LONG_TERM) 구현 — 현재 스텁, 후속 구현
 - [x] 4단계 파이프라인 확장 (1차) — 변동성 돌파 k 동적 적용, Half-Kelly 자금 관리, ATR Trailing Stop 청산, 체결 확인 후 포지션 등록 옵션, 유니버스/시그널 필터 스텁 구현. 상세: [개발 진행 현황](09-planning/02-development-status.md)
-- [ ] 4단계 파이프라인 확장 (데이터 수집 후) — Sector RS·Post-Earnings Drift 실제 구현, 수급 강도·듀얼 모멘텀·퀄리티-성장 실제 계산, Half-Kelly 백테스트 연동
+- [x] 4단계 파이프라인 확장 (데이터 수집 후) — Sector RS·Post-Earnings Drift·수급 강도·듀얼 모멘텀·퀄리티-성장 실제 계산, Half-Kelly 백테스트 연동. 상세: [개발 진행 현황](09-planning/02-development-status.md)
 - [ ] 커스텀 전략 생성 기능
 
 **예상 완료일**: 2026년 7월
@@ -166,8 +166,8 @@
 
 #### 6.1 대시보드 개선
 - [ ] 실시간 차트 통합
-- [ ] 성과 분석 대시보드
-- [ ] 알림 기능
+- [x] 성과 분석 대시보드 — 성과 요약 섹션·총 평가액·MDD·Sharpe·Sortino·VaR 95%·CVaR 95% 카드 표시 (GET /api/v1/dashboard/performance-summary 연동 완료). 실시간 차트는 대시보드 가격 추이(PriceChart)로 1종목 표시됨.
+- [ ] 알림 기능 (앱 내 사용자 알림)
 
 **예상 완료일**: 2026년 8월
 
@@ -309,3 +309,4 @@
 | 1.1 | 2026-01-29 | System | 자동투자수익 비전·4단계 파이프라인·국내/미국·뉴스 파이프라인·KIS API 단계 반영 |
 | 1.2 | 2026-02-06 | System | 기준 문서(00-planning-basis·minimum·기획요청·gemini) 참조 추가, Phase 기준 문서 정합 문구 반영 |
 | 1.3 | 2026-02-11 | System | 기획 고도화(퀀트 관점): Phase 5.2 수정주가 필수·스트레스 검증(2020/2022)·Walk-Forward(권장) 체크 추가 |
+| 1.4 | 2026-02-19 | System | 문서 동기화: Phase 5.1·5.2 완료 항목 [x] 반영(수정주가·Walk-Forward·시장 KR/US·중기 전략·4단계 확장 데이터 수집 후·고급 분석). 백테스트 스트레스 검증 문구 정리(결과 기입 완료 시 [x] 처리). |

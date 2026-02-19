@@ -47,10 +47,12 @@
 
 | 방향 | 소스/대상 | 프로토콜·포트 | 용도 |
 |------|-----------|---------------|------|
-| Ingress | Oracle 2(Korea) Public IP/32, Oracle 3(Mumbai) Public IP/32, **AWS Public IP/32** (및 추가 앱 노드) | TCP 5432 | TimescaleDB |
+| Ingress | Oracle 2(Korea) Public IP/32, Oracle 3(Mumbai) Public IP/32, **AWS(API 계층) Public IP/32** (및 추가 앱 노드) | TCP 5432 | TimescaleDB |
 | Ingress | 동일 | TCP 6379 | Redis |
 | Ingress | 관리자 IP 또는 배포 runner IP | TCP 22 | SSH |
 | Egress | 0.0.0.0/0 | All | 패키지/이미지 등 |
+
+- **AWS 사용 시**: API 스택이 Oracle 1(DB/Redis)에 접속하므로, Oracle 1 Security List에 **AWS 인스턴스 Public IP**(또는 Elastic IP)를 TCP 5432, 6379 Ingress 허용에 **반드시** 추가한다.
 
 ### 3.2 Oracle 2 (앱, Korea)
 
@@ -70,8 +72,8 @@
 
 ### 3.4 크로스 리전 통신
 
-- Korea·Mumbai 앱 노드의 Backend가 Oracle 1(Osaka)에 접속할 때 **Oracle 1의 Public IP**를 사용한다.
-- **Oracle 1 Security List**에서 **Oracle 2 + Oracle 3(Mumbai) + AWS Public IP**를 TCP 5432, 6379 Ingress에 허용해야 한다. 증설 시 새 앱 노드 Public IP를 동일하게 추가한다.
+- Korea·Mumbai 앱 노드 및 **AWS(API 계층)** 의 Backend가 Oracle 1(Osaka)에 접속할 때 **Oracle 1의 Public IP**를 사용한다.
+- **Oracle 1 Security List**에서 **Oracle 2 + Oracle 3(Mumbai) + AWS Public IP**를 TCP 5432, 6379 Ingress에 허용해야 한다. AWS 인스턴스 생성 후 즉시 AWS Public IP를 추가하는 것을 권장한다. 증설 시 새 앱 노드 Public IP를 동일하게 추가한다.
 
 ---
 

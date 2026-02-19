@@ -64,9 +64,12 @@ Oracle 1(Osaka)·Oracle 2(Korea)·Oracle 3(Mumbai) 각 노드의 홈 디렉터�
 
 ---
 
-## 3. Oracle 3 (Mumbai)
+## 3. Oracle 3 (Mumbai) — 매크로 전용
 
-- SSH 연결 타임아웃으로 구조 미파악. 접속 가능 시 Oracle 2와 유사한 패턴으로 `.oci`·`investment-infra`는 유지하고, 기존 docker-compose/로그 등만 정리하는 것을 권장.
+- **역할**: Jenkins(token-macro 등)만 운영. 앱 스택(Backend, prediction-service, data-collector)은 배포하지 않음.
+- **Compose**: `docker-compose.oracle3-mumbai-macro.yml` (investment-infra). `./jenkins_home` 디렉터리를 Jenkins 데이터로 마운트. 최초 1회 Osaka에서 `~/jenkins_home`을 rsync/scp로 복사 후 사용 권장.
+- **유지**: `~/investment-infra/`, `~/jenkins_home/`(또는 investment-infra/jenkins_home). OCI·매크로 관련 항목만 유지.
+- **정리**: 기존에 Oracle 2와 동일한 앱 스택으로 돌리던 경우, 해당 컨테이너·이미지는 제거하고 매크로(Jenkins)만 기동.
 
 ---
 
@@ -74,9 +77,9 @@ Oracle 1(Osaka)·Oracle 2(Korea)·Oracle 3(Mumbai) 각 노드의 홈 디렉터�
 
 | 노드 | 삭제·정리 | 유지 (OCI 매크로·배포 표준) |
 |------|------------|-----------------------------|
-| Osaka | `~/docker-compose/` 전체 | `~/investment-infra/`, `~/jenkins_home/`(token-macro 포함), `~/.cursor*`, `~/.gradle` |
+| Osaka | `~/docker-compose/` 전체, **Jenkins 컨테이너·이미지 제거** (매크로는 Mumbai로 이전) | `~/investment-infra/`, `~/.cursor*`, `~/.gradle` |
 | Korea | `~/docker-compose/*` 중 .oci 제외, `~/output*.log` | `~/.oci/`, `~/docker-compose/osaka/.oci/`, `~/investment-infra/`, `~/db_data/` |
-| Mumbai | (접속 후 동일 원칙 적용) | `~/.oci/`, `~/investment-infra/` |
+| Mumbai | (매크로 전용) 앱 스택 컨테이너 있으면 제거 | `~/investment-infra/`, `~/jenkins_home/` 또는 `investment-infra/jenkins_home` (Osaka에서 복사) |
 
 ---
 
