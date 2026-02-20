@@ -47,7 +47,7 @@
   - **상태**: Oracle 2와 동일하게 구성함. cronie 설치, `/etc/cron.d/certbot-renew-aws` 등록(PATH 포함), `docker-compose.aws-api.yml`·`nginx/`·`scripts/renew-certs-aws.sh` 배치 완료. 스크립트에 cron용 PATH 설정 반영.
   - **Docker**: 해당 AWS 노드에 **Docker 설치 완료** (dnf install docker, Docker Compose v2 CLI 플러그인 GitHub 설치, systemctl enable --now docker, ec2-user docker 그룹 추가). 갱신 스크립트는 root cron에서 `docker compose` 호출 가능. API 스택 기동은 `.env` 설정 후 `./scripts/deploy-aws-api.sh` 실행.
   - **ec2-user docker 권한**: 새 세션에서도 `docker ps` 가능하도록 **소켓 666** 적용. 재시작 후 유지: `sudo mkdir -p /etc/systemd/system/docker.socket.d` 후 `SocketMode=0666` 인 override.conf 작성, `systemctl daemon-reload && systemctl restart docker.socket docker`.
-  - **API 스택 컨테이너**: `~/investment-infra/.env` 플레이스홀더 생성됨(REGISTRY, *_TAG, SPRING_DATASOURCE_URL, POSTGRES_PASSWORD, REDIS_HOST). **이미지 pull**은 ghcr.io 비공개 시 인증 필요: `echo $GHCR_PULL_TOKEN | docker login ghcr.io -u OWNER --password-stdin` 또는 CD의 GHCR_PULL_TOKEN 사용 후 `./scripts/deploy-aws-api.sh` 실행. `.env`의 REPLACE_ORACLE1_IP·REPLACE_ME를 Oracle 1 실제 IP·DB 비밀번호로 교체 후 재기동.
+  - **API 스택 컨테이너**: `~/investment-infra/.env`에 REGISTRY, *_TAG, SPRING_DATASOURCE_URL(Oracle 1 IP), REDIS_HOST(Oracle 1 IP) 반영됨. **POSTGRES_PASSWORD**만 Oracle 1과 동일한 DB 비밀번호로 AWS 서버에서 설정 후 `./scripts/deploy-aws-api.sh` 실행(또는 CD로 배포). 이미지 pull은 ghcr.io 인증 필요.
   - **미등록 시** 운영자 SSH 접속 후: `echo "0 0,12 * * * root PATH=/usr/bin:/bin:/usr/local/bin /home/ec2-user/investment-infra/scripts/renew-certs-aws.sh >> /var/log/certbot-renew.log 2>&1" | sudo tee /etc/cron.d/certbot-renew-aws && sudo chmod 644 /etc/cron.d/certbot-renew-aws`.
   - 상세: [11-dns-and-domain-setup.md §4.4](11-dns-and-domain-setup.md#44-인증서-자동-갱신-cron).
 
