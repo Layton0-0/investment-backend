@@ -1,5 +1,8 @@
 # 최소 비용 구성 가이드
 
+> **현재 채택 설계와의 관계**: 본 문서는 **통합 서버 1대·MariaDB·단일 VPS** 등 **최소 비용 대안**을 정리한 **참고용** 문서입니다.  
+> **현재 프로젝트 운영 배포**는 **Oracle 3대 + AWS 1대** 구성을 사용하며, **[05-multi-vps-oracle-aws-cicd.md](05-multi-vps-oracle-aws-cicd.md)** 및 **[00-deployment-docs-index.md](00-deployment-docs-index.md)** 를 참조하세요.
+
 ## 개요
 
 초기 투자 금액이 크지 않은 상황을 고려한 최소 비용 구성 가이드입니다.

@@ -36,7 +36,9 @@ Oracle 1(Osaka)·Oracle 2(Korea)·Oracle 3(Mumbai) 각 노드의 홈 디렉터�
 
 ---
 
-## 2. Oracle 2 (Korea) — 엣지 (역할 상세는 05 §2 참조)
+## 2. Oracle 2 (Korea) — 엣지 전용 (역할 상세는 05 §2 참조)
+
+**역할**: Frontend + nginx만 운영. Backend·prediction-service·data-collector는 **배포하지 않음** (API는 AWS). `/api` 요청은 nginx가 AWS(api.\* 도메인)로 프록시.
 
 ### 2.1 파악된 구조 (정리 전)
 
@@ -66,10 +68,9 @@ Oracle 1(Osaka)·Oracle 2(Korea)·Oracle 3(Mumbai) 각 노드의 홈 디렉터�
 
 ## 3. Oracle 3 (Mumbai) — 매크로 전용
 
-- **역할**: Jenkins(token-macro 등)만 운영. 앱 스택(Backend, prediction-service, data-collector)은 배포하지 않음.
-- **Compose**: `docker-compose.oracle3-mumbai-macro.yml` (investment-infra). `./jenkins_home` 디렉터리를 Jenkins 데이터로 마운트. 최초 1회 Osaka에서 `~/jenkins_home`을 rsync/scp로 복사 후 사용 권장.
-- **유지**: `~/investment-infra/`, `~/jenkins_home/`(또는 investment-infra/jenkins_home). OCI·매크로 관련 항목만 유지.
-- **정리**: 기존에 Oracle 2와 동일한 앱 스택으로 돌리던 경우, 해당 컨테이너·이미지는 제거하고 매크로(Jenkins)만 기동.
+- **역할**: **매크로(자동화/스케줄) 전용.** 앱 스택(Backend, prediction-service, data-collector)은 **배포하지 않음.** 매크로는 Jenkins 또는 cron + shell 등 더 나은 방식으로 운영 가능.
+- **정리**: 기존에 Oracle 2와 동일한 앱 스택으로 돌리던 경우, `deploy-oracle3-mumbai.sh`로 해당 컨테이너 down·이미지 prune. 이후 매크로(Jenkins compose 또는 cron/스크립트만)는 별도 관리.
+- **유지**: `~/investment-infra/`. OCI·매크로 관련 항목만 유지.
 
 ---
 
@@ -77,9 +78,9 @@ Oracle 1(Osaka)·Oracle 2(Korea)·Oracle 3(Mumbai) 각 노드의 홈 디렉터�
 
 | 노드 | 삭제·정리 | 유지 (OCI 매크로·배포 표준) |
 |------|------------|-----------------------------|
-| Osaka | `~/docker-compose/` 전체, **Jenkins 컨테이너·이미지 제거** (매크로는 Mumbai로 이전) | `~/investment-infra/`, `~/.cursor*`, `~/.gradle` |
-| Korea | `~/docker-compose/*` 중 .oci 제외, `~/output*.log` | `~/.oci/`, `~/docker-compose/osaka/.oci/`, `~/investment-infra/`, `~/db_data/` |
-| Mumbai | (매크로 전용) 앱 스택 컨테이너 있으면 제거 | `~/investment-infra/`, `~/jenkins_home/` 또는 `investment-infra/jenkins_home` (Osaka에서 복사) |
+| Osaka | `~/docker-compose/` 전체, **Jenkins 컨테이너·이미지 제거** (매크로는 Mumbai 또는 별도 방식) | `~/investment-infra/`, `~/.cursor*`, `~/.gradle` |
+| Korea | 앱 스택(Backend 등) 제거 — **엣지 전용**(Frontend, nginx)만 배포 | `~/.oci/`, `~/docker-compose/osaka/.oci/`, `~/investment-infra/`, `~/db_data/` |
+| Mumbai | 앱 스택 컨테이너·이미지 제거 (`deploy-oracle3-mumbai.sh`) | `~/investment-infra/`. 매크로(Jenkins 또는 cron/shell)는 별도 관리 |
 
 ---
 

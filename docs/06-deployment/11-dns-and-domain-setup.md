@@ -222,7 +222,26 @@ nslookup app.neekly-report.cloud
      `mkdir -p ~/investment-infra/secrets/certs && sudo cp -rL /etc/letsencrypt/live/api.neekly-report.cloud ~/investment-infra/secrets/certs/live/`  
      로 복사한 뒤, api.conf에서 cert 경로를 `/etc/nginx/certs/live/api.neekly-report.cloud/...` 로 치환. (기본 compose는 `./secrets/certs` → `/etc/nginx/certs` 마운트.)
 
-4. **갱신**: `sudo certbot renew` (cron 등으로 주기 실행). 방법 B를 쓰면 갱신 후 위 복사 명령을 다시 실행하거나, symlink로 live를 가리키게 하면 된다.
+4. **갱신**: §4.4 인증서 자동 갱신(cron) 참조. 방법 B를 쓰면 갱신 후 위 복사 명령을 다시 실행해야 하므로, **갱신 스크립트 + cron**으로 자동화하는 것을 권장한다.
+
+### 4.4 인증서 자동 갱신 (cron)
+
+- **목적**: Let's Encrypt 인증서는 약 90일마다 만료되므로, 주기적으로 `certbot renew` 실행 후 nginx가 쓰는 인증서를 갱신된 파일로 덮어쓰고 nginx를 재기동해야 한다.
+- **스크립트**: investment-infra **scripts/renew-certs-aws.sh**
+  - nginx 중지 → `certbot renew` (80 포트 사용) → `/etc/letsencrypt/live/api.neekly-report.cloud`를 `secrets/certs/live/`로 복사 → nginx 기동.
+- **AWS 노드에서 cron 등록** (한 번만 설정):
+  - 저장소가 예: `/home/ec2-user/investment-infra`에 있다면:
+    ```bash
+    sudo bash -c 'echo "0 0,12 * * * root /home/ec2-user/investment-infra/scripts/renew-certs-aws.sh >> /var/log/certbot-renew.log 2>&1" > /etc/cron.d/certbot-renew-aws'
+    ```
+  - 또는 `sudo crontab -e`로 root crontab에 다음 한 줄 추가 (경로를 실제 investment-infra 경로로 변경):
+    ```text
+    0 0,12 * * * /home/ec2-user/investment-infra/scripts/renew-certs-aws.sh >> /var/log/certbot-renew.log 2>&1
+    ```
+  - 실행 주기: **0 0,12** = 매일 00:00, 12:00 (Certbot 권장: 하루 2회). 필요 시 `0 */6 * * *` 등으로 조정 가능.
+- **실행 권한**: 스크립트는 **root** 또는 **sudo**로 실행되어야 함 (certbot, docker, cp 권한). `/etc/cron.d/`에 넣을 때 사용자 컬럼을 `root`로 두면 root가 실행한다.
+- **cron 미설치 시**: Amazon Linux 등에서 `/etc/cron.d/`가 없으면 `sudo dnf install -y cronie` (또는 `sudo yum install -y cronie`) 후 `sudo systemctl enable --now crond` 실행한 뒤 위 cron 등록.
+- **Oracle 2 (app 도메인)** 에서도 동일 방식으로 갱신 스크립트를 두고 cron 등록 가능. 이 경우 해당 노드의 compose·도메인에 맞게 스크립트 경로·도메인 변수를 조정한다.
 
 ---
 

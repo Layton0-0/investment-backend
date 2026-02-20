@@ -1,5 +1,8 @@
 # 배포 가이드
 
+> **현재 운영 배포**: 본 문서는 빌드·로컬·Docker·Kubernetes 등 **일반 배포 방법**을 다룹니다.  
+> **실제 운영 인프라**(Oracle 3대 + AWS, CI/CD, 방화벽, DNS)는 **[06-deployment/00-deployment-docs-index.md](00-deployment-docs-index.md)** 의 읽는 순서대로 **[05-multi-vps-oracle-aws-cicd.md](05-multi-vps-oracle-aws-cicd.md)** 및 동일 폴더 내 문서를 참조하세요.
+
 ## 1. 배포 환경
 
 ### 1.1 지원 환경

@@ -33,6 +33,8 @@
   investment-infra cd.yml: `concurrency`(cd-deploy-${{ github.ref }}, cancel-in-progress), job `timeout-minutes: 20`, Oracle 2/3 Verify 단계에서 Backend 기동 대기(최대 90초, 10초 간격 재시도) 후 actuator/health 검증. 푸시 시 CD 정상 트리거·실패 시 원인 파악 용이.
 - [x] **OCI 노드 구조 문서화·기존 구조 정리 (OCI 매크로 유지)**  
   [09-oci-node-structure.md](../06-deployment/09-oci-node-structure.md) 신설: Oracle 1(Osaka)·2(Korea) 홈 디렉터리 구조 파악, OCI·매크로 관련 항목(예: .oci, jenkins_home/token-macro) 유지 정책, 정리 대상·수행 내용 정리. Osaka: ~/docker-compose 전체 삭제(sudo). Korea: output*.log·docker-compose/duckling·osaka/.ssh 등 삭제, ~/.oci·docker-compose/osaka/.oci 유지.
+- [x] **OCI 스왑 10GB·Backend/Python AWS 전환·배포 전 정리**  
+  [05-multi-vps-oracle-aws-cicd.md](../06-deployment/05-multi-vps-oracle-aws-cicd.md) §3.0: OCI 3대 스왑 10GB 통일, 스왑 작업 전 컨테이너 down·image prune 필수 순서 명시. Oracle 2(Korea)=엣지 전용(Frontend, nginx), Oracle 3(Mumbai)=앱 스택 제거·매크로만(Jenkins 또는 cron/shell). CD(cd.yml): Oracle 2 → deploy-oracle2-edge.sh·FRONTEND_TAG, Oracle 3 → deploy-oracle3-mumbai.sh(앱 스택 down·prune만), Oracle 2/3 Backend 검증 스텝 제거. 배포 스크립트(deploy-oracle1.sh, deploy-oracle2-edge.sh, deploy-aws-api.sh, deploy-oracle3-mumbai.sh)에 배포 전 down·docker image prune -f 반영. 09·12·13·scripts/README 갱신.
 - [x] **한국투자증권 주식잔고조회 INQR_DVSN 제한 대응 (2026-02-11 공지)**  
   주식잔고조회 API INQR_DVSN 02(종목별) 제한에 따라 01(대출일별)로 변경. `KoreaInvestmentAccountClient.inquireBalance`, `verifyAccountByCredentials` 및 [09-korea-investment-api-guide.md](../04-api/09-korea-investment-api-guide.md) 예시·주식잔고조회 섹션 반영.
 - [x] **슈퍼관리자(yoon) DB 지정**  
@@ -131,6 +133,8 @@
   SpringDoc 설정, 전략 API(market 파라미터)·뉴스 API @Tag·@Operation·@Parameter 반영.
 - [x] **Circuit Breaker**  
   RealtimeMarketDataService(getCurrentPrice), OrderService(executeOrder), FastApiPredictionClient(predictPrice·predictBatch). Resilience4j marketDataService·orderService·aiPredictionService 인스턴스, Fallback 정책 반영.
+- [x] **도메인 E2E 준비 (옵션 B)**  
+  [12-domain-e2e-readiness.md](../06-deployment/12-domain-e2e-readiness.md)·[13-manual-operator-tasks.md](../06-deployment/13-manual-operator-tasks.md) 신설. investment-infra에 docker-compose.aws-api.yml·deploy-aws-api.sh(AWS API 스택), docker-compose.oracle2-edge.yml·deploy-oracle2-edge.sh(엣지 전용), nginx/conf.d.api·conf.d.edge 추가. CD AWS 단계를 API 스택 배포(deploy-aws-api.sh)·Verify Backend health로 변경. DEPLOY_USER_AWS(ec2-user) 지원.
 
 ### AI 연동
 - [x] **AiPredictionClient·FastApiPredictionClient**  
@@ -341,10 +345,10 @@
 
 ### 인프라·운영
 
+- [ ] **도메인 E2E 검증 (필수)**  
+  [12-domain-e2e-readiness.md](../06-deployment/12-domain-e2e-readiness.md) 체크리스트 기준으로 api/app.neekly-report.cloud 접속 → 로그인 → API 정상 동작 확인. 수동 작업은 [13-manual-operator-tasks.md](../06-deployment/13-manual-operator-tasks.md) 수행 후 진행.
 - [ ] **성능 최적화 (2차·선택)**  
   쿼리·캐싱·비동기 추가 적용. 시장 데이터·종목 분석·계좌 조회 응답 시간 목표(평균 500ms, 95%ile 1초) 측정·튜닝.
-- [x] **단일 VPS·Cron/배치·배포 절차 문서화**  
-  [08-setup-guides/06-single-vps-batch-deployment.md](../08-setup-guides/06-single-vps-batch-deployment.md) 신설: 단일 VPS 배포 전제, BatchJobRegistry·BatchJobScheduler 기반 스케줄 구조, Job·Cron·트리거 경로 요약, 배포 절차·모니터링·복구·체크리스트.
 
 ---
 
@@ -361,8 +365,10 @@
 | [PRD](../PRD.md) | 제품 목표·기능·비기능 요구사항 |
 | [API 개요](../04-api/01-api-overview.md) | API 목록·버전·인증 |
 | [구현 계획](../02-architecture/04-implementation-plan.md) | Phase별 구현 상세(참고) |
+| [도메인 E2E 완료 여부](../06-deployment/12-domain-e2e-readiness.md) | 도메인 접근 E2E 체크리스트·다음 할일 |
+| [운영자 수동 작업](../06-deployment/13-manual-operator-tasks.md) | 배포·인프라 시 사람이 반드시 수행할 작업 |
 
-**변동 시**: 완료 항목 추가·이동, 진행중 항목 추가/제거, 진행예정 순서 조정 시 이 문서를 먼저 수정하고, 필요 시 roadmap.md 체크박스·일정을 맞춘다.
+**변동 시**: 완료 항목 추가·이동, 진행중 항목 추가/제거, 진행예정 순서 조정 시 **이 문서를 먼저 수정**하고, 필요 시 roadmap.md 체크박스·일정을 맞춘다. roadmap과 불일치할 경우 **본 문서(development-status)를 우선** 반영한다.
 
 ---
 
@@ -416,3 +422,4 @@
 | 1.43 | 2026-02-11 | Phase 2 Quant Engine 구현: 수정주가 파이프라인(한투 FID_ORG_ADJ_PRC=0, US yfinance auto_adjust=True, KR/KRX·DailyStock 주석), PIT·Look-ahead 검증(BacktestService·FactorCalculationService·RoboBacktestService 주석·00-strategy-registry §1.1), 백테스트 스트레스 검증(backtest-stress-results.md 시나리오 정의·검증 기준·BacktestServiceTest 스트레스 구간 테스트 추가). 진행예정에서 수정주가·PIT·스트레스 항목 완료로 이동. |
 | 1.44 | 2026-02-12 | 기획 정합 퀀트 개발 진행: Phase 1 메뉴별 API·프론트 순차 검토 완료(11-api-frontend-mapping §4·§5.2 미연동 항목 없음). 백테스트 스트레스 결과 기입(데이터 수집 후) 진행예정 추가, backtest-stress-results.md §4 데이터 점검 방법·§3 이슈·비고 안내 보강. roadmap.md 백테스트 스트레스 검증 항목과 development-status·backtest-stress-results 정합. |
 | 1.45 | 2026-02-19 | 로드맵·문서 동기화(roadmap Phase 5.1·5.2 완료 [x]). 백테스트 스트레스 백필: krx-daily-backfill·us-daily-backfill Job·API·KrxCollectionService.collectAndSaveRange·backtest-stress-results.md §5 백필 가이드. Phase 6 대시보드 성과 분석 심화: 성과 요약 섹션·Sortino·CVaR 카드·roadmap 6.1 성과 분석 [x]. |
+| 1.46 | 2026-02-20 | 문서 통합: 변동 시 본 문서 우선·roadmap 불일치 시 development-status 우선 반영 문구 추가. 배포 문서는 06-deployment/00-deployment-docs-index.md 분야별 인덱스 참조. |

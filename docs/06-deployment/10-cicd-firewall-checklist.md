@@ -38,39 +38,10 @@ CD가 성공하려면 **GitHub 저장소 설정**과 **각 노드 준비**가 �
 
 ## 3. 방화벽 / Security List 작업 정리
 
-CD 및 서비스 동작을 위해 **아래 규칙을 OCI Security List(또는 해당 클라우드 방화벽)에 반영**해야 한다.  
-상세 설계: [06-oci-vcn-subnet-design.md §3](06-oci-vcn-subnet-design.md).
+CD 및 서비스 동작을 위해 **서버별 인바운드/아웃바운드 규칙**을 반영해야 한다.  
+**전체 정책(OCI Oracle 1·2·3, AWS 보안 그룹)** 은 **[14-server-inbound-outbound-policy.md](14-server-inbound-outbound-policy.md)** 에 통합되어 있다.
 
-### 3.1 Oracle 1 (데이터, Osaka)
-
-| 방향 | 소스/대상 | 프로토콜·포트 | 용도 |
-|------|-----------|----------------|------|
-| **Ingress** | Oracle 2(Korea) Public IP/32 | TCP 5432 | TimescaleDB (앱→DB) |
-| **Ingress** | Oracle 3(Mumbai) Public IP/32 | TCP 5432 | 동일 |
-| **Ingress** | **AWS Public IP/32** | TCP 5432 | 동일 (API 계층→DB) |
-| **Ingress** | Oracle 2, Oracle 3, **AWS** Public IP/32 | TCP 6379 | Redis |
-| **Ingress** | GitHub Actions runner IP 또는 관리자 IP | TCP 22 | SSH (CD 배포) |
-
-- **필수**: Oracle 2·Oracle 3·**AWS**의 **Public IP**를 5432, 6379 Ingress에 **각각** 추가.  
-  (Mumbai 인스턴스·AWS 사용 시 해당 Public IP를 Oracle 1 Security List에 포함.)
-
-### 3.2 Oracle 2 (앱, Korea)
-
-| 방향 | 소스/대상 | 프로토콜·포트 | 용도 |
-|------|-----------|----------------|------|
-| **Ingress** | 0.0.0.0/0 (또는 로드밸런서/프론트 도메인만) | TCP 80, 443 | HTTP/HTTPS |
-| **Ingress** | GitHub Actions runner IP 또는 관리자 IP | TCP 22 | SSH (CD 배포) |
-| **Egress** | 0.0.0.0/0 | All | Oracle 1(Public IP), ghcr.io, 기타 |
-
-### 3.3 Oracle 3 (앱, Mumbai)
-
-| 방향 | 소스/대상 | 프로토콜·포트 | 용도 |
-|------|-----------|----------------|------|
-| **Ingress** | 0.0.0.0/0 (또는 제한 가능) | TCP 80, 443 | HTTP/HTTPS |
-| **Ingress** | GitHub Actions runner IP 또는 관리자 IP | TCP 22 | SSH (CD 배포) |
-| **Egress** | 0.0.0.0/0 | All | Oracle 1(Osaka) Public IP, ghcr.io 등 |
-
-### 3.4 CD 실패 시 점검
+### 3.1 CD 실패 시 점검
 
 - **"dial tcp ...:22: i/o timeout"**: GitHub Actions 러너 → 해당 노드 SSH(22) 불가.  
   - 해당 노드 VM 기동 여부, **Security List Ingress TCP 22**에 **GitHub runner IP** 또는 넓은 대역 허용 여부 확인.  
