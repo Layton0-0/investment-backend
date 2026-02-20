@@ -28,6 +28,10 @@ public class TaxReportSummaryDto {
     private BigDecimal overseasRealizedGainLoss;
     /** 배당 소득 요약 (원). 스텁 시 null */
     private BigDecimal dividendTotal;
+    /** 연간 기본공제 (원). 국내주식 250만원 */
+    private BigDecimal basicDeduction;
+    /** 과세대상 금액 (원). 실현손익 - 기본공제. 음수 시 0 */
+    private BigDecimal taxableAmount;
     /** 예상 세금(추정, 원). 스텁 시 null */
     private BigDecimal estimatedTax;
     /** 가정·한계·비세무자문 면책 문구 */

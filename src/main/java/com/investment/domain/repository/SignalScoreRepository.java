@@ -10,11 +10,15 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 시그널/팩터 점수 Repository.
  */
 public interface SignalScoreRepository extends JpaRepository<SignalScore, SignalScoreId> {
+
+    Optional<SignalScore> findByBasDtAndSymbolAndFactorTypeAndMarket(
+            LocalDate basDt, String symbol, String factorType, String market);
 
     Page<SignalScore> findByBasDtAndMarket(LocalDate basDt, String market, Pageable pageable);
 

@@ -12,6 +12,7 @@ import com.investment.factor.service.RiskGateService;
 import com.investment.domain.repository.TradingSettingRepository;
 import com.investment.risk.dto.RiskLimitsDto;
 import com.investment.risk.dto.RiskSummaryDto;
+import com.investment.risk.util.VarCalculator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -52,6 +53,8 @@ class RiskReportServiceTest {
     private UserAccountRepository userAccountRepository;
     @Mock
     private EncryptionUtil encryptionUtil;
+    @Mock
+    private VarCalculator varCalculator;
 
     @InjectMocks
     private RiskReportService riskReportService;
@@ -62,6 +65,13 @@ class RiskReportServiceTest {
         lenient().when(riskProperties.getReduceSizeOnHighVolPct()).thenReturn(new BigDecimal("50"));
         lenient().when(riskProperties.getDailyLossLimitPct()).thenReturn(new BigDecimal("5"));
         lenient().when(riskProperties.getVarDailyVolPct()).thenReturn(null);
+        lenient().when(riskProperties.getVarMethod()).thenReturn(RiskProperties.VarMethod.PARAMETRIC);
+        lenient().when(riskProperties.getVarLookbackDays()).thenReturn(252);
+        lenient().when(riskProperties.getYearEndLossLimitPct()).thenReturn(new BigDecimal("20"));
+        lenient().when(riskProperties.getYearEndAlertThresholdPct()).thenReturn(new BigDecimal("0.8"));
+        lenient().when(varCalculator.calculateVar95(any())).thenReturn(null);
+        lenient().when(varCalculator.calculateCvar95(any())).thenReturn(null);
+        lenient().when(varCalculator.getCurrentMethod()).thenReturn("PARAMETRIC");
     }
 
     @Test
@@ -111,12 +121,20 @@ class RiskReportServiceTest {
         when(riskProperties.getVixThreshold()).thenReturn(new BigDecimal("28"));
         when(riskProperties.getReduceSizeOnHighVolPct()).thenReturn(new BigDecimal("40"));
         when(riskProperties.getDailyLossLimitPct()).thenReturn(new BigDecimal("3"));
+        when(riskProperties.getVarMethod()).thenReturn(RiskProperties.VarMethod.HISTORICAL);
+        when(riskProperties.getVarLookbackDays()).thenReturn(120);
+        when(riskProperties.getYearEndLossLimitPct()).thenReturn(new BigDecimal("15"));
+        when(riskProperties.getYearEndAlertThresholdPct()).thenReturn(new BigDecimal("0.7"));
 
         RiskLimitsDto dto = riskReportService.getLimits();
 
         assertThat(dto.isRegimeGateEnabled()).isTrue();
         assertThat(dto.getVixThreshold()).isEqualByComparingTo(new BigDecimal("28"));
         assertThat(dto.getDailyLossLimitPct()).isEqualByComparingTo(new BigDecimal("3"));
+        assertThat(dto.getVarMethod()).isEqualTo("HISTORICAL");
+        assertThat(dto.getVarLookbackDays()).isEqualTo(120);
+        assertThat(dto.getYearEndLossLimitPct()).isEqualByComparingTo(new BigDecimal("15"));
+        assertThat(dto.getYearEndAlertThresholdPct()).isEqualByComparingTo(new BigDecimal("0.7"));
     }
 
     @Test

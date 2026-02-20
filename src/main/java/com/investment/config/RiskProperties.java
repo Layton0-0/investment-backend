@@ -34,8 +34,28 @@ public class RiskProperties {
     /** VaR/CVaR 단순 파라메트릭용 일일 변동성 가정 (%). 기본 1.0 = 1%. 0 또는 미설정 시 VaR/CVaR 미산출 */
     private BigDecimal varDailyVolPct;
 
+    /** VaR 방법론 (PARAMETRIC | HISTORICAL). 기본 PARAMETRIC */
+    private VarMethod varMethod = VarMethod.PARAMETRIC;
+
+    /** 역사적 VaR 룩백 기간 (거래일). 기본 252 (1년). HISTORICAL 방법 선택 시 사용 */
+    private int varLookbackDays = 252;
+
+    /** 연간 손실 한도 비율 (%, 연초 자산 대비). 기본 20%. 초과 시 신규 매수 중단 */
+    private BigDecimal yearEndLossLimitPct = new BigDecimal("20");
+
+    /** 연간 손실 한도 알림 임계값 (0~1). 기본 0.8 = 한도의 80% 도달 시 알림 */
+    private BigDecimal yearEndAlertThresholdPct = new BigDecimal("0.8");
+
     /** 리스크 이벤트 알림: 일일 손실 한도 대비 이 비율(0~1) 도달 시 알림. 기본 0.8 = 80% 도달 시 */
     private BigDecimal alertMddThresholdPct = new BigDecimal("0.8");
+
+    /** VaR 계산 방법론 */
+    public enum VarMethod {
+        /** 파라메트릭 VaR (정규분포 가정) */
+        PARAMETRIC,
+        /** 역사적 VaR (실제 수익률 분포 사용) */
+        HISTORICAL
+    }
 
     /** 리스크 이벤트 알림: VaR 95% 초과 시 Discord 알림 사용 여부. 기본 true */
     private boolean alertVarExceedEnabled = true;

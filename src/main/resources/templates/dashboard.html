@@ -6,6 +6,7 @@
     <title>투자 대시보드 - Investment Choi</title>
     <meta name="description" content="고수익 자동투자 시스템 대시보드">
     <link rel="stylesheet" th:href="@{/css/common.css}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body class="page-background">
     <div th:replace="~{fragments/layout-header :: header}"></div>
@@ -176,6 +177,29 @@
                     </table>
                 </div>
             </div>
+            <!-- 리스크 지표 및 차트 -->
+            <div class="card" th:if="${positionsVirtual != null and !positionsVirtual.isEmpty()}">
+                <h3>자산 배분 및 리스크 지표</h3>
+                <div class="chart-risk-container">
+                    <div class="chart-wrapper">
+                        <canvas id="allocationChartVirtual"></canvas>
+                    </div>
+                    <div class="risk-metrics">
+                        <div class="risk-item">
+                            <label>VaR (95%)</label>
+                            <div class="value" th:text="${varVirtual != null ? #numbers.formatDecimal(varVirtual, 2, 'COMMA', 2, 'POINT') + '%' : '계산 불가'}">-</div>
+                        </div>
+                        <div class="risk-item">
+                            <label>CVaR (95%)</label>
+                            <div class="value" th:text="${cvarVirtual != null ? #numbers.formatDecimal(cvarVirtual, 2, 'COMMA', 2, 'POINT') + '%' : '계산 불가'}">-</div>
+                        </div>
+                        <div class="risk-item">
+                            <label>계산 방식</label>
+                            <div class="value" th:text="${varMethod != null ? varMethod : 'PARAMETRIC'}">PARAMETRIC</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </section>
         <!-- 모의계좌 탭인데 모의계좌 미등록 시 -->
         <div th:if="${hasAccount and currentServerType == '1' and !hasVirtualAccount}" class="empty-state">
@@ -338,6 +362,29 @@
                     </table>
                 </div>
             </div>
+            <!-- 리스크 지표 및 차트 -->
+            <div class="card" th:if="${positionsReal != null and !positionsReal.isEmpty()}">
+                <h3>자산 배분 및 리스크 지표</h3>
+                <div class="chart-risk-container">
+                    <div class="chart-wrapper">
+                        <canvas id="allocationChartReal"></canvas>
+                    </div>
+                    <div class="risk-metrics">
+                        <div class="risk-item">
+                            <label>VaR (95%)</label>
+                            <div class="value" th:text="${varReal != null ? #numbers.formatDecimal(varReal, 2, 'COMMA', 2, 'POINT') + '%' : '계산 불가'}">-</div>
+                        </div>
+                        <div class="risk-item">
+                            <label>CVaR (95%)</label>
+                            <div class="value" th:text="${cvarReal != null ? #numbers.formatDecimal(cvarReal, 2, 'COMMA', 2, 'POINT') + '%' : '계산 불가'}">-</div>
+                        </div>
+                        <div class="risk-item">
+                            <label>계산 방식</label>
+                            <div class="value" th:text="${varMethod != null ? varMethod : 'PARAMETRIC'}">PARAMETRIC</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </section>
         <!-- 실계좌 탭인데 실계좌 미등록 시 -->
         <div th:if="${hasAccount and currentServerType == '0' and !hasRealAccount}" class="empty-state">
@@ -347,7 +394,7 @@
         </div>
     </main>
 
-    <script>
+    <script th:inline="javascript">
         function logout() {
             if (confirm('로그아웃 하시겠습니까?')) {
                 fetch('/api/v1/auth/logout', {
@@ -366,6 +413,107 @@
                     window.location.href = '/login';
                 });
             }
+        }
+
+        // Chart.js 자산 배분 파이 차트 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            // 모의계좌 차트
+            const virtualChartCanvas = document.getElementById('allocationChartVirtual');
+            if (virtualChartCanvas) {
+                const positionsVirtual = /*[[${positionsVirtual}]]*/ [];
+                if (positionsVirtual && positionsVirtual.length > 0) {
+                    const labels = positionsVirtual.map(p => p.symbol || 'Unknown');
+                    const data = positionsVirtual.map(p => p.totalValue || 0);
+                    const colors = generateColors(positionsVirtual.length);
+                    
+                    new Chart(virtualChartCanvas, {
+                        type: 'doughnut',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                data: data,
+                                backgroundColor: colors,
+                                borderWidth: 2,
+                                borderColor: '#1a1a2e'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: {
+                                legend: {
+                                    position: 'bottom',
+                                    labels: {
+                                        color: '#e0e0e0',
+                                        font: { size: 11 }
+                                    }
+                                },
+                                title: {
+                                    display: true,
+                                    text: '자산 배분',
+                                    color: '#e0e0e0',
+                                    font: { size: 14 }
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+
+            // 실계좌 차트
+            const realChartCanvas = document.getElementById('allocationChartReal');
+            if (realChartCanvas) {
+                const positionsReal = /*[[${positionsReal}]]*/ [];
+                if (positionsReal && positionsReal.length > 0) {
+                    const labels = positionsReal.map(p => p.symbol || 'Unknown');
+                    const data = positionsReal.map(p => p.totalValue || 0);
+                    const colors = generateColors(positionsReal.length);
+                    
+                    new Chart(realChartCanvas, {
+                        type: 'doughnut',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                data: data,
+                                backgroundColor: colors,
+                                borderWidth: 2,
+                                borderColor: '#1a1a2e'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: {
+                                legend: {
+                                    position: 'bottom',
+                                    labels: {
+                                        color: '#e0e0e0',
+                                        font: { size: 11 }
+                                    }
+                                },
+                                title: {
+                                    display: true,
+                                    text: '자산 배분',
+                                    color: '#e0e0e0',
+                                    font: { size: 14 }
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+        });
+
+        function generateColors(count) {
+            const baseColors = [
+                '#20D26D', '#3498db', '#f39c12', '#e74c3c', '#9b59b6',
+                '#1abc9c', '#34495e', '#e67e22', '#2ecc71', '#3498db'
+            ];
+            const colors = [];
+            for (let i = 0; i < count; i++) {
+                colors.push(baseColors[i % baseColors.length]);
+            }
+            return colors;
         }
     </script>
 </body>

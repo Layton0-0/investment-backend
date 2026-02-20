@@ -33,6 +33,8 @@ public class TaxReportService {
     private static final String DISCLAIMER = "본 내용은 추정이며 세무 자문이 아닙니다. 실제 신고는 국세청 홈택스 등에서 확인하세요.";
     /** 예상 세금 단순 가정: 국내 실현손익 양수 구간 세율 (표준 단순 적용) */
     private static final BigDecimal DOMESTIC_TAX_RATE_ASSUMED = new BigDecimal("0.22");
+    /** 연간 기본공제 (250만원). 비대주주 국내주식 양도소득 공제 */
+    private static final BigDecimal BASIC_DEDUCTION = new BigDecimal("2500000");
 
     private final TradingSettingRepository tradingSettingRepository;
     private final AccountService accountService;
@@ -68,10 +70,16 @@ public class TaxReportService {
                 log.warn("기간별손익 조회 스킵: accountNo 마스킹, year={}, error={}", y, e.getMessage());
             }
         }
+        // 기본공제 적용: 실현손익이 양수인 경우에만 공제 적용
+        BigDecimal taxableAmount = null;
         BigDecimal estimatedTax = null;
         if (domesticSum.compareTo(BigDecimal.ZERO) > 0) {
-            estimatedTax = domesticSum.multiply(DOMESTIC_TAX_RATE_ASSUMED).setScale(0, RoundingMode.DOWN);
+            // 과세대상 = 실현손익 - 기본공제 (음수면 0)
+            taxableAmount = domesticSum.subtract(BASIC_DEDUCTION).max(BigDecimal.ZERO);
+            // 예상 세금 = 과세대상 × 22%
+            estimatedTax = taxableAmount.multiply(DOMESTIC_TAX_RATE_ASSUMED).setScale(0, RoundingMode.DOWN);
         } else if (domesticSum.compareTo(BigDecimal.ZERO) < 0) {
+            taxableAmount = BigDecimal.ZERO;
             estimatedTax = BigDecimal.ZERO;
         }
         return TaxReportSummaryDto.builder()
@@ -79,6 +87,8 @@ public class TaxReportService {
                 .domesticRealizedGainLoss(domesticSum)
                 .overseasRealizedGainLoss(null)
                 .dividendTotal(null)
+                .basicDeduction(BASIC_DEDUCTION)
+                .taxableAmount(taxableAmount)
                 .estimatedTax(estimatedTax)
                 .disclaimer(DISCLAIMER)
                 .build();
@@ -90,11 +100,13 @@ public class TaxReportService {
     public byte[] exportSummaryAsCsv(TaxReportSummaryDto dto) {
         StringBuilder sb = new StringBuilder();
         sb.append("\uFEFF"); // UTF-8 BOM
-        sb.append("year,domesticRealizedGainLoss,overseasRealizedGainLoss,dividendTotal,estimatedTax\n");
+        sb.append("year,domesticRealizedGainLoss,overseasRealizedGainLoss,dividendTotal,basicDeduction,taxableAmount,estimatedTax\n");
         sb.append(dto.getYear()).append(",");
         sb.append(dto.getDomesticRealizedGainLoss() != null ? dto.getDomesticRealizedGainLoss() : "");
         sb.append(",").append(dto.getOverseasRealizedGainLoss() != null ? dto.getOverseasRealizedGainLoss() : "");
         sb.append(",").append(dto.getDividendTotal() != null ? dto.getDividendTotal() : "");
+        sb.append(",").append(dto.getBasicDeduction() != null ? dto.getBasicDeduction() : "");
+        sb.append(",").append(dto.getTaxableAmount() != null ? dto.getTaxableAmount() : "");
         sb.append(",").append(dto.getEstimatedTax() != null ? dto.getEstimatedTax() : "");
         sb.append("\n");
         if (dto.getDisclaimer() != null) {
@@ -113,10 +125,13 @@ public class TaxReportService {
             document.open();
             document.add(new Paragraph("연말 세금 요약 (" + dto.getYear() + "년)"));
             document.add(new Paragraph(" "));
-            document.add(new Paragraph("국내 실현손익: " + (dto.getDomesticRealizedGainLoss() != null ? dto.getDomesticRealizedGainLoss() : "-")));
-            document.add(new Paragraph("해외 실현손익: " + (dto.getOverseasRealizedGainLoss() != null ? dto.getOverseasRealizedGainLoss() : "-")));
-            document.add(new Paragraph("배당 소득: " + (dto.getDividendTotal() != null ? dto.getDividendTotal() : "-")));
-            document.add(new Paragraph("예상 세금: " + (dto.getEstimatedTax() != null ? dto.getEstimatedTax() : "-")));
+            document.add(new Paragraph("국내 실현손익: " + formatAmount(dto.getDomesticRealizedGainLoss())));
+            document.add(new Paragraph("해외 실현손익: " + formatAmount(dto.getOverseasRealizedGainLoss())));
+            document.add(new Paragraph("배당 소득: " + formatAmount(dto.getDividendTotal())));
+            document.add(new Paragraph(" "));
+            document.add(new Paragraph("기본공제: " + formatAmount(dto.getBasicDeduction())));
+            document.add(new Paragraph("과세대상: " + formatAmount(dto.getTaxableAmount())));
+            document.add(new Paragraph("예상 세금: " + formatAmount(dto.getEstimatedTax())));
             document.add(new Paragraph(" "));
             if (dto.getDisclaimer() != null) {
                 document.add(new Paragraph(dto.getDisclaimer()));
@@ -127,5 +142,9 @@ public class TaxReportService {
             log.warn("PDF 생성 실패: {}", e.getMessage());
             throw new RuntimeException("PDF 생성 실패", e);
         }
+    }
+
+    private String formatAmount(BigDecimal amount) {
+        return amount != null ? String.format("%,d원", amount.longValue()) : "-";
     }
 }

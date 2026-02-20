@@ -25,10 +25,12 @@ public class PortfolioRiskMetricsDto {
     private BigDecimal currentValue;
     @Schema(description = "MDD (0~1). 없으면 null")
     private BigDecimal mddPct;
-    @Schema(description = "1일 VaR 95% (%). 단순 파라메트릭, 없으면 null")
+    @Schema(description = "1일 VaR 95% (%). 방법론에 따라 파라메트릭 또는 역사적")
     private BigDecimal var95Pct;
-    @Schema(description = "1일 CVaR 95% (%). 단순 파라메트릭, 없으면 null")
+    @Schema(description = "1일 CVaR 95% (%). 방법론에 따라 파라메트릭 또는 역사적")
     private BigDecimal cvar95Pct;
+    @Schema(description = "VaR 계산 방법론 (PARAMETRIC | HISTORICAL)")
+    private String varMethod;
     @Schema(description = "Sharpe 비율 (연율화). 일수익 시계열 있으면 산출, 없으면 null")
     private BigDecimal sharpeRatio;
     @Schema(description = "Sortino 비율 (연율화). 일수익 시계열 있으면 산출, 없으면 null")

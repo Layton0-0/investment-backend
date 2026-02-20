@@ -1,4 +1,4 @@
-# 전략·계산 방식 통합 레지스트리 (Strategy Registry)
+﻿# 전략·계산 방식 통합 레지스트리 (Strategy Registry)
 
 **목적**: 프로젝트에서 개발·적용하는 모든 전문적인 투자 방식, 전략, 계산 방법을 한 문서에 정리하고, 전략 업데이트 시 갱신·버전 스택(실패/교훈 포함)으로 경험을 쌓으며, **나라별·분야별·기간별**로 구분해 정확도를 높인다.
 
@@ -81,6 +81,28 @@
 - **Calmar**: CAGR / |MDD|.
 - **승률(p)**: 승리 거래 수 / 전체 거래 수. Half-Kelly 입력.
 - **손익비(b)**: 평균 이익 / |평균 손실|. Half-Kelly 입력.
+
+### 2.8.1 Monte Carlo VaR/CVaR (P0 헤지펀드급 리스크 분석)
+
+Monte Carlo 시뮬레이션 기반 VaR/CVaR 계산으로 꼬리 위험(tail risk)을 정밀하게 측정한다.
+
+- **수식**:
+  - VaR(α) = -Percentile(SimulatedReturns, 1-α)
+  - CVaR(α) = E[Loss | Loss > VaR(α)] (Expected Shortfall)
+- **시뮬레이션 방법**:
+  - 기본 10,000개 시나리오 생성
+  - 정규분포 또는 Student-t 분포(팻테일) 지원
+  - Student-t 분포: 자유도(df) 5 기본, 낮을수록 꼬리 두꺼움
+- **포트폴리오 VaR**: Cholesky 분해로 종목 간 상관관계 반영
+- **설정**: `investment.risk.montecarlo.*`
+  - `scenarios`: 시뮬레이션 횟수 (기본 10,000)
+  - `distribution`: NORMAL | STUDENT_T (기본 STUDENT_T)
+  - `degrees-of-freedom`: Student-t 자유도 (기본 5)
+  - `parallel-threads`: 병렬 처리 스레드 (기본 4)
+  - `min-samples`: 최소 필요 샘플 수 (기본 60)
+- **구현**: `MonteCarloVarService`, `MonteCarloVarServiceImpl`
+- **결과**: `MonteCarloVarResult` (value, confidenceLevel, method, elapsedTimeMs 등)
+- **성능 목표**: 10,000 시나리오 × 1,000 종목 기준 30초 이내
 
 ### 2.9 리스크 게이트·일일 손실 한도 (전문 투자자 흐름 P0)
 
@@ -223,6 +245,9 @@
 | 미국 갭 스킵 | 전일 종가 대비 갭 N% 이상 시 진입 스킵 | us-gap-up-skip-pct: 5 | PositionSizingService.filterByUsGapUpSkip |
 | Discord 긴급 알림 | 미체결 N분 경과 시 Discord Webhook 발송 | alert-discord-webhook-url, alert-base-url, unfilled-check-minutes: 1 | EmergencyAlertService, UnfilledOrderCheckScheduler |
 | 리스크 이벤트 알림 | 일일 손실 한도 임박(한도 대비 N% 도달)·VaR 95% 초과 시 Discord 발송 | investment.risk.alert-mdd-threshold-pct: 0.8, alert-var-exceed-enabled: true | RiskEventAlertService, RiskEventAlertTasklet (Batch risk-event-alert, 장중 10분마다) |
+| Monte Carlo VaR | VaR(α) = -Percentile(SimReturns, 1-α), 10,000+ 시나리오, Student-t 분포(팻테일) | investment.risk.montecarlo.scenarios: 10000, distribution: STUDENT_T, degrees-of-freedom: 5 | MonteCarloVarService.calculateVaR |
+| Monte Carlo CVaR | CVaR(α) = E[Loss｜Loss > VaR], Expected Shortfall | (동일) | MonteCarloVarService.calculateCVaR |
+| Portfolio VaR | Cholesky 분해로 상관관계 반영, 다중 종목 포트폴리오 VaR | (동일), parallel-threads: 4 | MonteCarloVarService.calculatePortfolioVaR |
 | 시드 배분 | 계좌별 단기/중기/장기 비율(합=1), 기본 20/40/40 | TB_TRADING_SETTINGS SHORT/MEDIUM/LONG_TERM_RATIO, maxInvestmentAmount, autoTradingEnabled | PipelineExecutionScheduler(자동투자 ON 계좌만) |
 | 단기 -3% Trailing | 현재가 ≤ trailingHigh×0.97 시 매도 | short-term-trailing-pct: 3 | ExitRuleService.evaluateShortTermTrailingStop |
 | 한국 단기/스윙 -5% 손절 | 현재가 ≤ entryPrice×0.95 시 매도 | short-term-kr-stop-loss-pct: 5 | ExitRuleService.evaluateKrFixedStopLoss |
@@ -240,6 +265,16 @@
 | 로보 동적 자산배분 | 모멘텀 N개월·MA 필터·변동성 역가중·Top N | investment.backtest.robo.* (asset-symbols, momentum-months, ma-window-days, top-n, rebalance-frequency, comm-pct, slip-pct, pre-execution-*) | RoboAllocationEngine, RoboBacktestService, RoboRebalanceScheduler |
 | 로보 듀얼 모멘텀(노트) | 절대: SPY 12M vs 무위험; 상대: 섹터 ETF 6M 상위 2개 | dual-momentum-mode, robo-sector-etf-symbols, robo-momentum-months-relative: 6, robo-top-n-sector: 2 | RoboAllocationEngine(모드 분기), RoboBacktestProperties |
 | 한국 역발상 RSI | RSI(14)&lt;30/40 시 매수 시그널 가중 | contrarian-rsi-threshold: 40 | FactorCalculationService.addContrarianRsiSignal |
+| 매크로 레짐 판정 | VIX·금리·경제지표 종합 → BULL/BEAR/NEUTRAL | investment.risk.vix-threshold, regime-gate-enabled | MacroDashboardService.getMarketRegime |
+| 매크로 리스크 게이트 | VIX > vixThreshold 시 신규 진입 차단 | vix-threshold: 30, regime-gate-enabled: true | MacroDashboardResponse.RiskGateStatus |
+| 매크로 대시보드 캐싱 | Redis 캐시 (1시간 TTL), 강제 갱신 지원 | spring.cache.type: redis | MacroDashboardService (@Cacheable) |
+| 스트레스 테스트 충격률 | PortfolioLoss = Σ(Position_i × Shock_i), 자산군별 충격 | - | StressTestService.runStressTest |
+| 스트레스 기본 시나리오 | 2008 금융위기(-50%), 2020 코로나(-35%), 2022 금리 인상(-25%), 1987 블랙 먼데이(-22%) | - | StressScenario.financialCrisis2008 등 |
+| 스트레스 리스크 등급 | CRITICAL(≥40%), HIGH(≥25%), MEDIUM(≥10%), LOW(<10%) | - | StressTestResult.RiskGrade |
+| Information Coefficient (IC) | Spearman Corr(FactorValue, ForwardReturn), 팩터 예측력 | - | FactorZooService.computeIC |
+| Information Ratio (IR) | IC_mean / IC_stdDev, 팩터 안정성 | - | FactorTestResult.informationRatio |
+| 팩터 등급 | A(IC≥0.05,IR≥0.5), B(IC≥0.03,IR≥0.3), C(IC≥0.02,IR≥0.2), D(IC≥0.01), F | - | FactorTestResult.FactorGrade |
+| 복합 팩터 점수 | Σ(Factor_i × Weight_i) / Σ(Weight_i) | - | FactorZooService.getCombinedScore |
 
 ---
 
@@ -260,6 +295,12 @@
 | v1.8 | 2026-02-02 | KR, US | 자동매매 직전 점검 | Time-Cut 단기(SHORT_TERM) 전용·중/장기 제외. 한국 Hunter 분기(Case A 모멘텀 ∪ Case B 역발상). 시초가 유동성 opening(300억). 켈리 초기 고정 비율(kelly-enabled·kelly-fixed-allocation-pct). 미국 갭 상승 스킵(us-gap-up-skip-pct). 미체결 N분 경과 시 Discord 긴급 알림(UnfilledOrderCheckScheduler·EmergencyAlertService). | 미검증 | Go/No-Go 체크리스트 반영 |
 | v1.10 | 2026-02-11 | KR, US | 자금 관리·분석 | 리스크 기반 포지션 사이징 옵션(risk-based-cap-enabled·risk-based-cap-max-pct). 상관관계 분석 API GET /api/v1/analysis/correlation(일봉 수익률 Pearson 상관계수 행렬). | 미검증 | 고급 분석·포트폴리오 2차(상관관계·리스크 기반 캡) |
 | v1.12 | 2026-02-11 | KR, US | 백테스트 | Walk-Forward(롤링 OOS) 백테스트. train/test 구간 분리 후 각 test 구간만 BacktestService로 실행·fold별 메트릭 집계. POST /api/v1/backtest/walk-forward. 오버피팅 완화·일반화 성능 추정용. | 미검증 | Walk-Forward 1차 구현 |
+| v1.13 | 2026-02-20 | KR, US | 리스크 분석 | Monte Carlo VaR/CVaR 서비스 구현. 10,000+ 시나리오 시뮬레이션, Student-t 분포(팻테일), Cholesky 분해(포트폴리오 상관관계), 비동기 처리. MonteCarloVarService·MonteCarloVarServiceImpl. | 미검증 | 헤지펀드급 꼬리 위험 측정 |
+| v1.14 | 2026-02-20 | KR, US | 실행 알파 | TCA (Transaction Cost Analysis) 서비스 구현. 명시적 비용(수수료, 세금, TAF), 암묵적 비용(스프레드, 슬리피지, Market Impact), Implementation Shortfall 계산. TransactionCostAnalyzer·TcaController. REST API /api/v1/tca/*. | 미검증 | 거래 비용 사전/사후 분석 |
+| v1.15 | 2026-02-20 | KR, US | 리스크 모니터링 | 매크로 지표 대시보드 API 구현. VIX·채권·경제지표·환율 통합 조회. 시장 레짐(BULL/BEAR/NEUTRAL) 판정. 리스크 게이트 상태. Redis 캐싱(1시간 TTL). MacroDashboardService·MacroController. REST API /api/v1/macro/*. | 미검증 | 거시경제 기반 리스크 의사결정 |
+| v1.16 | 2026-02-20 | KR, US | 리스크 분석 | Historical Stress Test 자동화. 기본 4개 시나리오(2008 금융위기, 2020 코로나, 2022 금리 인상, 1987 블랙 먼데이). 사용자 정의 시나리오. 자산군별·종목별 충격률. StressTestService·StressTestController. REST API /api/v1/stress-test/*. | 미검증 | 과거 위기 시나리오 포트폴리오 영향 분석 |
+| v1.17 | 2026-02-20 | KR, US | 알파 생성 | Factor Zoo 프레임워크 구현. 15개 팩터(Value 3, Momentum 3, Quality 3, Size 1, Volatility 2, Technical 2, Flow 1). IC/IR 계산, 분위 수익률, 팩터 등급(A~F). 기존 팩터(이격도, 수급강도) 통합. FactorZooService·FactorZooController. REST API /api/v1/factor-zoo/*. | 미검증 | 체계적 팩터 테스트 및 랭킹 |
+|| v1.18 | 2026-02-20 | KR, US | ?ㅽ뻾 理쒖쟻??| TWAP/VWAP/POV 二쇰Ц 遺꾪븷 ?뚭퀬由ъ쬁 援ы쁽. ?쒓컙 洹좊벑(TWAP), 嫄곕옒??媛以?VWAP), ?쒖옣 李몄뿬??POV). ?щ씪?댁뒪 怨꾪쉷쨌?ㅽ뻾쨌吏꾪뻾?곹깭 議고쉶쨌痍⑥냼쨌?ш컻. AlgorithmicOrderService쨌AlgorithmicOrderController. REST API /api/v1/algo-orders/*. | 誘멸?利?| ???二쇰Ц ?쒖옣 異⑷꺽 理쒖냼??|
 
 ---
 
@@ -278,3 +319,9 @@
 | 1.8 | 2026-02-02 | 자동매매 직전 점검: Time-Cut 단기 전용·Hunter 분기(Case A/B)·시초가 유동성 opening·켈리 초기 고정 비율·미국 갭 스킵·Discord 긴급 알림·§2·§3·§6·버전 스택 v1.8 추가 |
 | 1.10 | 2026-02-11 | §2.5.1 리스크 기반 포지션 사이징 옵션·버전 스택 v1.10 추가. 상관관계 분석 API(02-api-endpoints·01-api-overview·11-api-frontend-mapping) 반영. |
 | 1.11 | 2026-02-11 | §1.1 데이터·백테스트 원칙 추가 — PIT·Look-ahead 방지·수정주가·백테스트-실전 분리·Survivorship·전략 거버넌스·중단 원칙. |
+| 1.13 | 2026-02-20 | §2.8.1 Monte Carlo VaR/CVaR 추가 — 10,000+ 시나리오 시뮬레이션, Student-t(팻테일), Cholesky(상관관계), 비동기 처리. §6 수식 일람·버전 스택 v1.13 추가. |
+| 1.14 | 2026-02-20 | TCA (Transaction Cost Analysis) 서비스 추가 — 명시적/암묵적 비용, Implementation Shortfall, Market Impact 모델. REST API /api/v1/tca/*. 버전 스택 v1.14 추가. |
+| 1.15 | 2026-02-20 | 매크로 지표 대시보드 API 추가 — VIX·채권·경제지표·환율 통합 조회, 시장 레짐 판정, 리스크 게이트 상태, Redis 캐싱. REST API /api/v1/macro/*. 버전 스택 v1.15 추가. |
+| 1.16 | 2026-02-20 | Historical Stress Test 자동화 — 4개 기본 시나리오(2008 금융위기, 2020 코로나, 2022 금리 인상, 1987 블랙 먼데이), 사용자 정의 시나리오, 자산군별 충격률 모델. REST API /api/v1/stress-test/*. 버전 스택 v1.16 추가. |
+| 1.17 | 2026-02-20 | Factor Zoo 프레임워크 — 15개 팩터(VALUE·MOMENTUM·QUALITY·SIZE·VOLATILITY·TECHNICAL·FLOW), IC/IR 계산, 분위 수익률, 팩터 등급(A~F), 복합 팩터 점수. 기존 팩터 통합. REST API /api/v1/factor-zoo/*. 버전 스택 v1.17 추가. |
+|| 1.18 | 2026-02-20 | TWAP/VWAP/POV 二쇰Ц 遺꾪븷 ?뚭퀬由ъ쬁 - ?쒓컙 洹좊벑(TWAP), 嫄곕옒??媛以?VWAP), ?쒖옣 李몄뿬??POV). ?щ씪?댁뒪 怨꾪쉷 ?ㅽ뻾 痍⑥냼 ?ш컻. VWAP 愿대━??10% ?대궡. REST API /api/v1/algo-orders/*. 踰꾩쟾 ?ㅽ깮 v1.18 異붽?. |

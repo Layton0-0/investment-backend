@@ -1924,3 +1924,333 @@ select {
     padding: var(--space-sm) var(--space-md);
     border-radius: 4px;
 }
+
+/* ========== 토스트 알림 시스템 (Toast Notification) ========== */
+.toast-container {
+    position: fixed;
+    top: var(--space-lg);
+    right: var(--space-lg);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    pointer-events: none;
+}
+.toast {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: 14px 20px;
+    background: var(--color-bg);
+    border-radius: var(--radius-md);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border-left: 4px solid var(--color-primary);
+    pointer-events: auto;
+    animation: toast-slide-in 0.3s ease-out;
+    max-width: 380px;
+    min-width: 280px;
+}
+.toast.toast-success {
+    border-left-color: var(--color-success);
+}
+.toast.toast-error {
+    border-left-color: var(--color-error);
+}
+.toast.toast-warning {
+    border-left-color: var(--color-warning-border);
+}
+.toast.toast-info {
+    border-left-color: var(--color-primary);
+}
+.toast-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+}
+.toast-success .toast-icon { color: var(--color-success); }
+.toast-error .toast-icon { color: var(--color-error); }
+.toast-warning .toast-icon { color: var(--color-warning-text); }
+.toast-info .toast-icon { color: var(--color-primary); }
+.toast-content {
+    flex: 1;
+}
+.toast-title {
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: 2px;
+}
+.toast-message {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    line-height: 1.4;
+}
+.toast-close {
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 4px;
+    font-size: 16px;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: color 0.2s;
+}
+.toast-close:hover {
+    color: var(--color-text);
+}
+.toast.toast-out {
+    animation: toast-slide-out 0.3s ease-in forwards;
+}
+@keyframes toast-slide-in {
+    from {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+@keyframes toast-slide-out {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+}
+@media (max-width: 480px) {
+    .toast-container {
+        top: var(--space-md);
+        right: var(--space-md);
+        left: var(--space-md);
+    }
+    .toast {
+        max-width: 100%;
+        min-width: 0;
+    }
+}
+
+/* ========== 모바일 네비게이션 개선 ========== */
+.mobile-menu-toggle {
+    display: none;
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 8px;
+    line-height: 1;
+}
+@media (max-width: 768px) {
+    .mobile-menu-toggle {
+        display: block;
+    }
+    .app-nav .nav-inner {
+        display: none;
+        flex-direction: column;
+        gap: 0;
+    }
+    .app-nav .nav-inner.nav-open {
+        display: flex;
+    }
+    .app-nav .nav-link {
+        width: 100%;
+        text-align: left;
+        padding: 14px var(--space-md);
+        border-bottom: 1px solid var(--color-border-light);
+    }
+    .app-nav .nav-link.active {
+        border-bottom: 1px solid var(--color-border-light);
+        margin-bottom: 0;
+    }
+    .app-header .user-info {
+        width: 100%;
+        justify-content: flex-end;
+    }
+    .app-header .header-link {
+        padding: 6px 10px;
+        font-size: 13px;
+    }
+}
+
+/* ========== 차트 플레이스홀더 스타일 ========== */
+.chart-container {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-md);
+    padding: var(--space-lg);
+    min-height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: var(--space-lg);
+}
+.chart-placeholder {
+    text-align: center;
+    color: var(--color-text-muted);
+}
+.chart-placeholder .icon {
+    font-size: 48px;
+    margin-bottom: var(--space-md);
+    opacity: 0.5;
+}
+.chart-placeholder .text {
+    font-size: var(--font-size-base);
+}
+.chart-canvas {
+    width: 100%;
+    height: 300px;
+}
+.chart-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 300px;
+    color: var(--color-text-muted);
+}
+.chart-loading::after {
+    content: '';
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--color-border-light);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ========== 실시간 데이터 표시 스타일 ========== */
+.realtime-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+}
+.realtime-indicator .dot {
+    width: 8px;
+    height: 8px;
+    background: var(--color-success);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+.realtime-indicator.disconnected .dot {
+    background: var(--color-error);
+    animation: none;
+}
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+.price-change {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 600;
+}
+.price-change.up {
+    color: var(--color-error);
+}
+.price-change.down {
+    color: #0066CC;
+}
+.price-change .arrow {
+    font-size: 12px;
+}
+
+/* ========== 반응형: 태블릿 (iPad 등) ========== */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .container,
+    .settings-container {
+        padding-left: var(--space-lg);
+        padding-right: var(--space-lg);
+    }
+    .quick-actions {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .strategies-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ========== 스켈레톤 로딩 ========== */
+.skeleton {
+    background: linear-gradient(90deg, var(--color-bg-muted) 25%, var(--color-border-light) 50%, var(--color-bg-muted) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+    border-radius: var(--radius-sm);
+}
+.skeleton-text {
+    height: 16px;
+    margin-bottom: 8px;
+}
+.skeleton-text.short {
+    width: 60%;
+}
+.skeleton-box {
+    height: 100px;
+}
+@keyframes skeleton-loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* ========== 차트 및 리스크 지표 컨테이너 ========== */
+.chart-risk-container {
+    display: flex;
+    gap: var(--space-xl);
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+.chart-wrapper {
+    flex: 1;
+    min-width: 200px;
+    max-width: 300px;
+}
+.chart-wrapper canvas {
+    max-height: 250px;
+}
+.risk-metrics {
+    flex: 1;
+    min-width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+.risk-item {
+    background: var(--color-bg-muted);
+    padding: var(--space-md);
+    border-radius: var(--radius-md);
+    border-left: 4px solid var(--color-primary);
+}
+.risk-item label {
+    display: block;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-xs);
+}
+.risk-item .value {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    color: var(--color-text);
+}
+@media (max-width: 768px) {
+    .chart-risk-container {
+        flex-direction: column;
+    }
+    .chart-wrapper {
+        max-width: 100%;
+        width: 100%;
+    }
+    .risk-metrics {
+        width: 100%;
+    }
+}

@@ -202,6 +202,15 @@ investment:
     alert-mdd-threshold-pct: ${INVESTMENT_RISK_ALERT_MDD_THRESHOLD_PCT:0.8}
     # 리스크 이벤트 알림: VaR 95% 초과 시 Discord 알림 사용 여부
     alert-var-exceed-enabled: ${INVESTMENT_RISK_ALERT_VAR_EXCEED_ENABLED:true}
+    # Monte Carlo 시뮬레이션 설정 (P0: 헤지펀드급 리스크 분석)
+    montecarlo:
+      scenarios: ${INVESTMENT_RISK_MC_SCENARIOS:10000}              # 시뮬레이션 시나리오 수
+      distribution: ${INVESTMENT_RISK_MC_DISTRIBUTION:STUDENT_T}    # NORMAL | STUDENT_T (팻테일)
+      degrees-of-freedom: ${INVESTMENT_RISK_MC_DF:5}                # Student-t 자유도 (낮을수록 팻테일 강화)
+      parallel-threads: ${INVESTMENT_RISK_MC_THREADS:4}             # 병렬 처리 스레드 수
+      min-samples: ${INVESTMENT_RISK_MC_MIN_SAMPLES:60}             # 최소 필요 샘플 수
+      default-confidence-level: ${INVESTMENT_RISK_MC_CONFIDENCE:0.95}
+      async-timeout-seconds: ${INVESTMENT_RISK_MC_TIMEOUT:60}
   # 전략 거버넌스: 정기 백테스트·MDD/Sharpe 열화 시 Discord 알림 (매월 1일 02:00 KST, 수동 트리거 가능)
   governance:
     enabled: ${INVESTMENT_GOVERNANCE_ENABLED:true}
@@ -309,11 +318,13 @@ investment:
     provider: ${MARKET_DATA_PROVIDER:korea-investment}
     timeout: ${MARKET_DATA_TIMEOUT:30000}
     use-mock-data: ${MARKET_DATA_USE_MOCK_DATA:false}
-    # 한국투자증권 API 설정 (이제 사용자별로 DB에서 관리)
+    # 한국투자증권 API 설정
+    # [주의] app-key/app-secret/server-type은 계정별로 DB에서 관리됨
+    # - SUPER_ADMIN: env의 SUPER_ADMIN_VIRTUAL_*/SUPER_ADMIN_REAL_*로 설정 (SuperAdminSeeder가 DB 동기화)
+    # - 일반 사용자: 회원가입 시 직접 입력하여 DB에 저장
+    # - server-type: 화면 토글 시 해당 계좌의 serverType 자동 인식
     korea-investment:
-      app-key: ${KOREA_INVESTMENT_APP_KEY:}
-      app-secret: ${KOREA_INVESTMENT_APP_SECRET:}
-      server-type: ${KOREA_INVESTMENT_SERVER_TYPE:1}  # 1: 모의투자, 0: 실거래
+      # app-key, app-secret, server-type은 계정별 DB에서 관리 (env 미사용)
       use-token-cache: ${KOREA_INVESTMENT_USE_TOKEN_CACHE:true}
       # 장 시작 30분 전 토큰 자동 갱신 (08:30 KST, 평일)
       token:

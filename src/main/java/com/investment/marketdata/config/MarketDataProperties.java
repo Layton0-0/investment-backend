@@ -98,10 +98,12 @@ public class MarketDataProperties {
             private String baseUrlVirtual = "wss://openapivts.koreainvestment.com:29443";
             /** WebSocket 경로 (예: /tryitout). 공식 문서·MCP 확인 */
             private String path = "/tryitout";
-            /** 실시간 호가(통합) TR_ID. MCP asking_price_total (예: H0GASP0) */
-            private String quoteTrId = "H0GASP0";
-            /** 실시간 체결통보 TR_ID. MCP ccnl_notice (예: H0GAMT0) */
-            private String ccnlNoticeTrId = "H0GAMT0";
+            /** 실시간 호가(통합) TR_ID. MCP asking_price_total (예: H0STASP0) */
+            private String quoteTrId = "H0STASP0";
+            /** 실시간 체결 TR_ID (예: H0STCNT0) */
+            private String executionTrId = "H0STCNT0";
+            /** 실시간 체결통보 TR_ID. MCP ccnl_notice (예: H0STCNI0) */
+            private String ccnlNoticeTrId = "H0STCNI0";
             /** 연결 후 구독 전 최소 대기(ms). API 제한 준수(최소 1초) */
             private long connectWaitMs = 1000L;
             /** 구독 등록 간격(ms). 0.2초 이내 권장 */
@@ -110,6 +112,20 @@ public class MarketDataProperties {
             private String approvalKey = "";
             /** approval_key 미설정 시 연결 시 REST /oauth2/Approval 호출로 발급 시도 여부 */
             private boolean approvalKeyFetchEnabled = false;
+            /** 재연결 활성화 여부 */
+            private boolean reconnectEnabled = true;
+            /** 재연결 최대 시도 횟수 (0이면 무제한) */
+            private int reconnectMaxAttempts = 5;
+            /** 재연결 초기 대기 시간(ms) */
+            private long reconnectInitialDelayMs = 1000L;
+            /** 재연결 최대 대기 시간(ms) */
+            private long reconnectMaxDelayMs = 60000L;
+            /** 재연결 백오프 배수 */
+            private double reconnectBackoffMultiplier = 2.0;
+            /** PINGPONG 하트비트 간격(초). 0이면 비활성화 */
+            private long heartbeatIntervalSeconds = 30L;
+            /** 세션당 최대 구독 종목 수 (KIS 제한: 41개) */
+            private int maxSubscriptionsPerSession = 41;
         }
 
         @Getter

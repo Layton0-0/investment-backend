@@ -14,6 +14,7 @@ import com.investment.risk.dto.RiskAccountSummaryDto;
 import com.investment.risk.dto.RiskHistoryItemDto;
 import com.investment.risk.dto.RiskLimitsDto;
 import com.investment.risk.dto.RiskSummaryDto;
+import com.investment.risk.util.VarCalculator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -46,6 +47,7 @@ public class RiskReportService {
     private final TradingSettingRepository tradingSettingRepository;
     private final UserAccountRepository userAccountRepository;
     private final EncryptionUtil encryptionUtil;
+    private final VarCalculator varCalculator;
 
     /**
      * 현재 사용자 기준 리스크 요약.
@@ -65,13 +67,8 @@ public class RiskReportService {
                 .filter(v -> v != null)
                 .max(BigDecimal::compareTo)
                 .orElse(null);
-        BigDecimal var95Pct = null;
-        BigDecimal cvar95Pct = null;
-        if (riskProperties.getVarDailyVolPct() != null && riskProperties.getVarDailyVolPct().compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal vol = riskProperties.getVarDailyVolPct();
-            var95Pct = new BigDecimal("1.65").multiply(vol).setScale(2, RoundingMode.HALF_UP);
-            cvar95Pct = new BigDecimal("2.06").multiply(vol).setScale(2, RoundingMode.HALF_UP);
-        }
+        BigDecimal var95Pct = varCalculator.calculateVar95(null);
+        BigDecimal cvar95Pct = varCalculator.calculateCvar95(null);
         return RiskSummaryDto.builder()
                 .killSwitchActive(killSwitch)
                 .regimeGateEnabled(riskProperties.isRegimeGateEnabled())
@@ -117,19 +114,15 @@ public class RiskReportService {
                 mdd = peakVal.subtract(current).divide(peakVal, 6, RoundingMode.HALF_UP).max(BigDecimal.ZERO);
             }
         }
-        BigDecimal var95Pct = null;
-        BigDecimal cvar95Pct = null;
-        if (riskProperties.getVarDailyVolPct() != null && riskProperties.getVarDailyVolPct().compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal vol = riskProperties.getVarDailyVolPct();
-            var95Pct = new BigDecimal("1.65").multiply(vol).setScale(2, RoundingMode.HALF_UP);
-            cvar95Pct = new BigDecimal("2.06").multiply(vol).setScale(2, RoundingMode.HALF_UP);
-        }
+        BigDecimal var95Pct = varCalculator.calculateVar95(null);
+        BigDecimal cvar95Pct = varCalculator.calculateCvar95(null);
         return PortfolioRiskMetricsDto.builder()
                 .accountNoMasked(LogMaskingUtil.maskAccountNo(accNo))
                 .currentValue(current)
                 .mddPct(mdd)
                 .var95Pct(var95Pct)
                 .cvar95Pct(cvar95Pct)
+                .varMethod(varCalculator.getCurrentMethod())
                 .sharpeRatio(null)
                 .sortinoRatio(null)
                 .build();
@@ -144,6 +137,10 @@ public class RiskReportService {
                 .vixThreshold(riskProperties.getVixThreshold() != null ? riskProperties.getVixThreshold() : new BigDecimal("30"))
                 .reduceSizeOnHighVolPct(riskProperties.getReduceSizeOnHighVolPct() != null ? riskProperties.getReduceSizeOnHighVolPct() : new BigDecimal("50"))
                 .dailyLossLimitPct(riskProperties.getDailyLossLimitPct() != null ? riskProperties.getDailyLossLimitPct() : new BigDecimal("5"))
+                .varMethod(riskProperties.getVarMethod() != null ? riskProperties.getVarMethod().name() : "PARAMETRIC")
+                .varLookbackDays(riskProperties.getVarLookbackDays())
+                .yearEndLossLimitPct(riskProperties.getYearEndLossLimitPct() != null ? riskProperties.getYearEndLossLimitPct() : new BigDecimal("20"))
+                .yearEndAlertThresholdPct(riskProperties.getYearEndAlertThresholdPct() != null ? riskProperties.getYearEndAlertThresholdPct() : new BigDecimal("0.8"))
                 .build();
     }
 

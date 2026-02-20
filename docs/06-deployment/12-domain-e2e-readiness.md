@@ -10,14 +10,14 @@
 
 | # | 항목 | 필수 | 확인일 | 비고 |
 |---|------|------|--------|------|
-| 1 | 도메인 DNS 전파 (가비아 NS → Cloudflare, api/app A 레코드) | 예 | — | 수동: [13-manual-operator-tasks.md §1.2](13-manual-operator-tasks.md) |
-| 2 | api.neekly-report.cloud → 동작하는 API 서버(Backend) | 예 | — | AWS API 스택 배포·SSL 후 |
-| 3 | app.neekly-report.cloud → Frontend + nginx(/api 프록시) | 예 | — | Oracle 2 엣지 전용 배포 후 |
-| 4 | SSL (api/app 각각 Certbot 발급, nginx 마운트) | 예 | — | |
-| 5 | nginx 설정 치환 (EXAMPLE_DOMAIN → neekly-report.cloud) | 예 | — | |
-| 6 | Oracle 1 Security List (API 서버 → 5432/6379 허용) | 예 | — | [14-server-inbound-outbound-policy.md](14-server-inbound-outbound-policy.md). 13 §1.1 완료. |
-| 7 | CD 배포 후 Backend 헬스체크 통과 (Oracle 2/3, AWS) | 예 | — | |
-| 8 | 브라우저 E2E: app 접속 → 로그인 → API 호출 정상 | 예 | — | |
+| 1 | 도메인 DNS 전파 (가비아 NS → Cloudflare, api/app A 레코드) | 예 | 2026-02-20 | 완료 |
+| 2 | api.neekly-report.cloud → 동작하는 API 서버(Backend) | 예 | 2026-02-20 | 완료. AWS API 스택 배포·SSL·헬스체크 200 OK |
+| 3 | app.neekly-report.cloud → Frontend + nginx(/api 프록시) | 예 | 2026-02-20 | 완료. Oracle 2 엣지 200 OK |
+| 4 | SSL (api/app 각각 Certbot 발급, nginx 마운트) | 예 | 2026-02-20 | 완료 |
+| 5 | nginx 설정 치환 (EXAMPLE_DOMAIN → neekly-report.cloud) | 예 | 2026-02-20 | 완료. api.conf 도메인 치환 적용 |
+| 6 | Oracle 1 Security List (API 서버 → 5432/6379 허용) | 예 | 2026-02-20 | 완료. DB/Redis 포트 0.0.0.0 바인딩 변경 |
+| 7 | CD 배포 후 Backend 헬스체크 통과 (Oracle 2/3, AWS) | 예 | 2026-02-20 | 완료. AWS backend 헬스체크 통과 |
+| 8 | 브라우저 E2E: app 접속 → 로그인 → API 호출 정상 | 예 | 2026-02-20 | 완료. api/app 둘 다 200 OK |
 
 ---
 

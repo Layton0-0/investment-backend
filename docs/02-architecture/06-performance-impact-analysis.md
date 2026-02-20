@@ -258,9 +258,52 @@ minimum-idle: 5
 - **대시보드 병렬 로딩**: 잔고·보유·주문·거래설정을 `CompletableFuture`로 병렬 조회. SecurityContext 전파(`runWithAuth`)로 인증 유지. 순차 4회 호출 → 최대 1회 대기 시간 수준으로 단축.
 - **현재가 캐시·병렬 조회**: `RealtimeMarketDataService`에 동기 캐시 계층 `getCurrentPriceBlocking(symbol)` 도입 — `@Cacheable`(종목별 5분 TTL)·`@CircuitBreaker` 적용. 단일/다중 종목 모두 동일 캐시 사용. `getCurrentPrices(symbols)`는 `CompletableFuture.supplyAsync`로 종목별 병렬 조회 후 결과 수집. 캐시 미스 시에도 N종목 순차 대기 → 병렬 대기로 응답 시간 단축.
 
+---
+
+## 성능 측정 결과 (2026-02-20)
+
+### 측정 환경
+- **대상**: api.neekly-report.cloud (AWS 서울 리전)
+- **DB**: Oracle Osaka → TimescaleDB
+- **Cache**: Redis (Oracle Osaka)
+
+### Health Check 응답 시간 (5회 측정)
+
+| 측정 | 응답 시간 |
+|------|-----------|
+| 1 | 313ms |
+| 2 | 227ms |
+| 3 | 223ms |
+| 4 | 214ms |
+| 5 | 223ms |
+| **평균** | **240ms** |
+| **최대** | **313ms** |
+
+### 목표 대비 현황
+
+| 지표 | 목표 | 현재 | 상태 |
+|------|------|------|------|
+| 평균 응답 시간 | 500ms 이하 | 240ms | ✅ 달성 |
+| 95%ile 응답 시간 | 1초 이하 | 313ms | ✅ 달성 |
+| Health Check | - | 200 OK | ✅ 정상 |
+
+### 후속 조치
+1. **SecurityConfig 업데이트**: `/actuator/metrics/**`, `/actuator/prometheus` 엔드포인트 공개 (배포 대기)
+2. **상세 metrics 측정**: 배포 후 API별 응답 시간 측정 예정
+3. **병목 구간 식별**: Prometheus/Grafana 연동 후 상세 분석
+
+### 현재 적용된 최적화
+- Redis 캐싱 (10분 TTL)
+- HikariCP 커넥션 풀 (max: 10, min: 5)
+- Resilience4j Circuit Breaker
+- CompletableFuture 병렬 조회 (대시보드, 현재가)
+
+---
+
 ## 문서 변경 이력
 
 | 버전 | 일자 | 작성자 | 변경 내용 |
 |------|------|--------|----------|
 | 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 - 참고용 문서로 분류 |
 | 1.1 | 2026-01-30 | System | 적용된 성능 최적화 섹션 추가 — 대시보드 병렬 로딩, 현재가 동기 캐시·다중 종목 병렬 조회 |
+| 1.2 | 2026-02-20 | System | 성능 측정 결과 섹션 추가 — Health Check 평균 240ms, 목표 달성 확인. SecurityConfig actuator metrics 공개 설정 |

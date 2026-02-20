@@ -2,7 +2,7 @@
 
 **목적**: 개발 완료·진행중·진행예정 항목을 한 문서에서 관리하고, [로드맵](../roadmap.md)·[화면·메뉴 기획서](./01-screen-menu-spec.md)·[PRD](../PRD.md)와 연동하여 참조·변동 시 갱신한다.
 
-**갱신 원칙**: 개발 완료·스프린트 시작·범위 변경 시 이 문서를 수정하고, 다른 문서(roadmap, README)에서 이 문서를 참조한다.
+**갱신 원칙**: 개발 완료·스프린트 시작·범위 변경 시 이 문서를 수정하고, 다른 문서(roadmap, README)에서 이 문서를 참조한다. **shrimp-task-manager로 작업 완료 시 §1 완료 항목 추가 및 §5 변경 이력 버전 갱신 필수.**
 
 **기획·개발 기준**: 진행예정 항목은 [기획·개발 기준 정리](../01-requirements/00-planning-basis.md)에서 지정한 기준 문서([minimum-architecture-requirement.md](../01-requirements/minimum-architecture-requirement.md), [기획요청.md](../01-requirements/기획요청.md), [gemini-설계.md](../01-requirements/gemini-설계.md))에 따라 Phase·레이어별로 그룹화되어 있다.
 
@@ -257,6 +257,18 @@
   **섹터 분석**: GET `/api/v1/analysis/sector` (accountNo 또는 symbols+market), SectorAnalysisService·SymbolSectorRepository, 포트폴리오 페이지 섹터 비중·수익 기여도 카드. **포트폴리오 리스크 메트릭**: GET `/api/v1/risk/portfolio-metrics?accountNo=`, RiskReportService.getPortfolioRiskMetrics, VaR/CVaR/MDD·Sharpe/Sortino, 포트폴리오 페이지 리스크 카드. **리밸런싱 제안**: GET `/api/v1/trading-portfolios/rebalance-suggestions?accountNo=&market=US`, RebalanceSuggestionsService(Rebalancer+RoboAllocationEngine), 포트폴리오 페이지 US 리밸런싱 제안 카드. 02-api-endpoints·11-api-frontend-mapping 반영.
 - [x] **Phase 1 미연동 API 정리**  
   **주문 단건**: ordersApi.getOrder(orderId, accountNo), 404 시 null. **계좌 상세 5종**: accountApi에 getBalance, getBuyableAmount, getSellableQuantity, getOrderHistory, getProfitLoss 및 DTO 추가(404/400 시 null 또는 빈 배열). **user/accounts**: userAccountsApi에 getAccounts(serverType), getAccount(accountId), setMainAccount(accountId), AccountListResponseDto·UserAccountDto. 설정 페이지 "등록된 계좌" 카드에서 모의/실 계좌 목록·메인으로 설정 버튼 연동. 11-api-frontend-mapping §2 미연동 제거·갱신.
+- [x] **다중 계좌·실시간 스트리밍 설계 문서 작성**  
+  [14-multi-account-realtime-streaming.md](../02-architecture/14-multi-account-realtime-streaming.md) 신설: 다중 계좌 관리(UserAccount·TradingSetting 기존 활용, 계좌 그룹화), 통합 포트폴리오 뷰, WebSocket 스트리밍(KIS 실시간 호가 H0STASP0·체결 H0STCNT0·체결통보 H0STCNI0, 기존 Impl 분석, 재연결·하트비트·메시지 파싱 확장 계획), Toast 알림 연동. Mermaid 시퀀스 다이어그램 포함.
+- [x] **뉴스·공시 파이프라인 구현 아키텍처 설계**  
+  [13-news-collection-design.md](../02-architecture/13-news-collection-design.md) §8 Speed/Buzz 계층 구현 상세 설계 추가: 시스템 아키텍처 Mermaid 다이어그램, Speed 계층(연합뉴스 RSS, Google News RSS — Reuters 대안), Buzz 계층(네이버 금융 HTML 파싱, Yahoo Finance yfinance), NLP 분석 파이프라인(감정 분석·중요도 점수), Backend 연동(NewsSignalService 확장), app.py 엔드포인트, 스케줄 설계(Fact 10~15분, Speed 3~5분, Buzz 10~30분), Fallback 전략.
+- [x] **API 토큰·인증 설정 가이드 문서**  
+  [15-api-credentials-guide.md](../05-operations/15-api-credentials-guide.md) 신설: §1 개요(대상 API 목록 — KIS·DART·SEC·Yahoo·네이버), §2 KIS API(앱 등록 절차, Access Token·Approval Key 발급, 토큰 갱신 전략 Crontab/Scheduler/만료 전, 모의/실전 구분, TR_ID 표), §3 외부 뉴스 API(DART API Key, SEC User-Agent, RSS 무인증, 네이버 이용약관 준수), §4 보안 원칙(.env.example 템플릿, Secret Manager AWS/K8s, LogMaskingUtil), §5 환경별 설정(로컬/Dev/Prod 체크리스트), §6 트러블슈팅. investment-backend/.env.example 신규 생성.
+- [x] **KIS WebSocket 실제 구현 (재연결·하트비트·이벤트)**  
+  KoreaInvestmentWebSocketClientImpl 전면 확장: 재연결 로직(Exponential Backoff — 초기 1초, 최대 60초, 배수 2.0, 최대 5회 시도, 구독 자동 복원), PINGPONG 하트비트(설정 가능 간격 기본 30초), 메시지 파싱(JSON/파이프 형식 지원), ApplicationEvent 발행(WebSocketDataEvent). MarketDataProperties.WebSocketProperties에 재연결·하트비트·구독 한도(41개) 설정 추가. TR_ID 업데이트(H0STASP0 호가, H0STCNT0 체결, H0STCNI0 체결통보). WebSocketDataEvent 클래스 신규. 단위 테스트 11개 추가(KoreaInvestmentWebSocketClientImplTest, WebSocketDataEventTest).
+- [x] **뉴스 수집기 확장 (Speed/Buzz)**  
+  investment-data-collector/collectors에 3개 신규 수집기 추가: yonhap_collector.py(연합뉴스 RSS 경제/산업, 시그널 키워드 매칭, itemType=SPEED), naver_collector.py(네이버 금융 시장/증권 뉴스 HTML 파싱, 이용약관 준수 2초 간격, itemType=BUZZ), google_news_collector.py(Google News RSS 7개 금융 키워드, Reuters 대안, itemType=SPEED). app.py에 POST /yonhap-collect, /naver-collect, /google-news-collect 엔드포인트 추가. SCHEDULE_SPEED_BUZZ=1 시 APScheduler로 연합뉴스 5분, 네이버 10분, Google News 5분 주기 수집.
+- [x] **VaR 역사적 계산 검증 및 차트 연동**  
+  VarCalculatorTest 강화: 60일 이상 데이터 백분위수 계산 검증, CVaR >= VaR 검증(Expected Shortfall 특성), 파라메트릭 vs 역사적 비교 테스트 추가(총 12개 테스트). dashboard.html에 Chart.js 4.4.1 CDN 추가, 자산 배분 도넛 차트(모의/실계좌), VaR/CVaR/계산 방식 리스크 지표 UI. common.css에 .chart-risk-container, .chart-wrapper, .risk-metrics 반응형 스타일 추가.
 - [x] **Phase 1 Ops 전략 거버넌스 프론트 연동**  
   Admin 전용 `/ops/governance` 라우트·메뉴 추가. opsApi에 getGovernanceResults(limit), getGovernanceHalts(), clearGovernanceHalt(market, strategyType, clearedBy) 연동. GovernanceView: 검사 결과 이력 테이블(limit 20), 활성 halt 목록·halt 해제 버튼. 11-api-frontend-mapping §4 전략 거버넌스 행 연동 완료 반영.
 - [x] **Phase 1 메뉴별 API·프론트 순차 검토 완료**  
@@ -295,8 +307,8 @@
 
 ### 데이터·파이프라인 (Data Engine)
 
-- [ ] **뉴스·공시 파이프라인 (확정 원천만) — 1차 완료, Speed/Buzz 후속**  
-  1차 완료: DART 키워드 포착·SEC 8-K 최우선·시그널 반영(NewsSignalService·포지션 사이징 우선 정렬). **후속**: 연합뉴스·Reuters·네이버 금융·Yahoo Buzz 수집·NLP·감정/중요도 분석, 전략 시그널 점수 반영 강화. (데이터 품질·백테스트 검증 완료 후 진행.)
+- [x] **뉴스·공시 파이프라인 (확정 원천만) — 1차 완료, Speed/Buzz 설계·수집기 완료**  
+  1차 완료: DART 키워드 포착·SEC 8-K 최우선·시그널 반영(NewsSignalService·포지션 사이징 우선 정렬). **2차 설계·수집기**: 13-news-collection-design.md §8 Speed/Buzz 구현 상세(아키텍처·수집기·NLP·Backend 연동) 완료. yonhap/naver/google_news_collector.py 추가, app.py 엔드포인트·스케줄 설정 완료. **후속**: NLP 감정/중요도 분석 실제 적용, 전략 시그널 점수 반영 강화. (데이터 품질·백테스트 검증 완료 후 진행.)
 - [x] **Walk-Forward / Out-of-Sample (권장)**  
   WalkForwardBacktestService·POST `/api/v1/backtest/walk-forward`. train/test 구간 분리 후 각 test 구간만 BacktestService로 실행·fold별 메트릭 집계(avgCagr·avgMddPct·minSharpeRatio 등). 전략 파라미터 재추정 없음. 오버피팅 완화·일반화 성능 추정용. 00-strategy-registry v1.12, 02-api-endpoints·01-api-overview 반영.
 - [x] **거래 사유(Trade Reason) 추적**  
@@ -328,8 +340,8 @@
   **WebSocket approval_key**: POST /oauth2/Approval 호출 추가. `KoreaInvestmentTokenClient.getApprovalKey`, `KoreaInvestmentTokenService.getApprovalKey`. `KoreaInvestmentWebSocketClientImpl`에서 `approval-key-fetch-enabled` 시 연결 시 REST 발급 후 구독 메시지에 사용. **순위/투자자 API**: application.yml에 path·TR_ID 기본값 반영(거래량순위·시장별 투자자). 09-korea-investment-api-guide에 §순위분석·투자자 API(path·TR_ID)·§WebSocket approval_key 발급 추가. **유니버스 연동**: `UniverseFilterService`에 선택적 `KoreaInvestmentRankClient` 주입, `investment.factor.volume-rank-enabled`, `volume-rank-user-id`, `volume-rank-limit` 설정 시 KR 유니버스에 거래량 순위 교집합 적용. ADR 18 실전 후속·제한 사항 갱신.
 - [ ] **KIS Open API 실전 구축 (추가 후속)**  
   **향후**: 실서버 연동 검증; 미국 해외주식 기간별 시세(Phase 5). 시드·주문·통합증거금·모의 2주 테스트 후 실전은 [12-auto-investment-strategy](../02-architecture/12-auto-investment-strategy.md) §8 참조.
-- [ ] **다중 계좌·실시간 스트리밍**  
-  다중 계좌 관리, WebSocket 시세·알림, 통합 포트폴리오 뷰.
+- [x] **다중 계좌·실시간 스트리밍 설계 완료**  
+  [14-multi-account-realtime-streaming.md](../02-architecture/14-multi-account-realtime-streaming.md) 설계 문서 완료. 다중 계좌 관리(UserAccount 기반), WebSocket 스트리밍(KIS 실시간 호가·체결·체결통보, 재연결·하트비트 로직 구현), 통합 포트폴리오 뷰, Toast 알림 연동. **후속**: 프론트 실시간 연동·통합 대시보드 뷰 구현.
 
 ### 프론트·대시보드
 
@@ -423,3 +435,4 @@
 | 1.44 | 2026-02-12 | 기획 정합 퀀트 개발 진행: Phase 1 메뉴별 API·프론트 순차 검토 완료(11-api-frontend-mapping §4·§5.2 미연동 항목 없음). 백테스트 스트레스 결과 기입(데이터 수집 후) 진행예정 추가, backtest-stress-results.md §4 데이터 점검 방법·§3 이슈·비고 안내 보강. roadmap.md 백테스트 스트레스 검증 항목과 development-status·backtest-stress-results 정합. |
 | 1.45 | 2026-02-19 | 로드맵·문서 동기화(roadmap Phase 5.1·5.2 완료 [x]). 백테스트 스트레스 백필: krx-daily-backfill·us-daily-backfill Job·API·KrxCollectionService.collectAndSaveRange·backtest-stress-results.md §5 백필 가이드. Phase 6 대시보드 성과 분석 심화: 성과 요약 섹션·Sortino·CVaR 카드·roadmap 6.1 성과 분석 [x]. |
 | 1.46 | 2026-02-20 | 문서 통합: 변동 시 본 문서 우선·roadmap 불일치 시 development-status 우선 반영 문구 추가. 배포 문서는 06-deployment/00-deployment-docs-index.md 분야별 인덱스 참조. |
+| 1.47 | 2026-02-20 | shrimp-task-manager 작업 내역 반영: 다중 계좌·실시간 스트리밍 설계(14-multi-account-realtime-streaming.md), 뉴스·공시 파이프라인 아키텍처(13-news-collection-design §8), API 토큰·인증 가이드(15-api-credentials-guide.md, .env.example), KIS WebSocket 구현(재연결·하트비트·이벤트), Speed/Buzz 수집기(yonhap/naver/google_news), VaR 검증·Chart.js 차트 연동. |

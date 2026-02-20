@@ -122,7 +122,295 @@
 
 ---
 
-## 8. 참고 문서
+## 8. Speed/Buzz 계층 구현 상세 설계
+
+이 섹션은 미구현 상태인 Speed/Buzz 계층의 구현 상세 설계를 정의합니다.
+
+### 8.1 시스템 아키텍처
+
+```mermaid
+flowchart TB
+    subgraph Sources["외부 데이터 소스"]
+        DART[DART 공시<br/>Fact]
+        SEC[SEC EDGAR<br/>Fact]
+        YNA[연합뉴스<br/>Speed]
+        Reuters[Reuters/대안<br/>Speed]
+        Naver[네이버 금융<br/>Buzz]
+        Yahoo[Yahoo Finance<br/>Buzz]
+    end
+    
+    subgraph Collector["investment-data-collector (Python/FastAPI)"]
+        DC_DART[dart_collector.py<br/>✅ 구현됨]
+        DC_SEC[sec_edgar_collector.py<br/>✅ 구현됨]
+        DC_YNA[yonhap_collector.py<br/>⏳ 신규]
+        DC_Reuters[reuters_collector.py<br/>⏳ 신규]
+        DC_Naver[naver_collector.py<br/>⏳ 신규]
+        DC_Yahoo[yahoo_collector.py<br/>✅ 시세용 존재]
+    end
+    
+    subgraph NLP["NLP 분석 파이프라인"]
+        Sentiment[감정 분석]
+        Importance[중요도 점수]
+        Keywords[키워드 추출]
+    end
+    
+    subgraph Backend["Spring Backend"]
+        InternalAPI[Internal API]
+        NewsItem[TB_NEWS_ITEMS]
+        NewsSignal[NewsSignalService]
+        Pipeline[Signal Pipeline]
+    end
+    
+    DART --> DC_DART
+    SEC --> DC_SEC
+    YNA --> DC_YNA
+    Reuters --> DC_Reuters
+    Naver --> DC_Naver
+    Yahoo --> DC_Yahoo
+    
+    DC_DART --> InternalAPI
+    DC_SEC --> InternalAPI
+    DC_YNA --> NLP
+    DC_Reuters --> NLP
+    DC_Naver --> NLP
+    DC_Yahoo --> NLP
+    
+    NLP --> InternalAPI
+    InternalAPI --> NewsItem
+    NewsItem --> NewsSignal
+    NewsSignal --> Pipeline
+```
+
+### 8.2 Speed 계층 구현 상세
+
+#### 8.2.1 연합뉴스 (Yonhap) 수집기
+
+| 항목 | 설명 |
+|------|------|
+| **수집 방식** | RSS 파싱 (공식 API 미제공) |
+| **RSS URL** | `https://www.yna.co.kr/rss/economy.xml` (경제), `https://www.yna.co.kr/rss/industry.xml` (산업) |
+| **폴링 주기** | 3분 |
+| **파일 경로** | `investment-data-collector/collectors/yonhap_collector.py` |
+| **시그널 키워드** | 속보, 긴급, 급등, 급락, M&A, 인수, 합병, 실적 |
+
+```python
+# yonhap_collector.py 설계
+YONHAP_RSS_URLS = [
+    "https://www.yna.co.kr/rss/economy.xml",
+    "https://www.yna.co.kr/rss/industry.xml",
+]
+SIGNAL_KEYWORDS = ["속보", "긴급", "급등", "급락", "M&A", "실적"]
+
+def fetch_yonhap_news() -> List[Dict]:
+    items = []
+    for url in YONHAP_RSS_URLS:
+        feed = feedparser.parse(url)
+        for entry in feed.entries:
+            items.append({
+                "source": "YONHAP",
+                "market": "KR",
+                "itemType": "SPEED",
+                "title": entry.title,
+                "summary": entry.get("summary", "")[:500],
+                "url": entry.link,
+                "collectedAt": parse_date(entry.published),
+            })
+    return items
+```
+
+#### 8.2.2 미국 뉴스 수집기 (Reuters 대안)
+
+Reuters는 유료 구독 서비스이므로 초기 구현 시 무료 대안 활용:
+
+| 대안 | 설명 | 비용 |
+|------|------|------|
+| Google News RSS | 금융 키워드 검색 RSS | 무료 |
+| NewsAPI.org | REST API, 무료 플랜 500회/일 | 무료/유료 |
+
+```python
+# reuters_collector.py (Google News 대안)
+GOOGLE_NEWS_RSS = "https://news.google.com/rss/search?q={query}&hl=en-US&gl=US"
+QUERIES = ["stock market", "earnings report", "Fed interest rate"]
+
+def fetch_us_news() -> List[Dict]:
+    items = []
+    for query in QUERIES:
+        url = GOOGLE_NEWS_RSS.format(query=urllib.parse.quote(query))
+        feed = feedparser.parse(url)
+        for entry in feed.entries[:10]:
+            items.append({
+                "source": "GOOGLE_NEWS",
+                "market": "US",
+                "itemType": "SPEED",
+                "title": entry.title,
+                "url": entry.link,
+            })
+    return items
+```
+
+### 8.3 Buzz 계층 구현 상세
+
+#### 8.3.1 네이버 금융 수집기
+
+| 항목 | 설명 |
+|------|------|
+| **수집 방식** | HTML 파싱 (이용약관 준수) |
+| **대상** | 많이 본 뉴스, 실시간 검색 종목 |
+| **폴링 주기** | 10분 |
+| **주의사항** | Rate Limit 준수 (요청 간 2초 이상 간격), User-Agent 명시 |
+
+```python
+# naver_collector.py 설계
+NAVER_POPULAR_URL = "https://finance.naver.com/news/news_list.naver"
+HEADERS = {"User-Agent": "InvestmentBot/1.0"}
+REQUEST_INTERVAL = 2  # seconds
+
+def fetch_naver_popular_news() -> List[Dict]:
+    time.sleep(REQUEST_INTERVAL)
+    resp = requests.get(NAVER_POPULAR_URL, headers=HEADERS)
+    soup = BeautifulSoup(resp.text, "html.parser")
+    items = []
+    for article in soup.select(".articleSubject a")[:20]:
+        items.append({
+            "source": "NAVER",
+            "market": "KR",
+            "itemType": "BUZZ",
+            "title": article.get_text(strip=True),
+            "url": "https://finance.naver.com" + article["href"],
+        })
+    return items
+```
+
+#### 8.3.2 Yahoo Finance 확장
+
+```python
+# yahoo_collector.py 확장
+def fetch_yahoo_earnings_calendar() -> List[Dict]:
+    tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA"]
+    items = []
+    for symbol in tickers:
+        stock = yf.Ticker(symbol)
+        earnings = stock.earnings_dates
+        if earnings is not None:
+            for date, row in earnings.head(2).iterrows():
+                items.append({
+                    "source": "YAHOO",
+                    "market": "US",
+                    "itemType": "BUZZ",
+                    "title": f"Earnings: {symbol}",
+                    "symbol": symbol,
+                    "eventType": "EARNINGS",
+                })
+    return items
+```
+
+### 8.4 NLP 분석 파이프라인
+
+#### 8.4.1 감정 분석
+
+| 언어 | 방법 | 설명 |
+|------|------|------|
+| 한국어 | 키워드 기반 | 금융 도메인 특화 사전 |
+| 영어 | VADER | 경량, 빠른 분석 |
+
+```python
+# sentiment_analyzer.py
+POSITIVE_KR = ["급등", "상승", "호재", "성장", "흑자"]
+NEGATIVE_KR = ["급락", "하락", "악재", "적자", "손실"]
+
+def analyze_sentiment_kr(text: str) -> float:
+    pos = sum(1 for kw in POSITIVE_KR if kw in text)
+    neg = sum(1 for kw in NEGATIVE_KR if kw in text)
+    total = pos + neg
+    return (pos - neg) / total if total > 0 else 0.0
+
+def analyze_sentiment_en(text: str) -> float:
+    from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+    return SentimentIntensityAnalyzer().polarity_scores(text)["compound"]
+```
+
+#### 8.4.2 중요도 점수
+
+```python
+def calculate_importance(item: Dict) -> float:
+    score = 0.5
+    HIGH_KW = ["속보", "긴급", "breaking", "8-K"]
+    if any(kw.lower() in item.get("title", "").lower() for kw in HIGH_KW):
+        score += 0.3
+    if item.get("itemType") == "FACT":
+        score += 0.2
+    elif item.get("itemType") == "SPEED":
+        score += 0.1
+    return min(score, 1.0)
+```
+
+### 8.5 Backend 연동
+
+#### 8.5.1 NewsSignalService 확장
+
+```java
+public BigDecimal calculateNewsScore(String symbol, LocalDateTime from, LocalDateTime to) {
+    List<NewsItem> items = newsItemRepository.findBySymbolAndCollectedAtBetween(symbol, from, to);
+    
+    BigDecimal totalScore = BigDecimal.ZERO;
+    BigDecimal totalWeight = BigDecimal.ZERO;
+    
+    for (NewsItem item : items) {
+        BigDecimal weight = getTypeWeight(item.getItemType());  // FACT=1.0, SPEED=0.7, BUZZ=0.5
+        BigDecimal sentiment = item.getSentimentScore() != null ? item.getSentimentScore() : BigDecimal.ZERO;
+        BigDecimal importance = item.getImportanceScore() != null ? item.getImportanceScore() : new BigDecimal("0.5");
+        
+        totalScore = totalScore.add(sentiment.multiply(importance).multiply(weight));
+        totalWeight = totalWeight.add(weight);
+    }
+    
+    return totalWeight.compareTo(BigDecimal.ZERO) > 0 
+        ? totalScore.divide(totalWeight, 4, RoundingMode.HALF_UP)
+        : BigDecimal.ZERO;
+}
+```
+
+### 8.6 app.py 엔드포인트 추가
+
+```python
+@app.post("/yonhap-collect")
+def yonhap_collect():
+    from collectors.yonhap_collector import fetch_yonhap_news
+    items = fetch_yonhap_news()
+    return _post_collected_news(items)
+
+@app.post("/naver-collect")
+def naver_collect():
+    from collectors.naver_collector import fetch_naver_popular_news
+    items = fetch_naver_popular_news()
+    return _post_collected_news(items)
+
+@app.post("/yahoo-news-collect")
+def yahoo_news_collect():
+    from collectors.yahoo_collector import fetch_yahoo_earnings_calendar
+    items = fetch_yahoo_earnings_calendar()
+    return _post_collected_news(items)
+```
+
+### 8.7 스케줄 설계
+
+| 수집기 | 주기 | 설명 |
+|--------|------|------|
+| DART | 10분 | 기존 유지 |
+| SEC | 15분 | 기존 유지 |
+| 연합뉴스 | 3분 | Speed 계층 |
+| 네이버 금융 | 10분 | Buzz 계층 |
+| Yahoo 뉴스 | 30분 | Buzz 계층 |
+
+### 8.8 Fallback 전략
+
+- 원천 수집 실패 시 해당 원천만 스킵, 나머지 원천으로 시그널 생성
+- 캐시된 최근 데이터 활용 (TTL 1시간)
+- 파이프라인 전체 중단 없음
+
+---
+
+## 9. 참고 문서
 
 - [자동투자 전략 명세 §7 공시/데이터·뉴스/센티멘트 원천 확정](./12-auto-investment-strategy.md#7-공시데이터뉴스센티멘트-원천-확정-파이프라인-연결-소스)
 - [PRD — 제품 비전](../PRD.md)
@@ -135,3 +423,4 @@
 | 버전 | 일자 | 작성자 | 변경 내용 |
 |------|------|--------|----------|
 | 1.0 | 2026-01-29 | System | 초기 뉴스·공시 수집·연동 설계 작성 — 확정 원천·구현 가이드·전략 연동 반영 |
+| 1.1 | 2026-02-20 | System | §8 Speed/Buzz 계층 구현 상세 설계 추가 — 연합뉴스/네이버/Yahoo 수집기, NLP 분석, 시그널 연동 |
