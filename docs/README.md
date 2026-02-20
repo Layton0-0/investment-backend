@@ -4,14 +4,15 @@
 
 이 문서는 Investment Choi 프로젝트의 기획 및 설계 문서를 포함합니다.
 
-## 기획 문서 (최상위)
+## 기획·정리 문서 (최상위)
 
 프로젝트의 핵심 기획 문서입니다. Cursor MCP를 활용하여 자동으로 관리 및 업데이트할 수 있습니다.
 
-- **[PRD (Product Requirements Document)](./PRD.md)** - 제품 요구사항 통합 문서
-- **[로드맵](./roadmap.md)** - 프로젝트 개발 계획 및 마일스톤
-- **[개발 진행 현황](./09-planning/02-development-status.md)** - 완료·진행중·진행예정 목록 (개발 시 참조·변동 시 수정)
-- **[아키텍처 결정 사항](./decisions.md)** - 주요 기술 및 설계 결정 기록 (ADR)
+- **[PRD (Product Requirements Document)](./PRD.md)** — 제품 요구사항 통합 문서
+- **[로드맵](./roadmap.md)** — 프로젝트 개발 계획 및 마일스톤 (변동 시 [개발 진행 현황](./09-planning/02-development-status.md) 우선 반영 후 동기화)
+- **[개발 진행 현황](./09-planning/02-development-status.md)** — 완료·진행중·진행예정 목록 (개발 시 참조·변동 시 수정)
+- **[아키텍처 결정 사항](./decisions.md)** — 주요 기술 및 설계 결정 기록 (ADR)
+- **[배포·인프라 문서 인덱스](./06-deployment/00-deployment-docs-index.md)** — 배포 문서 분야별 통합·읽는 순서·중복 제거 요약
 
 ## 문서 목록
 
@@ -69,10 +70,22 @@
 
 ### 6. 배포 및 운영 (06-deployment) ✅
 
-- [배포 가이드](./06-deployment/01-deployment-guide.md) ✅
-- [운영 가이드](./06-deployment/02-operations-guide.md) ✅
-- [서버 스펙](./06-deployment/03-server-specification.md) ✅
-- [최소 비용 구성](./06-deployment/04-minimal-cost-setup.md) ✅ (비용 최적화 내용 통합)
+**현재 채택 설계**: Oracle 3대 + AWS 1대. 분야별 문서·중복 제거 상태·읽는 순서는 **[배포·인프라 문서 인덱스](./06-deployment/00-deployment-docs-index.md)** 참조.
+
+- [**00 배포 문서 인덱스**](./06-deployment/00-deployment-docs-index.md) — 분야별 통합·읽는 순서·중복 제거 요약
+- [05 멀티 VPS (Oracle 2~3대 + AWS) 및 CI/CD](./06-deployment/05-multi-vps-oracle-aws-cicd.md) — **메인 배포 문서**
+- [06 OCI VCN·서브넷 설계](./06-deployment/06-oci-vcn-subnet-design.md)
+- [07 CI/CD 구현 체크리스트](./06-deployment/07-cicd-implementation-checklist.md)
+- [08 DevOps 토큰/키 목록](./06-deployment/08-devops-required-tokens-and-keys.md)
+- [09 OCI 노드 구조](./06-deployment/09-oci-node-structure.md)
+- [10 CI/CD·방화벽 점검](./06-deployment/10-cicd-firewall-checklist.md) · [10 OCI 트러블슈팅](./06-deployment/10-oci-public-subnet-route-table-troubleshooting.md)
+- [11 DNS·도메인 설정](./06-deployment/11-dns-and-domain-setup.md)
+- [12 도메인 E2E 준비](./06-deployment/12-domain-e2e-readiness.md) · [12 로컬 데스크탑 토폴로지](./06-deployment/12-local-desktop-topology-options.md)
+- [13 운영자 수동 작업](./06-deployment/13-manual-operator-tasks.md) · [13 Oracle 1 복구 런북](./06-deployment/13-oracle1-recovery-runbook.md)
+- [14 서버 인바운드/아웃바운드 정책 (통합)](./06-deployment/14-server-inbound-outbound-policy.md) — 방화벽·Security List 단일 문서
+- [배포 가이드](./06-deployment/01-deployment-guide.md) — 일반 빌드·Docker·K8s (운영은 05·인덱스 참조)
+- [운영 가이드](./06-deployment/02-operations-guide.md) · [서버 스펙](./06-deployment/03-server-specification.md)
+- [최소 비용 구성](./06-deployment/04-minimal-cost-setup.md) — 참고용 대안 (현재 설계와 다름)
 
 ### 7. 보안 (07-security) ✅
 

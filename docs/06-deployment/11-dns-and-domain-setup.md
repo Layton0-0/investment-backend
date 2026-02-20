@@ -230,10 +230,11 @@ nslookup app.neekly-report.cloud
 - **스크립트**: investment-infra **scripts/renew-certs-aws.sh**
   - nginx 중지 → `certbot renew` (80 포트 사용) → `/etc/letsencrypt/live/api.neekly-report.cloud`를 `secrets/certs/live/`로 복사 → nginx 기동.
 - **AWS 노드에서 cron 등록** (한 번만 설정):
-  - 저장소가 예: `/home/ec2-user/investment-infra`에 있다면:
+  - 저장소가 `/home/ec2-user/investment-infra`에 있다면, **SSH 접속 후** 아래 한 줄 실행 (권장):
     ```bash
-    sudo bash -c 'echo "0 0,12 * * * root /home/ec2-user/investment-infra/scripts/renew-certs-aws.sh >> /var/log/certbot-renew.log 2>&1" > /etc/cron.d/certbot-renew-aws'
+    echo "0 0,12 * * * root /home/ec2-user/investment-infra/scripts/renew-certs-aws.sh >> /var/log/certbot-renew.log 2>&1" | sudo tee /etc/cron.d/certbot-renew-aws && sudo chmod 644 /etc/cron.d/certbot-renew-aws
     ```
+  - 또는 `cd ~/investment-infra && chmod +x scripts/register-cron-aws.sh && ./scripts/register-cron-aws.sh` 로 등록 스크립트 실행.
   - 또는 `sudo crontab -e`로 root crontab에 다음 한 줄 추가 (경로를 실제 investment-infra 경로로 변경):
     ```text
     0 0,12 * * * /home/ec2-user/investment-infra/scripts/renew-certs-aws.sh >> /var/log/certbot-renew.log 2>&1
@@ -241,7 +242,15 @@ nslookup app.neekly-report.cloud
   - 실행 주기: **0 0,12** = 매일 00:00, 12:00 (Certbot 권장: 하루 2회). 필요 시 `0 */6 * * *` 등으로 조정 가능.
 - **실행 권한**: 스크립트는 **root** 또는 **sudo**로 실행되어야 함 (certbot, docker, cp 권한). `/etc/cron.d/`에 넣을 때 사용자 컬럼을 `root`로 두면 root가 실행한다.
 - **cron 미설치 시**: Amazon Linux 등에서 `/etc/cron.d/`가 없으면 `sudo dnf install -y cronie` (또는 `sudo yum install -y cronie`) 후 `sudo systemctl enable --now crond` 실행한 뒤 위 cron 등록.
-- **Oracle 2 (app 도메인)** 에서도 동일 방식으로 갱신 스크립트를 두고 cron 등록 가능. 이 경우 해당 노드의 compose·도메인에 맞게 스크립트 경로·도메인 변수를 조정한다.
+- **Oracle 2 (app 도메인)**:
+  - **스크립트**: investment-infra **scripts/renew-certs-oracle2-edge.sh**  
+    nginx 중지 → `certbot renew`(또는 호스트에 certbot 없으면 Docker certbot으로 renew) → `/etc/letsencrypt/live/app.neekly-report.cloud`를 `secrets/certs/live/`로 복사 → nginx 기동.
+  - **Oracle 2 노드에서 cron 등록** (한 번만 설정, 경로가 `/home/ubuntu/investment-infra`인 경우):
+    ```bash
+    echo "0 0,12 * * * root /home/ubuntu/investment-infra/scripts/renew-certs-oracle2-edge.sh >> /var/log/certbot-renew-oracle2.log 2>&1" | sudo tee /etc/cron.d/certbot-renew-oracle2
+    sudo chmod 644 /etc/cron.d/certbot-renew-oracle2
+    ```
+  - 실행 주기: 매일 00:00, 12:00. Certbot 미설치 시 스크립트 내부에서 Docker certbot으로 갱신 시도.
 
 ---
 

@@ -7,7 +7,7 @@
 - **시작일**: 2026년 1월
 - **마지막 업데이트**: 2026년 2월 11일
 - **비전**: **자동투자수익** — 사람 개입 없이 퀀트 엔진 기반 자동 매매 (MDD -15% 이내, CAGR 30%+ 목표). 국내(KR)·미국(US) 4단계 파이프라인(유니버스→시그널→자금관리→매매실행), 확정 공시/뉴스/센티멘트 원천만 파이프라인 연결. [자동투자 전략 명세](./02-architecture/12-auto-investment-strategy.md), [뉴스·공시 수집·연동 설계](./02-architecture/13-news-collection-design.md) 참조.
-- **진행 현황**: 완료·진행중·진행예정 목록은 **[개발 진행 현황](./09-planning/02-development-status.md)** 문서를 참조하고, 변동 시 해당 문서를 수정한다.
+- **진행 현황**: 완료·진행중·진행예정 목록은 **[개발 진행 현황](./09-planning/02-development-status.md)** 문서를 참조하고, 변동 시 **해당 문서를 먼저 수정**한다. 불일치 시 development-status를 우선 반영하고 필요 시 본 로드맵 체크박스·일정을 동기화한다.
 - **기준 문서**: 앞으로의 개발은 [기획·개발 기준 정리](./01-requirements/00-planning-basis.md)에서 지정한 세 문서(minimum-architecture-requirement, 기획요청, gemini-설계)에 따라 진행한다. Phase 1(Foundation) → Phase 2(Quant Engine & Risk) → Phase 3(Intelligence & Tax) → Phase 4(Stability & Optional Scale)와 본 로드맵의 단기·중기·장기 Phase는 [02-development-status.md](./09-planning/02-development-status.md)에서 레이어별로 정합되어 있다.
 
 ## 단기 로드맵 (1-3개월)

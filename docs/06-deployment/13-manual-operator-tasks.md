@@ -43,7 +43,74 @@
 - **작업**: DNS 전파 후 AWS에서 `api.neekly-report.cloud`, Oracle 2에서 `app.neekly-report.cloud` 각각 `sudo certbot certonly --standalone -d <도메인>` 실행.  
   Agent가 SSH MCP로 접속 가능하면 Agent 수행. (현재 AWS MCP 키 경로 미일치 시 **운영자가 SSH로 직접** 실행.) 80 포트 사용 중이면 nginx 잠시 중단 후 실행.
 - **api.neekly-report.cloud**: **완료** (AWS, 80 포트 개방 후 Certbot 성공). 인증서는 `/etc/letsencrypt/live/api.neekly-report.cloud/` 및 `~/investment-infra/secrets/certs/live/api.neekly-report.cloud/`에 복사됨. 만료: 2026-05-21.
-- **자동 갱신**: AWS 노드에서 **한 번** cron 등록 필요. [11-dns-and-domain-setup.md §4.4](11-dns-and-domain-setup.md#44-인증서-자동-갱신-cron) 참조. 스크립트: `investment-infra/scripts/renew-certs-aws.sh`. 예: `0 0,12 * * * root /home/ec2-user/investment-infra/scripts/renew-certs-aws.sh >> /var/log/certbot-renew.log 2>&1` 를 `/etc/cron.d/certbot-renew-aws`에 추가.
+- **자동 갱신**: AWS 노드에서 **한 번** cron 등록 필요.
+  - **상태**: Oracle 2와 동일하게 구성함. cronie 설치, `/etc/cron.d/certbot-renew-aws` 등록(PATH 포함), `docker-compose.aws-api.yml`·`nginx/`·`scripts/renew-certs-aws.sh` 배치 완료. 스크립트에 cron용 PATH 설정 반영.
+  - **Docker**: 해당 AWS 노드에 **Docker 설치 완료** (dnf install docker, Docker Compose v2 CLI 플러그인 GitHub 설치, systemctl enable --now docker, ec2-user docker 그룹 추가). 갱신 스크립트는 root cron에서 `docker compose` 호출 가능. API 스택 기동은 `.env` 설정 후 `./scripts/deploy-aws-api.sh` 실행.
+  - **ec2-user docker 권한**: 새 세션에서도 `docker ps` 가능하도록 **소켓 666** 적용. 재시작 후 유지: `sudo mkdir -p /etc/systemd/system/docker.socket.d` 후 `SocketMode=0666` 인 override.conf 작성, `systemctl daemon-reload && systemctl restart docker.socket docker`.
+  - **API 스택 컨테이너**: `~/investment-infra/.env` 플레이스홀더 생성됨(REGISTRY, *_TAG, SPRING_DATASOURCE_URL, POSTGRES_PASSWORD, REDIS_HOST). **이미지 pull**은 ghcr.io 비공개 시 인증 필요: `echo $GHCR_PULL_TOKEN | docker login ghcr.io -u OWNER --password-stdin` 또는 CD의 GHCR_PULL_TOKEN 사용 후 `./scripts/deploy-aws-api.sh` 실행. `.env`의 REPLACE_ORACLE1_IP·REPLACE_ME를 Oracle 1 실제 IP·DB 비밀번호로 교체 후 재기동.
+  - **미등록 시** 운영자 SSH 접속 후: `echo "0 0,12 * * * root PATH=/usr/bin:/bin:/usr/local/bin /home/ec2-user/investment-infra/scripts/renew-certs-aws.sh >> /var/log/certbot-renew.log 2>&1" | sudo tee /etc/cron.d/certbot-renew-aws && sudo chmod 644 /etc/cron.d/certbot-renew-aws`.
+  - 상세: [11-dns-and-domain-setup.md §4.4](11-dns-and-domain-setup.md#44-인증서-자동-갱신-cron).
+
+---
+
+### 1.6 Cloudflare Error 521 (Web server is down) 대응
+
+- **증상**: 브라우저에서 `neekly-report.cloud` 또는 `app.neekly-report.cloud` 접속 시 Cloudflare "Error 521 — Web server is down" 표시. (Cloudflare는 정상, 오리진 서버 미응답.)
+- **오리진**: **Oracle 2 (Korea)** — Nginx 엣지 + Frontend. [14-server-inbound-outbound-policy.md §2](14-server-inbound-outbound-policy.md#2-oracle-2-앱엣지-korea--oci-security-list) 참조.
+- **운영자 체크리스트** (순서대로 확인):
+  1. **Cloudflare DNS**  
+     [Cloudflare 대시보드](https://dash.cloudflare.com) → neekly-report.cloud → DNS  
+     - `app` (A): **Oracle 2 Korea Public IP**를 가리키는지 확인.  
+     - 루트 `@`(neekly-report.cloud) 사용 시: 해당 A 레코드도 **Oracle 2 Korea Public IP**인지 확인.  
+     - 잘못된 IP(예: 이전 호스트·AWS만 사용 중인 경우)면 Oracle 2 Public IP로 수정.
+  2. **OCI Security List (Oracle 2 Korea)**  
+     OCI 콘솔 → Oracle 2(Korea) VCN → Security List  
+     - **Ingress**: TCP **80**, **443** 소스 **0.0.0.0/0** 허용 규칙 존재 여부 확인. [14-server-inbound-outbound-policy.md §2](14-server-inbound-outbound-policy.md#2-oracle-2-앱엣지-korea--oci-security-list)  
+     - 없으면 추가 후 저장.
+  3. **Oracle 2 호스트 (SSH)**  
+     - `docker ps` → `investment-nginx-edge`, `investment-frontend` 상태가 Up 인지 확인.  
+     - `curl -I http://localhost` → HTTP 200 등 응답 확인.  
+     - Down 이면 `~/investment-infra`에서 `./scripts/deploy-oracle2-edge.sh` 또는 `docker compose -f docker-compose.oracle2-edge.yml up -d` 실행.
+  4. **Oracle 2 호스트 iptables (방화벽)**  
+     OCI Security List만 열려 있어도 **호스트 iptables**에서 80/443이 막혀 있으면 521 발생.  
+     - `sudo iptables -L INPUT -n --line-numbers` 로 **tcp dpt:80**, **tcp dpt:443** ACCEPT 규칙이 REJECT 앞에 있는지 확인.  
+     - 없으면: `sudo iptables -I INPUT 5 -p tcp --dport 80 -j ACCEPT`, `sudo iptables -I INPUT 5 -p tcp --dport 443 -j ACCEPT`  
+     - 재부팅 후 유지: `sudo iptables-save | sudo tee /etc/iptables.rules` 후, 부팅 시 복원 스크립트 또는 `netfilter-persistent` 사용.
+  5. **Cloudflare SSL/TLS 모드 (프록시 사용 시)**  
+     오리진(Oracle 2)은 현재 **HTTP(80)만** 제공하고, **HTTPS(443) 서버 블록은 비활성** 상태.  
+     Cloudflare가 **Full** 또는 **Full (strict)** 이면 오리진 **443**으로 접속 시도 → TLS 실패 → **521**.  
+     - [Cloudflare 대시보드](https://dash.cloudflare.com) → neekly-report.cloud → **SSL/TLS** → **Overview**  
+     - **Encryption mode** 를 **Flexible** 로 변경. (방문자↔Cloudflare는 HTTPS, Cloudflare↔오리진은 **HTTP 80** 사용.)  
+     - **보안**: Flexible이면 **Cloudflare↔오리진 구간이 평문**이라, 해당 구간 도청 가능. 권장은 **§1.7**대로 app 인증서 적용 후 **Full** 전환.
+- **참고**: Cloudflare 프록시(주황 구름) 사용 시에도 오리진은 80/443에서 인터넷(또는 Cloudflare IP) 접속을 허용해야 함.
+
+---
+
+### 1.7 (권장) app 오리진 HTTPS — Certbot on Oracle 2 + Cloudflare Full
+
+- **목적**: **Flexible** 대신 **Full** 사용으로 Cloudflare↔오리진 구간까지 TLS 적용. (Certbot은 **api**는 AWS에서 완료, **app**은 Oracle 2에서 별도 발급.)
+- **작업 순서** (Oracle 2 Korea SSH):
+  0. **Certbot 미설치 시**  
+     - 호스트에 설치: `sudo apt-get update && sudo apt-get install -y certbot`  
+     - 또는 Docker 한 번 실행(80 사용 가능해야 함, nginx 중지 후):  
+       `sudo docker run --rm -p 80:80 -v /etc/letsencrypt:/etc/letsencrypt -v /var/lib/letsencrypt:/var/lib/letsencrypt certbot/certbot certonly --standalone -d app.neekly-report.cloud -d neekly-report.cloud --non-interactive --agree-tos --register-unsafely-without-email`
+  1. **Certbot 발급**  
+     - 80 사용 중인 nginx를 잠시 중지: `cd ~/investment-infra && docker compose -f docker-compose.oracle2-edge.yml stop nginx`  
+     - `sudo certbot certonly --standalone -d app.neekly-report.cloud -d neekly-report.cloud` (루트 도메인도 함께 발급 시 두 개 모두 입력)  
+     - 인증서 경로: `/etc/letsencrypt/live/app.neekly-report.cloud/` (fullchain.pem, privkey.pem)
+  2. **인증서를 compose 볼륨 경로로 복사**  
+     - `mkdir -p ~/investment-infra/secrets/certs/live && sudo cp -rL /etc/letsencrypt/live/app.neekly-report.cloud ~/investment-infra/secrets/certs/live/`  
+     - 필요 시 `sudo chown -R $(whoami) ~/investment-infra/secrets/certs/live/app.neekly-report.cloud`
+  3. **nginx 443 서버 블록 활성화**  
+     - `investment-infra/nginx/conf.d.edge/app.conf` 에서 443용 `server { listen 443 ssl; ... }` 블록 **주석 해제**.  
+     - `server_name`에 `neekly-report.cloud` 포함 시 루트 도메인도 443에서 처리 가능.  
+     - 배포(또는 수동 수정 후 `git pull` + `docker compose -f docker-compose.oracle2-edge.yml up -d --force-recreate nginx`)
+  4. **Cloudflare SSL/TLS**  
+     - **SSL/TLS** → **Overview** → **Encryption mode** 를 **Full** (또는 **Full (strict)**) 로 변경.
+  5. **갱신**  
+     - Let’s Encrypt 만료 전(90일)에 Oracle 2에서 `certbot renew` 실행. (80 사용 중이면 nginx 잠시 중지 후 실행.)  
+     - **스크립트**: `investment-infra/scripts/renew-certs-oracle2-edge.sh`. **cron 등록** (한 번만): [11-dns §4.4](11-dns-and-domain-setup.md#44-인증서-자동-갱신-cron). 예: `echo "0 0,12 * * * root /home/ubuntu/investment-infra/scripts/renew-certs-oracle2-edge.sh >> /var/log/certbot-renew-oracle2.log 2>&1" | sudo tee /etc/cron.d/certbot-renew-oracle2`
+- **완료 후**: 방문자↔Cloudflare↔오리진 전 구간 HTTPS.
 
 ---
 
@@ -52,6 +119,12 @@
 | 일자       | 항목 | 비고 |
 |------------|------|------|
 | 2026-02-20 | 1.5 Certbot (api) | AWS에서 api.neekly-report.cloud 발급·secrets/certs 복사 완료. |
+| 2026-02-20 | 1.6 Error 521 (iptables) | Oracle 2 Korea 호스트 iptables INPUT에 80/443 ACCEPT 추가. 원인: OCI만 열고 호스트 방화벽에서 80/443 미허용. |
+| 2026-02-20 | 1.7 app Certbot (Oracle 2) | Oracle 2에서 Docker certbot으로 app.neekly-report.cloud·neekly-report.cloud 발급, secrets/certs/live 복사, app.conf 443 활성화 완료. Cloudflare Full 전환 가능. |
+| 2026-02-20 | 1.7 갱신 cron (Oracle 2) | renew-certs-oracle2-edge.sh 추가, Oracle 2에 /etc/cron.d/certbot-renew-oracle2 등록(0 0,12 매일). |
+| 2026-02-20 | 1.5 AWS 갱신 cron | Oracle 2와 동일하게: cronie, cron 등록(PATH 포함), docker-compose.aws-api.yml·nginx·scripts 배치. 해당 노드에 Docker 미설치 시 갱신은 Docker 설치 후 동작. |
+| 2026-02-20 | 1.5 AWS Docker 설치 | AWS 노드에 Docker·Docker Compose v2 설치, 기동, ec2-user docker 그룹 추가. 갱신 cron에서 docker compose 정상 호출 가능. |
+| 2026-02-20 | 1.5 AWS docker 권한·컨테이너 | 소켓 666 + systemd override로 ec2-user docker ps 가능. .env 플레이스홀더·deploy-aws-api.sh 배치. 이미지 pull은 ghcr.io 인증 후 deploy 재실행 필요. |
 | (갱신 시)  | —    | 완료된 수동 작업은 위 §1에서 체크 또는 이 표에 요약. |
 
 ---
