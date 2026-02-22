@@ -160,9 +160,13 @@ public class PositionSizingService {
             }
         }
         List<String> symbolList = new ArrayList<>(symbols);
-        Set<String> newsSymbols = newsSignalService.getSymbolsWithSignalNews(market, basDt);
-        if (!newsSymbols.isEmpty()) {
-            symbolList.sort((a, b) -> Boolean.compare(newsSymbols.contains(b), newsSymbols.contains(a)));
+        Map<String, BigDecimal> signalScores = newsSignalService.getSymbolScoresWithSignalNews(market, basDt);
+        if (!signalScores.isEmpty()) {
+            symbolList.sort((a, b) -> {
+                BigDecimal scoreA = signalScores.getOrDefault(a, BigDecimal.ZERO);
+                BigDecimal scoreB = signalScores.getOrDefault(b, BigDecimal.ZERO);
+                return scoreB.compareTo(scoreA);
+            });
         }
 
         LocalDate fromDt = basDt.minusDays(ATR_DAYS + 5);

@@ -138,7 +138,7 @@
 - [x] 4단계 파이프라인 (1차) — 유니버스(유동성)·시그널 유니버스 필터·PositionSizingService·PipelineExecutor·ExitRuleService(Time-Cut). 상세: [개발 진행 현황](09-planning/02-development-status.md)
 - [x] 시장(Market KR/US) 차원 도입 — 전략·유니버스·시그널 시장별 분리·PipelineSummary·기간별 청산·자금관리
 - [x] 중기 전략 (MEDIUM_TERM) 구현 — -10% 손절·Time-Cut·시그널 상위 10% 등 (상세: 개발 진행 현황)
-- [ ] 장기 전략 (LONG_TERM) 구현 — 현재 스텁, 후속 구현
+- [x] 장기 전략 (LONG_TERM) 구현 — 1차: 매도 시그널 없음(보유 유지). ExitRuleEvaluator noExit, PositionSizingService 시그널 전체. 펀더멘털 훼손 청산은 추후.
 - [x] 4단계 파이프라인 확장 (1차) — 변동성 돌파 k 동적 적용, Half-Kelly 자금 관리, ATR Trailing Stop 청산, 체결 확인 후 포지션 등록 옵션, 유니버스/시그널 필터 스텁 구현. 상세: [개발 진행 현황](09-planning/02-development-status.md)
 - [x] 4단계 파이프라인 확장 (데이터 수집 후) — Sector RS·Post-Earnings Drift·수급 강도·듀얼 모멘텀·퀄리티-성장 실제 계산, Half-Kelly 백테스트 연동. 상세: [개발 진행 현황](09-planning/02-development-status.md)
 - [ ] 커스텀 전략 생성 기능

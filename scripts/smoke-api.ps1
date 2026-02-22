@@ -1,9 +1,9 @@
 # API 스모크 검사: 헬스·주요 엔드포인트 호출 후 exit code로 정합성 판단.
-# 사용: .\scripts\smoke-api.ps1 [-Port 8083]
+# 사용: .\scripts\smoke-api.ps1 [-Port 8080] (로컬은 Docker Compose Backend 8080)
 # Agent가 "API 정합성 확인" 요청 시 이 스크립트 실행 후 결과 해석.
 
 param(
-    [int] $Port = 8083
+    [int] $Port = 8080
 )
 
 $ErrorActionPreference = "Stop"

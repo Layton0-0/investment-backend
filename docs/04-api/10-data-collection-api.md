@@ -30,7 +30,15 @@ Yahoo 등 외부 수집기가 수집한 뉴스·이벤트를 일괄 등록한다
 - **DART 공시 / SEC EDGAR 공시**: **Python investment-data-collector**에서 수행. 스케줄은 `POST /dart-collect`, `POST /sec-collect` 호출 또는 `SCHEDULE_DART_SEC=1`로 기동 시 10분(DART)/15분(SEC) 주기. 수동 수집은 **Spring POST /api/v1/news/collect** 가 **Python 수집기 API**(POST /dart-collect, POST /sec-collect)를 호출하는 구조. `investment.data.us.collector-url` 설정 필요.
 - **Yahoo**: Cron 또는 수동으로 `collectors/yahoo_collector.py` 실행 후 Spring 내부 API로 전달.
 
+## 배치와의 관계 (스케줄 및 실행 주체)
+
+- **KRX/US 일봉 수집**의 **스케줄**은 Backend의 `BatchJobScheduler`(cron)에서만 관리된다. Backend가 정해진 시각에 해당 Job을 트리거한다.
+- **KRX 일봉**: 현재 **실행 주체는 Backend 내부**(`KrxCollectionService`)이다. Backend가 KRX Open API를 호출해 TB_DAILY_STOCK에 저장한다.
+- **US 일봉**: **실행 주체는 Backend → data-collector**이다. Backend가 `investment.data.us.collector-url`로 설정된 Python 수집기의 `POST /us-daily`를 호출하고, 수집 결과를 파싱해 DB에 저장한다.
+- 향후 KRX 일봉도 data-collector로 이전할 경우, US와 동일하게 Backend cron이 트리거하고 Backend가 data-collector URL을 호출하는 패턴을 적용할 수 있다. 자세한 역할 분배 원칙은 프로젝트 루트 `plans/infra/20260221-1730_batch-role-assignment.md` 참조.
+
 ## 참고
 
 - [뉴스·공시 수집·연동 설계](../02-architecture/13-news-collection-design.md)
 - [보안 설정 참조](../07-security/02-security-configuration-reference.md) (investment.data, DART/KRX/내부 API 키)
+- 프로젝트 루트 `plans/infra/20260221-1730_batch-role-assignment.md` (4개 레이어, Job 매트릭스, 이전 후보)

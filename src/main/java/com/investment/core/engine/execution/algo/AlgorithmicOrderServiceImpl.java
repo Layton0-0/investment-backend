@@ -8,8 +8,8 @@ import com.investment.core.engine.execution.algo.AlgorithmicOrder.OrderSide;
 import com.investment.core.engine.execution.algo.ExecutionAlgorithm.SlicePlan;
 import com.investment.order.dto.OrderRequestDto;
 import com.investment.order.dto.OrderResponseDto;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Service;
 
@@ -25,18 +25,17 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class AlgorithmicOrderServiceImpl implements AlgorithmicOrderService {
 
     private final ExecutionGateway executionGateway;
     private final TaskScheduler taskScheduler;
-
     private final Map<AlgorithmType, ExecutionAlgorithm> algorithms;
 
     private final Map<String, AlgorithmicExecutionResult> executions = new ConcurrentHashMap<>();
     private final Map<String, String> executionToUser = new ConcurrentHashMap<>();
     private final Map<String, List<SliceExecution>> sliceExecutions = new ConcurrentHashMap<>();
 
+    @Autowired
     public AlgorithmicOrderServiceImpl(
             ExecutionGateway executionGateway,
             TaskScheduler taskScheduler,

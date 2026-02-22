@@ -48,6 +48,8 @@ public class GlobalExceptionHandler {
 
         HttpStatus status = ErrorCode.ACCOUNT_NOT_FOUND.equals(e.getErrorCode())
                 ? HttpStatus.NOT_FOUND
+                : ErrorCode.SETTING_NOT_FOUND.equals(e.getErrorCode())
+                ? HttpStatus.NOT_FOUND
                 : ErrorCode.UNAUTHORIZED.equals(e.getErrorCode())
                 ? HttpStatus.UNAUTHORIZED
                 : ErrorCode.ORDER_REJECTED.equals(e.getErrorCode())

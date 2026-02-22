@@ -1,0 +1,4 @@
+# IntelliJ 전용: 별도 서버 구동 시 포트 8083 사용 (Docker/로컬 8080과 충돌 방지)
+# Run Configuration에서 Active profiles: intellij 로 지정
+server:
+  port: 8083

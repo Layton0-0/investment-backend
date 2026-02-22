@@ -100,6 +100,10 @@ public class AuthController {
     @GetMapping("/mypage")
     @Operation(summary = "마이페이지 조회", description = "현재 로그인한 사용자의 정보를 조회합니다")
     public ResponseEntity<MyPageResponseDto> getMyPage(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()
+                || "anonymousUser".equals(authentication.getPrincipal())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         String userId = authentication.getName();
         LogMaskingUtil.logWithDebugActual(log, "마이페이지 조회: userId={}",
                 new Object[] { LogMaskingUtil.maskUserId(userId) },
@@ -116,6 +120,10 @@ public class AuthController {
     public ResponseEntity<MyPageResponseDto> updateMyPage(
             Authentication authentication,
             @Valid @RequestBody MyPageUpdateRequestDto request) {
+        if (authentication == null || !authentication.isAuthenticated()
+                || "anonymousUser".equals(authentication.getPrincipal())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         String userId = authentication.getName();
         LogMaskingUtil.logWithDebugActual(log, "마이페이지 수정 요청: userId={}",
                 new Object[] { LogMaskingUtil.maskUserId(userId) },

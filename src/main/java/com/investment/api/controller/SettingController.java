@@ -11,7 +11,6 @@ import com.investment.setting.service.TradingSettingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -66,17 +65,20 @@ public class SettingController {
         return authentication.getName();
     }
 
+    /** 계좌번호 path (예: 69569325-01). 기본 세그먼트 매칭으로 슬래시 제외 전부 매칭. */
     @GetMapping("/{accountNo}")
+    @Operation(summary = "거래 설정 조회", description = "계좌별 거래 설정. 없으면 404 Not Found (설정 없음 시 기본값 폼 표시용)")
     public ResponseEntity<TradingSettingDto> getSetting(
-            @PathVariable @NotBlank String accountNo) {
-        TradingSettingDto setting = tradingSettingService.getSetting(accountNo);
-        return ResponseEntity.ok(setting);
+            @PathVariable("accountNo") @NotBlank String accountNo) {
+        return tradingSettingService.getSettingOptional(accountNo)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
-    
+
     @PutMapping("/{accountNo}")
     public ResponseEntity<TradingSettingDto> updateSetting(
             Authentication authentication,
-            @PathVariable @NotBlank String accountNo,
+            @PathVariable("accountNo") @NotBlank String accountNo,
             @RequestBody @Valid TradingSettingDto dto) {
         TradingSettingDto setting = tradingSettingService.saveSetting(accountNo, dto);
         String userId = authentication != null ? authentication.getName() : null;

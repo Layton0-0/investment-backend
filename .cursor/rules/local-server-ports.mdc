@@ -1,15 +1,23 @@
 ---
-description: 로컬 서버 포트 용도 및 8084 종료 규칙
+description: 로컬 환경 Docker Compose(8080) + Agent 전용 백엔드 테스트(8084)
 alwaysApply: true
 ---
 
-# 로컬 서버 포트 (8083 / 8084)
+# 로컬 환경 및 API 포트
 
-- **8083**: IntelliJ에서 수동 실행·확인용. 사용자가 별도로 실행한다.
-- **8084**: Cursor/Agent로 확인할 때만 `.\scripts\bootRun-agent.ps1`로 임시 실행한다.
+- **로컬 풀 스택**: DB·Redis·Backend 등은 **Docker Compose Local**으로 띄운다.
+  - Compose: `investment-infra/docker-compose.local-full.yml`
+  - 기동: `investment-infra/scripts/local-up.ps1` 또는 `docker compose -f docker-compose.local-full.yml up -d --build`
+  - **사용자가 이미 해당 Compose로 서비스를 띄워 둔 상태**로 작업한다. Agent는 이 스택을 별도로 띄우지 않는다.
 
-**8084 사용 시**: 확인을 마친 뒤 **반드시 8084 서버를 종료**한다. (해당 터미널에서 Ctrl+C로 프로세스 종료.) 8083은 사용자의 IntelliJ 수동 확인용으로 유지한다.
+- **API Base URL** (로컬, Docker 기준): **http://localhost:8080** (Backend 컨테이너). Nginx 사용 시 `http://localhost` + `/api` 로 접근 가능.
 
-**작업 종료 시**: Agent는 [agent-cleanup.mdc](agent-cleanup.mdc)에 따라 임시 빌드 폴더·8084 프로세스 등 사용한 자원을 전부 정리한 뒤 마친다.
+- **8084 — 순수 로컬 Agent용 Backend 테스트 포트**
+  - Agent가 백엔드만 따로 띄워 API/통합 검증이 필요할 때만 사용: `.\scripts\bootRun-agent.ps1` → **8084**에서 기동.
+  - 사용 후 **반드시 8084 프로세스 종료** (Ctrl+C). [agent-cleanup.mdc](agent-cleanup.mdc)에 따라 작업 종료 시 8084 등 정리.
 
-참조: [로컬 Windows 설정 가이드](docs/08-setup-guides/01-local-windows-setup.md) § 3-1, § 6.
+- **8083**: 사용하지 않는다.
+
+스크립트·문서·예시의 기본은 **8080**. Agent가 8084로 백엔드를 띄워 테스트할 때만 **http://localhost:8084** 사용.
+
+참조: docs/08-setup-guides/01-local-setup-complete.md, scripts/bootRun-agent.ps1, agent-cleanup.mdc.

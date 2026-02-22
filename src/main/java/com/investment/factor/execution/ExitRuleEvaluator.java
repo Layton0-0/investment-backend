@@ -44,6 +44,7 @@ public class ExitRuleEvaluator {
         }
         StrategyType term = input.getStrategyType() != null ? input.getStrategyType() : StrategyType.SHORT_TERM;
 
+        // 장기(LONG_TERM): 상대적 손절 없음. 펀더멘털 훼손 시에만 매도(현재는 보유 유지).
         if (term == StrategyType.LONG_TERM) {
             return ExitRuleResult.noExit();
         }

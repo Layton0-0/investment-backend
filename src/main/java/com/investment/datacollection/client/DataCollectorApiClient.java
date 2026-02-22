@@ -4,6 +4,7 @@ import com.investment.config.DataCollectionProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
@@ -12,6 +13,7 @@ import java.util.Map;
 /**
  * Python investment-data-collector HTTP API 호출 (수동 수집용).
  * DART/SEC 공시 수집은 수집기 POST /dart-collect, /sec-collect 로 위임.
+ * nginx proxy_read_timeout(60s) 내에 응답하도록 connect/read 타임아웃 설정.
  */
 @Slf4j
 @Component
@@ -20,9 +22,20 @@ public class DataCollectorApiClient {
 
     private static final String PATH_DART = "/dart-collect";
     private static final String PATH_SEC = "/sec-collect";
+    /** 수집기 연결 타임아웃(ms). 미연결 시 빠르게 실패 */
+    private static final int CONNECT_TIMEOUT_MS = 5_000;
+    /** 수집기 읽기 타임아웃(ms). DART+SEC 두 호출 합쳐 nginx 60s 이내 되도록 호출당 25s */
+    private static final int READ_TIMEOUT_MS = 25_000;
 
     private final DataCollectionProperties dataCollectionProperties;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate = createRestTemplateWithTimeouts();
+
+    private static RestTemplate createRestTemplateWithTimeouts() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(CONNECT_TIMEOUT_MS);
+        factory.setReadTimeout(READ_TIMEOUT_MS);
+        return new RestTemplate(factory);
+    }
 
     /**
      * 수집기 베이스 URL (investment.data.us.collector-url). 비어 있으면 수집 불가.

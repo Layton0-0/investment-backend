@@ -19,6 +19,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -62,11 +63,20 @@ class SettingControllerTest {
                 .defaultCurrency("KRW")
                 .autoTradingEnabled(true)
                 .build();
-        when(tradingSettingService.getSetting("12345678")).thenReturn(dto);
+        when(tradingSettingService.getSettingOptional("12345678")).thenReturn(Optional.of(dto));
 
         mockMvc.perform(get("/api/v1/settings/12345678"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.defaultCurrency").value("KRW"));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/settings/{accountNo} 설정 없으면 404")
+    void getSetting_returns404WhenNotFound() throws Exception {
+        when(tradingSettingService.getSettingOptional("99999999")).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/api/v1/settings/99999999"))
+                .andExpect(status().isNotFound());
     }
 
     @Test

@@ -1,6 +1,8 @@
 package com.investment.api.controller;
 
 import com.investment.marketdata.dto.CurrentPriceDto;
+import com.investment.marketdata.dto.DailyChartPointDto;
+import com.investment.marketdata.service.DailyChartService;
 import com.investment.marketdata.service.RealtimeMarketDataService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -10,12 +12,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import reactor.core.publisher.Mono;
 
 import jakarta.validation.constraints.NotBlank;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -23,14 +26,22 @@ import java.util.List;
  * 
  * 실시간 시세 조회 API를 제공합니다.
  */
+@Slf4j
 @Tag(name = "Market Data", description = "시장 데이터 조회 API")
 @RestController
 @RequestMapping("/api/v1/market-data")
 @RequiredArgsConstructor
 public class MarketDataController {
-    
+
     private final RealtimeMarketDataService realtimeMarketDataService;
-    
+    private final DailyChartService dailyChartService;
+
+    /** 진입 확인용. GET /api/v1/market-data/ping → 200 "ok" (daily-chart 404 시 컨트롤러 도달 여부 확인). */
+    @GetMapping("/ping")
+    public ResponseEntity<String> ping() {
+        return ResponseEntity.ok("ok");
+    }
+
     @Operation(
             summary = "단일 종목 현재가 조회",
             description = "한국투자증권 API를 통해 단일 종목의 실시간 현재가 정보를 조회합니다."
@@ -65,8 +76,45 @@ public class MarketDataController {
     public ResponseEntity<List<CurrentPriceDto>> getCurrentPrices(
             @Parameter(description = "종목 코드 목록", required = true)
             @RequestBody List<@NotBlank String> symbols) {
-        List<CurrentPriceDto> currentPrices = realtimeMarketDataService.getCurrentPrices(symbols)
-                .block(Duration.ofSeconds(30));
-        return ResponseEntity.ok(currentPrices);
+        try {
+            List<CurrentPriceDto> currentPrices = realtimeMarketDataService.getCurrentPrices(symbols)
+                    .block(Duration.ofSeconds(30));
+            return ResponseEntity.ok(currentPrices != null ? currentPrices : List.of());
+        } catch (Exception e) {
+            log.warn("current-prices 일괄 조회 실패: symbols={}, error={}", symbols, e.getMessage());
+            return ResponseEntity.ok(List.of());
+        }
+    }
+
+    @Operation(
+            summary = "일봉 차트 조회",
+            description = "TB_DAILY_STOCK 기반 종목·시장·기간별 일봉 데이터. from/to 미지정 시 최근 1년, 최대 365일."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "조회 성공 (데이터 없으면 빈 배열)",
+                    content = @Content(schema = @Schema(implementation = DailyChartPointDto.class))),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청 (파라미터)")
+    })
+    @GetMapping("/daily-chart")
+    public ResponseEntity<List<DailyChartPointDto>> getDailyChart(
+            @Parameter(description = "종목 코드", required = true, example = "005930") @RequestParam @NotBlank String symbol,
+            @Parameter(description = "시장 (KR, US)", required = true, example = "KR") @RequestParam(defaultValue = "KR") String market,
+            @Parameter(description = "시작일 (yyyy-MM-dd)") @RequestParam(required = false) String from,
+            @Parameter(description = "종료일 (yyyy-MM-dd)") @RequestParam(required = false) String to) {
+        LocalDate fromDate = null;
+        LocalDate toDate = null;
+        try {
+            if (from != null && !from.isBlank()) {
+                fromDate = LocalDate.parse(from);
+            }
+            if (to != null && !to.isBlank()) {
+                toDate = LocalDate.parse(to);
+            }
+        } catch (Exception e) {
+            log.warn("daily-chart 파라미터 파싱 실패: from={}, to={}", from, to, e);
+            return ResponseEntity.badRequest().build();
+        }
+        List<DailyChartPointDto> list = dailyChartService.getDailyChart(symbol, market, fromDate, toDate);
+        return ResponseEntity.ok(list);
     }
 }

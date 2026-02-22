@@ -791,9 +791,10 @@ curl -X GET "http://localhost:8080/api/v1/accounts/12345678/profit-loss?startDat
 
 ### 7.1 배치 작업 목록 조회
 
-**엔드포인트**: `GET /batch/api/jobs`
+**엔드포인트**: `GET /api/v1/batch/jobs` (권장. nginx가 `/api`만 백엔드로 전달하므로 이 경로 사용.)  
+레거시: `GET /batch/api/jobs` (BatchManagementController. nginx에 `/batch` location 없으면 404.)
 
-**설명**: 스케줄러로 실행되는 배치 작업 목록을 조회합니다. (구현 경로는 `/batch/api/jobs`이며, SPA 프론트는 이 경로로 연동. [11-api-frontend-mapping.md](./11-api-frontend-mapping.md) §5.1 참조.)
+**설명**: 스케줄러로 실행되는 배치 작업 목록을 조회합니다. SPA 프론트는 `GET /api/v1/batch/jobs`로 연동. [11-api-frontend-mapping.md](./11-api-frontend-mapping.md) §5.1 참조.
 
 **응답**:
 ```json
@@ -961,6 +962,28 @@ curl -X POST "http://localhost:8080/api/v1/market-data/current-prices" \
   "listedShares": Long,          // 상장주식수
   "queriedAt": LocalDateTime     // 조회 시각
 }
+```
+
+### 8.3 일봉 차트 조회
+
+**엔드포인트**: `GET /api/v1/market-data/daily-chart`
+
+**설명**: TB_DAILY_STOCK 기반 종목·시장·기간별 일봉 데이터. from/to 미지정 시 최근 1년, 최대 365일. 데이터 없으면 200 + 빈 배열.
+
+**쿼리 파라미터**:
+| 이름 | 필수 | 설명 |
+|------|------|------|
+| symbol | O | 종목 코드 (예: 005930) |
+| market | - | 시장 (KR, US). 기본값 KR |
+| from | - | 시작일 (yyyy-MM-dd) |
+| to | - | 종료일 (yyyy-MM-dd) |
+
+**성공 응답 (200 OK)**:
+```json
+[
+  { "date": "2025-01-02", "open": 72000, "high": 73500, "low": 71800, "close": 73000, "volume": 12000000 },
+  { "date": "2025-01-03", "open": 73100, "high": 74200, "low": 72800, "close": 73800, "volume": 9800000 }
+]
 ```
 
 ---

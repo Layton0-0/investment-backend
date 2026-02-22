@@ -26,7 +26,7 @@
 
 ## 3. 실행 결과 (데이터 수집 후 기입)
 
-아래는 해당 구간 데이터로 백테스트를 실행한 뒤 메트릭·비고를 기입하는 영역이다.
+아래는 해당 구간 데이터로 백테스트를 실행한 뒤 메트릭·비고를 기입하는 영역이다. **실제 수치 기입 방법**: `investment-backend/scripts/run-stress-backtest.ps1` 실행 후 생성되는 `docs/02-architecture/stress-backtest-results.json`의 `backtestResults`를 참고하여 본 표를 채운다. (백엔드·DB·Redis 기동 및 KRX/US 데이터 수집 환경 필요.) 기입 완료 후 [roadmap.md Phase 5.2](../roadmap.md) "백테스트 스트레스 검증" 항목을 [x] 처리한다.
 
 ### 3.1 코로나 폭락 (2020-02-24 ~ 2020-04-30)
 
@@ -88,10 +88,16 @@
 
 ### 5.3 스크립트 사용 예 (PowerShell)
 
-프로젝트 루트 `scripts/backfill-stress-periods.ps1` 이 스트레스 구간(코로나·금리 인상기) KR/US 백필을 순차 호출한다.
+**권장 스크립트**: `investment-backend/scripts/run-stress-backtest.ps1` — 로그인 → 코로나/금리 인상기 KR·US 백필(4회) → 팩터 계산 → 백테스트 4건 실행 후 결과를 JSON으로 저장.
 
-- **사용법**: Backend 기동 후 로그인·쿠키 또는 Bearer 토큰으로 인증. `.\scripts\backfill-stress-periods.ps1 -BaseUrl "http://localhost:8083" -BearerToken "…"` 또는 `-WebSession $session`.
-- **순서**: 스크립트 실행 → (필요 시) 팩터 계산 트리거 → §4로 데이터 점검 → `POST /api/v1/backtest` 실행 → §3 표 기입.
+- **사용법**: Backend·DB·Redis 기동 후 실행.
+  ```powershell
+  cd investment-backend
+  .\scripts\run-stress-backtest.ps1 -BaseUrl "http://localhost:8080" -EnvPath ".\.env" -OutJsonPath ".\docs\02-architecture\stress-backtest-results.json"
+  ```
+  - `-Username`, `-Password` 생략 시 `.env`의 `SUPER_ADMIN_USERNAME`, `SUPER_ADMIN_PASSWORD` 사용. 또는 `STRESS_TEST_USER`, `STRESS_TEST_PASSWORD` 환경변수.
+- **출력**: `stress-backtest-results.json`의 `backtestResults` 배열에 시나리오별 `mddPct`, `cagr`, `tradeCount`, `trades` 등 포함. 이 값을 §3.1·§3.2 표에 기입.
+- **순서**: 스크립트 실행 → §4로 데이터 점검(선택) → §3 표 기입 → [roadmap.md Phase 5.2](../roadmap.md) 해당 항목 [x] 처리.
 
 ---
 

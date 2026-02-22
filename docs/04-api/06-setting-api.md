@@ -29,15 +29,7 @@ curl -X GET "http://localhost:8080/api/v1/settings/12345678"
 }
 ```
 
-**에러 (404 Not Found)**:
-```json
-{
-  "code": "SETTING_NOT_FOUND",
-  "message": "거래 설정을 찾을 수 없습니다: 12345678",
-  "traceId": "550e8400-e29b-41d4-a716-446655440000",
-  "timestamp": "2026-01-26T10:00:00"
-}
-```
+**설정 없음 (404 Not Found)**: 해당 계좌에 거래 설정이 없으면 404. 클라이언트는 기본값 폼 표시 후 PUT으로 저장 가능.
 
 ## 2. 거래 설정 저장/업데이트
 

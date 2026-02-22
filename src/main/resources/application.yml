@@ -136,6 +136,8 @@ investment:
   # 뉴스·공시 시그널 연동 (DART 키워드·8-K). 포지션 사이징 시 시그널 공시 종목 우선 정렬
   news:
     signal-lookback-days: ${NEWS_SIGNAL_LOOKBACK_DAYS:7}
+    # 시그널 공시 종목 정렬 가중치 (PositionSizingService). 1.0 = 기본
+    signal-weight: ${NEWS_SIGNAL_WEIGHT:1.0}
   # 팩터 계산 (이격도·변동성 돌파·유동성). 매일 장 시작 전 실행.
   factor:
     schedule-cron: ${FACTOR_SCHEDULE_CRON:0 0 8 * * *}

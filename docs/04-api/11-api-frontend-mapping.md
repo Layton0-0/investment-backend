@@ -86,9 +86,10 @@
 | **시장 데이터 (MarketDataController)** | | |
 | GET | `/api/v1/market-data/current-price/{symbol}` | 단일 종목 현재가 |
 | POST | `/api/v1/market-data/current-prices` | 다중 종목 현재가 일괄 조회 |
-| **배치 관리 (BatchManagementController)** | | |
+| **배치 관리 (BatchController / BatchManagementController)** | | |
 | GET | `/batch` | 스케줄 현황 페이지 (SSR, Thymeleaf) |
-| GET | `/batch/api/jobs` | 배치 작업 목록 JSON (SPA 연동용) |
+| GET | `/api/v1/batch/jobs` | 배치 작업 목록 JSON (SPA 연동용, 권장. nginx /api 전달) |
+| GET | `/batch/api/jobs` | 배치 작업 목록 (레거시, nginx에 /batch 없으면 404) |
 | **Ops 데이터 파이프라인 (OpsDataPipelineController)** | | |
 | GET | `/api/v1/ops/data-pipeline/status` | 데이터 파이프라인 원천별 수집 상태 (ADMIN 전용) |
 | **Ops 알림센터 (OpsAlertsController)** | | |
@@ -107,7 +108,7 @@
 | GET | `/api/v1/report/tax/summary` | 연말 세금 요약 (year 쿼리, 실데이터 집계) |
 | GET | `/api/v1/report/tax/summary/export` | 연말 세금 요약 내보내기 (year, format=csv\|pdf) |
 
-**참고**: API 개요 문서(01-api-overview.md)의 "3.7 배치 관리 API"에는 `GET /api/v1/batch/jobs`로 기술되어 있으나, **현재 백엔드 구현은 `GET /batch/api/jobs`** 이다. SPA 프론트는 동일 base URL로 `/batch/api/jobs`를 호출한다. 향후 `/api/v1/batch/jobs`로 통일할지 별도 결정.
+**참고**: SPA 프론트는 `GET /api/v1/batch/jobs`(BatchController)를 호출한다. nginx가 `/api`만 백엔드로 전달하므로 `/batch/api/jobs`는 프록시 설정 없이 404가 난다.
 
 ---
 
@@ -159,7 +160,7 @@
 | GET /api/v1/trading-portfolios/rebalance-suggestions | tradingPortfolioApi.getRebalanceSuggestions | Market(Portfolio) 리밸런싱 제안 카드 | 연동 완료 |
 | GET /api/v1/market-data/current-price/{symbol} | marketDataApi.getCurrentPrice | Market(Portfolio) 종목 분석 모달 현재가 | 연동 완료 |
 | POST /api/v1/market-data/current-prices | marketDataApi.getCurrentPrices | 다중 종목 현재가 위젯(선택) | 연동 완료 |
-| GET /batch/api/jobs | batchApi.getBatchJobs | Admin(Batch) | **SPA 연동** (문서상 /api/v1/batch/jobs 아님) |
+| GET /api/v1/batch/jobs | batchApi.getBatchJobs | Admin(데이터 파이프라인 /ops/data, Batch) | SPA 연동 |
 | GET /api/v1/ops/data-pipeline/status | opsApi.getDataPipelineStatus | Admin(Ops 데이터 파이프라인 /ops/data) | 연동 완료 |
 | GET /api/v1/ops/alerts | opsApi.getAlerts | Admin(Ops 알림센터 /ops/alerts) | 연동 완료 |
 | GET /api/v1/ops/audit | opsApi.getAuditLogs | Admin(Ops 감사 로그 /ops/audit) | 연동 완료 |
@@ -228,9 +229,9 @@
 
 ### 5.1 배치 API 경로
 
-- **문서(01-api-overview.md)**: `GET /api/v1/batch/jobs`
-- **실제 구현**: `GET /batch/api/jobs` (BatchManagementController)
-- **프론트**: 동일 base URL 기준으로 `/batch/api/jobs` 호출. 상세는 [01-api-overview.md](./01-api-overview.md) §3.7 및 이 문서 §1 참조.
+- **SPA 연동(권장)**: `GET /api/v1/batch/jobs` (BatchController). nginx가 `/api`만 백엔드로 전달하므로 이 경로 사용.
+- **레거시**: `GET /batch/api/jobs` (BatchManagementController). nginx에 `location /batch` 없으면 404.
+- **프론트**: batchApi.getBatchJobs → `/api/v1/batch/jobs` 호출. [01-api-overview.md](./01-api-overview.md) §3.7, [02-api-endpoints.md](./02-api-endpoints.md) §7 참조.
 
 ### 5.2 미구현·미연동 (우선순위별 보완)
 

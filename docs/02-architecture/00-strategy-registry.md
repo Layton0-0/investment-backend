@@ -1,4 +1,4 @@
-﻿# 전략·계산 방식 통합 레지스트리 (Strategy Registry)
+# 전략·계산 방식 통합 레지스트리 (Strategy Registry)
 
 **목적**: 프로젝트에서 개발·적용하는 모든 전문적인 투자 방식, 전략, 계산 방법을 한 문서에 정리하고, 전략 업데이트 시 갱신·버전 스택(실패/교훈 포함)으로 경험을 쌓으며, **나라별·분야별·기간별**로 구분해 정확도를 높인다.
 
@@ -200,7 +200,7 @@ Monte Carlo 시뮬레이션 기반 VaR/CVaR 계산으로 꼬리 위험(tail risk
 | **한국(KR) 단기/스윙** | RSI≥70 익절 | RSI(14) ≥ 70 시 수익 실현 매도 | `investment.pipeline.rsi-exit-threshold` (70), `ExitRuleService.evaluateRsiExit` |
 | **중기(MEDIUM_TERM)** | -10% 손절 | 현재가 ≤ entryPrice × (1 − 10/100) 시 매도 | `investment.pipeline.medium-term-stop-loss-pct` (10), `ExitRuleService.evaluateMediumTermStopLoss` |
 | **단기(SHORT_TERM)** | Time-Cut | 매수 후 N일 내 목표 수익률 미도달 시 전량 매도. **단기 전용** (중/장기 듀얼 모멘텀은 추세 훼손만 청산). | `StrategyPosition.timeCutDays`, `targetReturnPct`, `ExitRuleEvaluator` (SHORT_TERM만 평가) |
-| **장기(LONG_TERM)** | 펀더멘털 훼손 시에만 매도 | 1차 스텁(매도 시그널 없음) | 추후 펀더멘털 데이터·훼손 정의 후 구현 |
+| **장기(LONG_TERM)** | 펀더멘털 훼손 시에만 매도 | 구현: 매도 시그널 없음(보유 유지). ExitRuleEvaluator LONG_TERM → noExit. PositionSizingService 시그널 전체 사용. | 펀더멘털 훼손 정의·데이터 연동 시 청산 규칙 확장 |
 | **공통(참고)** | ATR Trailing Stop | 현재가 ≤ trailingHigh − ATR×multiplier 시 매도 | `investment.pipeline.atr-trailing-stop-multiplier` (2.0), `ExitRuleService.evaluateAtrTrailingStop` |
 
 ---

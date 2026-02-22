@@ -1,0 +1,21 @@
+# 로컬 전용: 소스에서 JAR 빌드 후 실행. docker compose build 시 항상 최신 코드 반영.
+# CI/배포는 기존 Dockerfile + 호스트에서 gradle bootJar 사용.
+FROM eclipse-temurin:17-jdk-alpine AS builder
+WORKDIR /app
+
+# 의존성만 먼저 복사 → 레이어 캐시. 소스 변경 시 아래 COPY/RUN만 재실행
+COPY gradlew settings.gradle build.gradle gradle.properties ./
+COPY gradle ./gradle
+# Windows 호스트에서 복사 시 CRLF 제거 (Alpine에서 ./gradlew: not found 방지)
+RUN sed -i 's/\r$//' gradlew && chmod +x gradlew
+# $0 이 경로를 포함하도록 ./gradlew 로 실행 (APP_HOME 계산용)
+RUN ./gradlew dependencies --no-daemon -q || true
+
+COPY src ./src
+RUN ./gradlew bootJar --no-daemon -x test
+
+FROM eclipse-temurin:17-jre-alpine
+WORKDIR /app
+COPY --from=builder /app/build/libs/*.jar app.jar
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]

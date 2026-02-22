@@ -17,6 +17,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpMethod;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -60,7 +61,11 @@ public class SecurityConfig {
             
             // 요청 인가 설정
             .authorizeHttpRequests(auth -> auth
-                // 공개 엔드포인트
+                // 공개 엔드포인트 (읽기 전용 시세/차트는 비인증 허용)
+                .requestMatchers(
+                    HttpMethod.GET,
+                    "/api/v1/market-data/**"
+                ).permitAll()
                 .requestMatchers(
                     "/api/v1/auth/**",
                     "/api/v1/public/**",
@@ -74,6 +79,9 @@ public class SecurityConfig {
                     "/actuator/health",
                     "/actuator/metrics/**",
                     "/actuator/prometheus",
+                    "/api/actuator/health",
+                    "/api/actuator/metrics/**",
+                    "/api/actuator/prometheus",
                     "/swagger-ui/**",
                     "/v3/api-docs/**",
                     "/swagger-resources/**"
