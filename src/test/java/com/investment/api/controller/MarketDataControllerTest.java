@@ -5,6 +5,7 @@ import com.investment.common.security.JwtAuthenticationFilter;
 import com.investment.common.security.RateLimitFilter;
 import com.investment.config.SecurityHeadersConfig;
 import com.investment.marketdata.dto.CurrentPriceDto;
+import com.investment.marketdata.service.DailyChartService;
 import com.investment.marketdata.service.RealtimeMarketDataService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -38,6 +39,8 @@ class MarketDataControllerTest {
 
     @MockBean
     private RealtimeMarketDataService realtimeMarketDataService;
+    @MockBean
+    private DailyChartService dailyChartService;
     @MockBean
     private AccountService accountService;
     @MockBean
