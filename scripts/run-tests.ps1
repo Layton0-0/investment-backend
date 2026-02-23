@@ -25,7 +25,9 @@ try {
         Remove-Item Env:\GRADLE_UNIQUE_BUILD_DIR -ErrorAction SilentlyContinue
         Write-Host "테스트 실행 (빌드: 프로젝트 build)" -ForegroundColor Cyan
     }
-    & .\gradlew test --no-daemon @args
+    $prevErrPref = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { & .\gradlew test --no-daemon @args } finally { $ErrorActionPreference = $prevErrPref }
     $code = $LASTEXITCODE
     if (-not $NoUniqueDir -and (Test-Path $agentBuildDirFile)) {
         $agentBuild = Get-Content $agentBuildDirFile -Raw
