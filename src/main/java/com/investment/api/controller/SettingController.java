@@ -65,14 +65,14 @@ public class SettingController {
         return authentication.getName();
     }
 
-    /** 계좌번호 path (예: 69569325-01). 기본 세그먼트 매칭으로 슬래시 제외 전부 매칭. */
+    /** 계좌번호 path (예: 69569325-01). 없으면 204 No Content (404 미발생, 기본값 폼 표시용). */
     @GetMapping("/{accountNo}")
-    @Operation(summary = "거래 설정 조회", description = "계좌별 거래 설정. 없으면 404 Not Found (설정 없음 시 기본값 폼 표시용)")
+    @Operation(summary = "거래 설정 조회", description = "계좌별 거래 설정. 없으면 204 No Content")
     public ResponseEntity<TradingSettingDto> getSetting(
             @PathVariable("accountNo") @NotBlank String accountNo) {
         return tradingSettingService.getSettingOptional(accountNo)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElse(ResponseEntity.noContent().build());
     }
 
     @PutMapping("/{accountNo}")

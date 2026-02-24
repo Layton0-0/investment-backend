@@ -22,7 +22,7 @@ public class TradingSettingDto {
     @Positive(message = "최대 투자금액은 양수여야 합니다")
     private BigDecimal maxInvestmentAmount;
 
-    @NotNull(message = "최소 투자금액은 필수입니다")
+    /** 최소 투자금액. null이면 시스템 기본값 사용(퀀트 프로그램이 결정). */
     @Positive(message = "최소 투자금액은 양수여야 합니다")
     private BigDecimal minInvestmentAmount;
 
@@ -50,4 +50,10 @@ public class TradingSettingDto {
      * 장기 비율 (0~1).
      */
     private BigDecimal longTermRatio;
+
+    /** 파이프라인 자동 실행 허용. null이면 서버 기본값 사용 */
+    private Boolean pipelineAutoExecute;
+
+    /** 실계좌 자동 실행 허용. null이면 서버 기본값 사용 */
+    private Boolean pipelineAllowRealExecution;
 }

@@ -34,6 +34,8 @@ spring:
         format_sql: true
         use_sql_comments: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          time_zone: Asia/Seoul
     open-in-view: false
   
   thymeleaf:
@@ -359,6 +361,48 @@ investment:
     max-investment-amount: ${MAX_INVESTMENT_AMOUNT:1000000}
     min-investment-amount: ${MIN_INVESTMENT_AMOUNT:10000}
     default-currency: USD
+    # 전략 비중 동적 결정 (시장 레짐별 단기/중기/장기 목표 비중). 레짐 미판별 시 default 사용
+    strategy-weights:
+      enabled: ${STRATEGY_WEIGHTS_ENABLED:true}
+      min-weight: 0.05
+      max-weight: 0.55
+      regime-weights:
+        HIGH_VOLATILITY:
+          short-pct: 0.10
+          mid-pct: 0.35
+          long-pct: 0.55
+        MODERATE_VOLATILITY:
+          short-pct: 0.15
+          mid-pct: 0.40
+          long-pct: 0.45
+        RECESSION:
+          short-pct: 0.10
+          mid-pct: 0.30
+          long-pct: 0.60
+        GROWTH:
+          short-pct: 0.25
+          mid-pct: 0.40
+          long-pct: 0.35
+        NORMAL:
+          short-pct: 0.20
+          mid-pct: 0.40
+          long-pct: 0.40
+        LOW_VOLATILITY:
+          short-pct: 0.25
+          mid-pct: 0.40
+          long-pct: 0.35
+        HIGH_INTEREST_RATE:
+          short-pct: 0.15
+          mid-pct: 0.38
+          long-pct: 0.47
+        HIGH_INFLATION:
+          short-pct: 0.15
+          mid-pct: 0.38
+          long-pct: 0.47
+        default:
+          short-pct: 0.20
+          mid-pct: 0.40
+          long-pct: 0.40
   # AI 서비스 설정
   ai:
     prediction-service:

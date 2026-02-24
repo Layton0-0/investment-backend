@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -28,16 +29,23 @@ public class TradingPortfolioService {
     private final ShortTermTradingStrategyService strategyService;
     
     /**
-     * 오늘의 트레이딩 포트폴리오 조회 또는 생성
+     * 오늘의 트레이딩 포트폴리오 조회 (없으면 Optional.empty, 400 미발생).
+     */
+    @Transactional(readOnly = true)
+    public Optional<TradingPortfolioDto> getTodayPortfolioOptional() {
+        LocalDate today = LocalDate.now();
+        return tradingPortfolioRepository.findByTradingDate(today)
+                .map(this::convertToDto);
+    }
+
+    /**
+     * 오늘의 트레이딩 포트폴리오 조회 (없으면 예외. 배치/수동 생성용).
      */
     @Transactional(readOnly = true)
     public TradingPortfolioDto getTodayPortfolio() {
-        LocalDate today = LocalDate.now();
-        TradingPortfolio portfolio = tradingPortfolioRepository.findByTradingDate(today)
+        return getTodayPortfolioOptional()
                 .orElseThrow(() -> new DomainException(ErrorCode.PORTFOLIO_NOT_FOUND,
                         "오늘의 트레이딩 포트폴리오가 없습니다. 스케줄러를 실행해주세요."));
-        
-        return convertToDto(portfolio);
     }
     
     /**

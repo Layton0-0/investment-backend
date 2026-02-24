@@ -127,6 +127,7 @@
 | GET balance, buyable-amount, sellable-quantity, order-history, profit-loss | accountApi.getBalance, getBuyableAmount, getSellableQuantity, getOrderHistory, getProfitLoss | (필요 시 상세 화면) | 연동 완료 |
 | GET /api/v1/orders | ordersApi.getOrders | useDashboardData, Market(Orders), Dashboard. 응답 각 항목에 signalType·exitRuleType(거래 사유) 포함, 주문 목록·대시보드 주문 테이블에 시그널 유형·청산 규칙 컬럼 표시 | |
 | DELETE /api/v1/orders/{orderId} | ordersApi.cancelOrder | Market(Orders) | |
+| POST /api/v1/orders/cancel-all-pending | ordersApi.cancelAllPendingOrders | Market(Orders) 미체결 전체 취소 | |
 | POST /api/v1/orders | ordersApi.placeOrder | Market(Orders) | |
 | GET /api/v1/orders/{orderId} | ordersApi.getOrder | 주문 상세·재시도 시 (404 시 null). 응답에 signalType·exitRuleType(거래 사유) 포함 | 연동 완료 |
 | GET /api/v1/strategies/{accountNo} | strategyApi.getStrategies | Investment(Strategy) | |

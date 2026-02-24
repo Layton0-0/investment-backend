@@ -10,7 +10,6 @@ import com.investment.risk.service.RiskReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.http.HttpStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -51,7 +50,7 @@ public class RiskReportController {
         return ResponseEntity.ok(dto);
     }
 
-    @Operation(summary = "포트폴리오 리스크 메트릭", description = "단일 계좌의 VaR/CVaR/MDD·Sharpe/Sortino(데이터 있으면) 반환.")
+    @Operation(summary = "포트폴리오 리스크 메트릭", description = "단일 계좌의 VaR/CVaR/MDD·Sharpe/Sortino. 데이터 없으면 200 + 빈 DTO (404 미발생).")
     @GetMapping("/portfolio-metrics")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<PortfolioRiskMetricsDto> getPortfolioRiskMetrics(
@@ -60,7 +59,7 @@ public class RiskReportController {
         String userId = getUserId(principal);
         PortfolioRiskMetricsDto dto = riskReportService.getPortfolioRiskMetrics(userId, accountNo);
         if (dto == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            return ResponseEntity.ok(PortfolioRiskMetricsDto.builder().build());
         }
         return ResponseEntity.ok(dto);
     }

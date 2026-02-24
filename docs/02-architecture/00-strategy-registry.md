@@ -10,8 +10,8 @@
 
 | 항목 | 내용 |
 |------|------|
-| **현재 전략 문서 버전** | v1.10 |
-| **최종 갱신일** | 2026-02-11 |
+| **현재 전략 문서 버전** | v1.11 |
+| **최종 갱신일** | 2026-02-24 |
 | **코드 참조** | `factor.service.*`, `factor.execution.ExitRuleService`, `application.yml` (investment.factor, investment.fees, investment.pipeline) |
 
 ### 1.1 데이터·백테스트 원칙 (필수)
@@ -133,7 +133,23 @@ Monte Carlo 시뮬레이션 기반 VaR/CVaR 계산으로 꼬리 위험(tail risk
 - **출력**: `RebalanceItem(symbol, side=BUY|SELL, quantity, notional)`.
 - **구현**: `RebalancerImpl` — `AccountService.getBalanceAndPositionsWithUserId`로 포지션 조회 후 시장별 필터, 목표와 차이 산출.
 
-### 2.9.4 공시·뉴스 시그널 반영 (뉴스·공시 1차)
+### 2.9.4 전략 비중 동적 결정 (레짐별 단기/중기/장기)
+
+단기/중기/장기 전략 비중을 시장 레짐에 따라 동적으로 결정한다. 파이프라인 실행 시점에 `StrategyWeightResolver`가 `MacroEconomicStrategyEngine.decideStrategy(indicators)`로 레짐을 판별하고, 레짐별 목표 비중을 적용한 뒤 상·하한 클리핑 및 합=1 정규화하여 사용한다.
+
+- **설정 경로**: `investment.trading.strategy-weights` (application.yml). `StrategyWeightProperties` 바인딩.
+- **옵션**: `enabled` (기본 true), `min-weight` (0.05), `max-weight` (0.55), `regime-weights.<레짐명>.short-pct/mid-pct/long-pct`.
+- **레짐별 목표 비중 (1차)**:
+  - HIGH_VOLATILITY: 0.10 / 0.35 / 0.55
+  - MODERATE_VOLATILITY: 0.15 / 0.40 / 0.45
+  - RECESSION: 0.10 / 0.30 / 0.60
+  - GROWTH, NORMAL, LOW_VOLATILITY: 0.25 또는 0.20 / 0.40 / 0.35 또는 0.40
+  - HIGH_INTEREST_RATE, HIGH_INFLATION: 0.15 / 0.38 / 0.47
+  - default: 0.20 / 0.40 / 0.40
+- **구현**: `StrategyWeightResolver.resolve(TradingSetting, Optional<MacroEconomicIndicators>)` → `StrategyWeights`. `PipelineExecutionScheduler`에서 호출 후 반환된 비중으로 shortCapital/midCapital/longCapital 계산. 지표 없음·예외 시 설정 비중 또는 (0.2, 0.4, 0.4) fallback.
+- **변경 이력**: v1.11 (2026-02) 전략 비중 동적 결정 도입.
+
+### 2.9.5 공시·뉴스 시그널 반영 (뉴스·공시 1차)
 
 - **역할**: DART 키워드 매칭·SEC 8-K 등 시그널 반영 대상 공시에 등장한 종목을 포지션 사이징 시 우선 정렬(동일 조건에서 진입 우선순위 상향).
 - **데이터**: TB_NEWS_ITEMS. eventType `DART_SIGNAL:%`(DART 키워드 매칭), `8K`(SEC 8-K). `NewsSignalService.getSymbolsWithSignalNews(market, basDt)` → 최근 N일 시그널 공시 종목 집합.

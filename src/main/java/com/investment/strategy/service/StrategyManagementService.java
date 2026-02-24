@@ -4,7 +4,9 @@ import com.investment.common.exception.DomainException;
 import com.investment.common.exception.ErrorCode;
 import com.investment.common.security.LogMaskingUtil;
 import com.investment.domain.entity.Strategy;
+import com.investment.domain.entity.TradingSetting;
 import com.investment.domain.repository.StrategyRepository;
+import com.investment.domain.repository.TradingSettingRepository;
 import com.investment.strategy.domain.StrategyStatus;
 import com.investment.strategy.domain.StrategyType;
 import com.investment.strategy.dto.StrategyDto;
@@ -20,19 +22,26 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * 전략 관리 서비스
+ * 전략 관리 서비스.
+ * 계좌+시장별 조회 시 전략이 없으면 시스템 기본(단기/중기/장기 3건)을 자동 생성하여 조회 중심 UX를 보장한다.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class StrategyManagementService {
 
-    private final StrategyRepository strategyRepository;
-
     private static final String DEFAULT_MARKET = "KR";
+    private static final BigDecimal DEFAULT_SHORT_RATIO = new BigDecimal("0.2");
+    private static final BigDecimal DEFAULT_MEDIUM_RATIO = new BigDecimal("0.4");
+    private static final BigDecimal DEFAULT_LONG_RATIO = new BigDecimal("0.4");
+    private static final BigDecimal DEFAULT_RISK_LEVEL = new BigDecimal("1.0");
+    private static final BigDecimal DEFAULT_CONFIDENCE_THRESHOLD = new BigDecimal("0.7");
+
+    private final StrategyRepository strategyRepository;
+    private final TradingSettingRepository tradingSettingRepository;
 
     /**
-     * 계좌의 모든 전략 조회 (시장 미지정 시 전체)
+     * 계좌의 모든 전략 조회 (시장 미지정 시 전체). 시장별 ensure는 적용하지 않음.
      */
     @Transactional(readOnly = true)
     public List<StrategyDto> getStrategies(String accountNo) {
@@ -40,16 +49,78 @@ public class StrategyManagementService {
     }
 
     /**
-     * 계좌·시장별 전략 조회 (market null이면 전체)
+     * 계좌·시장별 전략 조회 (market null이면 전체).
+     * 시장이 지정된 경우 해당 계좌+시장에 전략이 하나도 없으면 시스템 기본 3건(단기/중기/장기)을 생성한 뒤 반환한다.
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public List<StrategyDto> getStrategies(String accountNo, String market) {
         List<Strategy> strategies = (market != null && !market.isBlank())
                 ? strategyRepository.findByAccountNoAndMarket(accountNo, market)
                 : strategyRepository.findByAccountNo(accountNo);
+
+        if (strategies.isEmpty() && market != null && !market.isBlank()) {
+            ensureDefaultStrategies(accountNo, market);
+            strategies = strategyRepository.findByAccountNoAndMarket(accountNo, market);
+        }
+
         return strategies.stream()
                 .map(this::convertToDto)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 계좌+시장에 대해 단기/중기/장기 시스템 기본 전략이 없으면 생성한다.
+     * TradingSetting이 있으면 maxInvestmentAmount·비율로 배분 금액을 설정하고, 없으면 금액은 null(파이프라인 기본 사용).
+     */
+    private void ensureDefaultStrategies(String accountNo, String market) {
+        String m = market != null && !market.isBlank() ? market : DEFAULT_MARKET;
+        BigDecimal maxTotal = null;
+        BigDecimal shortRatio = DEFAULT_SHORT_RATIO;
+        BigDecimal mediumRatio = DEFAULT_MEDIUM_RATIO;
+        BigDecimal longRatio = DEFAULT_LONG_RATIO;
+        String userId = null;
+
+        var settingOpt = tradingSettingRepository.findByAccountNo(accountNo);
+        if (settingOpt.isPresent()) {
+            TradingSetting setting = settingOpt.get();
+            maxTotal = setting.getMaxInvestmentAmount();
+            userId = setting.getUserId();
+            if (setting.getShortTermRatio() != null) {
+                shortRatio = setting.getShortTermRatio();
+            }
+            if (setting.getMediumTermRatio() != null) {
+                mediumRatio = setting.getMediumTermRatio();
+            }
+            if (setting.getLongTermRatio() != null) {
+                longRatio = setting.getLongTermRatio();
+            }
+        }
+
+        for (StrategyType type : List.of(StrategyType.SHORT_TERM, StrategyType.MEDIUM_TERM, StrategyType.LONG_TERM)) {
+            if (strategyRepository.findByAccountNoAndMarketAndStrategyType(accountNo, m, type).isPresent()) {
+                continue;
+            }
+            BigDecimal ratio = type == StrategyType.SHORT_TERM ? shortRatio
+                    : type == StrategyType.MEDIUM_TERM ? mediumRatio : longRatio;
+            BigDecimal maxAmount = null;
+            if (maxTotal != null && maxTotal.compareTo(BigDecimal.ZERO) > 0 && ratio != null) {
+                maxAmount = maxTotal.multiply(ratio).setScale(0, RoundingMode.DOWN);
+            }
+            Strategy strategy = Strategy.builder()
+                    .accountNo(accountNo)
+                    .userId(userId)
+                    .market(m)
+                    .strategyType(type)
+                    .status(StrategyStatus.ACTIVE)
+                    .maxInvestmentAmount(maxAmount)
+                    .minInvestmentAmount(BigDecimal.ZERO)
+                    .riskLevel(DEFAULT_RISK_LEVEL)
+                    .confidenceThreshold(DEFAULT_CONFIDENCE_THRESHOLD)
+                    .build();
+            strategyRepository.save(strategy);
+            log.info("시스템 기본 전략 생성: accountNo={}, market={}, strategyType={}",
+                    LogMaskingUtil.maskAccountNo(accountNo), m, type);
+        }
     }
 
     /**

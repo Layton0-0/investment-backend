@@ -385,4 +385,54 @@ class OrderServiceTest {
                 assertEquals("VOLATILITY_BREAKOUT", response.getSignalType());
                 assertEquals("ATR_TRAILING_STOP", response.getExitRuleType());
         }
+
+        @Test
+        void 미체결_전체_취소_성공() {
+                String accountNo = "1234567890";
+                Order o1 = Order.builder()
+                                .accountNo(accountNo)
+                                .symbol("005930")
+                                .orderType(Order.OrderType.BUY)
+                                .quantity(10)
+                                .price(new BigDecimal("70000"))
+                                .status(Order.OrderStatus.PENDING)
+                                .build();
+                Order o2 = Order.builder()
+                                .accountNo(accountNo)
+                                .symbol("000660")
+                                .orderType(Order.OrderType.SELL)
+                                .quantity(5)
+                                .price(new BigDecimal("100000"))
+                                .status(Order.OrderStatus.PENDING)
+                                .build();
+                try {
+                        java.lang.reflect.Field idField = Order.class.getDeclaredField("id");
+                        idField.setAccessible(true);
+                        idField.set(o1, java.util.UUID.randomUUID().toString());
+                        idField.set(o2, java.util.UUID.randomUUID().toString());
+                } catch (Exception e) {
+                        throw new RuntimeException(e);
+                }
+
+                when(orderRepository.findByAccountNoAndStatus(accountNo, Order.OrderStatus.PENDING))
+                                .thenReturn(java.util.List.of(o1, o2));
+                when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+                int count = orderService.cancelAllPendingOrders(accountNo);
+
+                assertEquals(2, count);
+                verify(orderRepository, times(2)).save(any(Order.class));
+        }
+
+        @Test
+        void 미체결_전체_취소_대상없음() {
+                String accountNo = "1234567890";
+                when(orderRepository.findByAccountNoAndStatus(accountNo, Order.OrderStatus.PENDING))
+                                .thenReturn(java.util.List.of());
+
+                int count = orderService.cancelAllPendingOrders(accountNo);
+
+                assertEquals(0, count);
+                verify(orderRepository, never()).save(any(Order.class));
+        }
 }

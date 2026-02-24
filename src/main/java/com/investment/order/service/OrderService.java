@@ -318,6 +318,25 @@ public class OrderService implements OrderExecutor {
     }
 
     /**
+     * 해당 계좌의 미체결(PENDING) 주문 전체 취소.
+     *
+     * @param accountNo 계좌번호
+     * @return 취소된 주문 수
+     */
+    @Transactional
+    public int cancelAllPendingOrders(String accountNo) {
+        List<Order> pending = orderRepository.findByAccountNoAndStatus(accountNo, Order.OrderStatus.PENDING);
+        for (Order order : pending) {
+            order.cancel("미체결 전체 취소");
+            orderRepository.save(order);
+        }
+        if (!pending.isEmpty()) {
+            log.info("미체결 전체 취소: accountNo={}, count={}", LogMaskingUtil.maskAccountNo(accountNo), pending.size());
+        }
+        return pending.size();
+    }
+
+    /**
      * DTO 주문 유형을 엔티티 주문 유형으로 변환
      * 
      * @param type DTO 주문 유형 (BUY/SELL)

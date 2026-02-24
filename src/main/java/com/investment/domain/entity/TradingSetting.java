@@ -76,6 +76,18 @@ public class TradingSetting {
     @Column(name = "LONG_TERM_RATIO", precision = 5, scale = 4)
     private BigDecimal longTermRatio;
 
+    /**
+     * 파이프라인 자동 실행 허용. NULL이면 서버 기본값(investment.pipeline.auto-execute) 사용.
+     */
+    @Column(name = "PIPELINE_AUTO_EXECUTE")
+    private Boolean pipelineAutoExecute;
+
+    /**
+     * 실계좌 자동 실행 허용. NULL이면 서버 기본값(investment.pipeline.allow-real-execution) 사용.
+     */
+    @Column(name = "PIPELINE_ALLOW_REAL_EXECUTION")
+    private Boolean pipelineAllowRealExecution;
+
     @Column(name = "CREATED_AT", nullable = false)
     private LocalDateTime createdAt;
 
@@ -100,7 +112,8 @@ public class TradingSetting {
     public TradingSetting(String accountNo, String userId, BigDecimal maxInvestmentAmount,
             BigDecimal minInvestmentAmount, String defaultCurrency,
             Boolean autoTradingEnabled, Boolean roboAdvisorEnabled, BigDecimal riskLevel,
-            BigDecimal shortTermRatio, BigDecimal mediumTermRatio, BigDecimal longTermRatio) {
+            BigDecimal shortTermRatio, BigDecimal mediumTermRatio, BigDecimal longTermRatio,
+            Boolean pipelineAutoExecute, Boolean pipelineAllowRealExecution) {
         this.accountNo = accountNo;
         this.userId = userId;
         this.maxInvestmentAmount = maxInvestmentAmount;
@@ -112,6 +125,8 @@ public class TradingSetting {
         this.shortTermRatio = shortTermRatio;
         this.mediumTermRatio = mediumTermRatio;
         this.longTermRatio = longTermRatio;
+        this.pipelineAutoExecute = pipelineAutoExecute;
+        this.pipelineAllowRealExecution = pipelineAllowRealExecution;
     }
 
     public void updateMaxInvestmentAmount(BigDecimal maxInvestmentAmount) {
@@ -138,5 +153,13 @@ public class TradingSetting {
         this.shortTermRatio = shortTermRatio;
         this.mediumTermRatio = mediumTermRatio;
         this.longTermRatio = longTermRatio;
+    }
+
+    public void updatePipelineAutoExecute(Boolean pipelineAutoExecute) {
+        this.pipelineAutoExecute = pipelineAutoExecute;
+    }
+
+    public void updatePipelineAllowRealExecution(Boolean pipelineAllowRealExecution) {
+        this.pipelineAllowRealExecution = pipelineAllowRealExecution;
     }
 }

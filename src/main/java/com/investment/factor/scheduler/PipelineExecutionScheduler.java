@@ -2,13 +2,18 @@ package com.investment.factor.scheduler;
 
 import com.investment.common.security.LogMaskingUtil;
 import com.investment.domain.entity.TradingSetting;
+import com.investment.domain.repository.StrategyRepository;
 import com.investment.domain.repository.TradingSettingRepository;
+import com.investment.strategy.domain.StrategyStatus;
 import com.investment.factor.execution.PipelineExecutor;
 import com.investment.factor.service.DailyLossLimitService;
 import com.investment.factor.service.RiskGateService;
+import com.investment.domain.entity.Strategy;
 import com.investment.governance.GovernanceHaltService;
 import com.investment.strategy.domain.StrategyType;
+import com.investment.strategy.dto.StrategyWeights;
 import com.investment.strategy.engine.MacroIndicatorProvider;
+import com.investment.strategy.service.StrategyWeightResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,6 +23,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 4단계 파이프라인 실행 스케줄러.
@@ -35,11 +41,13 @@ public class PipelineExecutionScheduler {
     private static final BigDecimal DEFAULT_LONG = new BigDecimal("0.4");
 
     private final TradingSettingRepository tradingSettingRepository;
+    private final StrategyRepository strategyRepository;
     private final PipelineExecutor pipelineExecutor;
     private final RiskGateService riskGateService;
     private final DailyLossLimitService dailyLossLimitService;
     private final MacroIndicatorProvider macroIndicatorProvider;
     private final GovernanceHaltService governanceHaltService;
+    private final StrategyWeightResolver strategyWeightResolver;
 
     @Value("${investment.pipeline.auto-execute:false}")
     private boolean autoExecute = false;
@@ -57,10 +65,16 @@ public class PipelineExecutionScheduler {
             log.debug("파이프라인 실행 스킵: 자동투자 ON 계좌 없음");
             return;
         }
-        boolean dryRun = forceDryRun != null ? forceDryRun : !autoExecute;
-
         for (TradingSetting setting : settings) {
             String accountNo = setting.getAccountNo();
+            boolean effectiveAutoExecute = setting.getPipelineAutoExecute() != null
+                    ? setting.getPipelineAutoExecute()
+                    : autoExecute;
+            boolean dryRun = forceDryRun != null ? forceDryRun : !effectiveAutoExecute;
+            if (!effectiveAutoExecute && forceDryRun == null) {
+                log.debug("파이프라인 실행 스킵: accountNo={}, 계정별 자동 실행 OFF", LogMaskingUtil.maskAccountNo(accountNo));
+                continue;
+            }
             BigDecimal capital = setting.getMaxInvestmentAmount();
             if (capital == null || capital.compareTo(BigDecimal.ZERO) <= 0) {
                 capital = defaultCapital != null && defaultCapital.compareTo(BigDecimal.ZERO) > 0
@@ -82,9 +96,21 @@ public class PipelineExecutionScheduler {
                 log.info("파이프라인 실행 스킵: accountNo={}, 리스크 게이트 신규 매수 불가", accountNo);
                 continue;
             }
-            BigDecimal shortPct = setting.getShortTermRatio() != null ? setting.getShortTermRatio() : DEFAULT_SHORT;
-            BigDecimal midPct = setting.getMediumTermRatio() != null ? setting.getMediumTermRatio() : DEFAULT_MEDIUM;
-            BigDecimal longPct = setting.getLongTermRatio() != null ? setting.getLongTermRatio() : DEFAULT_LONG;
+            StrategyWeights weights;
+            try {
+                weights = strategyWeightResolver.resolve(setting, indicatorsOpt);
+            } catch (Exception e) {
+                log.warn("전략 비중 결정 실패, 기본 비중 사용: accountNo={}, error={}", LogMaskingUtil.maskAccountNo(accountNo), e.getMessage());
+                weights = StrategyWeights.builder()
+                        .shortPct(DEFAULT_SHORT)
+                        .midPct(DEFAULT_MEDIUM)
+                        .longPct(DEFAULT_LONG)
+                        .regime("FALLBACK")
+                        .build();
+            }
+            BigDecimal shortPct = weights.getShortPct();
+            BigDecimal midPct = weights.getMidPct();
+            BigDecimal longPct = weights.getLongPct();
             BigDecimal shortCapital = capital.multiply(shortPct).multiply(sizeMultiplier).setScale(0,
                     RoundingMode.DOWN);
             BigDecimal midCapital = capital.multiply(midPct).multiply(sizeMultiplier).setScale(0, RoundingMode.DOWN);
@@ -122,6 +148,15 @@ public class PipelineExecutionScheduler {
             log.info("파이프라인 실행 스킵: governance halt, market={}, strategyType={}, accountNo={}",
                     market, strategyType, LogMaskingUtil.maskAccountNo(accountNo));
             return;
+        }
+        Optional<Strategy> strategyOpt = strategyRepository.findByAccountNoAndMarketAndStrategyType(accountNo, market, strategyType);
+        if (strategyOpt.isPresent()) {
+            Strategy strategy = strategyOpt.get();
+            if (strategy.isStopped() || strategy.getStatus() == StrategyStatus.PAUSED) {
+                log.info("파이프라인 실행 스킵: 전략 중지/일시정지, market={}, strategyType={}, accountNo={}",
+                        market, strategyType, LogMaskingUtil.maskAccountNo(accountNo));
+                return;
+            }
         }
         pipelineExecutor.run(basDt, market, accountNo, strategyType, capital, dryRun);
     }

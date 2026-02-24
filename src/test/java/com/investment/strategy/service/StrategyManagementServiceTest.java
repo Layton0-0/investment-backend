@@ -3,7 +3,9 @@ package com.investment.strategy.service;
 import com.investment.common.exception.DomainException;
 import com.investment.common.exception.ErrorCode;
 import com.investment.domain.entity.Strategy;
+import com.investment.domain.entity.TradingSetting;
 import com.investment.domain.repository.StrategyRepository;
+import com.investment.domain.repository.TradingSettingRepository;
 import com.investment.strategy.domain.StrategyStatus;
 import com.investment.strategy.domain.StrategyType;
 import com.investment.strategy.dto.StrategyDto;
@@ -30,6 +32,9 @@ class StrategyManagementServiceTest {
 
         @Mock
         private StrategyRepository strategyRepository;
+
+        @Mock
+        private TradingSettingRepository tradingSettingRepository;
 
         @InjectMocks
         private StrategyManagementService strategyManagementService;
@@ -59,16 +64,58 @@ class StrategyManagementServiceTest {
         }
 
         @Test
-        @DisplayName("getStrategies market 지정 시 시장별 조회")
+        @DisplayName("getStrategies market 지정 시 시장별 조회 (기존 전략 있으면 그대로 반환)")
         void getStrategies_withMarket_filtersByMarket() {
                 String accountNo = "12345678-12";
-                when(strategyRepository.findByAccountNoAndMarket(accountNo, "US")).thenReturn(List.of());
+                Strategy one = Strategy.builder()
+                                .accountNo(accountNo)
+                                .market("US")
+                                .strategyType(StrategyType.MEDIUM_TERM)
+                                .status(StrategyStatus.ACTIVE)
+                                .build();
+                when(strategyRepository.findByAccountNoAndMarket(accountNo, "US")).thenReturn(List.of(one));
 
                 List<StrategyDto> result = strategyManagementService.getStrategies(accountNo, "US");
 
                 assertNotNull(result);
-                assertTrue(result.isEmpty());
+                assertEquals(1, result.size());
                 verify(strategyRepository).findByAccountNoAndMarket(accountNo, "US");
+                verify(tradingSettingRepository, never()).findByAccountNo(any());
+        }
+
+        @Test
+        @DisplayName("getStrategies market 지정 시 비어 있으면 시스템 기본 3건 ensure 후 반환")
+        void getStrategies_withMarket_empty_ensuresDefaultsAndReturnsThree() throws Exception {
+                String accountNo = "12345678-12";
+                when(strategyRepository.findByAccountNoAndMarket(accountNo, "KR")).thenReturn(List.of());
+                when(tradingSettingRepository.findByAccountNo(accountNo)).thenReturn(Optional.empty());
+                when(strategyRepository.findByAccountNoAndMarketAndStrategyType(eq(accountNo), eq("KR"), any()))
+                                .thenReturn(Optional.empty());
+                Strategy saved = Strategy.builder()
+                                .accountNo(accountNo)
+                                .market("KR")
+                                .strategyType(StrategyType.SHORT_TERM)
+                                .status(StrategyStatus.ACTIVE)
+                                .build();
+                java.lang.reflect.Field idField = Strategy.class.getDeclaredField("id");
+                idField.setAccessible(true);
+                idField.set(saved, "gen-1");
+                when(strategyRepository.save(any(Strategy.class))).thenReturn(saved);
+
+                List<Strategy> three = List.of(
+                                Strategy.builder().accountNo(accountNo).market("KR").strategyType(StrategyType.SHORT_TERM).status(StrategyStatus.ACTIVE).build(),
+                                Strategy.builder().accountNo(accountNo).market("KR").strategyType(StrategyType.MEDIUM_TERM).status(StrategyStatus.ACTIVE).build(),
+                                Strategy.builder().accountNo(accountNo).market("KR").strategyType(StrategyType.LONG_TERM).status(StrategyStatus.ACTIVE).build());
+                when(strategyRepository.findByAccountNoAndMarket(accountNo, "KR"))
+                                .thenReturn(List.of())
+                                .thenReturn(three);
+
+                List<StrategyDto> result = strategyManagementService.getStrategies(accountNo, "KR");
+
+                assertNotNull(result);
+                assertEquals(3, result.size());
+                verify(strategyRepository, times(2)).findByAccountNoAndMarket(accountNo, "KR");
+                verify(strategyRepository, atLeastOnce()).save(any(Strategy.class));
         }
 
         @Test

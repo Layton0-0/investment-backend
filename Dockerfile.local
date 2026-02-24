@@ -15,7 +15,10 @@ COPY src ./src
 RUN ./gradlew bootJar --no-daemon -x test
 
 FROM eclipse-temurin:17-jre-alpine
+ENV TZ=Asia/Seoul
 WORKDIR /app
 COPY --from=builder /app/build/libs/*.jar app.jar
+COPY scripts/docker-entrypoint-retry.sh /app/entrypoint-retry.sh
+RUN sed -i 's/\r$//' /app/entrypoint-retry.sh && chmod +x /app/entrypoint-retry.sh
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["/app/entrypoint-retry.sh"]

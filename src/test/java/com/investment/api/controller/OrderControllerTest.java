@@ -18,8 +18,11 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -105,5 +108,58 @@ class OrderControllerTest {
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.orderId").value(orderId))
                                 .andExpect(jsonPath("$.status").value("EXECUTED"));
+        }
+
+        @Test
+        void 미체결_전체_취소_성공() throws Exception {
+                when(orderService.cancelAllPendingOrders("1234567890")).thenReturn(2);
+
+                mockMvc.perform(post("/api/v1/orders/cancel-all-pending")
+                                .param("accountNo", "1234567890"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.accountNo").value("1234567890"))
+                                .andExpect(jsonPath("$.cancelledCount").value(2));
+        }
+
+        @Test
+        void 미체결_전체_취소_건수_0() throws Exception {
+                when(orderService.cancelAllPendingOrders("1234567890")).thenReturn(0);
+
+                mockMvc.perform(post("/api/v1/orders/cancel-all-pending")
+                                .param("accountNo", "1234567890"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.cancelledCount").value(0));
+        }
+
+        @Test
+        void 주문_목록_조회_성공_모의계좌() throws Exception {
+                String accountNo = "50161075-01"; // 모의계좌 예시
+                OrderResponseDto o1 = OrderResponseDto.builder()
+                                .orderId(java.util.UUID.randomUUID().toString())
+                                .accountNo(accountNo)
+                                .symbol("005930")
+                                .orderType(OrderRequestDto.OrderType.BUY)
+                                .quantity(10)
+                                .price(new BigDecimal("70000"))
+                                .status(OrderResponseDto.OrderStatus.PENDING)
+                                .orderTime(LocalDateTime.now())
+                                .build();
+                when(orderService.getOrders(accountNo)).thenReturn(List.of(o1));
+
+                mockMvc.perform(get("/api/v1/orders").param("accountNo", accountNo))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.length()").value(1))
+                                .andExpect(jsonPath("$[0].symbol").value("005930"))
+                                .andExpect(jsonPath("$[0].status").value("PENDING"));
+        }
+
+        @Test
+        void 주문_단건_취소_성공() throws Exception {
+                String orderId = java.util.UUID.randomUUID().toString();
+                String accountNo = "50161075-01";
+
+                mockMvc.perform(delete("/api/v1/orders/" + orderId).param("accountNo", accountNo))
+                                .andExpect(status().isNoContent());
+                verify(orderService).cancelOrder(eq(orderId), eq(accountNo));
         }
 }

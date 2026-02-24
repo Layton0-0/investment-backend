@@ -446,6 +446,23 @@ curl -X GET "http://localhost:8080/api/v1/accounts/12345678/profit-loss?startDat
 - `ORDER_NOT_FOUND`: 주문을 찾을 수 없음
 - `ORDER_FAILED`: 주문 취소 실패 (이미 체결됨)
 
+### 2.5 미체결 전체 취소
+
+**엔드포인트**: `POST /api/v1/orders/cancel-all-pending`
+
+**설명**: 해당 계좌의 대기 중(PENDING) 주문을 모두 취소합니다. 모의/실계좌 구분은 계좌번호로 이루어지며, 동일 API를 모의·실계좌 모두 사용합니다.
+
+**쿼리 파라미터**:
+- `accountNo` (String, required): 계좌번호
+
+**응답** (200 OK):
+```json
+{
+  "accountNo": "50161075-01",
+  "cancelledCount": 2
+}
+```
+
 ---
 
 ## 3. 분석 API

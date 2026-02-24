@@ -141,9 +141,12 @@ public class PipelineExecutor {
                             .orElseThrow(() -> new DomainException(ErrorCode.SETTING_NOT_FOUND,
                                     "거래 설정을 찾을 수 없습니다: " + accountNo));
                     String userId = setting.getUserId();
+                    boolean effectiveAllowReal = setting.getPipelineAllowRealExecution() != null
+                            ? setting.getPipelineAllowRealExecution()
+                            : allowRealExecution;
                     // 실전 계좌(serverType=0)는 allow-real-execution=false 시 주문 스킵
                     String serverType = resolveServerTypeForAccount(userId, accountNo);
-                    if ("0".equals(serverType) && !allowRealExecution) {
+                    if ("0".equals(serverType) && !effectiveAllowReal) {
                         log.warn("실전 계좌 자동 실행 미허용(allow-real-execution=false), 주문 스킵: accountNo={}, symbol={}",
                                 accountNo, rec.getSymbol());
                         auditLogService.record(AuditLogService.EVENT_REAL_ACCOUNT_GUARD_BLOCKED, userId, accountNo,

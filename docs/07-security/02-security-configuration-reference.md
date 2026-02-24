@@ -59,7 +59,7 @@
 #### CORS_ALLOWED_ORIGINS
 - **설명**: 허용할 Origin 목록 (credentials 포함 요청 시 브라우저는 `*`를 허용하지 않으므로 구체적 origin 필요)
 - **필수**: 아니오
-- **기본값**: `*` — 미설정 시 로컬 개발용으로 `http://localhost:5173`, `http://127.0.0.1:5173` 허용 + allowCredentials(true) 적용 (Vite dev 서버 연동)
+- **기본값**: `*` — 미설정 시 로컬 개발용으로 `http://localhost`, `http://127.0.0.1`(Nginx 80), `http://localhost:5173`, `http://127.0.0.1:5173`(Vite) 허용 + allowCredentials(true) 적용
 - **형식**: 콤마로 구분된 URL 목록. 프로덕션에서는 반드시 실제 프론트 도메인만 지정할 것.
 - **예시**: `https://example.com,https://www.example.com`
 - **주의**: `*`와 `allowCredentials=true`는 함께 사용 불가. 프론트가 `credentials: 'include'`를 쓰면 서버는 구체적 origin을 반환해야 함.

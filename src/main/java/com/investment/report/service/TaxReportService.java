@@ -94,15 +94,19 @@ public class TaxReportService {
                 .build();
     }
 
+    /** CSV 헤더(한글): 연도, 국내 실현손익, 해외 실현손익, 배당 소득 합계, 기본공제, 과세대상 금액, 예상 세금 */
+    private static final String CSV_HEADER_KO =
+            "연도,국내 실현손익,해외 실현손익,배당 소득 합계,기본공제,과세대상 금액,예상 세금";
+
     /**
-     * 요약 DTO를 CSV 형식으로 내보내기 (UTF-8 BOM).
+     * 요약 DTO를 CSV 형식으로 내보내기 (UTF-8 BOM). 컬럼명 한글, 하단에 용어 설명 섹션 포함.
      */
     public byte[] exportSummaryAsCsv(TaxReportSummaryDto dto) {
         StringBuilder sb = new StringBuilder();
         sb.append("\uFEFF"); // UTF-8 BOM
-        sb.append("year,domesticRealizedGainLoss,overseasRealizedGainLoss,dividendTotal,basicDeduction,taxableAmount,estimatedTax\n");
-        sb.append(dto.getYear()).append(",");
-        sb.append(dto.getDomesticRealizedGainLoss() != null ? dto.getDomesticRealizedGainLoss() : "");
+        sb.append(CSV_HEADER_KO).append("\n");
+        sb.append(dto.getYear() != null ? dto.getYear() : "");
+        sb.append(",").append(dto.getDomesticRealizedGainLoss() != null ? dto.getDomesticRealizedGainLoss() : "");
         sb.append(",").append(dto.getOverseasRealizedGainLoss() != null ? dto.getOverseasRealizedGainLoss() : "");
         sb.append(",").append(dto.getDividendTotal() != null ? dto.getDividendTotal() : "");
         sb.append(",").append(dto.getBasicDeduction() != null ? dto.getBasicDeduction() : "");
@@ -110,20 +114,35 @@ public class TaxReportService {
         sb.append(",").append(dto.getEstimatedTax() != null ? dto.getEstimatedTax() : "");
         sb.append("\n");
         if (dto.getDisclaimer() != null) {
-            sb.append("disclaimer,\"").append(dto.getDisclaimer().replace("\"", "\"\"")).append("\"\n");
+            sb.append("면책,\"").append(dto.getDisclaimer().replace("\"", "\"\"")).append("\"\n");
         }
+        appendCsvGlossary(sb);
         return sb.toString().getBytes(StandardCharsets.UTF_8);
     }
 
+    /** CSV 하단 용어 설명 섹션 (같은 파일 내 별도 블록) */
+    private void appendCsvGlossary(StringBuilder sb) {
+        sb.append("\n");
+        sb.append("【용어 설명】\n");
+        sb.append("용어,설명\n");
+        sb.append("연도,기준 연도 (예: 2026)\n");
+        sb.append("국내 실현손익,해당 연도 국내 주식 매도로 실현된 손익 합계(원)\n");
+        sb.append("해외 실현손익,해당 연도 해외 주식 매도로 실현된 손익 합계(원화 환산)\n");
+        sb.append("배당 소득 합계,해당 연도 받은 배당금 합계(원)\n");
+        sb.append("기본공제,국내 주식 양도소득 시 적용되는 연간 기본공제(비대주주 250만원 등)\n");
+        sb.append("과세대상 금액,실현손익에서 기본공제를 뺀 후 과세 대상이 되는 금액(원)\n");
+        sb.append("예상 세금,과세대상 금액에 세율을 적용한 추정 세금(세무 자문 아님)\n");
+    }
+
     /**
-     * 요약 DTO를 PDF 형식으로 내보내기.
+     * 요약 DTO를 PDF 형식으로 내보내기. 본문 하단에 용어 설명 섹션 포함.
      */
     public byte[] exportSummaryAsPdf(TaxReportSummaryDto dto) {
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Document document = new Document();
             PdfWriter.getInstance(document, out);
             document.open();
-            document.add(new Paragraph("연말 세금 요약 (" + dto.getYear() + "년)"));
+            document.add(new Paragraph("연말 세금 요약 (" + (dto.getYear() != null ? dto.getYear() : "") + "년)"));
             document.add(new Paragraph(" "));
             document.add(new Paragraph("국내 실현손익: " + formatAmount(dto.getDomesticRealizedGainLoss())));
             document.add(new Paragraph("해외 실현손익: " + formatAmount(dto.getOverseasRealizedGainLoss())));
@@ -136,12 +155,28 @@ public class TaxReportService {
             if (dto.getDisclaimer() != null) {
                 document.add(new Paragraph(dto.getDisclaimer()));
             }
+            appendPdfGlossary(document);
             document.close();
             return out.toByteArray();
         } catch (Exception e) {
             log.warn("PDF 생성 실패: {}", e.getMessage());
             throw new RuntimeException("PDF 생성 실패", e);
         }
+    }
+
+    /** PDF 하단 용어 설명 섹션 */
+    private void appendPdfGlossary(Document document) throws Exception {
+        document.add(new Paragraph(" "));
+        document.add(new Paragraph("────────────────────────"));
+        document.add(new Paragraph("용어 설명"));
+        document.add(new Paragraph(" "));
+        document.add(new Paragraph("· 연도: 기준 연도 (예: 2026)"));
+        document.add(new Paragraph("· 국내 실현손익: 해당 연도 국내 주식 매도로 실현된 손익 합계(원)"));
+        document.add(new Paragraph("· 해외 실현손익: 해당 연도 해외 주식 매도로 실현된 손익 합계(원화 환산)"));
+        document.add(new Paragraph("· 배당 소득: 해당 연도 받은 배당금 합계(원)"));
+        document.add(new Paragraph("· 기본공제: 국내 주식 양도소득 시 적용되는 연간 기본공제(비대주주 250만원 등)"));
+        document.add(new Paragraph("· 과세대상: 실현손익에서 기본공제를 뺀 후 과세 대상이 되는 금액(원)"));
+        document.add(new Paragraph("· 예상 세금: 과세대상에 세율을 적용한 추정 세금(세무 자문 아님)"));
     }
 
     private String formatAmount(BigDecimal amount) {

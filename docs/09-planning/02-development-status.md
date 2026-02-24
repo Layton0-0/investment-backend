@@ -65,6 +65,8 @@
   **Phase 4**: TokenRefreshScheduler(장 시작 30분 전 토큰 갱신), KoreaInvestmentTokenService.forceRefreshAllTokensForMarketOpen, pre-market-refresh-cron. **Phase 3**: OrderRequestQueue(BlockingQueue+RateLimiter), OrderExecutor, throttle.* 설정. **Phase 2**: KoreaInvestmentRankClient(getVolumeRank, getInvestorDailyByMarket), RankApiProperties, path/TR_ID 미설정 시 빈 리스트; MCP volume_rank·inquire_investor_daily_by_market 확인 후 설정. **Phase 1**: KoreaInvestmentWebSocketClient 인터페이스, NoOpKoreaInvestmentWebSocketClient(미구현). **문서**: 09-korea-investment-api-guide.md 실전 구축 요약, decisions.md ADR 18.
 
 ### 화면·메뉴
+- [x] **대시보드·설정 UX 개선 (킬스위치 노출·서버 설정 계정별·저장 확인·투자금액 도움말)**  
+  대시보드: 킬스위치(긴급실행 중지) 카드는 상단 토글(모의/실)의 자동투자 ON일 때만 표시(useCurrentAccountAutoTrade 훅). 설정: 서버 설정을 계정별 편집 가능하게 전환(TB_TRADING_SETTINGS PIPELINE_AUTO_EXECUTE·PIPELINE_ALLOW_REAL_EXECUTION, Flyway V33), PipelineExecutionScheduler·PipelineExecutor에서 계정별 플래그 우선·서버 기본값 fallback. 자동투자 설정 저장 시 확인 모달(AlertDialog) 추가. 최소/최대 투자금액 라벨에 Tooltip 도움말(한 종목 최소 주문 금액·총 투자 가능 상한 의미) 추가. [06-setting-api.md](../04-api/06-setting-api.md), [02-api-endpoints.md](../04-api/02-api-endpoints.md) 반영.
 - [x] **한국투자증권 토큰 과다 발급 방지**  
   로그인/대시보드 진입 시 토큰 발급 API 과다 호출 방지: KoreaInvestmentTokenService.issueTokenForUser에 사용자 단위 락 적용(발급 직렬화, 응답 전 재요청 방지). KoreaInvestmentAccountClient 401 시 issueTokenForUser 제거·getAccessToken 재조회 후 1회 재시도만. KoreaInvestmentMarketDataClient ensureAccessToken에서 직접 발급 제거·getAccessToken(userId, serverType)만 사용. 토큰은 1회 발급 후 DB 저장, 클라이언트는 getAccessToken만 사용.
 - [x] **한국투자증권 토큰 발급 1분 1회 제한·사용자 단위 락**  
@@ -91,6 +93,8 @@
   `/strategies/kr`, `/strategies/us`, WebStrategyController 시장별 조회·폼 market 전달.
 - [x] **국내/미국 전략 계좌 자동 사용 및 로고·네비게이션 정리**  
   국내 전략 = 모의계좌(serverType=1), 미국 전략 = 실계좌(serverType=0) 자동 사용. 계좌번호 입력 폼 제거, 계좌 미등록 시 안내 및 설정 링크. 전략 페이지 내 대시보드/국내/미국 중복 링크 제거. 헤더 로고 클릭 시 대시보드(`/`) 이동. 화면·메뉴 기획서 §3.3·§3.4·§4 반영.
+- [x] **국내/미국 전략 시스템 기본화 및 조회 중심 전환**  
+  시스템이 적용한 전략 조회·상태 변경만 하도록 변경. Backend: getStrategies(accountNo, market) 호출 시 해당 계좌+시장에 전략이 없으면 단기/중기/장기 3건 시스템 기본값 ensure 후 반환(StrategyManagementService, TradingSetting 기반). 파이프라인 실행 시 Strategy status가 STOPPED/PAUSED이면 해당 (market, strategyType) run 스킵(PipelineExecutionScheduler). Frontend: "전략 추가" 버튼 제거, 빈 상태 문구 "시스템이 적용한 단기/중기/장기 전략을 조회합니다. 활성/중지는 각 전략 카드에서 변경할 수 있습니다."로 변경. 01-screen-menu-spec §3.3·§3.4, decisions.md ADR 25 반영.
 - [x] **뉴스·이벤트**  
   `/news`, NewsWebController, news.html, GET /api/v1/news 연동.
 - [x] **주문·체결**  
@@ -436,3 +440,4 @@
 | 1.45 | 2026-02-19 | 로드맵·문서 동기화(roadmap Phase 5.1·5.2 완료 [x]). 백테스트 스트레스 백필: krx-daily-backfill·us-daily-backfill Job·API·KrxCollectionService.collectAndSaveRange·backtest-stress-results.md §5 백필 가이드. Phase 6 대시보드 성과 분석 심화: 성과 요약 섹션·Sortino·CVaR 카드·roadmap 6.1 성과 분석 [x]. |
 | 1.46 | 2026-02-20 | 문서 통합: 변동 시 본 문서 우선·roadmap 불일치 시 development-status 우선 반영 문구 추가. 배포 문서는 06-deployment/00-deployment-docs-index.md 분야별 인덱스 참조. |
 | 1.47 | 2026-02-20 | shrimp-task-manager 작업 내역 반영: 다중 계좌·실시간 스트리밍 설계(14-multi-account-realtime-streaming.md), 뉴스·공시 파이프라인 아키텍처(13-news-collection-design §8), API 토큰·인증 가이드(15-api-credentials-guide.md, .env.example), KIS WebSocket 구현(재연결·하트비트·이벤트), Speed/Buzz 수집기(yonhap/naver/google_news), VaR 검증·Chart.js 차트 연동. |
+| 1.48 | 2026-02-24 | 완료: 국내/미국 전략 시스템 기본화·조회 중심 — getStrategies 시 계좌+시장별 기본 3개 전략 ensure, 파이프라인 Strategy STOPPED/PAUSED 스킵, 프론트 전략 추가 제거·문구 변경, 01-screen-menu-spec·02-development-status·decisions ADR 25 갱신. |

@@ -69,4 +69,26 @@ public class OrderController {
         orderService.cancelOrder(orderId, accountNo);
         return ResponseEntity.noContent().build();
     }
+
+    @Operation(summary = "미체결 전체 취소", description = "해당 계좌의 대기 중인 주문을 모두 취소합니다.")
+    @PostMapping("/cancel-all-pending")
+    public ResponseEntity<CancelAllPendingResult> cancelAllPending(
+            @RequestParam @NotBlank String accountNo) {
+        int count = orderService.cancelAllPendingOrders(accountNo);
+        return ResponseEntity.ok(new CancelAllPendingResult(accountNo, count));
+    }
+
+    /** 미체결 전체 취소 응답 (취소된 건수). */
+    public static final class CancelAllPendingResult {
+        private final String accountNo;
+        private final int cancelledCount;
+
+        public CancelAllPendingResult(String accountNo, int cancelledCount) {
+            this.accountNo = accountNo;
+            this.cancelledCount = cancelledCount;
+        }
+
+        public String getAccountNo() { return accountNo; }
+        public int getCancelledCount() { return cancelledCount; }
+    }
 }

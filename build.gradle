@@ -98,6 +98,11 @@ tasks.named('test') {
     // 한글 경로 환경에서 worker 클래스 로딩 문제가 발생할 수 있으므로 기본 설정 사용
 }
 
+// 시스템 표준 시간 Asia/Seoul (로컬 bootRun·컨테이너와 동일)
+tasks.named('bootRun') {
+    jvmArgs = ['-Duser.timezone=Asia/Seoul']
+}
+
 jacoco {
     toolVersion = '0.8.11'
 }

@@ -25,9 +25,14 @@ curl -X GET "http://localhost:8080/api/v1/settings/12345678"
   "minInvestmentAmount": 10000.00,
   "defaultCurrency": "KRW",
   "autoTradingEnabled": true,
-  "riskLevel": 0.7
+  "riskLevel": 0.7,
+  "pipelineAutoExecute": true,
+  "pipelineAllowRealExecution": false
 }
 ```
+
+- `pipelineAutoExecute` (Boolean, optional): 파이프라인 자동 실행 허용. null이면 서버 기본값(`investment.pipeline.auto-execute`) 사용.
+- `pipelineAllowRealExecution` (Boolean, optional): 실계좌 자동 실행 허용. null이면 서버 기본값(`investment.pipeline.allow-real-execution`) 사용. 실계좌(serverType=0)에서만 의미 있음.
 
 **설정 없음 (404 Not Found)**: 해당 계좌에 거래 설정이 없으면 404. 클라이언트는 기본값 폼 표시 후 PUT으로 저장 가능.
 
@@ -48,7 +53,9 @@ PUT /api/v1/settings/{accountNo}
   "minInvestmentAmount": 10000.00,
   "defaultCurrency": "KRW",
   "autoTradingEnabled": true,
-  "riskLevel": 0.7
+  "riskLevel": 0.7,
+  "pipelineAutoExecute": true,
+  "pipelineAllowRealExecution": false
 }
 ```
 
@@ -58,6 +65,8 @@ PUT /api/v1/settings/{accountNo}
 - `defaultCurrency` (String, required): 기본 통화
 - `autoTradingEnabled` (Boolean, required): 자동 매매 활성화 여부
 - `riskLevel` (BigDecimal, optional): 리스크 레벨 (0.0 ~ 1.0)
+- `pipelineAutoExecute` (Boolean, optional): 파이프라인 자동 실행 허용. null이면 서버 기본값 사용.
+- `pipelineAllowRealExecution` (Boolean, optional): 실계좌 자동 실행 허용. null이면 서버 기본값 사용.
 
 **예시**:
 ```bash
@@ -91,12 +100,14 @@ curl -X PUT "http://localhost:8080/api/v1/settings/12345678" \
 ### 3.1 TradingSettingDto
 ```java
 {
-  "accountNo": String,              // 계좌번호
+  "accountNo": String,                // 계좌번호
   "maxInvestmentAmount": BigDecimal, // 최대 투자금액 (required)
   "minInvestmentAmount": BigDecimal, // 최소 투자금액 (required)
-  "defaultCurrency": String,         // 기본 통화 (required)
-  "autoTradingEnabled": Boolean,     // 자동 매매 활성화 여부 (required)
-  "riskLevel": BigDecimal            // 리스크 레벨 (0.0 ~ 1.0, optional)
+  "defaultCurrency": String,          // 기본 통화 (required)
+  "autoTradingEnabled": Boolean,      // 자동 매매 활성화 여부 (required)
+  "riskLevel": BigDecimal,           // 리스크 레벨 (0.0 ~ 1.0, optional)
+  "pipelineAutoExecute": Boolean,     // 파이프라인 자동 실행 허용 (optional, null=서버 기본값)
+  "pipelineAllowRealExecution": Boolean // 실계좌 자동 실행 허용 (optional, null=서버 기본값)
 }
 ```
 

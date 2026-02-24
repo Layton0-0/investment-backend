@@ -130,7 +130,8 @@ class PipelineSummaryServiceTest {
                 TradingSetting setting = new TradingSetting(
                                 accountNo, "user1",
                                 new BigDecimal("100000000"), new BigDecimal("1000000"), "KR", false, false, null,
-                                new BigDecimal("0.2"), new BigDecimal("0.4"), new BigDecimal("0.4"));
+                                new BigDecimal("0.2"), new BigDecimal("0.4"), new BigDecimal("0.4"),
+                                null, null);
                 when(universeRepository.countByBasDtAndMarket(any(), anyString())).thenReturn(0L);
                 when(signalScoreService.countSignals(any(), anyString())).thenReturn(0L);
                 when(signalScoreService.getSignals(any(), anyString(), isNull(), isNull(), eq(0), eq(10)))

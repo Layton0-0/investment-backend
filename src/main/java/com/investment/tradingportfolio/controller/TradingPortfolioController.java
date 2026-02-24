@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
 import java.time.LocalDate;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -40,13 +41,18 @@ public class TradingPortfolioController {
     private final ApplicationContext applicationContext;
 
     /**
-     * 오늘의 트레이딩 포트폴리오 조회
+     * 오늘의 트레이딩 포트폴리오 조회. 없으면 200 + 빈 DTO (날짜·빈 items, 404/400 미발생).
      */
     @GetMapping("/today")
     public ResponseEntity<TradingPortfolioDto> getTodayPortfolio() {
         log.debug("오늘의 트레이딩 포트폴리오 조회");
-        TradingPortfolioDto portfolio = tradingPortfolioService.getTodayPortfolio();
-        return ResponseEntity.ok(portfolio);
+        return tradingPortfolioService.getTodayPortfolioOptional()
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.ok(
+                        TradingPortfolioDto.builder()
+                                .tradingDate(LocalDate.now())
+                                .items(Collections.emptyList())
+                                .build()));
     }
 
     /**

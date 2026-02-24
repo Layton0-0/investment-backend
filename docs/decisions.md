@@ -25,6 +25,10 @@
 19. [데이터 정합성 (수정주가)](#19-데이터-정합성-수정주가)
 20. [Point-in-Time 및 Look-ahead 방지](#20-point-in-time-및-look-ahead-방지)
 21. [전략 거버넌스·중단 원칙](#21-전략-거버넌스중단-원칙)
+22. [파이프라인 실행 플래그 계정별 저장](#22-파이프라인-실행-플래그-계정별-저장)
+23. [시스템 표준 시간 Asia/Seoul](#23-시스템-표준-시간-asiaseoul)
+24. [전략 비중 동적 결정](#24-전략-비중-동적-결정)
+25. [국내/미국 전략 시스템 기본화 및 조회 중심](#25-국내미국-전략-시스템-기본화-및-조회-중심)
 
 ---
 
@@ -708,6 +712,92 @@ API 설계 표준 수립 필요
 
 ---
 
+## 22. 파이프라인 실행 플래그 계정별 저장
+
+**결정일**: 2026년 2월  
+**상태**: 확정  
+**결정**: PIPELINE_AUTO_EXECUTE·PIPELINE_ALLOW_REAL_EXECUTION을 계정(계좌) 단위로 TB_TRADING_SETTINGS에 저장하고, 스케줄러/실행기는 계정별 값을 우선·서버 기본값 fallback으로 사용한다.
+
+### 배경
+기존에는 `investment.pipeline.auto-execute`, `investment.pipeline.allow-real-execution` 서버 전역 설정만 있어 사용자별로 "이 계좌는 자동 실행 허용/실계좌 주문 허용"을 선택할 수 없었다. 설정 화면에서 사용자가 계정별로 선택·저장할 수 있도록 요구됨.
+
+### 결정 사항
+- TB_TRADING_SETTINGS에 PIPELINE_AUTO_EXECUTE·PIPELINE_ALLOW_REAL_EXECUTION 컬럼 추가(Flyway V33). NULL = 서버 기본값 사용.
+- PipelineExecutionScheduler: 자동투자 ON 계좌에 대해 계정별 pipelineAutoExecute가 null이면 서버 autoExecute 사용. effective가 true인 계좌만 실제 실행(dryRun=false).
+- PipelineExecutor: 실계좌(serverType=0) 주문 시 계정별 pipelineAllowRealExecution이 null이면 서버 allowRealExecution 사용.
+- GET/PUT `/api/v1/settings/{accountNo}` 요청/응답에 두 필드 포함.
+
+### 영향
+- [06-setting-api.md](./04-api/06-setting-api.md), [02-development-status.md](./09-planning/02-development-status.md), [02-api-endpoints.md](./04-api/02-api-endpoints.md) 반영. 프론트 설정 화면에서 "파이프라인 실행 설정" 카드로 편집·저장.
+
+---
+
+## 23. 시스템 표준 시간 Asia/Seoul
+
+**결정일**: 2026-02-24  
+**상태**: 확정  
+**결정**: 시스템 전체(백엔드·DB·컨테이너) 표준 시간을 **Asia/Seoul**로 통일
+
+### 배경
+로그·스케줄·DB 타임스탬프·배치 실행 시간 등이 서버/컨테이너 기본 UTC로 처리되면 한국 사용자·운영 관점에서 해석이 어렵고, 배치 크론도 Asia/Seoul 기준으로 이미 등록되어 있어 일관성을 위해 전 계층을 Asia/Seoul로 맞추기로 함.
+
+### 결정 사항
+- **백엔드(Spring Boot)**  
+  - JVM: `-Duser.timezone=Asia/Seoul` (Gradle `bootRun`·Dockerfile ENTRYPOINT).  
+  - JPA/Hibernate: `spring.jpa.properties.hibernate.jdbc.time_zone: Asia/Seoul` (application.yml).
+- **DB(TimescaleDB/PostgreSQL)**  
+  - 컨테이너: `TZ=Asia/Seoul`, `PGTZ=Asia/Seoul`.  
+  - init 스크립트: `docker/timescaledb/init/02_timezone_asia_seoul.sql`에서 `SET timezone = 'Asia/Seoul';`.
+- **Docker**  
+  - 모든 compose 서비스(backend, frontend, nginx, redis, timescaledb, prediction-service, data-collector)에 `environment.TZ: Asia/Seoul` 설정.  
+  - 모든 Dockerfile에 `ENV TZ=Asia/Seoul` 및 백엔드 이미지는 `ENTRYPOINT`에 `-Duser.timezone=Asia/Seoul` 포함.
+
+### 영향
+- 로그·배치·API 응답의 날짜/시간이 모두 Asia/Seoul 기준으로 해석·표시됨.  
+- 인프라: `investment-infra` docker-compose 전 파일 및 각 서비스 Dockerfile 반영.
+
+---
+
+## 24. 전략 비중 동적 결정
+
+**결정일**: 2026-02-24  
+**상태**: 확정  
+**결정**: 단기/중기/장기 전략 비중을 시장 레짐에 따라 동적으로 결정하며, 레짐별 목표 비중은 설정(application.yml)으로 관리한다.
+
+### 배경
+파이프라인 실행 시 총 자본을 단기/중기/장기로 나누는 비중이 기존에는 계정 설정 또는 고정 기본값(0.2/0.4/0.4)이었음. 퀀트 관점에서 고변동성·스트레스 시 단기 비중 축소·장기 비중 확대, 저변동·추세 구간에서 단기/중기 확대가 바람직함.
+
+### 결정
+- **StrategyWeightResolver**: 파이프라인 실행 시점에 `MacroEconomicStrategyEngine.decideStrategy(indicators)`로 레짐 판별 후, `StrategyWeightProperties`의 레짐별 목표 비중을 조회·클리핑·정규화하여 (shortPct, midPct, longPct) 합=1 반환.
+- **설정 외부화**: `investment.trading.strategy-weights` 하위에 `enabled`, `min-weight`, `max-weight`, `regime-weights.<레짐명>.short-pct/mid-pct/long-pct`로 튜닝 가능.
+- **하위 호환**: 지표 없음·예외·비활성화 시 설정 비중 또는 (0.2, 0.4, 0.4) fallback.
+
+### 결과
+- `PipelineExecutionScheduler`에서 Resolver 호출 후 반환 비중으로 자본 배분. 기존 `sizeMultiplier`(리스크 게이트)는 유지.
+- 전략 레지스트리(00-strategy-registry.md)에 레짐별 테이블·설정 경로·변경 이력 반영.
+
+---
+
+## 25. 국내/미국 전략 시스템 기본화 및 조회 중심
+
+**결정일**: 2026-02-24  
+**상태**: 확정  
+**결정**: 국내/미국 전략 화면은 사용자가 전략을 "등록"하는 것이 아니라, 시스템이 적용한 기본 전략(단기/중기/장기 3건)을 **조회·상태 변경**만 하도록 한다. 사용자 전략 등록은 필수가 아니다.
+
+### 배경
+자동 투자 프로그램에서 국내·미국 전략을 사용자가 직접 추가하는 UX는 "자동화" 정체성과 맞지 않으며, 사용자 개입을 최소화하고 시스템이 기본 전략을 갖추어 조회·활성/중지만 선택하게 하는 것이 적합하다는 요구가 있었다.
+
+### 결정
+- **시스템 기본 전략 보장**: `GET /api/v1/strategies?accountNo=...&market=KR|US` 호출 시 해당 계좌+시장에 전략이 없으면 백엔드에서 단기/중기/장기 3건을 시스템 기본값으로 자동 생성(ensure on read) 후 반환. TradingSetting의 비율·최대 투자금 등으로 기본값 산출.
+- **파이프라인과 전략 상태 연동**: 파이프라인 실행 시 (accountNo, market, strategyType)별 Strategy를 조회하고, status가 STOPPED 또는 PAUSED이면 해당 run 스킵. UI에서 "중지"한 전략은 실제로 파이프라인에서 실행되지 않음.
+- **프론트**: "전략 추가" 버튼 제거. 빈 상태 문구를 "시스템이 적용한 단기/중기/장기 전략을 조회합니다. 활성/중지는 각 전략 카드에서 변경할 수 있습니다."로 변경. 편집은 기존 전략 카드에서 제한된 필드(예: 최대/최소 금액)만 허용 가능.
+
+### 영향
+- 화면·메뉴 기획서(01-screen-menu-spec.md) §3.3·§3.4 목적·API 설명 갱신.
+- StrategyManagementService ensure 로직, PipelineExecutionScheduler Strategy status 체크, 프론트 Investment.tsx 전략 블록 수정.
+
+---
+
 ## 참고 문서
 
 - [시스템 아키텍처](./02-architecture/01-system-architecture.md)
@@ -729,3 +819,7 @@ API 설계 표준 수립 필요
 | 1.6 | 2026-02-11 | System | ADR 18 KIS Open API 실전 구축 (토큰 장전 갱신·주문 큐·순위/투자자 API·WebSocket 스켈레톤) |
 | 1.7 | 2026-02-11 | System | 한국투자증권 API 변경 대응: 주식잔고조회 INQR_DVSN 02 제한 → 01(대출일별) 사용 (ADR 14 하위) |
 | 1.8 | 2026-02-11 | System | ADR 19 데이터 정합성(수정주가), ADR 20 Point-in-Time·Look-ahead 방지, ADR 21 전략 거버넌스·중단 원칙 추가 (기획 고도화 퀀트 관점) |
+| 1.9 | 2026-02-24 | System | ADR 22 파이프라인 실행 플래그 계정별 저장 (TB_TRADING_SETTINGS, 설정 API·스케줄러/실행기) |
+| 1.10 | 2026-02-24 | System | ADR 23 시스템 표준 시간 Asia/Seoul (JVM·JPA·DB·Docker 전 계층) |
+| 1.11 | 2026-02-24 | System | ADR 24 전략 비중 동적 결정 (레짐별 목표 비중, StrategyWeightResolver·설정 외부화) |
+| 1.12 | 2026-02-24 | System | ADR 25 국내/미국 전략 시스템 기본화·조회 중심 (ensure on read, 파이프라인 STOPPED 스킵, 전략 추가 버튼 제거) |
