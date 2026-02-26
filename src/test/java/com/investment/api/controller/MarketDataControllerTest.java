@@ -7,6 +7,7 @@ import com.investment.config.SecurityHeadersConfig;
 import com.investment.marketdata.dto.CurrentPriceDto;
 import com.investment.marketdata.service.DailyChartService;
 import com.investment.marketdata.service.RealtimeMarketDataService;
+import com.investment.marketdata.service.SymbolSearchService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,6 +42,8 @@ class MarketDataControllerTest {
     private RealtimeMarketDataService realtimeMarketDataService;
     @MockBean
     private DailyChartService dailyChartService;
+    @MockBean
+    private SymbolSearchService symbolSearchService;
     @MockBean
     private AccountService accountService;
     @MockBean

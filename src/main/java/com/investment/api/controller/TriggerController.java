@@ -41,6 +41,7 @@ public class TriggerController {
     private final JobLauncher jobLauncher;
     private final ApplicationContext applicationContext;
     private final AuditLogService auditLogService;
+    private final EmergencyAlertService emergencyAlertService;
 
     private void recordManualTrigger(Principal principal, String pathSuffix, ResponseEntity<Map<String, Object>> response) {
         try {
