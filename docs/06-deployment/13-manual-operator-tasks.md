@@ -114,6 +114,42 @@
 
 ---
 
+### 1.8 로컬 Docker Compose — 로그 영구 보관 및 일일 백업
+
+- **목적**: 로컬 풀스택 로그를 **영구 보관 구조**로 두고, 필요 시 일일 스냅샷 백업도 수행.
+- **영구 보관 (docker-compose 적용)**  
+  - **방법 A**: 모든 서비스에 `logging: driver: json-file`, `max-size: "100m"`, `max-file: "5"` → 컨테이너당 로그 5개 로테이션.  
+  - **방법 B**: backend에 `./logs/backend:/LOG` 볼륨 → Spring Boot `logging.file.name=/LOG/investment-choi.log` 가 호스트 `investment-infra/logs/backend/` 에 저장됨. **down 해도 로그 유지.**  
+  - 적용: `docker-compose.local-full.yml` 에 이미 반영. 재기동 시 `logs/backend` 디렉터리는 Docker가 없으면 생성.
+- **일일 백업 (선택)**  
+  - `investment-infra/scripts/backup-local-compose-logs.ps1` — 각 서비스 stdout/stderr를 `logs-backup/YYYYMMDD/<서비스>.log` 로 저장(30일 초과 분 자동 삭제).  
+  - 한 번만 등록: `.\scripts\register-log-backup-task.ps1` → Windows 작업 스케줄러 **Investment-Local-Compose-LogBackup**, 매일 03:00 실행.  
+  - 삭제: `Unregister-ScheduledTask -TaskName Investment-Local-Compose-LogBackup`
+
+---
+
+### 1.9 Discord 긴급 알림 Webhook 설정 (선택)
+
+- **목적**: 미체결 주문·리스크 이벤트·전략 거버넌스 열화 시 Discord 채널로 알림 수신.
+- **작업**:
+  1. Discord 서버 → 알림 받을 채널 → **연동** → **웹후크** → **새 웹후크** → URL 복사.
+  2. Backend가 읽는 환경에 **`PIPELINE_ALERT_DISCORD_WEBHOOK_URL`** 설정 (예: Docker `.env`, 배포 서버 환경 변수). 값은 `https://discord.com/api/webhooks/...` 형태. **저장소에 커밋하지 않음.**
+  3. Backend 재시작 후 **연결 테스트**: `POST /api/v1/trigger/discord-test` (인증 필요).  
+     - 응답 `success: true` → 채널에 테스트 메시지가 오면 정상.  
+     - `success: false`, "Webhook URL이 설정되지 않았습니다" → 환경 변수·재시작 확인.
+- **알림이 나가는 조건**: (1) 미체결 N분 경과(기본 1분), (2) 일일 손실 한도 임박·VaR 95% 초과, (3) 전략 거버넌스 검사 후 MDD/Sharpe 열화. URL 미설정 시 해당 이벤트에서 알림 스킵(로그만 DEBUG).
+
+---
+
+### 1.10 전략 거버넌스 검사 결과 이력 (이력 없음 시)
+
+- **증상**: Ops → 전략 거버넌스 화면에서 **검사 결과 이력**이 "이력 없음"으로만 표시됨.
+- **원인**: `strategy-governance-check` Job이 아직 한 번도 실행되지 않아 TB_GOVERNANCE_CHECK_RESULT에 데이터가 없음.
+- **작업**: (1) **수동 실행**: Ops → 스케줄 현황에서 "전략 거버넌스 검사" **지금 실행** 버튼 클릭, 또는 `POST /api/v1/trigger/strategy-governance-check` 호출. (2) **스케줄 대기**: 매월 1일 02:00 KST에 자동 실행되므로 그 후에는 이력이 쌓임.
+- **참고**: API `GET /api/v1/ops/governance/results` 및 프론트 연동은 완료되어 있으며, 이력이 없으면 빈 배열이 반환되는 것이 정상임.
+
+---
+
 ## 2. 완료 이력 (참고)
 
 | 일자       | 항목 | 비고 |

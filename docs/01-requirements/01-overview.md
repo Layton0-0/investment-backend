@@ -39,7 +39,7 @@ Investment Choi - 주식 투자 수익 분석 및 자동 매매 시스템
 
 ## 기술 스택
 - **Backend**: Spring Boot 3.2.2 (Java 17)
-- **Frontend**: Thymeleaf (확장 가능 메뉴 구조), React (Vite) 일부 화면
+- **Frontend**: React (Vite) 단일 클라이언트, 확장 가능 메뉴 구조
 - **Database**: TimescaleDB (PostgreSQL 확장) — 시계열·일반 데이터
 - **Build Tool**: Gradle
 - **API**: 한국투자증권 KIS Developers (Open API) — REST·WebSocket

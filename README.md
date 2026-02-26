@@ -5,7 +5,7 @@
 ## 기술 스택
 
 - **Backend**: Spring Boot 2.7.18 (Java 11)
-- **Frontend**: Thymeleaf
+- **Frontend**: React (Vite)
 - **Database**: MariaDB
 - **Build Tool**: Gradle
 - **API**: 한국투자증권 Open API
@@ -23,7 +23,7 @@
 ```
 src/main/java/com/investment/
 ├── api/controller/          # REST API 컨트롤러
-├── web/controller/          # Thymeleaf 웹 컨트롤러
+├── api/controller/          # REST API 컨트롤러
 ├── account/                 # 계좌 관련
 ├── order/                   # 주문 관련
 ├── analysis/                # AI 분석 관련

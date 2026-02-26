@@ -43,9 +43,12 @@ public interface UserAccountRepository extends JpaRepository<UserAccount, String
         List<UserAccount> findByUserIdAndServerTypeAndIsActiveTrue(String userId, String serverType);
 
         /**
-         * 사용자 ID와 서버 타입으로 메인 계좌 조회
+         * 사용자 ID와 서버 타입으로 메인 계좌 조회.
+         * JPQL 명시로 Boolean 조건이 DB별(is_default = true / = 1)로 안전하게 생성되도록 함.
          */
-        Optional<UserAccount> findByUserIdAndServerTypeAndIsDefaultTrue(String userId, String serverType);
+        @Query("SELECT ua FROM UserAccount ua WHERE ua.userId = :userId AND ua.serverType = :serverType AND ua.isDefault = true")
+        Optional<UserAccount> findByUserIdAndServerTypeAndIsDefaultTrue(@Param("userId") String userId,
+                        @Param("serverType") String serverType);
 
         /**
          * 사용자 ID, 증권사 타입, 서버 타입으로 계좌 목록 조회

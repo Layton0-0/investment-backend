@@ -22,8 +22,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * 한국투자증권 토큰 관리 서비스
  *
  * 로그인 시점에 토큰이 DB에 없으면 1회 발급하여 저장합니다.
- * 한국투자증권 API 접근토큰 발급 1분당 1회 제한을 준수하며,
+ * 한국투자증권 API 접근토큰 발급 1분당 1회 제한(앱키별, 모의/실전 별도)을 준수하며,
  * 동시 발급은 사용자 단위 락으로 직렬화합니다.
+ * @see <a href="https://github.com/koreainvestment/open-trading-api">한국투자증권 open-trading-api</a>
  */
 @Slf4j
 @Service
@@ -40,11 +41,11 @@ public class KoreaInvestmentTokenService {
     private final ConcurrentHashMap<String, Long> recentTokenIssuance = new ConcurrentHashMap<>();
     private static final long RECENT_ISSUANCE_WINDOW_MS = 5000; // 5초
 
-    /** 한국투자증권 API 제한: 접근토큰 발급 1분당 1회 (사용자당) */
+    /** 한국투자증권 API 제한: 접근토큰 발급 1분당 1회 (앱키별, 모의/실전 별도) */
     private static final long TOKEN_ISSUANCE_COOLDOWN_MS = 60_000L;
 
-    /** 사용자별 마지막 토큰 발급 시각(밀리초). 사용자당 1분 1회 제한용 */
-    private final ConcurrentHashMap<String, Long> lastIssuanceTimeByUserId = new ConcurrentHashMap<>();
+    /** (userId|serverType)별 마지막 토큰 발급 시각(밀리초). 앱키(모의/실전)별 1분 1회 제한용 */
+    private final ConcurrentHashMap<String, Long> lastIssuanceTimeByKey = new ConcurrentHashMap<>();
 
     /** 사용자 단위 발급 락. 동시에 모의/실 두 타입 발급이 겹치지 않도록 직렬화 */
     private final ConcurrentHashMap<String, Object> issuanceLockByUserId = new ConcurrentHashMap<>();
@@ -156,8 +157,9 @@ public class KoreaInvestmentTokenService {
         }
 
         long now = System.currentTimeMillis();
-        recentTokenIssuance.put(issuanceKey(userId, serverType), now);
-        lastIssuanceTimeByUserId.put(userId, now);
+        String key = issuanceKey(userId, serverType);
+        recentTokenIssuance.put(key, now);
+        lastIssuanceTimeByKey.put(key, now);
 
         log.debug("장전 토큰 갱신 완료: userId={}, serverType={}", userId, serverType);
     }
@@ -303,8 +305,9 @@ public class KoreaInvestmentTokenService {
             }
 
             long now = System.currentTimeMillis();
-            recentTokenIssuance.put(issuanceKey(userId, serverType), now);
-            lastIssuanceTimeByUserId.put(userId, now);
+            String key = issuanceKey(userId, serverType);
+            recentTokenIssuance.put(key, now);
+            lastIssuanceTimeByKey.put(key, now);
 
             log.info("토큰 발급 및 저장 완료: userId={}, serverType={}", userId, serverType);
         }
@@ -398,14 +401,15 @@ public class KoreaInvestmentTokenService {
                         }
                     }
                     if (token == null || !token.isValid()) {
-                        Long lastByUser = lastIssuanceTimeByUserId.get(userId);
+                        String cooldownKey = issuanceKey(userId, st);
+                        Long lastByKey = lastIssuanceTimeByKey.get(cooldownKey);
                         long now = System.currentTimeMillis();
-                        if (lastByUser != null && (now - lastByUser) < TOKEN_ISSUANCE_COOLDOWN_MS) {
-                            long waitSec = (TOKEN_ISSUANCE_COOLDOWN_MS - (now - lastByUser)) / 1000;
+                        if (lastByKey != null && (now - lastByKey) < TOKEN_ISSUANCE_COOLDOWN_MS) {
+                            long waitSec = (TOKEN_ISSUANCE_COOLDOWN_MS - (now - lastByKey)) / 1000;
                             String msg = String.format(
-                                    "접근토큰 발급은 1분당 1회만 가능합니다. 약 %d초 후 다시 시도해 주세요.",
+                                    "접근토큰 발급은 1분당 1회만 가능합니다(앱키별). 약 %d초 후 다시 시도해 주세요.",
                                     Math.max(1, waitSec));
-                            log.warn("토큰 발급 제한: userId={}, serverType={}, lastIssuance={}ms ago", userId, st, now - lastByUser);
+                            log.warn("토큰 발급 제한: userId={}, serverType={}, lastIssuance={}ms ago", userId, st, now - lastByKey);
                             throw new RuntimeException(msg);
                         }
 
@@ -436,12 +440,13 @@ public class KoreaInvestmentTokenService {
                     .orElseThrow(() -> new RuntimeException("한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
 
             synchronized (lockForUser(userId)) {
-                Long lastByUser = lastIssuanceTimeByUserId.get(userId);
+                String cooldownKey = issuanceKey(userId, st);
+                Long lastByKey = lastIssuanceTimeByKey.get(cooldownKey);
                 long now = System.currentTimeMillis();
-                if (lastByUser != null && (now - lastByUser) < TOKEN_ISSUANCE_COOLDOWN_MS) {
-                    long waitSec = (TOKEN_ISSUANCE_COOLDOWN_MS - (now - lastByUser)) / 1000;
+                if (lastByKey != null && (now - lastByKey) < TOKEN_ISSUANCE_COOLDOWN_MS) {
+                    long waitSec = (TOKEN_ISSUANCE_COOLDOWN_MS - (now - lastByKey)) / 1000;
                     throw new RuntimeException(String.format(
-                            "접근토큰 발급은 1분당 1회만 가능합니다. 약 %d초 후 다시 시도해 주세요.", Math.max(1, waitSec)));
+                            "접근토큰 발급은 1분당 1회만 가능합니다(앱키별). 약 %d초 후 다시 시도해 주세요.", Math.max(1, waitSec)));
                 }
                 issueTokenForUser(userApiKey);
             }

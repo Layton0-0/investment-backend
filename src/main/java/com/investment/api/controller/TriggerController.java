@@ -1,5 +1,6 @@
 package com.investment.api.controller;
 
+import com.investment.alert.EmergencyAlertService;
 import com.investment.batch.registry.BatchJobRegistry;
 import com.investment.ops.service.AuditLogService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -267,5 +268,15 @@ public class TriggerController {
         ResponseEntity<Map<String, Object>> result = runTrigger("/strategy-governance-check", "전략 거버넌스 검사 완료", "전략 거버넌스 검사 실패", new JobParametersBuilder());
         recordManualTrigger(principal, "/strategy-governance-check", result);
         return result;
+    }
+
+    @Operation(summary = "Discord 웹훅 테스트", description = "Discord 긴급 알림 Webhook 연결 테스트. Webhook URL 설정 시 테스트 메시지 1건 발송")
+    @PostMapping("/discord-test")
+    public ResponseEntity<Map<String, Object>> triggerDiscordTest() {
+        boolean sent = emergencyAlertService.sendTestAlert();
+        if (sent) {
+            return ResponseEntity.ok(Map.of("success", true, "message", "Discord 테스트 알림 발송 완료. 채널에서 수신 여부를 확인하세요."));
+        }
+        return ResponseEntity.ok(Map.of("success", false, "message", "Discord Webhook URL이 설정되지 않았습니다. PIPELINE_ALERT_DISCORD_WEBHOOK_URL 환경 변수를 설정한 뒤 서버를 재시작하세요."));
     }
 }

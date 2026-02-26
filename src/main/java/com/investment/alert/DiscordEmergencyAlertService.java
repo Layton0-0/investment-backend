@@ -102,6 +102,22 @@ public class DiscordEmergencyAlertService implements EmergencyAlertService {
         sendToDiscord(message);
     }
 
+    @Override
+    public boolean sendTestAlert() {
+        if (discordWebhookUrl == null || discordWebhookUrl.isBlank()) {
+            log.debug("Discord Webhook URL 미설정, 테스트 알림 스킵");
+            return false;
+        }
+        String message = "**[테스트]** Discord 웹훅 연결이 정상입니다. (Investment Backend)";
+        try {
+            sendToDiscord(message);
+            return true;
+        } catch (Exception e) {
+            log.warn("Discord 테스트 알림 발송 실패: {}", e.getMessage());
+            return false;
+        }
+    }
+
     private void persistAlert(String level, String component, String message) {
         try {
             alertLogRepository.save(AlertLog.of(Instant.now(), level, component, message));

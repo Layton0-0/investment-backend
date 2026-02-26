@@ -119,14 +119,14 @@ Model Update Event → Kafka → [Prediction Service, Strategy Optimizer]
 **비용 최적화**: 초기에는 Redis만 사용하고, Kafka/Airflow/Vector DB는 수익 발생 후 추가
 
 ### 3.4 Frontend
-- **초기**: Thymeleaf (가벼운 HTML, 비용 최소화)
+- **현재**: React (Vite) SPA 단일 클라이언트
 - **향후 확장**: Next.js 14+ (React 기반 SSR/SSG)
 - **TypeScript**: 타입 안정성 (향후)
 - **Tailwind CSS**: 유틸리티 기반 스타일링 (향후)
 - **Recharts/D3.js**: 고급 차트 및 시각화 (선택적)
 - **WebSocket**: 실시간 데이터 업데이트 (선택적)
 
-**비용 최적화**: 초기에는 Thymeleaf로 시작하여 유지비를 최소화하고, 수익 발생 시 Next.js로 전환
+**비용 최적화**: React SPA로 단일 클라이언트 유지, 수익 발생 시 Next.js 등으로 전환 검토
 
 ### 3.5 인프라
 - **Docker**: 컨테이너화

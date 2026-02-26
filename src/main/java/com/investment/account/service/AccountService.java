@@ -44,6 +44,7 @@ public class AccountService {
     private final EncryptionUtil encryptionUtil;
     private final KoreaInvestmentAccountClient accountClient;
     private final KoreaInvestmentTokenService tokenService;
+    private final AccountApiRunner accountApiRunner;
 
     /**
      * 계좌 잔고 조회
@@ -53,7 +54,7 @@ public class AccountService {
      * @param accountNo 계좌번호
      * @return 계좌 잔고 정보
      */
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = { RuntimeException.class, Exception.class })
     @Cacheable(value = CacheConfig.CACHE_ACCOUNT, key = "'balance_' + #accountNo")
     public AccountBalanceDto getAccountBalance(String accountNo) {
         log.debug("계좌 잔고 조회: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo));
@@ -62,9 +63,9 @@ public class AccountService {
             // 현재 사용자 ID 가져오기
             String userId = getCurrentUserId();
 
-            // 한국투자증권 API 사용 시도
+            // 한국투자증권 API 사용 시도 (별도 트랜잭션에서 실행해 rollback-only 오염 방지)
             try {
-                KoreaInvestmentAccountClient.BalanceAndPositionsResult result = accountClient.inquireBalance(userId,
+                KoreaInvestmentAccountClient.BalanceAndPositionsResult result = accountApiRunner.inquireBalanceInNewTx(userId,
                         accountNo);
                 return result.getBalance();
             } catch (Exception apiException) {
@@ -119,6 +120,18 @@ public class AccountService {
     }
 
     /**
+     * 서버 타입 정규화: "0"(실거래), "1"(모의투자)만 허용, 그 외는 "1" 반환.
+     * null·공백·쿼리 파라미터 오염 방지.
+     */
+    private static String normalizeServerType(String serverType) {
+        if (serverType == null) {
+            return "1";
+        }
+        String trimmed = serverType.trim();
+        return "0".equals(trimmed) ? "0" : "1";
+    }
+
+    /**
      * 사용자 계좌 목록 조회 (첫 번째 계좌 자동 선택용)
      * 
      * @deprecated 사용자별 계좌 조회는 getUserAccountNo(String userId)를 사용하세요.
@@ -158,10 +171,10 @@ public class AccountService {
      */
     @Transactional(readOnly = true, noRollbackFor = { RuntimeException.class, Exception.class })
     public String getUserAccountNo(String userId, String serverType) {
-        log.debug("사용자 계좌 조회: userId={}, serverType={}", userId, serverType);
+        String st = normalizeServerType(serverType);
+        log.debug("사용자 계좌 조회: userId={}, serverType={}", userId, st);
 
         try {
-            String st = serverType != null ? serverType : "1";
             UserAccount mainAccount = userAccountRepository.findByUserIdAndServerTypeAndIsDefaultTrue(userId, st)
                     .orElse(null);
 
@@ -183,7 +196,7 @@ public class AccountService {
             return getDefaultAccountNoFallback();
 
         } catch (Exception e) {
-            log.error("사용자 계좌 조회 실패: userId={}, serverType={}", userId, serverType, e);
+            log.error("사용자 계좌 조회 실패: userId={}, serverType={}", userId, st, e);
             return getDefaultAccountNoFallback();
         }
     }
@@ -206,48 +219,80 @@ public class AccountService {
     }
 
     /**
-     * 보유 종목 조회
-     * 한국투자증권 API를 사용하여 실시간 보유 종목 정보를 조회합니다.
-     * API 실패 시 DB 폴백을 사용합니다.
-     * 
+     * 보유 종목 조회 (전체: 국내+해외 병합). 캐시는 getPositions(accountNo, null)에서 "all" 키로 적용.
+     * @see #getPositions(String, String)
+     */
+    @Transactional(readOnly = true, noRollbackFor = { RuntimeException.class, Exception.class })
+    public List<AccountPositionDto> getPositions(String accountNo) {
+        return getPositions(accountNo, null);
+    }
+
+    /**
+     * 보유 종목 조회 (시장별 별도 조회 지원).
+     * market=KR: 국내만, market=US: 해외만, null/빈값: 국내+해외 병합.
+     *
      * @param accountNo 계좌번호
+     * @param market    시장 구분 (KR, US, null 또는 빈 문자열이면 전체)
      * @return 보유 종목 목록
      */
-    @Transactional(readOnly = true)
-    @Cacheable(value = CacheConfig.CACHE_ACCOUNT, key = "'positions_' + #accountNo")
-    public List<AccountPositionDto> getPositions(String accountNo) {
-        log.debug("보유 종목 조회: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo));
+    @Transactional(readOnly = true, noRollbackFor = { RuntimeException.class, Exception.class })
+    @Cacheable(value = CacheConfig.CACHE_ACCOUNT, key = "'positions_' + #accountNo + '_' + (T(org.springframework.util.StringUtils).hasText(#market) ? #market : 'all')")
+    public List<AccountPositionDto> getPositions(String accountNo, String market) {
+        log.debug("보유 종목 조회: accountNo={}, market={}", LogMaskingUtil.maskAccountNo(accountNo), market);
 
         try {
-            // 현재 사용자 ID 가져오기
             String userId = getCurrentUserId();
+            boolean krOnly = "KR".equalsIgnoreCase(market);
+            boolean usOnly = "US".equalsIgnoreCase(market);
 
-            // 한국투자증권 API 사용 시도
             try {
-                KoreaInvestmentAccountClient.BalanceAndPositionsResult result = accountClient.inquireBalance(userId,
-                        accountNo);
-                return result.getPositions();
+                if (usOnly) {
+                    List<AccountPositionDto> overseas = accountApiRunner.inquireOverseasBalanceInNewTx(userId, accountNo);
+                    return overseas != null ? overseas : new ArrayList<>();
+                }
+                KoreaInvestmentAccountClient.BalanceAndPositionsResult result = accountApiRunner.inquireBalanceInNewTx(userId, accountNo);
+                List<AccountPositionDto> domestic = result.getPositions();
+                if (krOnly) {
+                    return domestic != null ? domestic : new ArrayList<>();
+                }
+                // 전체: 국내 + 해외
+                List<AccountPositionDto> all = new ArrayList<>(domestic != null ? domestic : List.of());
+                List<AccountPositionDto> overseasPositions = accountApiRunner.inquireOverseasBalanceInNewTx(userId, accountNo);
+                if (overseasPositions != null && !overseasPositions.isEmpty()) {
+                    all.addAll(overseasPositions);
+                }
+                return all;
             } catch (Exception apiException) {
-                log.warn("한국투자증권 API 호출 실패, DB 폴백 사용: accountNo={}, error={}",
-                        LogMaskingUtil.maskAccountNo(accountNo), apiException.getMessage());
-                try {
-                    return getPositionsFromDb(accountNo);
-                } catch (Exception dbEx) {
-                    log.warn("DB 폴백 보유 종목 조회 실패, 빈 목록 반환: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo), dbEx);
+                log.warn("한국투자증권 API 호출 실패, DB 폴백 사용: accountNo={}, market={}, error={}",
+                        LogMaskingUtil.maskAccountNo(accountNo), market, apiException.getMessage());
+                List<AccountPositionDto> fromDb = getPositionsFromDb(accountNo);
+                if (fromDb == null) {
                     return new ArrayList<>();
                 }
+                if (krOnly || usOnly) {
+                    String m = krOnly ? "KR" : "US";
+                    fromDb = fromDb.stream().filter(p -> m.equalsIgnoreCase(p.getMarket())).toList();
+                }
+                return fromDb;
             }
         } catch (IllegalStateException e) {
-            // 인증되지 않은 사용자 또는 userId를 찾을 수 없는 경우 DB 폴백
             log.debug("사용자 ID를 찾을 수 없음, DB 폴백 사용: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo));
             try {
-                return getPositionsFromDb(accountNo);
+                List<AccountPositionDto> fromDb = getPositionsFromDb(accountNo);
+                if (fromDb == null) return new ArrayList<>();
+                if ("KR".equalsIgnoreCase(market)) {
+                    return fromDb.stream().filter(p -> "KR".equalsIgnoreCase(p.getMarket())).toList();
+                }
+                if ("US".equalsIgnoreCase(market)) {
+                    return fromDb.stream().filter(p -> "US".equalsIgnoreCase(p.getMarket())).toList();
+                }
+                return fromDb;
             } catch (Exception dbEx) {
                 log.warn("DB 폴백 보유 종목 조회 실패, 빈 목록 반환: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo), dbEx);
                 return new ArrayList<>();
             }
         } catch (Exception e) {
-            log.error("보유 종목 조회 실패: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo), e);
+            log.error("보유 종목 조회 실패: accountNo={}, market={}", LogMaskingUtil.maskAccountNo(accountNo), market, e);
             throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                     "보유 종목 조회에 실패했습니다: " + e.getMessage(), e);
         }
@@ -261,7 +306,7 @@ public class AccountService {
      * @param accountNo 계좌번호
      * @return 잔고와 보유 종목 (API 실패 시 DB 폴백)
      */
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = { RuntimeException.class, Exception.class })
     @Cacheable(value = CacheConfig.CACHE_ACCOUNT, key = "'balanceAndPositions_' + #accountNo")
     public BalanceAndPositionsDto getBalanceAndPositions(String accountNo) {
         log.debug("잔고·보유종목 일괄 조회: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo));
@@ -270,10 +315,10 @@ public class AccountService {
             String userId = getCurrentUserId();
 
             try {
-                KoreaInvestmentAccountClient.BalanceAndPositionsResult result = accountClient.inquireBalance(userId,
+                KoreaInvestmentAccountClient.BalanceAndPositionsResult result = accountApiRunner.inquireBalanceInNewTx(userId,
                         accountNo);
                 List<AccountPositionDto> allPositions = new ArrayList<>(result.getPositions());
-                List<AccountPositionDto> overseasPositions = accountClient.inquireOverseasBalance(userId, accountNo);
+                List<AccountPositionDto> overseasPositions = accountApiRunner.inquireOverseasBalanceInNewTx(userId, accountNo);
                 if (!overseasPositions.isEmpty()) {
                     allPositions.addAll(overseasPositions);
                 }
@@ -305,23 +350,18 @@ public class AccountService {
      * @param accountNo 계좌번호
      * @return 잔고·보유종목 (API 실패 시 DB 폴백), 실패 시 null
      */
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = { RuntimeException.class, Exception.class })
     public BalanceAndPositionsDto getBalanceAndPositionsWithUserId(String userId, String accountNo) {
         if (userId == null || accountNo == null) {
             return null;
         }
         try {
-            KoreaInvestmentAccountClient.BalanceAndPositionsResult result = accountClient.inquireBalance(userId,
+            KoreaInvestmentAccountClient.BalanceAndPositionsResult result = accountApiRunner.inquireBalanceInNewTx(userId,
                     accountNo);
             List<AccountPositionDto> allPositions = new ArrayList<>(result.getPositions());
-            try {
-                List<AccountPositionDto> overseasPositions = accountClient.inquireOverseasBalance(userId, accountNo);
-                if (!overseasPositions.isEmpty()) {
-                    allPositions.addAll(overseasPositions);
-                }
-            } catch (Exception e) {
-                log.debug("해외 잔고 조회 스킵: accountNo={}, error={}",
-                        LogMaskingUtil.maskAccountNo(accountNo), e.getMessage());
+            List<AccountPositionDto> overseasPositions = accountApiRunner.inquireOverseasBalanceInNewTx(userId, accountNo);
+            if (!overseasPositions.isEmpty()) {
+                allPositions.addAll(overseasPositions);
             }
             return new BalanceAndPositionsDto(result.getBalance(), allPositions);
         } catch (Exception e) {
@@ -420,14 +460,50 @@ public class AccountService {
 
     /**
      * 투자계좌자산현황조회
+     * API 키 없음·한국투자증권 API 실패 시 DB(포트폴리오 합계) 기준으로 자산 요약 반환하여 404 방지.
      */
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = { RuntimeException.class, Exception.class })
     @Cacheable(value = CacheConfig.CACHE_ACCOUNT, key = "'assets_' + #accountNo")
     public AccountAssetDto getAccountAssets(String accountNo) {
         log.debug("투자계좌자산현황조회: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo));
 
-        String userId = getCurrentUserId();
-        return accountClient.inquireAssets(userId, accountNo);
+        try {
+            String userId = getCurrentUserId();
+            return accountClient.inquireAssets(userId, accountNo);
+        } catch (IllegalStateException e) {
+            log.debug("인증 없음, DB 폴백: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo));
+            return getAccountAssetsFromDb(accountNo);
+        } catch (DomainException e) {
+            if (e.getErrorCode() == ErrorCode.ACCOUNT_NOT_FOUND) {
+                log.warn("자산현황 API 실패(API 키 없음 등), DB 폴백: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo));
+                return getAccountAssetsFromDb(accountNo);
+            }
+            throw e;
+        } catch (Exception e) {
+            log.warn("자산현황 조회 실패, DB 폴백: accountNo={}, error={}",
+                    LogMaskingUtil.maskAccountNo(accountNo), e.getMessage());
+            return getAccountAssetsFromDb(accountNo);
+        }
+    }
+
+    /**
+     * DB(포트폴리오 합계) 기준 자산 요약 반환 (폴백용)
+     */
+    private AccountAssetDto getAccountAssetsFromDb(String accountNo) {
+        BigDecimal total = portfolioRepository.getTotalPortfolioValue(accountNo);
+        if (total == null) {
+            total = BigDecimal.ZERO;
+        }
+        return AccountAssetDto.builder()
+                .accountNo(accountNo)
+                .totalAssetValue(total)
+                .deposit(total)
+                .stockValue(total)
+                .totalProfitLoss(BigDecimal.ZERO)
+                .totalProfitLossRate(BigDecimal.ZERO)
+                .orderableCash(total)
+                .currency("KRW")
+                .build();
     }
 
     /**
@@ -454,14 +530,14 @@ public class AccountService {
      * 메인 계좌 조회 (서버 타입별)
      *
      * @param userId     사용자 ID
-     * @param serverType 서버 타입 ("1": 모의투자, "0": 실거래), null이면 "1"
+     * @param serverType 서버 타입 ("1": 모의투자, "0": 실거래), null/공백/기타 값이면 "1"
      * @return 메인 계좌 정보
      */
     @Transactional(readOnly = true)
     public MainAccountResponseDto getMainAccount(String userId, String serverType) {
-        log.debug("메인 계좌 조회: userId={}, serverType={}", userId, serverType);
+        String st = normalizeServerType(serverType);
+        log.debug("메인 계좌 조회: userId={}, serverType={}", userId, st);
 
-        String st = serverType != null ? serverType : "1";
         UserAccount mainAccount = userAccountRepository.findByUserIdAndServerTypeAndIsDefaultTrue(userId, st)
                 .orElse(null);
 
@@ -497,10 +573,11 @@ public class AccountService {
      */
     @Transactional(readOnly = true)
     public AccountListResponseDto getUserAccounts(String userId, String serverType) {
-        log.debug("사용자 계좌 목록 조회: userId={}, serverType={}", userId, serverType);
+        String st = (serverType != null && !serverType.trim().isEmpty()) ? normalizeServerType(serverType) : null;
+        log.debug("사용자 계좌 목록 조회: userId={}, serverType={}", userId, st);
 
-        List<UserAccount> accounts = serverType != null && !serverType.isEmpty()
-                ? userAccountRepository.findByUserIdAndServerTypeAndIsActiveTrue(userId, serverType)
+        List<UserAccount> accounts = st != null
+                ? userAccountRepository.findByUserIdAndServerTypeAndIsActiveTrue(userId, st)
                 : userAccountRepository.findByUserIdAndIsActiveTrue(userId);
 
         List<UserAccountDto> accountDtos = accounts.stream()

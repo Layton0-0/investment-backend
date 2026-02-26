@@ -37,4 +37,11 @@ public interface EmergencyAlertService {
          * @param message   알림 본문 (계좌·수치는 마스킹 후 포함)
          */
         void sendRiskEventAlert(String level, String component, String message);
+
+        /**
+         * Discord 웹훅 연결 테스트용 알림 1건 발송.
+         *
+         * @return Webhook URL이 설정되어 있고 발송에 성공하면 true, 미설정 또는 실패 시 false
+         */
+        boolean sendTestAlert();
 }

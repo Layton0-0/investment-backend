@@ -4,6 +4,8 @@ import com.investment.account.dto.AccountBalanceDto;
 import com.investment.account.dto.AccountPositionDto;
 import com.investment.account.dto.BalanceAndPositionsDto;
 import com.investment.account.client.KoreaInvestmentAccountClient;
+import com.investment.common.exception.DomainException;
+import com.investment.common.exception.ErrorCode;
 import com.investment.common.security.EncryptionUtil;
 import com.investment.domain.repository.PortfolioRepository;
 import com.investment.domain.repository.UserAccountRepository;
@@ -46,6 +48,9 @@ class AccountServiceTest {
 
     @Mock
     private KoreaInvestmentTokenService tokenService;
+
+    @Mock
+    private AccountApiRunner accountApiRunner;
 
     @InjectMocks
     private AccountService accountService;
@@ -102,14 +107,85 @@ class AccountServiceTest {
         when(auth.getName()).thenReturn(userId);
         SecurityContextHolder.getContext().setAuthentication(auth);
 
-        when(accountClient.inquireBalance(eq(userId), eq(accountNo))).thenReturn(clientResult);
+        when(accountApiRunner.inquireBalanceInNewTx(eq(userId), eq(accountNo))).thenReturn(clientResult);
+        when(accountApiRunner.inquireOverseasBalanceInNewTx(eq(userId), eq(accountNo))).thenReturn(List.of());
 
         BalanceAndPositionsDto result = accountService.getBalanceAndPositions(accountNo);
 
         assertNotNull(result);
         assertEquals(balanceDto, result.getBalance());
         assertEquals(positions, result.getPositions());
-        verify(accountClient, times(1)).inquireBalance(userId, accountNo);
+        verify(accountApiRunner, times(1)).inquireBalanceInNewTx(userId, accountNo);
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    @DisplayName("getPositions API 예외 시 DB 폴백 반환, UnexpectedRollback 없이 정상 반환")
+    void getPositions_whenApiThrows_returnsDbFallback() {
+        String accountNo = "12345678-12";
+        String userId = "user-1";
+        Authentication auth = mock(Authentication.class);
+        when(auth.getName()).thenReturn(userId);
+        SecurityContextHolder.getContext().setAuthentication(auth);
+
+        when(accountApiRunner.inquireBalanceInNewTx(eq(userId), eq(accountNo)))
+                .thenThrow(new DomainException(ErrorCode.ACCOUNT_NOT_FOUND, "한국투자증권 API 키를 찾을 수 없습니다"));
+        when(portfolioRepository.findByAccountNo(accountNo)).thenReturn(List.of());
+
+        List<AccountPositionDto> result = accountService.getPositions(accountNo);
+
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
+        verify(portfolioRepository).findByAccountNo(accountNo);
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    @DisplayName("getAccountBalance API 예외 시 DB 폴백 반환, UnexpectedRollback 없이 정상 반환")
+    void getAccountBalance_whenApiThrows_returnsDbFallback() {
+        String accountNo = "12345678-12";
+        String userId = "user-1";
+        BigDecimal portfolioValue = BigDecimal.valueOf(500_000);
+        Authentication auth = mock(Authentication.class);
+        when(auth.getName()).thenReturn(userId);
+        SecurityContextHolder.getContext().setAuthentication(auth);
+
+        when(accountApiRunner.inquireBalanceInNewTx(eq(userId), eq(accountNo)))
+                .thenThrow(new DomainException(ErrorCode.ACCOUNT_NOT_FOUND, "한국투자증권 API 키를 찾을 수 없습니다"));
+        when(portfolioRepository.getTotalPortfolioValue(accountNo)).thenReturn(portfolioValue);
+
+        AccountBalanceDto result = accountService.getAccountBalance(accountNo);
+
+        assertNotNull(result);
+        assertEquals(accountNo, result.getAccountNo());
+        assertEquals(portfolioValue, result.getTotalBalance());
+        verify(portfolioRepository).getTotalPortfolioValue(accountNo);
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    @DisplayName("getBalanceAndPositions API 예외 시 DB 폴백 반환, UnexpectedRollback 없이 정상 반환")
+    void getBalanceAndPositions_whenApiThrows_returnsDbFallback() {
+        String accountNo = "12345678-12";
+        String userId = "user-1";
+        BigDecimal portfolioValue = BigDecimal.valueOf(1_000_000);
+        Authentication auth = mock(Authentication.class);
+        when(auth.getName()).thenReturn(userId);
+        SecurityContextHolder.getContext().setAuthentication(auth);
+
+        when(accountApiRunner.inquireBalanceInNewTx(eq(userId), eq(accountNo)))
+                .thenThrow(new DomainException(ErrorCode.ACCOUNT_NOT_FOUND, "한국투자증권 API 키를 찾을 수 없습니다"));
+        when(portfolioRepository.getTotalPortfolioValue(accountNo)).thenReturn(portfolioValue);
+        when(portfolioRepository.findByAccountNo(accountNo)).thenReturn(List.of());
+
+        BalanceAndPositionsDto result = accountService.getBalanceAndPositions(accountNo);
+
+        assertNotNull(result);
+        assertEquals(portfolioValue, result.getBalance().getTotalBalance());
+        assertNotNull(result.getPositions());
+        assertTrue(result.getPositions().isEmpty());
+        verify(portfolioRepository).getTotalPortfolioValue(accountNo);
+        verify(portfolioRepository).findByAccountNo(accountNo);
         SecurityContextHolder.clearContext();
     }
 }

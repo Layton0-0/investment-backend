@@ -29,6 +29,7 @@
 23. [시스템 표준 시간 Asia/Seoul](#23-시스템-표준-시간-asiaseoul)
 24. [전략 비중 동적 결정](#24-전략-비중-동적-결정)
 25. [국내/미국 전략 시스템 기본화 및 조회 중심](#25-국내미국-전략-시스템-기본화-및-조회-중심)
+26. [Thymeleaf 제거 및 React 단일 클라이언트](#26-thymeleaf-제거-및-react-단일-클라이언트)
 
 ---
 
@@ -798,6 +799,27 @@ API 설계 표준 수립 필요
 
 ---
 
+## 26. Thymeleaf 제거 및 React 단일 클라이언트
+
+**결정일**: 2026-02-25
+**상태**: 확정
+**결정**: 백엔드에서 Thymeleaf 의존성·템플릿·웹 컨트롤러를 전부 제거하고, 웹 UI는 React (Vite) SPA 단일 클라이언트만 사용한다.
+
+### 배경
+프로젝트 초기에는 Thymeleaf로 서버 사이드 렌더링 화면을 제공했으나, React 프론트엔드(investment-frontend)가 대시보드·전략·뉴스·포트폴리오·주문·설정 등 동일 기능을 제공하게 되었다. 이중 유지보수와 일관성 문제를 없애기 위해 Thymeleaf를 완전히 제거하기로 했다.
+
+### 결정
+- **백엔드**: `spring-boot-starter-thymeleaf` 제거, `application*.yml`의 `spring.thymeleaf` 설정 제거, `src/main/resources/templates/` 디렉터리 전체 삭제.
+- **웹 레이어 제거**: Thymeleaf 뷰를 반환하던 컨트롤러(AuthWebController, DashboardController, AutoInvestController, BacktestWebController, NewsWebController, TradingPortfolioWebController, OrdersWebController, WebStrategyController, BatchManagementController) 및 메뉴 설정(MenuModelAdvice, MenuConfig, MenuItem) 삭제. 배치 목록 API는 기존 `GET /api/v1/batch/jobs`(BatchController) 유지.
+- **에러 페이지**: `static/error.html` 정적 HTML로 4xx/5xx HTML 응답 대응.
+- **프론트**: React에 `/strategies` → `/strategies/kr` 리다이렉트 추가. 기존 화면은 그대로 두고 Thymeleaf에만 있던 진입점만 보완.
+
+### 영향
+- 문서 전반에서 Thymeleaf 언급 제거·React 단일 클라이언트로 수정(01-overview, README, system-architecture, frontend-architecture, cost-optimized, essential-tech-spec, ai-redesign, api-frontend-mapping, screen-menu-spec, development-status, PRD, shrimp-rules).
+- 배포 시 Nginx 등에서 `/api`만 백엔드로 전달하고 나머지 경로는 React 빌드 결과로 서빙하는 구성 유지.
+
+---
+
 ## 참고 문서
 
 - [시스템 아키텍처](./02-architecture/01-system-architecture.md)
@@ -823,3 +845,4 @@ API 설계 표준 수립 필요
 | 1.10 | 2026-02-24 | System | ADR 23 시스템 표준 시간 Asia/Seoul (JVM·JPA·DB·Docker 전 계층) |
 | 1.11 | 2026-02-24 | System | ADR 24 전략 비중 동적 결정 (레짐별 목표 비중, StrategyWeightResolver·설정 외부화) |
 | 1.12 | 2026-02-24 | System | ADR 25 국내/미국 전략 시스템 기본화·조회 중심 (ensure on read, 파이프라인 STOPPED 스킵, 전략 추가 버튼 제거) |
+| 1.13 | 2026-02-25 | System | ADR 26 Thymeleaf 제거·React 단일 클라이언트 (의존성·템플릿·웹 컨트롤러·메뉴 설정 삭제, static error.html, 문서 갱신) |

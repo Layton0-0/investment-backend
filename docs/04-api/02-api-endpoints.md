@@ -813,24 +813,16 @@ curl -X GET "http://localhost:8080/api/v1/accounts/12345678/profit-loss?startDat
 
 **설명**: 스케줄러로 실행되는 배치 작업 목록을 조회합니다. SPA 프론트는 `GET /api/v1/batch/jobs`로 연동. [11-api-frontend-mapping.md](./11-api-frontend-mapping.md) §5.1 참조.
 
-**응답**:
+**응답**: Jenkins 호환 표기를 위해 `lastExecutionResult`는 마지막 빌드 결과(SUCCESS/FAILURE/UNSTABLE)를 반환하며, Ops 화면에서는 "마지막 빌드", "빌드 결과", "실행" 컬럼명과 `YYYY-MM-DD HH:mm:ss` 형식으로 표시한다.
 ```json
 [
   {
-    "jobName": "StrategyScheduler",
-    "description": "전략 실행 스케줄러",
-    "cronExpression": "0 0 * * * ?",
+    "id": "strategyScheduler",
+    "name": "단기 전략 실행",
+    "cronDescription": "매시간 0분",
     "lastExecutionTime": "2026-01-27T09:00:00",
-    "nextExecutionTime": "2026-01-27T10:00:00",
-    "status": "RUNNING"
-  },
-  {
-    "jobName": "TradingPortfolioScheduler",
-    "description": "트레이딩 포트폴리오 생성 스케줄러",
-    "cronExpression": "0 0 9 * * ?",
-    "lastExecutionTime": "2026-01-27T09:00:00",
-    "nextExecutionTime": "2026-01-28T09:00:00",
-    "status": "SCHEDULED"
+    "lastExecutionResult": "SUCCESS",
+    "triggerPath": "/api/v1/trigger/strategyScheduler"
   }
 ]
 ```
@@ -1000,6 +992,26 @@ curl -X POST "http://localhost:8080/api/v1/market-data/current-prices" \
 [
   { "date": "2025-01-02", "open": 72000, "high": 73500, "low": 71800, "close": 73000, "volume": 12000000 },
   { "date": "2025-01-03", "open": 73100, "high": 74200, "low": 72800, "close": 73800, "volume": 9800000 }
+]
+```
+
+### 8.4 종목 통합 검색
+
+**엔드포인트**: `GET /api/v1/market-data/symbols/search`
+
+**설명**: 종목 코드 또는 종목명으로 검색. KR/US 시장별 또는 전체 검색. 수동 주문 등에서 종목 선택용. KR은 StockCodeConverter 매핑, US는 주요 종목 정적 목록 기반. 최대 100건 반환.
+
+**쿼리 파라미터**:
+| 이름 | 필수 | 설명 |
+|------|------|------|
+| q | - | 검색어 (종목코드 또는 종목명, 비면 전체) |
+| market | - | 시장 (KR, US, 미지정 시 전체) |
+
+**성공 응답 (200 OK)**:
+```json
+[
+  { "symbol": "005930", "name": "삼성전자", "market": "KR" },
+  { "symbol": "000660", "name": "SK하이닉스", "market": "KR" }
 ]
 ```
 
@@ -1312,6 +1324,7 @@ Admin 전용: 전략 거버넌스 검사 결과 이력·(market, strategyType)�
 | `POST /api/v1/trigger/intraday-breakout` | 장중 변동성 돌파(09:00~10:00 구간) 실행 | 설정 시에만 유효 |
 | `POST /api/v1/trigger/medium-term-rebalance` | 중기(MEDIUM_TERM) 월 1회 리밸런싱 훅 (스텁) | - |
 | `POST /api/v1/trigger/strategy-governance-check` | 전략 거버넌스 검사: 최근 N개월 백테스트 실행 후 MDD/Sharpe 열화 시 Discord 알림 | - |
+| `POST /api/v1/trigger/discord-test` | Discord 웹훅 연결 테스트 (Webhook URL 설정 시 테스트 메시지 1건 발송) | - |
 
 **요청 예시**:
 ```bash

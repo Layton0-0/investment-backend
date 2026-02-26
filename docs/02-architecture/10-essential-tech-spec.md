@@ -31,7 +31,7 @@ investment-choi/
 │  ┌─────────────────────────────────────────────────┐   │
 │  │  Spring Boot Application (포트 8080)              │   │
 │  │  - REST API                                      │   │
-│  │  - Thymeleaf (웹 UI)                             │   │
+│  │  - REST API (웹 UI는 React SPA)                 │   │
 │  │  - 비즈니스 로직                                  │   │
 │  └─────────────────────────────────────────────────┘   │
 │                          │                               │
@@ -80,8 +80,8 @@ investment-choi/
 
 | 항목 | 버전/기술 | 상태 | 비고 |
 |------|----------|------|------|
-| Thymeleaf | 3.1.x | ✅ 설정 완료 | 서버 사이드 렌더링 |
-| JavaScript | ES5 | ✅ 사용 중 | 클라이언트 스크립트 |
+| React (Vite) | 최신 | ✅ 사용 중 | 단일 클라이언트 SPA (investment-frontend) |
+| TypeScript | 5.x | ✅ 사용 중 | 프론트엔드 타입 |
 
 ### 2.5 인프라 & 도구
 
@@ -174,7 +174,7 @@ investment-choi/
 │   ├── main/
 │   │   ├── java/com/investment/
 │   │   │   ├── api/controller/        # REST API
-│   │   │   ├── web/controller/         # Thymeleaf 컨트롤러
+│   │   │   # web/controller 제거됨 (React 단일 클라이언트)
 │   │   │   ├── account/                # 계좌 관리
 │   │   │   ├── order/                  # 주문 관리
 │   │   │   ├── analysis/               # 종목 분석
@@ -185,7 +185,7 @@ investment-choi/
 │   │   │   └── common/                 # 공통 (예외 처리 등)
 │   │   └── resources/
 │   │       ├── application.yml
-│   │       └── templates/              # Thymeleaf 템플릿
+│   │       └── static/                 # 정적 리소스 (error.html 등)
 │   └── test/
 ├── ai-service/                         # Python AI 서비스 (새로 생성)
 │   ├── prediction-service/

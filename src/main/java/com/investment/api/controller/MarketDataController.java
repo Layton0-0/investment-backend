@@ -2,8 +2,10 @@ package com.investment.api.controller;
 
 import com.investment.marketdata.dto.CurrentPriceDto;
 import com.investment.marketdata.dto.DailyChartPointDto;
+import com.investment.marketdata.dto.SymbolSearchItemDto;
 import com.investment.marketdata.service.DailyChartService;
 import com.investment.marketdata.service.RealtimeMarketDataService;
+import com.investment.marketdata.service.SymbolSearchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -35,6 +37,7 @@ public class MarketDataController {
 
     private final RealtimeMarketDataService realtimeMarketDataService;
     private final DailyChartService dailyChartService;
+    private final SymbolSearchService symbolSearchService;
 
     /** 진입 확인용. GET /api/v1/market-data/ping → 200 "ok" (daily-chart 404 시 컨트롤러 도달 여부 확인). */
     @GetMapping("/ping")
@@ -115,6 +118,22 @@ public class MarketDataController {
             return ResponseEntity.badRequest().build();
         }
         List<DailyChartPointDto> list = dailyChartService.getDailyChart(symbol, market, fromDate, toDate);
+        return ResponseEntity.ok(list);
+    }
+
+    @Operation(
+            summary = "종목 통합 검색",
+            description = "종목 코드 또는 종목명으로 검색. KR/US 시장별 또는 전체 검색. 수동 주문 등에서 종목 선택용."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "조회 성공",
+                    content = @Content(schema = @Schema(implementation = SymbolSearchItemDto.class)))
+    })
+    @GetMapping("/symbols/search")
+    public ResponseEntity<List<SymbolSearchItemDto>> searchSymbols(
+            @Parameter(description = "검색어 (종목코드 또는 종목명, 비면 전체)") @RequestParam(required = false) String q,
+            @Parameter(description = "시장 (KR, US, 미지정 시 전체)") @RequestParam(required = false) String market) {
+        List<SymbolSearchItemDto> list = symbolSearchService.search(q, market);
         return ResponseEntity.ok(list);
     }
 }

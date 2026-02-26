@@ -65,7 +65,7 @@ class AccountControllerTest {
     @Test
     @DisplayName("GET /api/v1/accounts/{accountNo}/positions 보유 종목 조회 성공")
     void getPositions_returnsOk() throws Exception {
-        when(accountService.getPositions("12345678")).thenReturn(List.of());
+        when(accountService.getPositions(anyString(), any())).thenReturn(List.of());
 
         mockMvc.perform(get("/api/v1/accounts/12345678/positions"))
                 .andExpect(status().isOk())

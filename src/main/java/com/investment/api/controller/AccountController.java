@@ -58,7 +58,7 @@ public class AccountController {
     
     @Operation(
             summary = "보유 종목 조회",
-            description = "특정 계좌의 보유 종목 목록을 조회합니다."
+            description = "특정 계좌의 보유 종목 목록을 조회합니다. market=KR(국내만), market=US(해외만), 미지정 시 국내+해외 병합."
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "조회 성공",
@@ -69,8 +69,10 @@ public class AccountController {
     @GetMapping("/{accountNo}/positions")
     public ResponseEntity<List<AccountPositionDto>> getPositions(
             @Parameter(description = "계좌번호", required = true, example = "12345678")
-            @PathVariable @NotBlank String accountNo) {
-        List<AccountPositionDto> positions = accountService.getPositions(accountNo);
+            @PathVariable @NotBlank String accountNo,
+            @Parameter(description = "시장 구분 (KR: 국내만, US: 해외만, 미지정: 전체)")
+            @RequestParam(required = false) String market) {
+        List<AccountPositionDto> positions = accountService.getPositions(accountNo, market);
         return ResponseEntity.ok(positions);
     }
     

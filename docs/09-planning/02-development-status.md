@@ -11,6 +11,10 @@
 ## 1. 완료 (Completed)
 
 ### 도메인·DB·API
+- [x] **Thymeleaf 전면 제거 및 React 단일 클라이언트**
+  백엔드에서 Thymeleaf 의존성·templates/·웹 컨트롤러(9개)·BatchManagementController·MenuModelAdvice/MenuConfig/MenuItem 제거. static/error.html 추가. React에 /strategies → /strategies/kr 리다이렉트 추가. 문서 전반 Thymeleaf → React 기준으로 갱신. decisions.md ADR 26 추가.
+- [x] **getPositions 등 UnexpectedRollbackException 수정 및 첫 화면·토큰 플로우 문서화**  
+  API/토큰 경로 예외 시 DB 폴백으로 정상 반환할 때 트랜잭션이 rollback-only로 표시되어 commit 시 UnexpectedRollbackException이 나던 문제 수정. `AccountService`의 `getPositions`, `getAccountBalance`, `getBalanceAndPositions`, `getBalanceAndPositionsWithUserId`에 `noRollbackFor = { RuntimeException.class, Exception.class }` 적용. 동일 패턴 다른 메서드 검토 완료. AccountServiceTest에 API 예외 시 DB 폴백 반환·예외 미전파 검증 테스트 추가. [09-korea-investment-api-guide.md](../04-api/09-korea-investment-api-guide.md)에 "첫 화면·대시보드 계좌 및 토큰 플로우" 절 추가(계좌번호는 UserAccount와 일치 필요, 로그인 후 토큰 DB 저장 점검).
 - [x] **거래 사유 API·화면 노출**  
   주문·포지션 응답에 `signalType`, `exitRuleType` 추가. OrderResponseDto·OpenPositionItemDto 확장, GET /api/v1/orders(목록·단건)·파이프라인 요약(보유 포지션) 반영. 프론트: 주문 목록/상세·대시보드·자동투자 현황 포지션 테이블에 시그널 유형·청산 규칙 컬럼 표시. [02-api-endpoints.md](../04-api/02-api-endpoints.md), [11-api-frontend-mapping.md](../04-api/11-api-frontend-mapping.md) 갱신.
 - [x] **전략 거버넌스 자동화(1차)**  
@@ -35,6 +39,8 @@
   [09-oci-node-structure.md](../06-deployment/09-oci-node-structure.md) 신설: Oracle 1(Osaka)·2(Korea) 홈 디렉터리 구조 파악, OCI·매크로 관련 항목(예: .oci, jenkins_home/token-macro) 유지 정책, 정리 대상·수행 내용 정리. Osaka: ~/docker-compose 전체 삭제(sudo). Korea: output*.log·docker-compose/duckling·osaka/.ssh 등 삭제, ~/.oci·docker-compose/osaka/.oci 유지.
 - [x] **OCI 스왑 10GB·Backend/Python AWS 전환·배포 전 정리**  
   [05-multi-vps-oracle-aws-cicd.md](../06-deployment/05-multi-vps-oracle-aws-cicd.md) §3.0: OCI 3대 스왑 10GB 통일, 스왑 작업 전 컨테이너 down·image prune 필수 순서 명시. Oracle 2(Korea)=엣지 전용(Frontend, nginx), Oracle 3(Mumbai)=앱 스택 제거·매크로만(Jenkins 또는 cron/shell). CD(cd.yml): Oracle 2 → deploy-oracle2-edge.sh·FRONTEND_TAG, Oracle 3 → deploy-oracle3-mumbai.sh(앱 스택 down·prune만), Oracle 2/3 Backend 검증 스텝 제거. 배포 스크립트(deploy-oracle1.sh, deploy-oracle2-edge.sh, deploy-aws-api.sh, deploy-oracle3-mumbai.sh)에 배포 전 down·docker image prune -f 반영. 09·12·13·scripts/README 갱신.
+- [x] **로컬 Docker Compose 로그 영구 보관 및 일일 백업**  
+  **영구 보관**: docker-compose.local-full.yml에 방법 A(json-file max-size 100m, max-file 5) + 방법 B(backend만 ./logs/backend:/LOG → Spring Boot 로그가 호스트에 유지, down 해도 유지). **일일 백업**: backup-local-compose-logs.ps1, register-log-backup-task.ps1(매일 03:00), logs-backup/YYYYMMDD/ 30일 보관. [13-manual-operator-tasks.md](../06-deployment/13-manual-operator-tasks.md) §1.8, plans/qa 20260226 계획서 반영.
 - [x] **한국투자증권 주식잔고조회 INQR_DVSN 제한 대응 (2026-02-11 공지)**  
   주식잔고조회 API INQR_DVSN 02(종목별) 제한에 따라 01(대출일별)로 변경. `KoreaInvestmentAccountClient.inquireBalance`, `verifyAccountByCredentials` 및 [09-korea-investment-api-guide.md](../04-api/09-korea-investment-api-guide.md) 예시·주식잔고조회 섹션 반영.
 - [x] **슈퍼관리자(yoon) DB 지정**  
@@ -69,14 +75,14 @@
   대시보드: 킬스위치(긴급실행 중지) 카드는 상단 토글(모의/실)의 자동투자 ON일 때만 표시(useCurrentAccountAutoTrade 훅). 설정: 서버 설정을 계정별 편집 가능하게 전환(TB_TRADING_SETTINGS PIPELINE_AUTO_EXECUTE·PIPELINE_ALLOW_REAL_EXECUTION, Flyway V33), PipelineExecutionScheduler·PipelineExecutor에서 계정별 플래그 우선·서버 기본값 fallback. 자동투자 설정 저장 시 확인 모달(AlertDialog) 추가. 최소/최대 투자금액 라벨에 Tooltip 도움말(한 종목 최소 주문 금액·총 투자 가능 상한 의미) 추가. [06-setting-api.md](../04-api/06-setting-api.md), [02-api-endpoints.md](../04-api/02-api-endpoints.md) 반영.
 - [x] **한국투자증권 토큰 과다 발급 방지**  
   로그인/대시보드 진입 시 토큰 발급 API 과다 호출 방지: KoreaInvestmentTokenService.issueTokenForUser에 사용자 단위 락 적용(발급 직렬화, 응답 전 재요청 방지). KoreaInvestmentAccountClient 401 시 issueTokenForUser 제거·getAccessToken 재조회 후 1회 재시도만. KoreaInvestmentMarketDataClient ensureAccessToken에서 직접 발급 제거·getAccessToken(userId, serverType)만 사용. 토큰은 1회 발급 후 DB 저장, 클라이언트는 getAccessToken만 사용.
-- [x] **한국투자증권 토큰 발급 1분 1회 제한·사용자 단위 락**  
-  KoreaInvestmentTokenService에 사용자당 1분 1회 새 발급 제한(TOKEN_ISSUANCE_COOLDOWN_MS)·lastIssuanceTimeByUserId·issuanceLockByUserId 추가. getAccessToken에서 동시에 모의/실 두 타입 발급이 겹치지 않도록 사용자 단위 synchronized 락으로 직렬화. 403 "접근토큰 발급 1분당 1회" 재발 방지.
+- [x] **한국투자증권 토큰 발급 1분 1회 제한·앱키별 쿨다운**  
+  KoreaInvestmentTokenService에 (userId, serverType)별 1분 1회 새 발급 제한(TOKEN_ISSUANCE_COOLDOWN_MS)·lastIssuanceTimeByKey (앱키별). 모의/실전은 별도 앱키이므로 각각 1분에 1회씩 발급 가능. getAccessToken에서 사용자 단위 synchronized 락으로 직렬화. 403 "접근토큰 발급 1분당 1회" 재발 방지.
 - [x] **대시보드 모의·실계좌 동시 로드**  
   useDashboardData에서 서버타입과 무관하게 모의·실 메인 계좌 각각에 대해 자산·포지션·주문·파이프라인 요약·거래 설정을 병렬 로드. virtualPositions/realPositions, virtualRecentOrders/realRecentOrders 등 모의·실 구분 저장. Dashboard에서 모의/실 카드에 각각 해당 데이터 매핑, 보유 종목·최근 주문 테이블 모의/실 각각 표시.
 - [x] **관리자 인가: User role·로그인 응답 role·OPS 로그인 버튼 제거**  
   TB_USERS에 ROLE 컬럼 추가(V24), User 엔티티·AuthResponseDto에 role 필드, AuthService 로그인/회원가입 응답에 role 포함. 프론트 LoginPage에서 "OPS 로그인" 버튼 제거, 로그인 API 응답의 role로 인가(역할은 서버에서 반환).
-- [x] **React 대시보드 API 매핑 정리(Thymeleaf·기획 문서 기준) 및 상세 에러 안내**  
-  Thymeleaf 대시보드·01-screen-menu-spec 기준으로 React Dashboard에 메인 계좌·자산·포지션·주문·파이프라인 요약(GET /api/v1/pipeline/summary)·거래 설정(GET /api/v1/settings/{accountNo}) 연동. 백엔드 GlobalExceptionHandler에서 ACCOUNT_NOT_FOUND 시 404 반환. 프론트 userAccountsApi/accountApi/ordersApi/settingsApi/pipelineApi에서 404·400 시 null/[] 반환(graceful). ApiError에 code·details·traceId 추가, errorMessages.ts로 원인별 한글 메시지(getDisplayErrorMessage) 제공, Dashboard 등에서 적용. [02-api-endpoints.md](../04-api/02-api-endpoints.md) 계좌/자산 404 명시.
+- [x] **React 대시보드 API 매핑 정리(기획 문서 기준) 및 상세 에러 안내**
+  01-screen-menu-spec 기준으로 React Dashboard에 메인 계좌·자산·포지션·주문·파이프라인 요약(GET /api/v1/pipeline/summary)·거래 설정(GET /api/v1/settings/{accountNo}) 연동. 백엔드 GlobalExceptionHandler에서 ACCOUNT_NOT_FOUND 시 404 반환. 프론트 userAccountsApi/accountApi/ordersApi/settingsApi/pipelineApi에서 404·400 시 null/[] 반환(graceful). ApiError에 code·details·traceId 추가, errorMessages.ts로 원인별 한글 메시지(getDisplayErrorMessage) 제공, Dashboard 등에서 적용. [02-api-endpoints.md](../04-api/02-api-endpoints.md) 계좌/자산 404 명시.
 - [x] **API–프론트엔드 매핑 문서 추가**  
   [11-api-frontend-mapping.md](../04-api/11-api-frontend-mapping.md) 신규: 백엔드 API 목록·프론트 모듈/함수·사용 위치(라우트/페이지)·미연동 정리. 01-api-overview.md §3.7 배치 경로 보정(GET /batch/api/jobs), §9.2에 11 문서 링크 추가.
 - [x] **배치 작업 목록 API 연동**  
@@ -209,6 +215,8 @@
   **1차**: ShortTermTradingStrategyService에서 PositionSizingService.getRecommendations(tradingDate, KR, SHORT_TERM, defaultCapital)로 TB_SIGNAL_SCORE + TB_DAILY_STOCK 기반 단기 권장 종목 사용. PositionRecommendationDto → TradingPortfolioItem 변환(목표가 R:R 2:1/3:1, 진입가 ±1%). **2차**: 시그널 없으면 StockScreeningService fallback 또는 모의 데이터. **N+1 제거**: KoreaInvestmentMarketDataClient에서 토큰/API키 5초 TTL 캐시(tokenInfo: token, serverType, appKey, appSecret)로 동일 요청 내 재사용, getChartData/getCurrentPriceFromApi는 tokenInfo만 사용. **스케줄**: TradingPortfolioScheduler 09:00 KST(팩터 08:00 이후). **리스크 문구**: generateRiskManagementStrategy를 전략 레지스트리(포지션 리스크 1%, ATR, Half-Kelly, 단기 -3% Trailing Stop)와 동일하게 수정. application.yml investment.trading-portfolio.default-capital.
 - [x] **해외(미국) 잔고·보유 조회 API 연동**  
   **상수**: KoreaInvestmentAccountApiConstants에 PATH_OVERSAS_INQUIRE_PRESENT_BALANCE, TR_ID_OVERSAS_BALANCE_REAL/VIRTUAL(CTRP6504R/VTRP6504R), getOverseasBalanceTrId. **클라이언트**: KoreaInvestmentAccountClient.inquireOverseasBalance(userId, accountNo) — GET+query(CANO, ACNT_PRDT_CD, WCRC_FRCR_DVSN_CD=02, NATN_CD=840, TR_MKET_CD=00, INQR_DVSN_CD=00), output1 파싱·parseOverseasPositionsOutput·parseOverseasPositionItem(ovrs_* 등 필드 대응), market=US·currency=USD. **서비스**: AccountService.getBalanceAndPositions에서 국내 inquireBalance 후 inquireOverseasBalance 호출해 US 보유 목록 병합. 실패 시 해외만 스킵·국내만 반환. [09-korea-investment-api-guide.md](../04-api/09-korea-investment-api-guide.md) 해외주식 현재잔고 조회 섹션 추가.
+- [x] **해외주식 잔고·매수 메인 반영 및 모의·실계좌 자산 0원 수정**  
+  **자산 0원 수정**: 주식잔고조회 응답에서 잔고 요약을 `output` 또는 `output2`(배열 시 첫 요소)에서 읽도록 처리. `tot_evlu_amt`가 0일 때 예수금+주문가능금액으로 총자산 표시(모의 100만원 등). [09-korea-investment-api-guide.md](../04-api/09-korea-investment-api-guide.md) 주식잔고조회 응답 구조·open-trading-api 참고 명시. **잔고 별도 API**: GET /api/v1/accounts/{accountNo}/positions?market=KR|US 지원. AccountService.getPositions(accountNo, market): KR=국내만, US=해외만, 미지정=병합. **대시보드**: 국내 잔고/해외 잔고 구역 분리(모의·실계좌 각각 KR/US 별도 호출). 보유 테이블에 시장(KR/US) 컬럼 추가. 11-api-frontend-mapping·02-development-status 버전 행 갱신.
 - [x] **모의계좌 투자 실제 실행 준비**  
   **토큰 서버 타입별 저장**: TB_KOREA_INVESTMENT_TOKENS에 SERVER_TYPE 추가(V12), UK(USER_ID, SERVER_TYPE). KoreaInvestmentToken 엔티티·KoreaInvestmentTokenRepository.findByUserIdAndServerType. **TokenService**: getAccessToken(userId, serverType) 추가, 발급/저장 시 serverType 반영, getAccessToken(userId)는 serverType="1" 위임(호환). **주문 경로 계좌별 키·토큰**: KoreaInvestmentOrderClient에서 accountNo → resolveServerTypeForAccount, getUserApiKeyForAccount(userId, accountNo), getAccessToken(userId, serverType) 사용. **실전 계좌 실행 가드**: investment.pipeline.allow-real-execution(false 기본). PipelineExecutor·PipelineExitScheduler에서 serverType='0' 계좌는 allow-real-execution=false 시 주문 스킵(로그 경고). application.yml pipeline.allow-real-execution, PIPELINE_ALLOW_REAL_EXECUTION. (V12 롤백 스크립트는 Flyway·마이그레이션 정리로 제거됨. 필요 시 git history 참조.)
 - [x] **4단계 파이프라인 확장 (데이터 수집 후 실제 구현)**  
@@ -441,3 +449,4 @@
 | 1.46 | 2026-02-20 | 문서 통합: 변동 시 본 문서 우선·roadmap 불일치 시 development-status 우선 반영 문구 추가. 배포 문서는 06-deployment/00-deployment-docs-index.md 분야별 인덱스 참조. |
 | 1.47 | 2026-02-20 | shrimp-task-manager 작업 내역 반영: 다중 계좌·실시간 스트리밍 설계(14-multi-account-realtime-streaming.md), 뉴스·공시 파이프라인 아키텍처(13-news-collection-design §8), API 토큰·인증 가이드(15-api-credentials-guide.md, .env.example), KIS WebSocket 구현(재연결·하트비트·이벤트), Speed/Buzz 수집기(yonhap/naver/google_news), VaR 검증·Chart.js 차트 연동. |
 | 1.48 | 2026-02-24 | 완료: 국내/미국 전략 시스템 기본화·조회 중심 — getStrategies 시 계좌+시장별 기본 3개 전략 ensure, 파이프라인 Strategy STOPPED/PAUSED 스킵, 프론트 전략 추가 제거·문구 변경, 01-screen-menu-spec·02-development-status·decisions ADR 25 갱신. |
+| 1.49 | 2026-02-26 | 완료: 해외주식 잔고·매수 메인 반영 — 모의·실계좌 자산 0원 수정(output/output2 파싱·tot_evlu_amt 0 시 예수금+주문가능 합산), 잔고 별도 API(positions?market=KR|US), 대시보드 국내/해외 잔고 구역 분리·시장 컬럼, 09-korea-investment-api-guide·11-api-frontend-mapping 갱신. |

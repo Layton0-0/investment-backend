@@ -180,8 +180,8 @@
 - **빌드 도구**: Gradle 8.x
 
 ### 8.2 Frontend
-- **템플릿 엔진**: Thymeleaf 3.1.x
-- **클라이언트 스크립트**: JavaScript ES5
+- **프론트엔드**: React (Vite), TypeScript
+- **클라이언트**: 단일 SPA (investment-frontend)
 
 ### 8.3 외부 API
 - **증권 API**: 한국투자증권 Open API

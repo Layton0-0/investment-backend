@@ -326,8 +326,16 @@ public class KoreaInvestmentAccountClient {
                         "한국투자증권 API 오류: rt_cd=" + rtCd + ", msg1=" + msg1);
             }
 
-            // output (계좌 잔고 정보)
+            // 계좌 잔고 정보: 한투 API는 output(단일) 또는 output2(배열/단일)로 반환. open-trading-api 샘플은 output1(보유종목)+output2(잔고요약).
             JsonNode output = rootNode.path("output");
+            if (output == null || output.isNull() || !output.isObject()) {
+                JsonNode output2 = rootNode.path("output2");
+                if (output2 != null && output2.isArray() && output2.size() > 0) {
+                    output = output2.get(0);
+                } else if (output2 != null && output2.isObject()) {
+                    output = output2;
+                }
+            }
             AccountBalanceDto balanceDto = parseBalanceOutput(output, accountNo);
 
             // output1 (보유 종목 목록)
@@ -1095,6 +1103,12 @@ public class KoreaInvestmentAccountClient {
         BigDecimal totalAssetValue = new BigDecimal(output.path("tot_evlu_amt").asText("0"));
         BigDecimal totalProfitLoss = new BigDecimal(output.path("evlu_pfls_smtl_amt").asText("0"));
         BigDecimal totalProfitLossRate = new BigDecimal(output.path("evlu_pfls_rt").asText("0"));
+
+        // 모의계좌 등에서 tot_evlu_amt가 0으로 올 때: 예수금+주문가능금액으로 총자산 표시 (한투 모의 100만원 등)
+        if (totalAssetValue.compareTo(BigDecimal.ZERO) == 0
+                && (deposit.compareTo(BigDecimal.ZERO) > 0 || orderableCash.compareTo(BigDecimal.ZERO) > 0)) {
+            totalAssetValue = deposit.add(orderableCash);
+        }
 
         return AccountBalanceDto.builder()
                 .accountNo(accountNo)

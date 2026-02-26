@@ -20,36 +20,32 @@
 
 ### 실제 구현 (가벼운 버전)
 
-현재는 **Thymeleaf 기반 간단한 HTML**로 구현하되,
-향후 확장 가능한 구조로 설계합니다.
+현재는 **React (Vite) SPA** 단일 클라이언트로 구현하며,
+REST API와 연동하는 구조입니다.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    클라이언트 레이어                      │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│  │  Thymeleaf   │  │  REST API    │  │  향후 확장   │  │
-│  │  (현재)      │  │  클라이언트  │  │  - Next.js   │  │
-│  │              │  │              │  │  - React     │  │
-│  │  - 가벼운    │  │  - fetch API │  │  - Mobile    │  │
-│  │  - 빠른      │  │  - 간단한    │  │              │  │
-│  │  - 간단한    │  │  - 확장 가능 │  │              │  │
+│  │  React SPA   │  │  REST API    │  │  향후 확장   │  │
+│  │  (Vite)      │  │  클라이언트  │  │  - Next.js   │  │
+│  │  - 단일 앱   │  │  - fetch API │  │  - Mobile    │  │
+│  │  - JWT 인증  │  │  - Bearer 토큰│  │              │  │
 │  └──────────────┘  └──────────────┘  └──────────────┘  │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ## 구현 전략
 
-### Phase 1: 현재 (가벼운 버전)
-- **Thymeleaf**: 서버 사이드 렌더링
-- **순수 HTML/CSS**: 외부 라이브러리 없음
-- **최소 JavaScript**: 필요한 기능만
-- **빠른 로딩**: 파일 크기 최소화
-
-### Phase 2: 향후 확장 (필요 시)
-- **Next.js**: SSR/SSG 지원
-- **React**: 컴포넌트 기반 개발
+### 현재: React SPA
+- **React (Vite)**: 단일 페이지 애플리케이션
 - **TypeScript**: 타입 안정성
-- **Tailwind CSS**: 유틸리티 기반 스타일링
+- **REST API**: Bearer JWT 인증, fetch/axios
+- **공통 레이아웃**: AppLayout(헤더·메뉴), RequireAuth
+
+### 향후 확장 (필요 시)
+- **Next.js**: SSR/SSG 지원
+- **Mobile**: 네이티브 앱 또는 PWA
 
 #### React SPA (분리 배포/개발) — 구현 시작
 - **프론트 디렉토리**: `investment-front/`
@@ -75,8 +71,8 @@
 - 거래 설정 확인
 
 ### 3. REST API 호환
-- Thymeleaf와 REST API 동시 지원
-- 향후 React/Next.js로 전환 용이
+- React SPA가 REST API 단일 클라이언트
+- JWT 인증, CORS 설정으로 백엔드 연동
 
 ## 확장 가능 메뉴·레이아웃 원칙
 
@@ -150,7 +146,7 @@ GET  /api/v1/trading-portfolios/{date}
 
 ## 성능 목표
 
-### 현재 (Thymeleaf)
+### 현재 (React SPA)
 - 로딩 시간: < 1초
 - 파일 크기: < 10KB
 - 렌더링 시간: < 50ms

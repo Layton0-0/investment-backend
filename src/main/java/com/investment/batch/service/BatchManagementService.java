@@ -30,6 +30,8 @@ public class BatchManagementService {
     private static final String SQL_LAST_END_TIME = "SELECT MAX(e.END_TIME) FROM BATCH_JOB_EXECUTION e INNER JOIN BATCH_JOB_INSTANCE i ON e.JOB_INSTANCE_ID = i.JOB_INSTANCE_ID WHERE i.JOB_NAME = ?";
     /** 마지막 실패 실행의 EXIT_MESSAGE (2500자 제한이 있으므로 앞 500자만) */
     private static final String SQL_LAST_FAILURE_MESSAGE = "SELECT e.EXIT_MESSAGE FROM BATCH_JOB_EXECUTION e INNER JOIN BATCH_JOB_INSTANCE i ON e.JOB_INSTANCE_ID = i.JOB_INSTANCE_ID WHERE i.JOB_NAME = ? AND e.STATUS = 'FAILED' ORDER BY e.END_TIME DESC LIMIT 1";
+    /** 마지막 실행 결과 (Jenkins 호환: SUCCESS/FAILURE/UNSTABLE) */
+    private static final String SQL_LAST_EXECUTION_STATUS = "SELECT e.STATUS FROM BATCH_JOB_EXECUTION e INNER JOIN BATCH_JOB_INSTANCE i ON e.JOB_INSTANCE_ID = i.JOB_INSTANCE_ID WHERE i.JOB_NAME = ? ORDER BY e.START_TIME DESC LIMIT 1";
 
     private final BatchJobRegistry batchJobRegistry;
     private final JdbcTemplate jdbcTemplate;
@@ -53,6 +55,7 @@ public class BatchManagementService {
                     .successCount(getSuccessCount(def.getId()))
                     .failureCount(getFailureCount(def.getId()))
                     .lastExecutionTime(getLastExecutionTime(def.getId()))
+                    .lastExecutionResult(toJenkinsStyleResult(getLastExecutionStatus(def.getId())))
                     .build();
             try {
                 String cron = def.getCronExpression();
@@ -106,6 +109,30 @@ public class BatchManagementService {
         } catch (Exception e) {
             log.trace("Last execution time query failed for job={}: {}", jobName, e.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * 마지막 실행의 Spring Batch STATUS (COMPLETED, FAILED 등).
+     */
+    private String getLastExecutionStatus(String jobName) {
+        try {
+            List<String> rows = jdbcTemplate.query(SQL_LAST_EXECUTION_STATUS,
+                    (rs, rowNum) -> rs.getString(1), jobName);
+            return (rows != null && !rows.isEmpty()) ? rows.get(0) : null;
+        } catch (Exception e) {
+            log.trace("Last execution status query failed for job={}: {}", jobName, e.getMessage());
+            return null;
+        }
+    }
+
+    /** Jenkins 호환: COMPLETED→SUCCESS, FAILED→FAILURE, 그 외→UNSTABLE */
+    private static String toJenkinsStyleResult(String batchStatus) {
+        if (batchStatus == null || batchStatus.isBlank()) return null;
+        switch (batchStatus) {
+            case "COMPLETED": return "SUCCESS";
+            case "FAILED": return "FAILURE";
+            default: return "UNSTABLE";
         }
     }
 

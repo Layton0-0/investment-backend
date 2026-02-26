@@ -46,21 +46,25 @@ public class DataPipelineStatusService {
         LocalDateTime updatedAt = LocalDateTime.now(zone);
         List<DataPipelineSourceStatusDto> sources = new ArrayList<>();
 
-        // DART
+        // DART (수집은 data-collector에서 수행. Batch job 없음 → 수집 시각을 lastRunTime으로 표시)
+        var dartCollected = newsItemRepository.findMaxCollectedAtBySource(SOURCE_NEWS_DART);
         sources.add(buildSourceStatus(
                 "DART",
                 "DART 공시",
                 JOB_DART,
-                newsItemRepository.findMaxCollectedAtBySource(SOURCE_NEWS_DART).map(LocalDateTime::toLocalDate).orElse(null),
-                updatedAt.toLocalDate()));
+                dartCollected.map(LocalDateTime::toLocalDate).orElse(null),
+                updatedAt.toLocalDate(),
+                dartCollected.orElse(null)));
 
-        // SEC
+        // SEC (동일)
+        var secCollected = newsItemRepository.findMaxCollectedAtBySource(SOURCE_NEWS_SEC);
         sources.add(buildSourceStatus(
                 "SEC",
                 "SEC EDGAR 공시",
                 JOB_SEC,
-                newsItemRepository.findMaxCollectedAtBySource(SOURCE_NEWS_SEC).map(LocalDateTime::toLocalDate).orElse(null),
-                updatedAt.toLocalDate()));
+                secCollected.map(LocalDateTime::toLocalDate).orElse(null),
+                updatedAt.toLocalDate(),
+                secCollected.orElse(null)));
 
         // KRX
         sources.add(buildSourceStatus(
@@ -68,7 +72,8 @@ public class DataPipelineStatusService {
                 "KRX 일별 시세",
                 JOB_KRX,
                 dailyStockRepository.findMaxBasDtByMarket("KR").orElse(null),
-                updatedAt.toLocalDate()));
+                updatedAt.toLocalDate(),
+                null));
 
         // US
         sources.add(buildSourceStatus(
@@ -76,7 +81,8 @@ public class DataPipelineStatusService {
                 "US 일별 시세",
                 JOB_US,
                 dailyStockRepository.findMaxBasDtByMarket("US").orElse(null),
-                updatedAt.toLocalDate()));
+                updatedAt.toLocalDate(),
+                null));
 
         return DataPipelineStatusDto.builder()
                 .sources(sources)
@@ -89,8 +95,11 @@ public class DataPipelineStatusService {
             String displayName,
             String jobId,
             LocalDate lastBaselineDate,
-            LocalDate today) {
-        LocalDateTime lastRunTime = batchManagementService.getLastExecutionTimeForJob(jobId);
+            LocalDate today,
+            LocalDateTime inferredLastRunTime) {
+        LocalDateTime lastRunTime = inferredLastRunTime != null
+                ? inferredLastRunTime
+                : batchManagementService.getLastExecutionTimeForJob(jobId);
         String errorSummary = batchManagementService.getLastFailureMessage(jobId);
         String status = deriveStatus(errorSummary, lastBaselineDate, today, sourceId);
         return DataPipelineSourceStatusDto.builder()

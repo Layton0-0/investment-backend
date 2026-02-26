@@ -37,6 +37,7 @@ bin/
 *.log
 logs/
 *.log.*
+docs/tomcat_logs/
 
 # Application (로컬/예민 설정 - Git 제외)
 application-local.yml

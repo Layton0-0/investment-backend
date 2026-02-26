@@ -86,8 +86,9 @@
 | **시장 데이터 (MarketDataController)** | | |
 | GET | `/api/v1/market-data/current-price/{symbol}` | 단일 종목 현재가 |
 | POST | `/api/v1/market-data/current-prices` | 다중 종목 현재가 일괄 조회 |
+| GET | `/api/v1/market-data/symbols/search` | 종목 통합 검색 (q, market) |
 | **배치 관리 (BatchController / BatchManagementController)** | | |
-| GET | `/batch` | 스케줄 현황 페이지 (SSR, Thymeleaf) |
+| GET | `/batch` | 스케줄 현황 (React: /batch → /ops/data 리다이렉트, GET /api/v1/batch/jobs) |
 | GET | `/api/v1/batch/jobs` | 배치 작업 목록 JSON (SPA 연동용, 권장. nginx /api 전달) |
 | GET | `/batch/api/jobs` | 배치 작업 목록 (레거시, nginx에 /batch 없으면 404) |
 | **Ops 데이터 파이프라인 (OpsDataPipelineController)** | | |
@@ -123,7 +124,7 @@
 | PUT /api/v1/auth/mypage | authApi.updateMyPage | MyPage | |
 | POST /api/v1/auth/logout | authApi.logout | AuthContext | |
 | GET /api/v1/accounts/{accountNo}/assets | accountApi.getAccountAssets | useDashboardData, Dashboard | |
-| GET /api/v1/accounts/{accountNo}/positions | accountApi.getPositions | useDashboardData, Dashboard | |
+| GET /api/v1/accounts/{accountNo}/positions (optional market=KR or US) | accountApi.getPositions(accountNo, market?) | useDashboardData(국내/해외 별도 호출), Dashboard(국내·해외 잔고 블록) | |
 | GET balance, buyable-amount, sellable-quantity, order-history, profit-loss | accountApi.getBalance, getBuyableAmount, getSellableQuantity, getOrderHistory, getProfitLoss | (필요 시 상세 화면) | 연동 완료 |
 | GET /api/v1/orders | ordersApi.getOrders | useDashboardData, Market(Orders), Dashboard. 응답 각 항목에 signalType·exitRuleType(거래 사유) 포함, 주문 목록·대시보드 주문 테이블에 시그널 유형·청산 규칙 컬럼 표시 | |
 | DELETE /api/v1/orders/{orderId} | ordersApi.cancelOrder | Market(Orders) | |
@@ -161,6 +162,7 @@
 | GET /api/v1/trading-portfolios/rebalance-suggestions | tradingPortfolioApi.getRebalanceSuggestions | Market(Portfolio) 리밸런싱 제안 카드 | 연동 완료 |
 | GET /api/v1/market-data/current-price/{symbol} | marketDataApi.getCurrentPrice | Market(Portfolio) 종목 분석 모달 현재가 | 연동 완료 |
 | POST /api/v1/market-data/current-prices | marketDataApi.getCurrentPrices | 다중 종목 현재가 위젯(선택) | 연동 완료 |
+| GET /api/v1/market-data/symbols/search | marketDataApi.searchSymbols | Market(Orders) 수동 주문 종목 통합 검색 모달 | 연동 완료 |
 | GET /api/v1/batch/jobs | batchApi.getBatchJobs | Admin(데이터 파이프라인 /ops/data, Batch) | SPA 연동 |
 | GET /api/v1/ops/data-pipeline/status | opsApi.getDataPipelineStatus | Admin(Ops 데이터 파이프라인 /ops/data) | 연동 완료 |
 | GET /api/v1/ops/alerts | opsApi.getAlerts | Admin(Ops 알림센터 /ops/alerts) | 연동 완료 |

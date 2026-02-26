@@ -433,7 +433,7 @@ investment:
 
 - **실전투자**: 초당 20건 제한
 - **모의투자**: 초당 2건 제한
-- **토큰 발급**: 초당 1건 제한
+- **토큰 발급**: **1분당 1회(앱키별)** — 한국투자증권 공식 제한. 모의(paper_app)와 실전(my_app)은 별도 앱키이므로 각각 1분에 1회씩 발급 가능. `KoreaInvestmentTokenService`에서 (userId, serverType)별 쿨다운으로 준수.
 
 Rate Limiter는 자동으로 호출을 제한하며, 초과 시 적절한 대기 시간 후 재시도합니다.
 
@@ -493,6 +493,7 @@ Java 17을 사용하는 경우 기본적으로 TLS 1.2 이상을 지원하므로
 - **요청 방식**: **GET** + query parameter
 - **기능**: 계좌 잔고 정보 및 보유 종목 목록 조회
 - **사용 클래스**: `KoreaInvestmentAccountClient.inquireBalance()`
+- **응답 구조**: 잔고 요약은 `output`(단일 객체) 또는 `output2`(배열 시 첫 번째 요소, 단일 객체 시 그대로)에서 읽음. 한투 공식 샘플([open-trading-api](https://github.com/koreainvestment/open-trading-api))은 output1(보유종목)+output2(잔고요약). `tot_evlu_amt`가 0인 경우(모의계좌 등) 예수금(`dnca_tot_amt`)+주문가능(`ord_psbl_cash`)으로 총자산 표시.
 - **INQR_DVSN**: **01(대출일별)**만 사용. 02(종목별)는 2026-02-11 공지로 제한되어 `INPUT INVALID_CHECK_INQR_DVSN` 오류가 발생하므로 사용하지 않음.
 - **시장(KR/US) 구분**: 보유 종목 응답에 거래소 구분 필드(`excg_dvsn_cd` 등)가 있으면 KRX→KR, NASD/NYSE/AMEX→US로 매핑하여 `AccountPositionDto.market`에 설정.
 
@@ -503,7 +504,7 @@ Java 17을 사용하는 경우 기본적으로 TLS 1.2 이상을 지원하므로
 
 #### 1-2. 해외주식 현재잔고(체결기준) 조회
 - **TR ID**: `CTRP6504R` (실거래) / `VTRP6504R` (모의투자)
-- **엔드포인트**: `/uapi/overseas-stock/v1/trading/inquire-present-balance`
+- **엔드포인트**: `/uapi/overseas-stock/v1/trading/inquire-present-balance` (체결기준 현재잔고). 포털 메뉴명이 "해외주식 잔고"이고 URL에 `inquire-balance`가 노출될 수 있으나, 본 프로젝트는 **inquire-present-balance** 사용.
 - **요청 방식**: **GET** + query parameter
 - **기능**: 미국(840) 외화(02) 기준 체결 잔고·보유 종목 목록 조회
 - **사용 클래스**: `KoreaInvestmentAccountClient.inquireOverseasBalance(userId, accountNo)` — 국내 잔고와 별도 호출 후 `AccountService.getBalanceAndPositions`에서 국내·해외 보유를 병합하여 반환
@@ -586,6 +587,12 @@ ProfitLossDto profitLoss = accountClient.inquirePeriodProfitLoss(
 - **에러 처리**: API 실패 시 DB 폴백 전략을 사용합니다.
 - **캐싱**: 계좌 잔고 및 보유 종목은 1분 TTL로 캐싱됩니다.
 - **인증**: 모든 API 호출은 사용자별 Access Token을 사용합니다.
+
+### 첫 화면·대시보드 계좌 및 토큰 플로우 (운영·점검 참고)
+
+- **토큰 정책**: 로그인/계좌인증 시점에 1회 발급 후 DB에 저장하고, 이후 API 호출은 `KoreaInvestmentTokenService.getAccessToken(userId, serverType)`으로 DB에서만 조회한다. 재발급은 토큰 없음/만료 시에만 제한적으로 수행. **한국투자증권 제한**: 접근토큰 발급 **1분당 1회(앱키별)** — 모의/실전은 서로 다른 앱키이므로 각각 1분에 1회씩 발급 가능([open-trading-api](https://github.com/koreainvestment/open-trading-api) 문제 해결 가이드).
+- **첫 화면 계좌**: 대시보드(`/`)는 `userAccountsApi.getMainAccount`로 메인 계좌(모의/실 serverType별)를 조회한 뒤, 해당 `accountNo`로 `getAccountAssets`, `getPositions` 등을 호출한다. **계좌번호는 반드시 `UserAccount`에 등록된 값(복호화 후 비교 기준)과 동일**해야 하며, 그렇지 않으면 `resolveServerTypeForAccount`가 null을 반환해 API 키를 찾을 수 없음(DomainException)이 발생할 수 있다.
+- **점검 시**: 첫 화면에서 API 키 없음/토큰 오류가 반복되면 (1) 대시보드에서 사용하는 accountNo가 UserAccount·TB_USER_ACCOUNTS와 일치하는지, (2) 로그인/계좌인증 직후 토큰이 `savePreIssuedTokenForUser` 등으로 DB에 저장되었는지 확인한다.
 
 ## 주의사항
 
