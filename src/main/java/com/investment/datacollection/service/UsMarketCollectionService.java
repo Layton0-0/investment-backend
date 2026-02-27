@@ -2,11 +2,12 @@ package com.investment.datacollection.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.investment.alert.EmergencyAlertService;
 import com.investment.config.DataCollectionProperties;
 import com.investment.domain.entity.DailyStock;
 import com.investment.domain.repository.DailyStockRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -37,7 +38,6 @@ import java.util.Map;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class UsMarketCollectionService {
 
     private static final String MARKET_US = "US";
@@ -45,6 +45,15 @@ public class UsMarketCollectionService {
     private final DailyStockRepository dailyStockRepository;
     private final DataCollectionProperties dataCollectionProperties;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Autowired(required = false)
+    private EmergencyAlertService emergencyAlertService;
+
+    public UsMarketCollectionService(DailyStockRepository dailyStockRepository,
+                                    DataCollectionProperties dataCollectionProperties) {
+        this.dailyStockRepository = dailyStockRepository;
+        this.dataCollectionProperties = dataCollectionProperties;
+    }
 
     /** 기간 수집 시 최대 일수 (과부하 방지) */
     private static final int MAX_RANGE_DAYS = 365;
@@ -78,6 +87,10 @@ public class UsMarketCollectionService {
             List<DailyStock> entities = fetchViaCollectorUrl(basDt, symbolsOverride);
             if (entities.isEmpty()) {
                 log.warn("US 시장 일별 수집(HTTP) 결과 없음: basDt={}, symbols={} — 수집기 응답 빈 배열 또는 오류", basDt, symbolsList);
+                if (dataCollectionProperties.getUs().isFailureAlertEnabled() && emergencyAlertService != null) {
+                    emergencyAlertService.sendRiskEventAlert("WARNING", "UsDailyCollector",
+                            "US 시장 일별 수집 결과 없음: basDt=" + basDt + ", symbols count=" + symbolsList.size());
+                }
                 return 0;
             }
             dailyStockRepository.saveAll(entities);
@@ -109,7 +122,7 @@ public class UsMarketCollectionService {
         return entities.size();
     }
 
-    /** collector-url로 POST 후 JSON 파싱 → DailyStock 목록 */
+    /** collector-url로 POST 후 JSON 파싱 → DailyStock 목록. 연결/타임아웃/5xx 시 재시도(지수 백오프). */
     private List<DailyStock> fetchViaCollectorUrl(LocalDate basDt, List<String> symbolsOverride) {
         String baseUrl = dataCollectionProperties.getUs().getCollectorUrl().trim().replaceAll("/+$", "");
         String url = baseUrl + "/us-daily";
@@ -118,6 +131,43 @@ public class UsMarketCollectionService {
             log.warn("US 일별 수집(HTTP) 스킵: 수집 대상 심볼 없음 — symbolsOverride 비어있고 설정값(us.symbols)도 없음, basDt={}", basDt);
             return List.of();
         }
+        int retryMax = Math.max(0, dataCollectionProperties.getUs().getRetryMax());
+        long retryInitialMs = Math.max(0L, dataCollectionProperties.getUs().getRetryInitialMs());
+        int maxAttempts = 1 + retryMax;
+        Exception lastException = null;
+        for (int attempt = 0; attempt < maxAttempts; attempt++) {
+            if (attempt > 0) {
+                long delayMs = retryInitialMs * (1L << (attempt - 1));
+                log.info("US 일별 수집(HTTP) 재시도: attempt={}/{}, basDt={}, delayMs={}", attempt + 1, maxAttempts, basDt, delayMs);
+                try {
+                    Thread.sleep(delayMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    log.warn("US 일별 수집(HTTP) 재시도 대기 중 인터럽트");
+                    return List.of();
+                }
+            }
+            try {
+                List<DailyStock> result = doFetchViaCollectorUrlOnce(url, basDt, symbolsList, symbolsOverride);
+                if (attempt > 0 && !result.isEmpty()) {
+                    log.info("US 일별 수집(HTTP) 재시도 성공: attempt={}, basDt={}, count={}", attempt + 1, basDt, result.size());
+                }
+                return result;
+            } catch (Exception e) {
+                lastException = e;
+                log.warn("US 일별 수집(HTTP) 시도 실패: attempt={}/{}, basDt={}, error={}",
+                        attempt + 1, maxAttempts, basDt, e.getMessage());
+            }
+        }
+        if (lastException != null) {
+            log.error("US 일별 수집(HTTP) 모든 재시도 실패: url={}, basDt={}, attempts={}",
+                    url, basDt, maxAttempts, lastException);
+        }
+        return List.of();
+    }
+
+    private List<DailyStock> doFetchViaCollectorUrlOnce(String url, LocalDate basDt,
+            List<String> symbolsList, List<String> symbolsOverride) {
         log.debug("US 일별 수집(HTTP) 요청: url={}, basDt={}, symbols={}", url, basDt, symbolsList);
         java.util.Map<String, Object> body = new java.util.HashMap<>();
         body.put("bas_dt", basDt.toString());
@@ -125,31 +175,25 @@ public class UsMarketCollectionService {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<java.util.Map<String, Object>> request = new HttpEntity<>(body, headers);
-        try {
-            RestTemplate rest = new RestTemplate();
-            ResponseEntity<String> response = rest.postForEntity(url, request, String.class);
-            if (!response.getStatusCode().is2xxSuccessful()) {
-                log.warn("US 일별 수집(HTTP) 비정상 응답: url={}, basDt={}, status={}, bodyLength={}",
-                        url, basDt, response.getStatusCode(),
-                        response.getBody() != null ? response.getBody().length() : 0);
-                return List.of();
-            }
-            if (response.getBody() == null || response.getBody().isBlank()) {
-                log.warn("US 일별 수집(HTTP) 응답 본문 없음: url={}, basDt={}", url, basDt);
-                return List.of();
-            }
-            List<DailyStock> parsed = parseJsonToDailyStocks(response.getBody(), basDt);
-            if (parsed.isEmpty() && !response.getBody().trim().startsWith("[]")) {
-                log.warn("US 일별 수집(HTTP) 파싱 후 0건: url={}, basDt={}, bodyPreview={}",
-                        url, basDt, response.getBody().length() > 200 ? response.getBody().substring(0, 200) + "..."
-                                : response.getBody());
-            }
-            return parsed;
-        } catch (Exception e) {
-            log.error("US 일별 수집(HTTP) 예외: url={}, basDt={}, error={}, cause={}",
-                    url, basDt, e.getMessage(), e.getCause() != null ? e.getCause().getMessage() : "none", e);
+        RestTemplate rest = new RestTemplate();
+        ResponseEntity<String> response = rest.postForEntity(url, request, String.class);
+        if (!response.getStatusCode().is2xxSuccessful()) {
+            log.warn("US 일별 수집(HTTP) 비정상 응답: url={}, basDt={}, status={}, bodyLength={}",
+                    url, basDt, response.getStatusCode(),
+                    response.getBody() != null ? response.getBody().length() : 0);
+            throw new IllegalStateException("HTTP " + response.getStatusCode());
+        }
+        if (response.getBody() == null || response.getBody().isBlank()) {
+            log.warn("US 일별 수집(HTTP) 응답 본문 없음: url={}, basDt={}", url, basDt);
             return List.of();
         }
+        List<DailyStock> parsed = parseJsonToDailyStocks(response.getBody(), basDt);
+        if (parsed.isEmpty() && !response.getBody().trim().startsWith("[]")) {
+            log.warn("US 일별 수집(HTTP) 파싱 후 0건: url={}, basDt={}, bodyPreview={}",
+                    url, basDt, response.getBody().length() > 200 ? response.getBody().substring(0, 200) + "..."
+                            : response.getBody());
+        }
+        return parsed;
     }
 
     private String resolveSymbolsString(List<String> symbolsOverride) {

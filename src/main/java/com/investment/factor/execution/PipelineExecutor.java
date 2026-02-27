@@ -16,6 +16,7 @@ import com.investment.factor.service.PositionSizingService;
 import com.investment.ops.service.AuditLogService;
 import com.investment.order.dto.OrderRequestDto;
 import com.investment.order.service.OrderService;
+import com.investment.setting.service.SystemSettingService;
 import com.investment.strategy.domain.StrategyType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,13 +50,7 @@ public class PipelineExecutor {
     private final UserAccountRepository userAccountRepository;
     private final EncryptionUtil encryptionUtil;
     private final AuditLogService auditLogService;
-
-    @Value("${investment.pipeline.auto-execute:false}")
-    private boolean autoExecute = false;
-
-    /** 실전 계좌(serverType=0) 자동 실행 허용. false면 모의계좌만 실제 주문 */
-    @Value("${investment.pipeline.allow-real-execution:false}")
-    private boolean allowRealExecution = false;
+    private final SystemSettingService systemSettingService;
 
     /** 체결 확인 후 포지션 등록 여부 (true면 체결 확인 후, false면 주문 성공 시 즉시 등록) */
     @Value("${investment.pipeline.register-position-on-execution:false}")
@@ -110,10 +105,12 @@ public class PipelineExecutor {
     @Transactional
     public PipelineRunResult run(LocalDate basDt, String market, String accountNo, StrategyType strategyType,
             BigDecimal allocatedCapital, boolean dryRun) {
+        boolean serverAutoExecute = systemSettingService.getBoolean("pipeline.autoExecute");
+        boolean serverAllowRealExecution = systemSettingService.getBoolean("pipeline.allowRealExecution");
         List<PositionRecommendationDto> recommendations = positionSizingService.getRecommendations(
                 basDt, market, strategyType, allocatedCapital);
         List<PipelineRunResult.OrderResult> orderResults = new ArrayList<>();
-        boolean actuallyExecute = autoExecute && !dryRun;
+        boolean actuallyExecute = serverAutoExecute && !dryRun;
 
         for (PositionRecommendationDto rec : recommendations) {
             if (rec.getRecommendedQty() <= 0)
@@ -143,7 +140,7 @@ public class PipelineExecutor {
                     String userId = setting.getUserId();
                     boolean effectiveAllowReal = setting.getPipelineAllowRealExecution() != null
                             ? setting.getPipelineAllowRealExecution()
-                            : allowRealExecution;
+                            : serverAllowRealExecution;
                     // 실전 계좌(serverType=0)는 allow-real-execution=false 시 주문 스킵
                     String serverType = resolveServerTypeForAccount(userId, accountNo);
                     if ("0".equals(serverType) && !effectiveAllowReal) {

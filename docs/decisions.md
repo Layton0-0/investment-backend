@@ -30,6 +30,8 @@
 24. [전략 비중 동적 결정](#24-전략-비중-동적-결정)
 25. [국내/미국 전략 시스템 기본화 및 조회 중심](#25-국내미국-전략-시스템-기본화-및-조회-중심)
 26. [Thymeleaf 제거 및 React 단일 클라이언트](#26-thymeleaf-제거-및-react-단일-클라이언트)
+27. [서버 기본값의 DB 저장 및 관리자 편집](#27-서버-기본값의-db-저장-및-관리자-편집)
+28. [시장 급락 시 동결 정책](#28-시장-급락-시-동결-정책)
 
 ---
 
@@ -820,6 +822,49 @@ API 설계 표준 수립 필요
 
 ---
 
+## 27. 서버 기본값의 DB 저장 및 관리자 편집
+
+**결정일**: 2026-02-27  
+**상태**: 확정  
+**결정**: pipeline.auto-execute·allow-real-execution 등 서버 전역 기본값을 TB_SYSTEM_SETTINGS에 저장하고, DB 값 우선·application.yml fallback. 관리자는 Ops 화면(시스템 설정)에서 조회·수정.
+
+### 배경
+- 기존에는 서버 기본값이 application.yml/환경변수로만 관리되어, 변경 시 재배포 또는 env 수정이 필요했음.
+- 관리자가 운영 중에 파이프라인 자동 실행·실계좌 허용 등 서버 기본값을 화면에서 바꿀 수 있도록 요구됨.
+
+### 결정
+- **TB_SYSTEM_SETTINGS**: 키-값 테이블(KEY, VALUE, DESCRIPTION, UPDATED_AT, UPDATED_BY). whitelist 키만 허용.
+- **해석 순서**: DB에 키가 있으면 DB 값 사용, 없으면 application.yml(또는 환경변수) fallback.
+- **계정별 설정 유지**: TB_TRADING_SETTINGS의 pipelineAutoExecute·pipelineAllowRealExecution가 null이면 위 서버 기본값 사용(기존 동작).
+- **API**: GET/PUT `/api/v1/system/settings` (ADMIN 전용). PUT 시 감사 로그(SETTING_CHANGE) 기록.
+- **캐시**: SystemSettingService 조회 결과 5분 TTL(Redis CACHE_SYSTEM_SETTINGS). PUT 시 캐시 무효화.
+
+### 참고
+- [02-api-endpoints.md §5.4](04-api/02-api-endpoints.md) 시스템 설정 API
+- [02-development-status.md](09-planning/02-development-status.md) 완료 항목 "시스템 설정 DB화 및 Ops 시스템 설정 화면"
+
+---
+
+## 28. 시장 급락 시 동결 정책
+
+**결정일**: 2026-02-27  
+**상태**: 확정  
+**결정**: 설계 원칙 "시장 급락 -5% 시 현금화"에 따른 최소 구현으로, 벤치마크 지수(기본 SPY) 전일 대비 일일 낙폭이 설정값(기본 5%) 이상일 때 **당일 신규 매수만 중단**(매도 허용). 데이터 부재 시 허용(fail-open).
+
+### 배경
+- 퀀트 시스템 설계서 점검에서 "시장 급락 시 전체 청산" 정책이 미구현 갭으로 식별됨.
+- 즉시 구현 범위는 "당일 매수 중단"으로 한정하고, 전액 청산(현금화)은 추후 정책 확장 시 검토.
+
+### 결정
+- **MarketCrashGateService**: TB_DAILY_STOCK에서 벤치마크 심볼(기본 SPY, US)의 전일·전전일 종가로 일일 수익률 산출. 수익률 ≤ -threshold% 시 `isNewBuyAllowed()` false.
+- **PipelineExecutionScheduler**: 리스크 게이트·일일 손실 한도 검사 후 `marketCrashGateService.isNewBuyAllowed()` 호출. false면 해당 계정 파이프라인 실행 스킵(로그만, 다음 계정 계속).
+- **설정**: `investment.risk.market-crash-gate-enabled`, `market-crash-daily-drop-pct`, `market-crash-benchmark-symbol`, `market-crash-benchmark-market`.
+
+### 참고
+- [00-strategy-registry.md §2.9](02-architecture/00-strategy-registry.md) 리스크 게이트·일일 손실 한도·시장 급락 시 동결
+
+---
+
 ## 참고 문서
 
 - [시스템 아키텍처](./02-architecture/01-system-architecture.md)
@@ -846,3 +891,5 @@ API 설계 표준 수립 필요
 | 1.11 | 2026-02-24 | System | ADR 24 전략 비중 동적 결정 (레짐별 목표 비중, StrategyWeightResolver·설정 외부화) |
 | 1.12 | 2026-02-24 | System | ADR 25 국내/미국 전략 시스템 기본화·조회 중심 (ensure on read, 파이프라인 STOPPED 스킵, 전략 추가 버튼 제거) |
 | 1.13 | 2026-02-25 | System | ADR 26 Thymeleaf 제거·React 단일 클라이언트 (의존성·템플릿·웹 컨트롤러·메뉴 설정 삭제, static error.html, 문서 갱신) |
+| 1.14 | 2026-02-27 | System | ADR 27 서버 기본값의 DB 저장 및 관리자 편집 (TB_SYSTEM_SETTINGS, SystemSettingService, GET/PUT /api/v1/system/settings, Ops 시스템 설정 화면) |
+| 1.15 | 2026-02-27 | System | ADR 28 시장 급락 시 동결 정책 (MarketCrashGateService, 벤치마크 전일 낙폭 임계값 시 당일 신규 매수 중단) |

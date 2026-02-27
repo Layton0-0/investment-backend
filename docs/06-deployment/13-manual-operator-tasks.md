@@ -125,6 +125,10 @@
   - `investment-infra/scripts/backup-local-compose-logs.ps1` — 각 서비스 stdout/stderr를 `logs-backup/YYYYMMDD/<서비스>.log` 로 저장(30일 초과 분 자동 삭제).  
   - 한 번만 등록: `.\scripts\register-log-backup-task.ps1` → Windows 작업 스케줄러 **Investment-Local-Compose-LogBackup**, 매일 03:00 실행.  
   - 삭제: `Unregister-ScheduledTask -TaskName Investment-Local-Compose-LogBackup`
+- **Backend 재시작이 16:00/17:00(KST) 이후인 경우**  
+  - 당일 **KRX 일별 수집**(16:00)·**US 일별 수집**(17:00)은 스케줄에 의해 이미 지나 있어 자동 실행되지 않음.  
+  - **보완 실행**: Ops → 스케줄 현황에서 **KRX 일별 수집**, **US 시장 일별 수집** 각각 **지금 실행** 버튼 클릭. 또는 API로 `POST /api/v1/trigger/krx-daily`, `POST /api/v1/trigger/us-daily` 호출(인증 필요).  
+  - 실행 여부는 `GET /api/v1/batch/jobs` 응답의 `lastExecutionTime` 또는 [plans/qa/scripts/배치_실행_이력_점검.sql](../../../plans/qa/scripts/배치_실행_이력_점검.sql) 로 확인.
 
 ---
 
@@ -147,6 +151,20 @@
 - **원인**: `strategy-governance-check` Job이 아직 한 번도 실행되지 않아 TB_GOVERNANCE_CHECK_RESULT에 데이터가 없음.
 - **작업**: (1) **수동 실행**: Ops → 스케줄 현황에서 "전략 거버넌스 검사" **지금 실행** 버튼 클릭, 또는 `POST /api/v1/trigger/strategy-governance-check` 호출. (2) **스케줄 대기**: 매월 1일 02:00 KST에 자동 실행되므로 그 후에는 이력이 쌓임.
 - **참고**: API `GET /api/v1/ops/governance/results` 및 프론트 연동은 완료되어 있으며, 이력이 없으면 빈 배열이 반환되는 것이 정상임.
+
+---
+
+### 1.11 자동매매 가동 전 점검
+
+- **목적**: 매일 09:10 KST 자동매수(통합) 실행 전에 운영자가 확인할 수 있는 체크리스트. 반복 검증·배포 후 점검에 사용.
+- **점검 항목** (순서대로 확인 권장):
+  1. **인프라**: DB(Spring Batch 메타데이터 테이블 존재), Redis 연결, Backend 기동 후 `auto-buy` 스케줄 등록 로그 확인 (`Scheduled batch job: id=auto-buy, cron=0 10 9 * * *`).
+  2. **데이터 파이프라인**: 전일 **KRX 일별 수집**(16:00), **US 일별 수집**(17:00), 당일 **팩터 계산**(08:00)이 선행 완료되어 있어야 함. 재기동이 16:00/17:00 이후면 §1.8 대로 수동 트리거 (`POST /api/v1/trigger/krx-daily`, `POST /api/v1/trigger/us-daily`, `POST /api/v1/trigger/factor-calculation`).
+  3. **계좌·설정**: 자동매매할 계좌의 TB_TRADING_SETTINGS에서 `AUTO_TRADING_ENABLED=true`, `MAX_INVESTMENT_AMOUNT>0`, 실제 주문 시 `PIPELINE_AUTO_EXECUTE=true`(또는 서버 기본). 실전 계좌면 `PIPELINE_ALLOW_REAL_EXECUTION` 허용. TB_USER_ACCOUNTS에 해당 계좌 등록·USER_ID 매칭 확인.
+  4. **게이트**: 활성 **거버넌스 halt** 없음 확인(Ops → 전략 거버넌스, 활성 halt 해제 시 `PUT /api/v1/ops/governance/halts/{market}/{strategyType}/clear`). 해당 계좌·시장·전략이 중지/일시정지 아님 확인.
+  5. **준비 상태 API**: `GET /api/v1/ops/auto-trading-readiness`(인증 필요)로 자동투자 ON 계좌 수, 전일 일봉·시그널 row 수, 활성 halt 수를 한 번에 확인. 09:10 전 점검용.
+- **수동 검증**: `POST /api/v1/trigger/auto-buy?dryRun=true`로 1회 실행 후 Backend 로그에서 대상 계좌·스킵 사유 메시지 확인. 실제 주문 전에는 dryRun=true 권장.
+- **참조**: [12-auto-investment-strategy.md §6.2](../02-architecture/12-auto-investment-strategy.md), 자동매매 선행 조건 종합 계획(plans).
 
 ---
 

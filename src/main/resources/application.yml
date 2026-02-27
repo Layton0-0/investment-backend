@@ -93,6 +93,9 @@ management:
         enabled: true
 
 investment:
+  # 배치 Job 실패 시 Discord 알림 (webhook 설정 시에만 동작)
+  batch:
+    failure-alert-enabled: ${BATCH_FAILURE_ALERT_ENABLED:false}
   # 마찰 비용 (한국투자증권 KIS 실전 수수료·세금·슬리피지). 백테스트 PnL 반영용.
   fees:
     korea:
@@ -126,6 +129,11 @@ investment:
       yfinance-script-path: ${US_YFINANCE_SCRIPT_PATH:}
       symbols: ${US_SYMBOLS:AAPL,MSFT,GOOGL,AMZN,META,TSLA,NVDA,JPM,V,JNJ,SPY,IEF,TLT,GLD,DBC,BIL}
       python-command: ${US_PYTHON_COMMAND:python}
+      # HTTP 호출 실패 시 재시도 (연결/타임아웃/5xx). 0이면 재시도 없음.
+      retry-max: ${US_COLLECTOR_RETRY_MAX:2}
+      retry-initial-ms: ${US_COLLECTOR_RETRY_INITIAL_MS:1000}
+      # US 일별 수집 실패·0건 시 Discord 알림 (webhook 설정 시에만 동작)
+      failure-alert-enabled: ${US_COLLECTOR_FAILURE_ALERT_ENABLED:false}
     # 내부 수집 API (Yahoo·DART·SEC 등 Python 수집기 → Spring 전달 시 사용). 키 미설정 시 내부 API 비활성화.
     internal-api-key: ${DATA_COLLECTION_INTERNAL_KEY:}
   # 뉴스·공시 시그널 연동 (DART 키워드·8-K). 포지션 사이징 시 시그널 공시 종목 우선 정렬
@@ -191,6 +199,11 @@ investment:
     vix-threshold: ${INVESTMENT_RISK_VIX_THRESHOLD:30}
     reduce-size-on-high-vol-pct: ${INVESTMENT_RISK_REDUCE_SIZE_ON_HIGH_VOL_PCT:50}
     daily-loss-limit-pct: ${INVESTMENT_RISK_DAILY_LOSS_LIMIT_PCT:5}
+    # 시장 급락 게이트: 벤치마크 일일 낙폭이 이 값 이상이면 당일 신규 매수 중단 (기본 5 = -5%)
+    market-crash-gate-enabled: ${INVESTMENT_RISK_MARKET_CRASH_GATE_ENABLED:true}
+    market-crash-daily-drop-pct: ${INVESTMENT_RISK_MARKET_CRASH_DAILY_DROP_PCT:5}
+    market-crash-benchmark-symbol: ${INVESTMENT_RISK_MARKET_CRASH_BENCHMARK_SYMBOL:SPY}
+    market-crash-benchmark-market: ${INVESTMENT_RISK_MARKET_CRASH_BENCHMARK_MARKET:US}
     # VaR/CVaR 단순 파라메트릭용 일일 변동성 가정 (%). 1 = 1%. 0 또는 미설정 시 VaR/CVaR 미산출
     var-daily-vol-pct: ${INVESTMENT_RISK_VAR_DAILY_VOL_PCT:1}
     # 거시경제 지표 API URL (선택). GET JSON 예: {"vix": 18.5}. 미설정 시 VIX 미제공.
@@ -218,7 +231,7 @@ investment:
     alert-only: ${INVESTMENT_GOVERNANCE_ALERT_ONLY:true}
     # 2차: 열화 시 (market, strategyType)별 halt 등록. true이고 alert-only=false일 때만 halt 등록 (기본 false)
     auto-halt-on-degradation: ${INVESTMENT_GOVERNANCE_AUTO_HALT_ON_DEGRADATION:false}
-  # 4단계 파이프라인 실행. auto-execute=false 시 주문 생성 없이 dry-run만.
+  # 4단계 파이프라인 실행. auto-execute=false 시 주문 생성 없이 dry-run만. 기본 false(문서 §6.2).
   pipeline:
     auto-execute: ${PIPELINE_AUTO_EXECUTE:false}
     # 실전 계좌(serverType=0) 자동 실행 허용. false면 모의계좌만 실제 주문 실행.

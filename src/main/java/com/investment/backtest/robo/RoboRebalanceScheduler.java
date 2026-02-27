@@ -37,7 +37,7 @@ public class RoboRebalanceScheduler {
         List<TradingSetting> settings = tradingSettingRepository
                 .findAllByAutoTradingEnabledTrueAndRoboAdvisorEnabledTrue();
         if (settings.isEmpty()) {
-            log.debug("로보 리밸런싱 스킵: 대상 계좌 없음");
+            log.info("로보 리밸런싱 스킵: 대상 계좌 없음");
             return;
         }
 

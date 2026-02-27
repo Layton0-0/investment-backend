@@ -38,4 +38,7 @@ public interface SignalScoreRepository extends JpaRepository<SignalScore, Signal
     List<SignalScore> findByBasDtAndMarketOrderBySymbol(LocalDate basDt, String market, Pageable pageable);
 
     long countByBasDtAndMarket(LocalDate basDt, String market);
+
+    /** 기준일 시그널 건수 (자동매매 준비 상태 API용). */
+    long countByBasDt(LocalDate basDt);
 }

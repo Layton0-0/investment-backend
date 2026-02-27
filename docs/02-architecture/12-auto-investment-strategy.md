@@ -153,7 +153,7 @@
 - ⏳ Half-Kelly 백테스트 연동 (전략별 p·b 값 산출)
 - ⏳ 체결 확인 스케줄러/리스너 구현
 
-**실제 주문 활성화**: 기본값이 `investment.pipeline.auto-execute=false`이므로, 실제 매수/매도가 나가게 하려면 아래 §6.2 체크리스트대로 서버 설정을 켜면 된다.
+**실제 주문 활성화**: 기본값은 `investment.pipeline.auto-execute=false`(application.yml·환경변수 미설정 시). 실제 매수/매도가 나가게 하려면 아래 §6.2 체크리스트대로 서버 설정을 켜면 된다.
 
 **상세**: [개발 진행 현황](../09-planning/02-development-status.md), [전략 통합 문서](./00-strategy-registry.md)
 
@@ -228,7 +228,7 @@ sequenceDiagram
 5. **[Risk]** 초기 운용 기간 **켈리 비활성** (`kelly-enabled: false`), **고정 자산 비율**만 사용 (`kelly-fixed-allocation-pct`).
 6. **[Fail-safe]** 매수/매도 주문 후 **체결 미확인 시 Discord 긴급 알림** (`alert-discord-webhook-url`, `unfilled-check-minutes`). 알림에 userId·계좌(마스킹)·모의/실전·증권사·URL 포함.
 7. **설정 화면 (/settings)**: 계좌 선택, 거래 설정 저장, **자동 매매 ON** 체크, 최대 투자금액·단기/중기/장기 비율 입력.
-8. **서버 설정**: `investment.pipeline.auto-execute: true` 또는 환경변수 `PIPELINE_AUTO_EXECUTE=true`. (기본값은 false라 설정하지 않으면 dry-run만 동작.)
+8. **서버 설정**: `investment.pipeline.auto-execute: true` 또는 환경변수 `PIPELINE_AUTO_EXECUTE=true`. (기본값은 false이므로 설정하지 않으면 dry-run만 동작.)
 9. **모의계좌 권장**: 실전 전 모의 2주 테스트. [로드맵 Phase 7](../roadmap.md) 참조.
 10. **모의계좌 실제 실행**: 모의 앱키·계좌 인증 완료, `PIPELINE_ALLOW_REAL_EXECUTION=false`(기본)로 실전 계좌 자동 실행 미허용. 실전 계좌 자동 실행은 `PIPELINE_ALLOW_REAL_EXECUTION=true`로만 허용.
 11. **모의 Rate Limit**: 한국투자증권 모의투자 1초당 2건 제한 인지. 스케줄(09:10 실행·장중 청산·체결 확인) 확인.

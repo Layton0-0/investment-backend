@@ -545,6 +545,34 @@ curl -X GET "http://localhost:8080/api/v1/accounts/12345678/profit-loss?startDat
 
 ## 4. 전략 API
 
+### 4.0 전략 비교 (백테스트 메트릭)
+
+**엔드포인트**: `GET /api/v1/strategies/comparison`
+
+**설명**: 전략별 최신 백테스트 메트릭(MDD, Sharpe)을 조회합니다. 데이터 소스는 TB_GOVERNANCE_CHECK_RESULT(거버넌스 검사 결과). CAGR는 현재 미저장으로 null.
+
+**쿼리 파라미터**:
+- `market` (String, optional): 시장 (KR, US). 미지정 시 KR+US 모두 반환.
+
+**응답**:
+```json
+[
+  {
+    "market": "KR",
+    "strategyType": "SHORT_TERM",
+    "description": "단기",
+    "cagr": null,
+    "mddPct": -8.5,
+    "sharpeRatio": 1.2,
+    "lastRunAt": "2026-02-27T02:00:00Z"
+  }
+]
+```
+
+**인증**: `isAuthenticated()` 권장.
+
+---
+
 ### 4.1 전략 목록 조회
 
 **엔드포인트**: `GET /api/v1/strategies/{accountNo}`
@@ -750,6 +778,57 @@ curl -X GET "http://localhost:8080/api/v1/accounts/12345678/profit-loss?startDat
 ```
 
 **참고**: `haltAllOrders=true` 시 모든 주문이 Pre-Trade 컴플라이언스에서 거부(ORDER_REJECTED, 403)됩니다.
+
+---
+
+### 5.4 시스템 설정 (서버 전역 기본값, ADMIN 전용)
+
+**엔드포인트**: `GET /api/v1/system/settings`
+
+**설명**: 서버 전역 설정(키-값) 목록을 조회합니다. DB에 저장된 값과 현재 적용값(effectiveValue)을 반환. **ADMIN** 전용.
+
+**응답 (200 OK)**:
+```json
+[
+  {
+    "key": "pipeline.autoExecute",
+    "type": "Boolean",
+    "description": "파이프라인 자동 실행(서버 기본)",
+    "valueFromDb": "true",
+    "effectiveValue": "true"
+  },
+  {
+    "key": "pipeline.allowRealExecution",
+    "type": "Boolean",
+    "description": "실계좌 자동 실행 허용(서버 기본)",
+    "valueFromDb": null,
+    "effectiveValue": "false"
+  }
+]
+```
+
+- `valueFromDb`: DB에 저장된 값. 없으면 null(이때 effectiveValue는 application.yml fallback).
+- `effectiveValue`: 현재 적용 중인 값(DB 우선, 없으면 yml).
+
+---
+
+**엔드포인트**: `PUT /api/v1/system/settings`
+
+**설명**: 시스템 설정 1건을 저장합니다. whitelist 키만 허용. **ADMIN** 전용. 감사 로그(SETTING_CHANGE) 기록.
+
+**요청 본문**:
+```json
+{
+  "key": "pipeline.autoExecute",
+  "value": "true"
+}
+```
+
+- `value`: 문자열. Boolean은 `"true"`/`"false"`, BigDecimal은 숫자 문자열.
+
+**응답 (200 OK)**: 갱신된 항목 1건(동일 DTO 구조).
+
+**허용 키 (Phase 1)**: `pipeline.autoExecute`, `pipeline.allowRealExecution`, `pipeline.scheduler.defaultCapital`
 
 ---
 
@@ -1273,6 +1352,9 @@ Admin 전용: 전략 거버넌스 검사 결과 이력·(market, strategyType)�
 - `GET /api/v1/ops/governance/results?limit=20` — 최근 검사 결과(RUN_AT 내림차순). `limit`(1~500, 기본 20). 응답: `GovernanceCheckResultDto[]` (id, runAt, market, strategyType, mddPct, sharpeRatio, degraded, startDate, endDate, createdAt).
 - `GET /api/v1/ops/governance/halts` — 현재 활성 halt 목록(CLEARED_AT IS NULL). 응답: `GovernanceHaltDto[]` (market, strategyType, haltedAt, reason).
 - `PUT /api/v1/ops/governance/halts/{market}/{strategyType}/clear` — 해당 (market, strategyType) halt 해제. Body(선택): `{ "clearedBy": "userId" }`. 204 No Content.
+
+**자동매매 준비 상태** (09:10 실행 전 점검용):
+- `GET /api/v1/ops/auto-trading-readiness` — 자동투자 ON 계좌 수, 전일(basDt) TB_DAILY_STOCK·TB_SIGNAL_SCORE 건수, 활성 거버넌스 halt 수. 응답: `AutoTradingReadinessDto` (basDt, autoTradingOnAccountCount, dailyStockRowCount, signalScoreRowCount, activeGovernanceHaltCount). **인가**: `hasRole('ADMIN')`.
 
 ---
 

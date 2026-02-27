@@ -6,7 +6,9 @@ import com.investment.common.security.RateLimitFilter;
 import com.investment.config.SecurityHeadersConfig;
 import com.investment.strategy.domain.StrategyStatus;
 import com.investment.strategy.domain.StrategyType;
+import com.investment.strategy.dto.StrategyComparisonItemDto;
 import com.investment.strategy.dto.StrategyDto;
+import com.investment.strategy.service.StrategyComparisonService;
 import com.investment.strategy.service.StrategyManagementService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -37,6 +39,8 @@ class StrategyApiControllerTest {
         @MockBean
         private StrategyManagementService strategyManagementService;
         @MockBean
+        private StrategyComparisonService strategyComparisonService;
+        @MockBean
         private AccountService accountService;
         @MockBean
         private JwtAuthenticationFilter jwtAuthenticationFilter;
@@ -47,6 +51,27 @@ class StrategyApiControllerTest {
 
         @Autowired
         private ObjectMapper objectMapper;
+
+        @Test
+        @DisplayName("GET /api/v1/strategies/comparison 전략 비교 조회 성공")
+        void getStrategyComparison_returnsOk() throws Exception {
+                StrategyComparisonItemDto dto = StrategyComparisonItemDto.builder()
+                                .market("KR")
+                                .strategyType("SHORT_TERM")
+                                .description("단기")
+                                .mddPct(new BigDecimal("-8.5"))
+                                .sharpeRatio(new BigDecimal("1.2"))
+                                .build();
+                when(strategyComparisonService.getComparison(null)).thenReturn(List.of(dto));
+
+                mockMvc.perform(get("/api/v1/strategies/comparison"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$[0].market").value("KR"))
+                                .andExpect(jsonPath("$[0].strategyType").value("SHORT_TERM"))
+                                .andExpect(jsonPath("$[0].description").value("단기"))
+                                .andExpect(jsonPath("$[0].mddPct").value(-8.5))
+                                .andExpect(jsonPath("$[0].sharpeRatio").value(1.2));
+        }
 
         @Test
         @DisplayName("GET /api/v1/strategies/{accountNo} 전략 목록 조회 성공")

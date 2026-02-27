@@ -40,6 +40,8 @@ public class CacheConfig {
         public static final String CACHE_CURRENT_PRICE = "currentPrice";
         public static final String CACHE_ANALYSIS = "analysis";
         public static final String CACHE_ACCOUNT = "account";
+        /** 시스템 설정 (서버 기본값, 5분 TTL) */
+        public static final String CACHE_SYSTEM_SETTINGS = "systemSettings";
 
         /**
          * Redis 캐시 매니저 설정
@@ -68,6 +70,8 @@ public class CacheConfig {
 
                 // 계좌 정보: 1분 TTL (자주 변경될 수 있음)
                 cacheConfigurations.put(CACHE_ACCOUNT, defaultConfig.entryTtl(Duration.ofMinutes(1)));
+                // 시스템 설정: 5분 TTL (관리자 변경 후 짧은 시간 내 반영)
+                cacheConfigurations.put(CACHE_SYSTEM_SETTINGS, defaultConfig.entryTtl(Duration.ofMinutes(5)));
 
                 return RedisCacheManager.builder(redisConnectionFactory)
                                 .cacheDefaults(defaultConfig)

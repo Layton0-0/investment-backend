@@ -119,6 +119,7 @@
 - `GET /api/v1/ops/governance/results` - 전략 거버넌스 검사 결과 이력(RUN_AT 내림차순, limit). 인가: `hasRole('ADMIN')`.
 - `GET /api/v1/ops/governance/halts` - 전략 거버넌스 활성 halt 목록. 인가: `hasRole('ADMIN')`.
 - `PUT /api/v1/ops/governance/halts/{market}/{strategyType}/clear` - 해당 (market, strategyType) halt 해제. Body 선택: `{ "clearedBy": "userId" }`. 인가: `hasRole('ADMIN')`.
+- `GET /api/v1/ops/auto-trading-readiness` - 자동매매 준비 상태(자동투자 ON 계좌 수, 전일 일봉·시그널 건수, 활성 halt 수). 09:10 전 점검용. 인가: `hasRole('ADMIN')`.
 
 ### 3.12 연말 세금·리포트 API
 - `GET /api/v1/report/tax/summary` - 연말 세금 요약. 쿼리: `year` (선택). 응답: year, domesticRealizedGainLoss, overseasRealizedGainLoss, dividendTotal, estimatedTax, disclaimer. **집계 근거**: 인증 사용자 소유 계좌에 대해 한국투자증권 기간별손익조회(realizedProfitLoss)를 해당 연도 구간으로 호출해 합산. 국내/해외 구분은 계좌별 API 응답 또는 서버타입 기준(모의/실 동일). 배당(dividendTotal)은 별도 수집 전까지 null. 예상 세금(estimatedTax)은 실현손익 가정 공식(국내 과세 표준 단순 적용) 추정이며 세무 자문 아님. PDF/CSV export·Hometax 연동은 별도 엔드포인트. 인증 필요.

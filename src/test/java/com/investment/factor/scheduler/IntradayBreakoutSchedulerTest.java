@@ -6,6 +6,7 @@ import com.investment.factor.service.DailyLossLimitService;
 import com.investment.factor.service.IntradayBreakoutService;
 import com.investment.factor.service.RiskGateService;
 import com.investment.order.service.OrderService;
+import com.investment.setting.service.SystemSettingService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,6 +35,8 @@ class IntradayBreakoutSchedulerTest {
     private DailyLossLimitService dailyLossLimitService;
     @Mock
     private OrderService orderService;
+    @Mock
+    private SystemSettingService systemSettingService;
 
     @InjectMocks
     private IntradayBreakoutScheduler intradayBreakoutScheduler;
@@ -52,7 +55,7 @@ class IntradayBreakoutSchedulerTest {
     @DisplayName("자동투자 ON 계좌 없으면 스킵")
     void runIntradayBreakout_noSettings_skips() {
         ReflectionTestUtils.setField(intradayBreakoutScheduler, "breakoutEnabled", true);
-        ReflectionTestUtils.setField(intradayBreakoutScheduler, "autoExecute", true);
+        when(systemSettingService.getBoolean("pipeline.autoExecute")).thenReturn(true);
         when(tradingSettingRepository.findAllByAutoTradingEnabledTrue()).thenReturn(List.of());
 
         intradayBreakoutScheduler.runIntradayBreakout();

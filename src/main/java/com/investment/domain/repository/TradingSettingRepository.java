@@ -29,6 +29,9 @@ public interface TradingSettingRepository extends JpaRepository<TradingSetting, 
      */
     List<TradingSetting> findAllByAutoTradingEnabledTrue();
 
+    /** 자동투자 ON인 거래설정 건수 (자동매매 준비 상태 API용). */
+    long countByAutoTradingEnabledTrue();
+
     /**
      * 자동투자 ON + 로보 어드바이저 ON인 거래설정 목록 (로보 리밸런싱 스케줄러 대상).
      */

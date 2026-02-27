@@ -121,3 +121,12 @@ curl -X PUT "http://localhost:8080/api/v1/settings/12345678" \
 
 - `SETTING_NOT_FOUND`: 거래 설정을 찾을 수 없음
 - `INVALID_SETTING_VALUE`: 잘못된 설정 값
+
+## 6. 시스템 설정 (서버 전역, ADMIN 전용)
+
+서버 전역 기본값(예: pipeline.auto-execute, allow-real-execution)은 **시스템 설정 API**로 조회·수정합니다. DB(TB_SYSTEM_SETTINGS)에 저장되며, 계정별 설정이 null일 때 이 서버 기본값이 사용됩니다.
+
+- **GET** `/api/v1/system/settings`: 허용된 모든 키의 목록·DB 값·적용값 반환. ADMIN 전용.
+- **PUT** `/api/v1/system/settings`: 키·값 1건 저장. ADMIN 전용. whitelist 키만 허용.
+
+상세 스펙·허용 키 목록은 [02-api-endpoints.md §5.4](02-api-endpoints.md#54-시스템-설정-서버-전역-기본값-admin-전용) 참조.

@@ -28,6 +28,18 @@ public class RiskProperties {
     /** 일일 손실 한도 (%, 당일 시작 자산 대비). 초과 시 당일 신규 매수 중단 */
     private BigDecimal dailyLossLimitPct = new BigDecimal("5");
 
+    /** 시장 급락 게이트 사용 여부. true면 벤치마크 지수 일일 낙폭이 임계값 이상일 때 당일 신규 매수 중단 */
+    private boolean marketCrashGateEnabled = true;
+
+    /** 시장 급락 임계값 (%, 전일 대비 벤치마크 일일 수익률). 이 값 이상 하락 시 신규 매수 중단 (기본 5 = -5%) */
+    private BigDecimal marketCrashDailyDropPct = new BigDecimal("5");
+
+    /** 시장 급락 판단용 벤치마크 심볼 (기본 SPY) */
+    private String marketCrashBenchmarkSymbol = "SPY";
+
+    /** 시장 급락 게이트 벤치마크 시장 (기본 US) */
+    private String marketCrashBenchmarkMarket = "US";
+
     /** 거시경제 지표 API URL (선택). GET JSON 예: {"vix": 18.5}. 미설정 시 VIX 미제공(기존 동작). */
     private String macroIndicatorUrl;
 

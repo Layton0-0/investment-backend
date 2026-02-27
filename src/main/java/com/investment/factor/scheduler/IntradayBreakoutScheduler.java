@@ -10,6 +10,7 @@ import com.investment.factor.service.IntradayBreakoutService;
 import com.investment.factor.service.RiskGateService;
 import com.investment.order.dto.OrderRequestDto;
 import com.investment.order.service.OrderService;
+import com.investment.setting.service.SystemSettingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,15 +38,13 @@ public class IntradayBreakoutScheduler {
     private final RiskGateService riskGateService;
     private final DailyLossLimitService dailyLossLimitService;
     private final OrderService orderService;
+    private final SystemSettingService systemSettingService;
 
     @Value("${investment.intraday.breakout-enabled:false}")
     private boolean breakoutEnabled = false;
 
     @Value("${investment.intraday.breakout-max-positions:3}")
     private int breakoutMaxPositions = 3;
-
-    @Value("${investment.pipeline.auto-execute:false}")
-    private boolean autoExecute = false;
 
     /** KR 시초가/변동성 돌파 시 주문구분(ORD_DVSN). 02=최유리, 03=IOC. 빈값이면 지정가(00). */
     @Value("${investment.pipeline.kr-opening-order-dvsn:}")
@@ -57,7 +56,7 @@ public class IntradayBreakoutScheduler {
             log.trace("장중 돌파 스킵: 비활성");
             return;
         }
-        if (!autoExecute) {
+        if (!systemSettingService.getBoolean("pipeline.autoExecute")) {
             log.trace("장중 돌파 스킵: auto-execute=false");
             return;
         }

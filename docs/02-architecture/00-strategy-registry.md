@@ -108,7 +108,8 @@ Monte Carlo 시뮬레이션 기반 VaR/CVaR 계산으로 꼬리 위험(tail risk
 
 - **리스크 게이트**: 파이프라인 실행 전 시장 레짐·VIX 확인. `investment.risk.regime-gate-enabled`, `vix-threshold`, `reduce-size-on-high-vol-pct`. 고변동성 시 신규 매수 비중 축소. `RiskGateService`, `MacroEconomicStrategyEngine` 연동. **VIX·거시 지표**: `MacroIndicatorProvider`(설정 URL GET JSON 예: `{"vix": 18.5}`)·`DefaultMacroIndicatorProvider`, `PipelineExecutionScheduler`에서 `getCurrentIndicators()` → `evaluateWithIndicators`/`evaluate(vix)`. `investment.risk.macro-indicator-url`(선택).
 - **일일 손실 한도**: 당일 시초 평가액 대비 손실이 `daily-loss-limit-pct` 초과 시 당일 신규 매수 중단. `DailyLossLimitService`, `PipelineExecutionScheduler` 실행 전 `isNewBuyAllowed` 검사.
-- **설정**: `investment.risk.*` (application.yml).
+- **시장 급락 시 동결 (Market Crash Gate)**: 설계 원칙 "시장 급락 -5% 시 현금화"에 따른 최소 구현. 벤치마크 지수(예: SPY) 전일 대비 일일 수익률이 `market-crash-daily-drop-pct`(기본 5%) 이상 하락한 경우 당일 **신규 매수만 중단**(매도 허용). 데이터는 TB_DAILY_STOCK 기준 전일 종가 대비 전전일 종가로 산출. 데이터 부재 시 허용(fail-open). `MarketCrashGateService`, `PipelineExecutionScheduler`에서 리스크 게이트·일일 손실 한도와 함께 검사.
+- **설정**: `investment.risk.*` (application.yml). 시장 급락 게이트: `market-crash-gate-enabled`(기본 true), `market-crash-daily-drop-pct`(기본 5), `market-crash-benchmark-symbol`(기본 SPY), `market-crash-benchmark-market`(기본 US).
 
 ### 2.9.1 Pre-Trade 컴플라이언스 (Phase 2)
 

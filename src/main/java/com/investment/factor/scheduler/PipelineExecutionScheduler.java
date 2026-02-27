@@ -7,16 +7,17 @@ import com.investment.domain.repository.TradingSettingRepository;
 import com.investment.strategy.domain.StrategyStatus;
 import com.investment.factor.execution.PipelineExecutor;
 import com.investment.factor.service.DailyLossLimitService;
+import com.investment.factor.service.MarketCrashGateService;
 import com.investment.factor.service.RiskGateService;
 import com.investment.domain.entity.Strategy;
 import com.investment.governance.GovernanceHaltService;
 import com.investment.strategy.domain.StrategyType;
 import com.investment.strategy.dto.StrategyWeights;
 import com.investment.strategy.engine.MacroIndicatorProvider;
+import com.investment.setting.service.SystemSettingService;
 import com.investment.strategy.service.StrategyWeightResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -45,15 +46,11 @@ public class PipelineExecutionScheduler {
     private final PipelineExecutor pipelineExecutor;
     private final RiskGateService riskGateService;
     private final DailyLossLimitService dailyLossLimitService;
+    private final MarketCrashGateService marketCrashGateService;
     private final MacroIndicatorProvider macroIndicatorProvider;
     private final GovernanceHaltService governanceHaltService;
     private final StrategyWeightResolver strategyWeightResolver;
-
-    @Value("${investment.pipeline.auto-execute:false}")
-    private boolean autoExecute = false;
-
-    @Value("${investment.pipeline.scheduler.default-capital:0}")
-    private BigDecimal defaultCapital = BigDecimal.ZERO;
+    private final SystemSettingService systemSettingService;
 
     /**
      * 수동/배치 트리거용. forceDryRun가 null이면 설정(auto-execute)에 따르고, non-null이면 해당 값으로 실행.
@@ -62,17 +59,22 @@ public class PipelineExecutionScheduler {
         LocalDate basDt = LocalDate.now().minusDays(1);
         List<TradingSetting> settings = tradingSettingRepository.findAllByAutoTradingEnabledTrue();
         if (settings.isEmpty()) {
-            log.debug("파이프라인 실행 스킵: 자동투자 ON 계좌 없음");
+            log.info("파이프라인 실행 스킵: code={}, {}", PipelineSkipReason.NO_AUTO_TRADING_ACCOUNTS.getCode(),
+                    PipelineSkipReason.NO_AUTO_TRADING_ACCOUNTS.getDescription());
             return;
         }
+        boolean serverAutoExecute = systemSettingService.getBoolean("pipeline.autoExecute");
+        BigDecimal defaultCapital = systemSettingService.getBigDecimal("pipeline.scheduler.defaultCapital");
         for (TradingSetting setting : settings) {
             String accountNo = setting.getAccountNo();
             boolean effectiveAutoExecute = setting.getPipelineAutoExecute() != null
                     ? setting.getPipelineAutoExecute()
-                    : autoExecute;
+                    : serverAutoExecute;
             boolean dryRun = forceDryRun != null ? forceDryRun : !effectiveAutoExecute;
             if (!effectiveAutoExecute && forceDryRun == null) {
-                log.debug("파이프라인 실행 스킵: accountNo={}, 계정별 자동 실행 OFF", LogMaskingUtil.maskAccountNo(accountNo));
+                log.info("파이프라인 실행 스킵: code={}, accountNo={}, {}",
+                        PipelineSkipReason.ACCOUNT_AUTO_EXECUTE_OFF.getCode(), LogMaskingUtil.maskAccountNo(accountNo),
+                        PipelineSkipReason.ACCOUNT_AUTO_EXECUTE_OFF.getDescription());
                 continue;
             }
             BigDecimal capital = setting.getMaxInvestmentAmount();
@@ -82,7 +84,9 @@ public class PipelineExecutionScheduler {
                         : BigDecimal.ZERO;
             }
             if (capital.compareTo(BigDecimal.ZERO) <= 0) {
-                log.debug("파이프라인 실행 스킵: accountNo={}, 자본 미설정", accountNo);
+                log.info("파이프라인 실행 스킵: code={}, accountNo={}, {}",
+                        PipelineSkipReason.CAPITAL_NOT_SET.getCode(), LogMaskingUtil.maskAccountNo(accountNo),
+                        PipelineSkipReason.CAPITAL_NOT_SET.getDescription());
                 continue;
             }
             var indicatorsOpt = macroIndicatorProvider.getCurrentIndicators();
@@ -93,7 +97,15 @@ public class PipelineExecutionScheduler {
                     ? riskResult.getSizeMultiplier()
                     : BigDecimal.ONE;
             if (!riskResult.isAllowNewBuy()) {
-                log.info("파이프라인 실행 스킵: accountNo={}, 리스크 게이트 신규 매수 불가", accountNo);
+                log.info("파이프라인 실행 스킵: code={}, accountNo={}, {}",
+                        PipelineSkipReason.RISK_GATE_NO_BUY.getCode(), LogMaskingUtil.maskAccountNo(accountNo),
+                        PipelineSkipReason.RISK_GATE_NO_BUY.getDescription());
+                continue;
+            }
+            if (!marketCrashGateService.isNewBuyAllowed()) {
+                log.info("파이프라인 실행 스킵: code={}, accountNo={}, {}",
+                        PipelineSkipReason.MARKET_CRASH_GATE.getCode(), LogMaskingUtil.maskAccountNo(accountNo),
+                        PipelineSkipReason.MARKET_CRASH_GATE.getDescription());
                 continue;
             }
             StrategyWeights weights;
@@ -120,13 +132,16 @@ public class PipelineExecutionScheduler {
                 dailyLossLimitService.recordOpeningBalanceIfAbsent(accountNo, currentValue);
             }
             if (!dailyLossLimitService.isNewBuyAllowed(accountNo)) {
-                log.info("파이프라인 실행 스킵: accountNo={}, 일일 손실 한도 초과", accountNo);
+                log.info("파이프라인 실행 스킵: code={}, accountNo={}, {}",
+                        PipelineSkipReason.DAILY_LOSS_LIMIT.getCode(), LogMaskingUtil.maskAccountNo(accountNo),
+                        PipelineSkipReason.DAILY_LOSS_LIMIT.getDescription());
                 continue;
             }
             try {
                 runPipelineForAccount(basDt, accountNo, shortCapital, midCapital, longCapital, dryRun);
             } catch (Exception e) {
-                log.warn("파이프라인 실행 실패: accountNo={}, error={}", accountNo, e.getMessage(), e);
+                log.warn("파이프라인 실행 스킵: code={}, accountNo={}, error={}",
+                        PipelineSkipReason.RUN_FAILED.getCode(), LogMaskingUtil.maskAccountNo(accountNo), e.getMessage(), e);
             }
         }
     }
@@ -145,16 +160,19 @@ public class PipelineExecutionScheduler {
     private void runIfNotHalted(LocalDate basDt, String market, String accountNo,
             StrategyType strategyType, BigDecimal capital, boolean dryRun) {
         if (governanceHaltService.isHalted(market, strategyType.name())) {
-            log.info("파이프라인 실행 스킵: governance halt, market={}, strategyType={}, accountNo={}",
-                    market, strategyType, LogMaskingUtil.maskAccountNo(accountNo));
+            log.info("파이프라인 실행 스킵: code={}, market={}, strategyType={}, accountNo={}, {}",
+                    PipelineSkipReason.GOVERNANCE_HALT.getCode(), market, strategyType,
+                    LogMaskingUtil.maskAccountNo(accountNo), PipelineSkipReason.GOVERNANCE_HALT.getDescription());
             return;
         }
         Optional<Strategy> strategyOpt = strategyRepository.findByAccountNoAndMarketAndStrategyType(accountNo, market, strategyType);
         if (strategyOpt.isPresent()) {
             Strategy strategy = strategyOpt.get();
             if (strategy.isStopped() || strategy.getStatus() == StrategyStatus.PAUSED) {
-                log.info("파이프라인 실행 스킵: 전략 중지/일시정지, market={}, strategyType={}, accountNo={}",
-                        market, strategyType, LogMaskingUtil.maskAccountNo(accountNo));
+                log.info("파이프라인 실행 스킵: code={}, market={}, strategyType={}, accountNo={}, {}",
+                        PipelineSkipReason.STRATEGY_STOPPED_OR_PAUSED.getCode(), market, strategyType,
+                        LogMaskingUtil.maskAccountNo(accountNo),
+                        PipelineSkipReason.STRATEGY_STOPPED_OR_PAUSED.getDescription());
                 return;
             }
         }

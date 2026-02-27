@@ -172,6 +172,7 @@
 | GET /api/v1/ops/governance/results | opsApi.getGovernanceResults | Admin(Ops 전략 거버넌스 /ops/governance) | 백엔드 준비 완료, 프론트 화면 선택 |
 | GET /api/v1/ops/governance/halts | opsApi.getGovernanceHalts | Admin(Ops 전략 거버넌스 /ops/governance) | 동일 |
 | PUT /api/v1/ops/governance/halts/{market}/{strategyType}/clear | opsApi.clearGovernanceHalt | Admin(Ops 전략 거버넌스 /ops/governance) | 동일 |
+| GET /api/v1/ops/auto-trading-readiness | opsApi.getAutoTradingReadiness | Admin(자동매매 가동 전 점검) | 연동 가능 |
 | GET /api/v1/report/tax/summary | reportApi.getTaxSummary | TaxReportPage | 연말 세금·리포트 화면 |
 | GET /api/v1/report/tax/summary/export | reportApi.downloadTaxSummaryExport (window.open) | TaxReportPage | CSV/PDF 다운로드 |
 

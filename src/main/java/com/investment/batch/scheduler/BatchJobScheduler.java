@@ -1,12 +1,14 @@
 package com.investment.batch.scheduler;
 
+import com.investment.alert.EmergencyAlertService;
 import com.investment.batch.registry.BatchJobDefinition;
 import com.investment.batch.registry.BatchJobRegistry;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.support.CronTrigger;
@@ -21,7 +23,6 @@ import java.time.ZoneId;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class BatchJobScheduler {
 
     private static final String BATCH_TABLE_MISSING_HINT = "Spring Batch 메타데이터 테이블이 없습니다. docs/08-setup-guides/01-local-setup-complete.md §문제 해결 - Spring Batch 메타데이터 테이블을 참고해 V20 마이그레이션을 적용하세요.";
@@ -32,6 +33,20 @@ public class BatchJobScheduler {
     private final JobLauncher jobLauncher;
     private final ApplicationContext applicationContext;
     private final TaskScheduler taskScheduler;
+
+    @Value("${investment.batch.failure-alert-enabled:false}")
+    private boolean failureAlertEnabled;
+
+    @Autowired(required = false)
+    private EmergencyAlertService emergencyAlertService;
+
+    public BatchJobScheduler(BatchJobRegistry batchJobRegistry, JobLauncher jobLauncher,
+                             ApplicationContext applicationContext, TaskScheduler taskScheduler) {
+        this.batchJobRegistry = batchJobRegistry;
+        this.jobLauncher = jobLauncher;
+        this.applicationContext = applicationContext;
+        this.taskScheduler = taskScheduler;
+    }
 
     @PostConstruct
     public void scheduleJobs() {
@@ -64,6 +79,10 @@ public class BatchJobScheduler {
                 log.warn("Batch job skipped (metadata tables missing): jobId={}. {}", jobId, BATCH_TABLE_MISSING_HINT);
             } else if (!isBatchTableMissing(e)) {
                 log.error("Batch job execution failed: jobId={}", jobId, e);
+                if (failureAlertEnabled && emergencyAlertService != null) {
+                    String message = "배치 Job 실패: jobId=" + jobId + ", error=" + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+                    emergencyAlertService.sendRiskEventAlert("ERROR", "BatchJob", message);
+                }
             }
         }
     }

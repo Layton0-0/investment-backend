@@ -12,9 +12,11 @@ import com.investment.domain.repository.UserAccountRepository;
 import com.investment.common.security.EncryptionUtil;
 import com.investment.factor.dto.PositionRecommendationDto;
 import com.investment.factor.service.PositionSizingService;
+import com.investment.ops.service.AuditLogService;
 import com.investment.order.dto.OrderRequestDto;
 import com.investment.order.dto.OrderResponseDto;
 import com.investment.order.service.OrderService;
+import com.investment.setting.service.SystemSettingService;
 import com.investment.strategy.domain.StrategyType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -55,6 +57,10 @@ class PipelineExecutorTest {
         private UserAccountRepository userAccountRepository;
         @Mock
         private EncryptionUtil encryptionUtil;
+        @Mock
+        private AuditLogService auditLogService;
+        @Mock
+        private SystemSettingService systemSettingService;
 
         @InjectMocks
         private PipelineExecutor pipelineExecutor;
@@ -66,8 +72,8 @@ class PipelineExecutorTest {
 
         @BeforeEach
         void setUp() {
-                ReflectionTestUtils.setField(pipelineExecutor, "autoExecute", false);
-                ReflectionTestUtils.setField(pipelineExecutor, "allowRealExecution", false);
+                lenient().when(systemSettingService.getBoolean("pipeline.autoExecute")).thenReturn(false);
+                lenient().when(systemSettingService.getBoolean("pipeline.allowRealExecution")).thenReturn(false);
                 ReflectionTestUtils.setField(pipelineExecutor, "registerPositionOnExecution", false);
         }
 
@@ -113,7 +119,7 @@ class PipelineExecutorTest {
         void run_autoExecute_immediatePositionRegistration() {
                 // given: 스케줄러에서 호출 시 인증 컨텍스트 없음 → accountNo로 userId 조회 후
                 // executeOrderForPipeline 호출
-                ReflectionTestUtils.setField(pipelineExecutor, "autoExecute", true);
+                when(systemSettingService.getBoolean("pipeline.autoExecute")).thenReturn(true);
                 LocalDate basDt = LocalDate.of(2026, 1, 30);
                 String market = "KR";
                 String accountNo = "1234567890";
@@ -189,7 +195,7 @@ class PipelineExecutorTest {
         @Test
         @DisplayName("KR+SHORT_TERM이고 kr-opening-order-dvsn 설정 시 OrderRequestDto에 orderDvsn 설정")
         void run_KR_shortTerm_withKrOpeningOrderDvsn_setsOrderDvsnOnRequest() {
-                ReflectionTestUtils.setField(pipelineExecutor, "autoExecute", true);
+                when(systemSettingService.getBoolean("pipeline.autoExecute")).thenReturn(true);
                 ReflectionTestUtils.setField(pipelineExecutor, "krOpeningOrderDvsn", "02");
                 LocalDate basDt = LocalDate.of(2026, 1, 30);
                 String market = "KR";
@@ -253,7 +259,7 @@ class PipelineExecutorTest {
         @Test
         @DisplayName("US 시장 권장 시 OrderRequestDto에 market=US 설정")
         void run_marketUS_setsMarketOnOrderRequest() {
-                ReflectionTestUtils.setField(pipelineExecutor, "autoExecute", true);
+                when(systemSettingService.getBoolean("pipeline.autoExecute")).thenReturn(true);
                 LocalDate basDt = LocalDate.of(2026, 1, 30);
                 String market = "US";
                 String accountNo = "1234567890";
@@ -365,8 +371,8 @@ class PipelineExecutorTest {
         @Test
         @DisplayName("allow-real-execution=false, 실전 계좌(serverType=0) - 주문 스킵, dry-run 결과")
         void run_allowRealExecutionFalse_realAccount_skipsOrder() {
-                ReflectionTestUtils.setField(pipelineExecutor, "autoExecute", true);
-                ReflectionTestUtils.setField(pipelineExecutor, "allowRealExecution", false);
+                when(systemSettingService.getBoolean("pipeline.autoExecute")).thenReturn(true);
+                when(systemSettingService.getBoolean("pipeline.allowRealExecution")).thenReturn(false);
 
                 LocalDate basDt = LocalDate.of(2026, 1, 30);
                 String market = "KR";

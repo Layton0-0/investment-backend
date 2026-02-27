@@ -46,5 +46,11 @@ public class DataCollectionProperties {
         private String symbols = "AAPL,MSFT,GOOGL,AMZN,META,TSLA,NVDA,JPM,V,JNJ";
         /** Python 실행 명령 (예: python, python3, py). 기본 python. collector-url 사용 시 무시 */
         private String pythonCommand = "python";
+        /** HTTP 호출 실패 시 재시도 횟수 (0이면 재시도 없음). 기본 2 */
+        private int retryMax = 2;
+        /** 재시도 대기 시간(ms). 지수 백오프의 초기값. 기본 1000 */
+        private long retryInitialMs = 1000L;
+        /** 수집 실패·0건 시 Discord 알림 발송 여부. 기본 false */
+        private boolean failureAlertEnabled = false;
     }
 }

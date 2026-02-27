@@ -1,8 +1,10 @@
 package com.investment.api.controller;
 
 import com.investment.strategy.domain.StrategyType;
+import com.investment.strategy.dto.StrategyComparisonItemDto;
 import com.investment.strategy.dto.StrategyDto;
 import com.investment.strategy.dto.StrategyStatusUpdateDto;
+import com.investment.strategy.service.StrategyComparisonService;
 import com.investment.strategy.service.StrategyManagementService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -22,6 +24,15 @@ import java.util.List;
 public class StrategyApiController {
 
     private final StrategyManagementService strategyManagementService;
+    private final StrategyComparisonService strategyComparisonService;
+
+    @Operation(summary = "전략 비교", description = "전략별 최신 백테스트 메트릭(MDD, Sharpe). market 미지정 시 KR+US 모두.")
+    @GetMapping("/comparison")
+    public ResponseEntity<List<StrategyComparisonItemDto>> getStrategyComparison(
+            @Parameter(description = "시장 (KR, US). 선택 시 해당 시장만") @RequestParam(required = false) String market) {
+        List<StrategyComparisonItemDto> list = strategyComparisonService.getComparison(market);
+        return ResponseEntity.ok(list);
+    }
 
     @GetMapping("/{accountNo}")
     public ResponseEntity<List<StrategyDto>> getStrategies(

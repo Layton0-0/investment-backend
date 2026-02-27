@@ -7,10 +7,12 @@ import com.investment.domain.repository.TradingSettingRepository;
 import com.investment.factor.execution.PipelineExecutor;
 import com.investment.strategy.domain.StrategyStatus;
 import com.investment.factor.service.DailyLossLimitService;
+import com.investment.factor.service.MarketCrashGateService;
 import com.investment.factor.service.RiskGateService;
 import com.investment.governance.GovernanceHaltService;
 import com.investment.strategy.domain.StrategyType;
 import com.investment.strategy.dto.StrategyWeights;
+import com.investment.setting.service.SystemSettingService;
 import com.investment.strategy.engine.MacroIndicatorProvider;
 import com.investment.strategy.service.StrategyWeightResolver;
 import org.junit.jupiter.api.DisplayName;
@@ -19,7 +21,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -44,11 +45,15 @@ class PipelineExecutionSchedulerTest {
     @Mock
     private DailyLossLimitService dailyLossLimitService;
     @Mock
+    private MarketCrashGateService marketCrashGateService;
+    @Mock
     private MacroIndicatorProvider macroIndicatorProvider;
     @Mock
     private GovernanceHaltService governanceHaltService;
     @Mock
     private StrategyWeightResolver strategyWeightResolver;
+    @Mock
+    private SystemSettingService systemSettingService;
 
     @InjectMocks
     private PipelineExecutionScheduler pipelineExecutionScheduler;
@@ -57,6 +62,29 @@ class PipelineExecutionSchedulerTest {
     @DisplayName("자동투자 ON 계좌 없으면 파이프라인 미실행")
     void runScheduledPipeline_noSettings_skips() {
         when(tradingSettingRepository.findAllByAutoTradingEnabledTrue()).thenReturn(List.of());
+
+        pipelineExecutionScheduler.runNow(null);
+
+        verify(pipelineExecutor, never()).run(any(), any(), any(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    @DisplayName("시장 급락 게이트 신규 매수 불가 시 해당 계좌 스킵")
+    void runScheduledPipeline_marketCrashGateDisallow_skipsAccount() {
+        TradingSetting setting = TradingSetting.builder()
+                .accountNo("1234567890")
+                .maxInvestmentAmount(new BigDecimal("10000000"))
+                .minInvestmentAmount(BigDecimal.valueOf(10000))
+                .defaultCurrency("KRW")
+                .autoTradingEnabled(true)
+                .pipelineAutoExecute(true)
+                .build();
+        when(tradingSettingRepository.findAllByAutoTradingEnabledTrue()).thenReturn(List.of(setting));
+        when(macroIndicatorProvider.getCurrentIndicators()).thenReturn(Optional.empty());
+        when(riskGateService.evaluate(any())).thenReturn(RiskGateService.RiskGateResult.allow(BigDecimal.ONE));
+        when(marketCrashGateService.isNewBuyAllowed()).thenReturn(false);
+        when(systemSettingService.getBoolean("pipeline.autoExecute")).thenReturn(false);
+        when(systemSettingService.getBigDecimal("pipeline.scheduler.defaultCapital")).thenReturn(BigDecimal.ZERO);
 
         pipelineExecutionScheduler.runNow(null);
 
@@ -78,7 +106,8 @@ class PipelineExecutionSchedulerTest {
         when(macroIndicatorProvider.getCurrentIndicators()).thenReturn(Optional.empty());
         when(riskGateService.evaluate(any()))
                 .thenReturn(RiskGateService.RiskGateResult.disallow());
-        ReflectionTestUtils.setField(pipelineExecutionScheduler, "autoExecute", false);
+        when(systemSettingService.getBoolean("pipeline.autoExecute")).thenReturn(false);
+        when(systemSettingService.getBigDecimal("pipeline.scheduler.defaultCapital")).thenReturn(BigDecimal.ZERO);
 
         pipelineExecutionScheduler.runNow(null);
 
@@ -99,6 +128,7 @@ class PipelineExecutionSchedulerTest {
         when(tradingSettingRepository.findAllByAutoTradingEnabledTrue()).thenReturn(List.of(setting));
         when(macroIndicatorProvider.getCurrentIndicators()).thenReturn(Optional.empty());
         when(riskGateService.evaluate(any())).thenReturn(RiskGateService.RiskGateResult.allow(BigDecimal.ONE));
+        when(marketCrashGateService.isNewBuyAllowed()).thenReturn(true);
         when(strategyWeightResolver.resolve(any(), any())).thenReturn(StrategyWeights.builder()
                 .shortPct(new BigDecimal("0.2"))
                 .midPct(new BigDecimal("0.4"))
@@ -110,7 +140,8 @@ class PipelineExecutionSchedulerTest {
         when(governanceHaltService.isHalted(anyString(), anyString())).thenReturn(false);
         when(strategyRepository.findByAccountNoAndMarketAndStrategyType(anyString(), anyString(), any(StrategyType.class)))
                 .thenReturn(Optional.empty());
-        ReflectionTestUtils.setField(pipelineExecutionScheduler, "autoExecute", true);
+        when(systemSettingService.getBoolean("pipeline.autoExecute")).thenReturn(true);
+        when(systemSettingService.getBigDecimal("pipeline.scheduler.defaultCapital")).thenReturn(BigDecimal.ZERO);
 
         pipelineExecutionScheduler.runNow(null);
 
@@ -132,6 +163,7 @@ class PipelineExecutionSchedulerTest {
         when(tradingSettingRepository.findAllByAutoTradingEnabledTrue()).thenReturn(List.of(setting));
         when(macroIndicatorProvider.getCurrentIndicators()).thenReturn(Optional.empty());
         when(riskGateService.evaluate(any())).thenReturn(RiskGateService.RiskGateResult.allow(BigDecimal.ONE));
+        when(marketCrashGateService.isNewBuyAllowed()).thenReturn(true);
         when(dailyLossLimitService.getCurrentPortfolioValue(anyString())).thenReturn(new BigDecimal("10000000"));
         when(dailyLossLimitService.isNewBuyAllowed(anyString())).thenReturn(true);
         when(governanceHaltService.isHalted(anyString(), anyString())).thenReturn(false);
@@ -144,7 +176,8 @@ class PipelineExecutionSchedulerTest {
                 .longPct(new BigDecimal("0.4"))
                 .regime("NORMAL")
                 .build());
-        ReflectionTestUtils.setField(pipelineExecutionScheduler, "autoExecute", true);
+        when(systemSettingService.getBoolean("pipeline.autoExecute")).thenReturn(true);
+        when(systemSettingService.getBigDecimal("pipeline.scheduler.defaultCapital")).thenReturn(BigDecimal.ZERO);
 
         pipelineExecutionScheduler.runNow(null);
 
@@ -166,6 +199,7 @@ class PipelineExecutionSchedulerTest {
         when(tradingSettingRepository.findAllByAutoTradingEnabledTrue()).thenReturn(List.of(setting));
         when(macroIndicatorProvider.getCurrentIndicators()).thenReturn(Optional.empty());
         when(riskGateService.evaluate(any())).thenReturn(RiskGateService.RiskGateResult.allow(BigDecimal.ONE));
+        when(marketCrashGateService.isNewBuyAllowed()).thenReturn(true);
         when(strategyWeightResolver.resolve(any(), any())).thenReturn(StrategyWeights.builder()
                 .shortPct(new BigDecimal("0.2"))
                 .midPct(new BigDecimal("0.4"))
@@ -189,7 +223,8 @@ class PipelineExecutionSchedulerTest {
                 .thenReturn(Optional.empty());
         when(strategyRepository.findByAccountNoAndMarketAndStrategyType(eq("1234567890"), eq("US"), any(StrategyType.class)))
                 .thenReturn(Optional.empty());
-        ReflectionTestUtils.setField(pipelineExecutionScheduler, "autoExecute", true);
+        when(systemSettingService.getBoolean("pipeline.autoExecute")).thenReturn(true);
+        when(systemSettingService.getBigDecimal("pipeline.scheduler.defaultCapital")).thenReturn(BigDecimal.ZERO);
 
         pipelineExecutionScheduler.runNow(null);
 

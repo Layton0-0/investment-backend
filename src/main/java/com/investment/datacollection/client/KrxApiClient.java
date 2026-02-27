@@ -45,7 +45,7 @@ public class KrxApiClient {
     public List<Map<String, Object>> fetchDailyStockKospi(LocalDate basDt) {
         String authKey = dataCollectionProperties.getKrx().getAuthKey();
         if (authKey == null || authKey.isBlank()) {
-            log.debug("KRX AUTH_KEY 미설정: 조회 스킵");
+            log.warn("KRX AUTH_KEY 미설정: 조회 스킵");
             return Collections.emptyList();
         }
 

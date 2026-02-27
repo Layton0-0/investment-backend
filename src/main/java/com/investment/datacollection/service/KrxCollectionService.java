@@ -43,7 +43,7 @@ public class KrxCollectionService {
     public int collectAndSave(LocalDate basDt) {
         List<Map<String, Object>> rows = krxApiClient.fetchDailyStockKospi(basDt);
         if (rows.isEmpty()) {
-            log.debug("KRX 일별 수집: basDt={}, rows=0", basDt);
+            log.info("KRX 일별 수집 스킵 또는 결과 없음: basDt={}, rows=0 (AUTH_KEY 미설정 또는 API 빈 응답)", basDt);
             return 0;
         }
         List<DailyStock> entities = new ArrayList<>();
@@ -58,7 +58,7 @@ public class KrxCollectionService {
             }
         }
         if (entities.isEmpty()) {
-            log.debug("KRX 일별 수집: basDt={}, parsed=0", basDt);
+            log.info("KRX 일별 수집 결과 없음: basDt={}, parsed=0", basDt);
             return 0;
         }
         dailyStockRepository.saveAll(entities);

@@ -46,4 +46,7 @@ public interface DailyStockRepository extends JpaRepository<DailyStock, DailySto
     /** 시장별 최근 기준일 (데이터 파이프라인 상태 API용). */
     @Query("SELECT MAX(d.basDt) FROM DailyStock d WHERE d.market = :market")
     Optional<LocalDate> findMaxBasDtByMarket(@Param("market") String market);
+
+    /** 기준일 일봉 건수 (자동매매 준비 상태 API용). */
+    long countByBasDt(LocalDate basDt);
 }

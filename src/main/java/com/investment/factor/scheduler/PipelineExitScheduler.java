@@ -14,9 +14,9 @@ import com.investment.ops.service.AuditLogService;
 import com.investment.marketdata.service.RealtimeMarketDataService;
 import com.investment.order.dto.OrderRequestDto;
 import com.investment.order.service.OrderService;
+import com.investment.setting.service.SystemSettingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,12 +45,7 @@ public class PipelineExitScheduler {
     private final RealtimeMarketDataService realtimeMarketDataService;
     private final OrderService orderService;
     private final AuditLogService auditLogService;
-
-    @Value("${investment.pipeline.auto-execute:false}")
-    private boolean autoExecute = false;
-
-    @Value("${investment.pipeline.allow-real-execution:false}")
-    private boolean allowRealExecution = false;
+    private final SystemSettingService systemSettingService;
 
     /**
      * 계좌의 서버 타입 조회 (모의=1, 실전=0).
@@ -85,17 +80,18 @@ public class PipelineExitScheduler {
             log.trace("청산 스케줄: 보유 포지션 없음");
             return;
         }
-
+        boolean serverAutoExecute = systemSettingService.getBoolean("pipeline.autoExecute");
+        boolean serverAllowRealExecution = systemSettingService.getBoolean("pipeline.allowRealExecution");
         for (String accountNo : accountNos) {
             try {
-                evaluateAndExecuteExitsForAccount(accountNo);
+                evaluateAndExecuteExitsForAccount(accountNo, serverAutoExecute, serverAllowRealExecution);
             } catch (Exception e) {
                 log.warn("청산 평가/실행 실패: accountNo={}, error={}", accountNo, e.getMessage(), e);
             }
         }
     }
 
-    private void evaluateAndExecuteExitsForAccount(String accountNo) {
+    private void evaluateAndExecuteExitsForAccount(String accountNo, boolean autoExecute, boolean allowRealExecution) {
         List<StrategyPosition> openPositions = strategyPositionRepository
                 .findByAccountNoAndExitDtIsNullOrderByEntryDtAsc(accountNo);
         if (openPositions.isEmpty()) {

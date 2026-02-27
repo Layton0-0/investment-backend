@@ -249,6 +249,12 @@ DATA_COLLECTION_INTERNAL_KEY=<내부 API 키>
 
 다른 작업 디렉터리에서 앱을 실행하는 경우, 스크립트 설정 안내에서 출력되는 `US_YFINANCE_SCRIPT_PATH`(절대 경로)와 `US_PYTHON_COMMAND`를 `.env`에 설정하세요.
 
+**US/KRX 수집이 0건일 때 확인할 env**
+
+- **US 일별 수집**: Docker 사용 시 `.env`에 `US_COLLECTOR_URL=http://data-collector:8001`(Compose 내부) 또는 `http://localhost:8001`(호스트에서 Backend 실행 시). 미설정이면 로그에 `US 시장 일별 수집 스킵: collector-url·yfinance-script-path 미설정` WARN 출력. `US_SYMBOLS`가 비어 있으면 수집 대상 없음으로 스킵.
+- **KRX 일별 수집**: `KRX_AUTH_KEY`(또는 `investment.data.krx.auth-key`) 미설정 시 로그에 `KRX AUTH_KEY 미설정: 조회 스킵` WARN 출력.
+- **헬스로 한눈에 확인**: `GET /actuator/health` 응답의 `dataCollectionHealthIndicator` detail에서 `usCollectorConfigured`, `krxAuthConfigured` 여부 확인 (값 자체는 노출하지 않음).
+
 **보안 키 생성 방법:**
 
 ```powershell
