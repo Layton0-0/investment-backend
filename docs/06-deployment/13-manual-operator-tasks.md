@@ -168,6 +168,15 @@
 
 ---
 
+### 1.12 로컬 PC — 평일 18:00(KST) 일일 GitHub 동기화 배치
+
+- **목적**: 전체 레포(루트 + .gitmodules 서브모듈) 변경분을 평일 오후 6시(한국시간)에 자동 커밋·푸시.
+- **스크립트**: 프로젝트 루트 `scripts/daily-git-sync.ps1` (주말은 스킵, 서브모듈별·루트 순으로 add/commit/push).
+- **등록**: 프로젝트 루트에서 `.\scripts\register-daily-git-sync-task.ps1` 실행 → Windows 작업 스케줄러에 **Investment-Daily-Git-Sync** 등록 (평일 18:00 로컬 시간). 18:00 KST로 맞추려면 Windows 표준 시간대를 (UTC+09:00) 서울로 설정.
+- **삭제**: `Unregister-ScheduledTask -TaskName Investment-Daily-Git-Sync`
+
+---
+
 ## 2. 완료 이력 (참고)
 
 | 일자       | 항목 | 비고 |
