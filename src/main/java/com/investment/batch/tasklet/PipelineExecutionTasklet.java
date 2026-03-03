@@ -16,14 +16,7 @@ public class PipelineExecutionTasklet implements Tasklet {
 
     @Override
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) {
-        Boolean dryRun = null;
-        var params = chunkContext.getStepContext().getJobParameters();
-        if (params != null && params.containsKey("dryRun")) {
-            String v = params.get("dryRun") != null ? String.valueOf(params.get("dryRun")) : null;
-            if (v != null)
-                dryRun = Boolean.parseBoolean(v);
-        }
-        pipelineExecutionScheduler.runNow(dryRun);
+        pipelineExecutionScheduler.runNow();
         return RepeatStatus.FINISHED;
     }
 }

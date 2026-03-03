@@ -30,15 +30,29 @@ public class SystemSettingService {
     private final SystemSettingRepository systemSettingRepository;
     private final Environment environment;
 
-    /** Phase 1: 키, (yml property, 기본값 문자열) */
+    /** Phase 1: 키, (yml property, 기본값 문자열). 활성/비활성 등 모든 설정은 Admin 화면에서 조회·저장. */
     private static final Map<String, KeyMeta> WHITELIST = new LinkedHashMap<>();
     static {
         WHITELIST.put("pipeline.autoExecute",
-                new KeyMeta("investment.pipeline.auto-execute", "true", "Boolean", "파이프라인 자동 실행(서버 기본)"));
+                new KeyMeta("investment.pipeline.auto-execute", "false", "Boolean", "파이프라인 자동 실행(서버 기본)"));
         WHITELIST.put("pipeline.allowRealExecution",
                 new KeyMeta("investment.pipeline.allow-real-execution", "false", "Boolean", "실계좌 자동 실행 허용(서버 기본)"));
         WHITELIST.put("pipeline.scheduler.defaultCapital",
                 new KeyMeta("investment.pipeline.scheduler.default-capital", "0", "BigDecimal", "스케줄러 기본 총자산(원)"));
+        WHITELIST.put("pipeline.tradingWindowEnabled",
+                new KeyMeta("investment.pipeline.trading-window.enabled", "true", "Boolean", "퀀트 매매 유리 시간대 사용 여부"));
+        WHITELIST.put("governance.enabled",
+                new KeyMeta("investment.governance.enabled", "true", "Boolean", "전략 거버넌스 검사 활성화"));
+        WHITELIST.put("governance.alertOnly",
+                new KeyMeta("investment.governance.alert-only", "true", "Boolean", "거버넌스 열화 시 알림만(true) / halt 가능(false)"));
+        WHITELIST.put("governance.autoHaltOnDegradation",
+                new KeyMeta("investment.governance.auto-halt-on-degradation", "false", "Boolean", "거버넌스 열화 시 자동 halt 등록"));
+        WHITELIST.put("batch.failureAlertEnabled",
+                new KeyMeta("investment.batch.failure-alert-enabled", "false", "Boolean", "배치 Job 실패 시 Discord 알림"));
+        WHITELIST.put("risk.regimeGateEnabled",
+                new KeyMeta("investment.risk.regime-gate-enabled", "false", "Boolean", "매크로 레짐 게이트(VIX 등) 신규 매수 차단"));
+        WHITELIST.put("intraday.breakoutEnabled",
+                new KeyMeta("investment.intraday.breakout-enabled", "false", "Boolean", "장중 변동성 돌파 진입 활성화"));
     }
 
     private static final Set<String> ALLOWED_KEYS = WHITELIST.keySet();

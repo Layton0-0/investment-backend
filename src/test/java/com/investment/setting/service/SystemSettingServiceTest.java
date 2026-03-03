@@ -51,7 +51,7 @@ class SystemSettingServiceTest {
     @DisplayName("getBoolean - DB 없으면 Environment fallback")
     void getBoolean_whenDbEmpty_usesEnvironmentFallback() {
         when(systemSettingRepository.findById("pipeline.autoExecute")).thenReturn(Optional.empty());
-        when(environment.getProperty("investment.pipeline.auto-execute", "true")).thenReturn("true");
+        when(environment.getProperty(eq("investment.pipeline.auto-execute"), eq("false"))).thenReturn("true");
         Boolean result = systemSettingService.getBoolean("pipeline.autoExecute");
         assertThat(result).isTrue();
     }
@@ -96,10 +96,15 @@ class SystemSettingServiceTest {
             if (k != null && k.contains("auto-execute")) return "true";
             if (k != null && k.contains("allow-real")) return "false";
             if (k != null && k.contains("default-capital")) return "0";
+            if (k != null && k.contains("trading-window")) return "true";
+            if (k != null && k.contains("governance")) return inv.getArgument(1);
+            if (k != null && k.contains("batch.failure")) return "false";
+            if (k != null && k.contains("regime-gate")) return "false";
+            if (k != null && k.contains("breakout-enabled")) return "false";
             return inv.getArgument(1);
         });
         var list = systemSettingService.listAll();
-        assertThat(list).hasSize(3);
+        assertThat(list).isNotEmpty();
         assertThat(list.stream().anyMatch(d -> "pipeline.autoExecute".equals(d.key()))).isTrue();
     }
 

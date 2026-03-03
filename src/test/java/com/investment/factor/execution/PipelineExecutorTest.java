@@ -75,11 +75,12 @@ class PipelineExecutorTest {
                 lenient().when(systemSettingService.getBoolean("pipeline.autoExecute")).thenReturn(false);
                 lenient().when(systemSettingService.getBoolean("pipeline.allowRealExecution")).thenReturn(false);
                 ReflectionTestUtils.setField(pipelineExecutor, "registerPositionOnExecution", false);
+                ReflectionTestUtils.setField(pipelineExecutor, "useAlgoExecution", false);
         }
 
         @Test
-        @DisplayName("dry-run 모드 - 주문 실행 없이 권장 목록만 반환")
-        void run_dryRun_returnsRecommendationsWithoutOrder() {
+        @DisplayName("autoExecute=false - 주문 실행 없이 권장 목록만 반환")
+        void run_autoExecuteFalse_returnsRecommendationsWithoutOrder() {
                 // given
                 LocalDate basDt = LocalDate.of(2026, 1, 30);
                 String market = "KR";
@@ -101,9 +102,9 @@ class PipelineExecutorTest {
                                 eq(totalCapital)))
                                 .thenReturn(List.of(recommendation));
 
-                // when
+                // when (autoExecute=false: DB에서 주문 미실행으로 설정된 경우)
                 PipelineExecutor.PipelineRunResult result = pipelineExecutor.run(
-                                basDt, market, accountNo, totalCapital, true);
+                                basDt, market, accountNo, totalCapital, false);
 
                 // then
                 assertThat(result.isDryRun()).isTrue();
@@ -119,7 +120,7 @@ class PipelineExecutorTest {
         void run_autoExecute_immediatePositionRegistration() {
                 // given: 스케줄러에서 호출 시 인증 컨텍스트 없음 → accountNo로 userId 조회 후
                 // executeOrderForPipeline 호출
-                when(systemSettingService.getBoolean("pipeline.autoExecute")).thenReturn(true);
+                lenient().when(systemSettingService.getBoolean("pipeline.autoExecute")).thenReturn(true);
                 LocalDate basDt = LocalDate.of(2026, 1, 30);
                 String market = "KR";
                 String accountNo = "1234567890";
@@ -176,12 +177,12 @@ class PipelineExecutorTest {
                                 .orderTime(LocalDateTime.now())
                                 .build();
 
-                when(orderService.executeOrderForPipeline(any(OrderRequestDto.class), eq(userId)))
+                lenient().when(orderService.executeOrderForPipeline(any(OrderRequestDto.class), eq(userId)))
                                 .thenReturn(orderResponse);
 
-                // when
+                // when (autoExecute=true: DB에서 주문 실행으로 설정된 경우)
                 PipelineExecutor.PipelineRunResult result = pipelineExecutor.run(
-                                basDt, market, accountNo, totalCapital, false);
+                                basDt, market, accountNo, totalCapital, true);
 
                 // then
                 assertThat(result.isDryRun()).isFalse();
@@ -195,7 +196,7 @@ class PipelineExecutorTest {
         @Test
         @DisplayName("KR+SHORT_TERM이고 kr-opening-order-dvsn 설정 시 OrderRequestDto에 orderDvsn 설정")
         void run_KR_shortTerm_withKrOpeningOrderDvsn_setsOrderDvsnOnRequest() {
-                when(systemSettingService.getBoolean("pipeline.autoExecute")).thenReturn(true);
+                lenient().when(systemSettingService.getBoolean("pipeline.autoExecute")).thenReturn(true);
                 ReflectionTestUtils.setField(pipelineExecutor, "krOpeningOrderDvsn", "02");
                 LocalDate basDt = LocalDate.of(2026, 1, 30);
                 String market = "KR";
@@ -238,7 +239,7 @@ class PipelineExecutorTest {
                 when(positionSizingService.getRecommendations(eq(basDt), eq(market), eq(StrategyType.SHORT_TERM),
                                 eq(totalCapital)))
                                 .thenReturn(List.of(recommendation));
-                when(orderService.executeOrderForPipeline(any(OrderRequestDto.class), eq(userId)))
+                lenient().when(orderService.executeOrderForPipeline(any(OrderRequestDto.class), eq(userId)))
                                 .thenReturn(OrderResponseDto.builder()
                                                 .orderId("order-kr-dvsn")
                                                 .accountNo(accountNo)
@@ -250,7 +251,7 @@ class PipelineExecutorTest {
                                                 .orderTime(LocalDateTime.now())
                                                 .build());
 
-                pipelineExecutor.run(basDt, market, accountNo, StrategyType.SHORT_TERM, totalCapital, false);
+                pipelineExecutor.run(basDt, market, accountNo, StrategyType.SHORT_TERM, totalCapital, true);
 
                 verify(orderService).executeOrderForPipeline(orderRequestCaptor.capture(), userIdCaptor.capture());
                 assertThat(orderRequestCaptor.getValue().getOrderDvsn()).isEqualTo("02");
@@ -259,7 +260,7 @@ class PipelineExecutorTest {
         @Test
         @DisplayName("US 시장 권장 시 OrderRequestDto에 market=US 설정")
         void run_marketUS_setsMarketOnOrderRequest() {
-                when(systemSettingService.getBoolean("pipeline.autoExecute")).thenReturn(true);
+                lenient().when(systemSettingService.getBoolean("pipeline.autoExecute")).thenReturn(true);
                 LocalDate basDt = LocalDate.of(2026, 1, 30);
                 String market = "US";
                 String accountNo = "1234567890";
@@ -315,11 +316,11 @@ class PipelineExecutorTest {
                                 .orderTime(LocalDateTime.now())
                                 .build();
 
-                when(orderService.executeOrderForPipeline(any(OrderRequestDto.class), eq(userId)))
+                lenient().when(orderService.executeOrderForPipeline(any(OrderRequestDto.class), eq(userId)))
                                 .thenReturn(orderResponse);
 
-                // when
-                pipelineExecutor.run(basDt, market, accountNo, totalCapital, false);
+                // when (autoExecute=true: DB에서 주문 실행으로 설정된 경우)
+                pipelineExecutor.run(basDt, market, accountNo, totalCapital, true);
 
                 // then
                 verify(orderService).executeOrderForPipeline(orderRequestCaptor.capture(), userIdCaptor.capture());
@@ -369,9 +370,8 @@ class PipelineExecutorTest {
         }
 
         @Test
-        @DisplayName("allow-real-execution=false, 실전 계좌(serverType=0) - 주문 스킵, dry-run 결과")
+        @DisplayName("allow-real-execution=false, 실전 계좌(serverType=0) - 주문 스킵, 권장만 결과")
         void run_allowRealExecutionFalse_realAccount_skipsOrder() {
-                when(systemSettingService.getBoolean("pipeline.autoExecute")).thenReturn(true);
                 when(systemSettingService.getBoolean("pipeline.allowRealExecution")).thenReturn(false);
 
                 LocalDate basDt = LocalDate.of(2026, 1, 30);
@@ -418,8 +418,9 @@ class PipelineExecutorTest {
                                 eq(totalCapital)))
                                 .thenReturn(List.of(recommendation));
 
+                // autoExecute=true로 진입하지만 실전 계좌 가드로 주문만 스킵
                 PipelineExecutor.PipelineRunResult result = pipelineExecutor.run(
-                                basDt, market, accountNo, totalCapital, false);
+                                basDt, market, accountNo, totalCapital, true);
 
                 assertThat(result.isDryRun()).isFalse();
                 assertThat(result.getOrderResults()).hasSize(1);

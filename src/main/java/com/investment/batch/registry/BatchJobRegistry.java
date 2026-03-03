@@ -97,6 +97,14 @@ public class BatchJobRegistry {
                                                 .triggerPath("/api/v1/trigger/auto-buy")
                                                 .build(),
                                 BatchJobDefinition.builder()
+                                                .id("auto-buy-us")
+                                                .name("자동매수(미국장)")
+                                                .description("매일 23:35 KST(미국 유리 시간대)에 파이프라인 US 시장만 실행합니다. 퀀트 유리 윈도우 내에서만 진입. 실행: Backend 내부.")
+                                                .cronExpression("0 35 23 * * *")
+                                                .timeZone(TZ)
+                                                .triggerPath("/api/v1/trigger/auto-buy-us")
+                                                .build(),
+                                BatchJobDefinition.builder()
                                                 .id("pipeline-execution")
                                                 .name("파이프라인 실행")
                                                 .description("4단계 파이프라인만 수동 실행합니다. (스케줄은 자동매수(통합) 사용). 실행: Backend 내부.")
@@ -175,6 +183,14 @@ public class BatchJobRegistry {
                                                 .cronExpression("0 0 2 1 * *")
                                                 .timeZone(TZ)
                                                 .triggerPath("/api/v1/trigger/strategy-governance-check")
+                                                .build(),
+                                BatchJobDefinition.builder()
+                                                .id("reconcile")
+                                                .name("포지션 정합성(Reconciliation)")
+                                                .description("장 시작 전 08:00 또는 장 마감 후 16:10에 자동투자 ON 계좌별 브로커-DB 포지션 비교, 불일치 시 Discord 알림. 실행: Backend 내부.")
+                                                .cronExpression("0 0 8,16 * * MON-FRI")
+                                                .timeZone(TZ)
+                                                .triggerPath("/api/v1/trigger/reconcile")
                                                 .build());
         }
 

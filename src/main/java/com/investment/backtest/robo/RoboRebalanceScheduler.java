@@ -6,6 +6,7 @@ import com.investment.common.security.LogMaskingUtil;
 import com.investment.config.RoboBacktestProperties;
 import com.investment.domain.entity.TradingSetting;
 import com.investment.domain.repository.TradingSettingRepository;
+import com.investment.setting.service.SystemSettingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -29,11 +30,13 @@ public class RoboRebalanceScheduler {
     private final RoboPreExecutionResultStore preExecutionResultStore;
     private final RoboRebalanceExecutor roboRebalanceExecutor;
     private final RoboBacktestProperties roboBacktestProperties;
+    private final SystemSettingService systemSettingService;
 
     /**
-     * 수동/배치 트리거용. dryRun=true면 백테스트만 실행·저장하고 executeRebalance는 호출하지 않음.
+     * 수동/배치 트리거용. 실제 ETF 주문 여부는 DB 시스템 설정(pipeline.autoExecute)에 따름.
      */
-    public void runNow(boolean dryRun) {
+    public void runNow() {
+        boolean autoExecute = systemSettingService.getBoolean("pipeline.autoExecute");
         List<TradingSetting> settings = tradingSettingRepository
                 .findAllByAutoTradingEnabledTrueAndRoboAdvisorEnabledTrue();
         if (settings.isEmpty()) {
@@ -69,8 +72,8 @@ public class RoboRebalanceScheduler {
 
                 preExecutionResultStore.store(accountNo, result, passed);
 
-                if (dryRun) {
-                    log.info("로보 수동 트리거(dryRun): accountNo={}, passed={}, MDD={}, Sharpe={}",
+                if (!autoExecute) {
+                    log.info("로보 실행 스킵(auto-execute=false): accountNo={}, passed={}, MDD={}, Sharpe={}",
                             LogMaskingUtil.maskAccountNo(accountNo), passed, result.getMddPct(),
                             result.getSharpeRatio());
                     continue;

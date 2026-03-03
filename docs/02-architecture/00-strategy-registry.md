@@ -63,6 +63,13 @@
 - **설정**: `investment.factor.risk-based-cap-enabled` (기본 false), `investment.factor.risk-based-cap-max-pct` (기본 0.05 = 5%). 활성화 시 각 권장 금액이 `totalCapital × risk-based-cap-max-pct`를 초과하지 않도록 캡.
 - **구현**: `PositionSizingService.applyRiskBasedCap`. 파이프라인·트레이딩 포트폴리오에서 `getRecommendations` 호출 시 설정이 켜져 있으면 자동 적용.
 
+### 2.5.2 포트폴리오 공분산·상관관계 패널티 (옵션, 인스티튜셔널 보완)
+
+- **역할**: 권장 포지션 목록에서 종목 간 **상관계수**가 임계값(기본 0.7) 이상인 쌍이 있으면, 포트폴리오 전체 비중을 스케일 다운하여 섹터/자산 동시 폭락 시 리스크를 완화.
+- **수식·데이터**: TB_DAILY_STOCK 기준 60일 일봉 수익률로 Pearson 상관계수 계산. 고상관 쌍 존재 시 전체 권장 금액에 `correlation-penalty-scale`(기본 0.8) 곱한 뒤 수량 재계산.
+- **설정**: `investment.factor.correlation-penalty-enabled` (기본 false), `investment.factor.correlation-threshold` (기본 0.7), `investment.factor.correlation-penalty-scale` (기본 0.8).
+- **구현**: `CorrelationPenaltyService.applyPenalty`. `PositionSizingService.getRecommendations` 내 applyRiskBasedCap 이후 호출.
+
 ### 2.6 AI/LSTM 활용 방침
 
 - **AI 예측(LSTM 등)**: 분석 정보 제공용. 목표가·신뢰도·방향은 참고 지표로만 사용.
@@ -119,6 +126,7 @@ Monte Carlo 시뮬레이션 기반 VaR/CVaR 계산으로 꼬리 위험(tail risk
 - **단일 종목 비중 상한**: 주문 후 해당 종목 비중 > 10%가 되면 거부. 계좌 평가총액·포지션 평가금액 기반.
 - **MDD 게이트**: 계좌별 피크(`TB_PORTFOLIO_PEAK`) 대비 현재 평가액으로 MDD 계산. MDD > 15% 시 **신규 매수만** 차단(매도 허용).
 - **구현**: `PreTradeComplianceEngine`, `TradingHaltService`, `PortfolioPeakService`. 스텁 사용 시 `investment.compliance.use-stub=true`.
+- **브로커-DB 정합성(Reconciliation)**: 자동투자 ON 계좌별 TB_STRATEGY_POSITION vs 증권사 실잔고 비교. `ReconciliationService.reconcile`, Batch Job `reconcile`(08:00·16:10), 불일치 시 Discord 알림. Re-sync 리포트: GET `/api/v1/ops/reconcile`(ADMIN). 실전 배포 전 체크리스트: [plans/qa/실전_배포_전_필수_확인_체크리스트.md](../../../plans/qa/실전_배포_전_필수_확인_체크리스트.md).
 
 ### 2.9.2 TaxAwareOptimizer (Phase 2)
 
@@ -159,6 +167,8 @@ Monte Carlo 시뮬레이션 기반 VaR/CVaR 계산으로 꼬리 위험(tail risk
 
 ### 2.10 Friction cost (마찰 비용)
 
+**원칙**: 매매 판단·기대수익·손익 계산 시 **반드시 수수료와 세금을 포함한 순손익(net)** 기준으로 한다. 모든 득실은 왕복 비용(매수+매도 수수료·세금·슬리피지)을 차감한 뒤 판단한다.
+
 백테스트·로보 리밸런싱 시 **수수료·세금·슬리피지**를 반영해 실전에 가까운 PnL을 산출한다. 한국투자증권(KIS) 실전 수수료 체계 기준.
 
 - **설정 경로**: `investment.fees` (application.yml). `FrictionCostProperties` 바인딩.
@@ -167,6 +177,7 @@ Monte Carlo 시뮬레이션 기반 VaR/CVaR 계산으로 꼬리 위험(tail risk
 - **미국(US) 주식/ETF**: 위탁수수료 + SEC Fee(매도) + 슬리피지 + TAF(매도 시 주당 USD). 환전 스프레드는 로보 백테스트에서 `usa.currency.exchange-rate-spread`로 반영.
 - **백테스트 반영**: `BacktestService`는 매수 시 `cost + feeBuy`, 매도 시 `exitValue - feeSell - taf`, PnL = (exitValue - cost) - totalFriction. `BacktestTradeDto.totalFrictionCost`로 거래별 마찰 비용 노출.
 - **로보 백테스트**: 요청에 `commPct`/`slipPct`가 없으면 `FrictionCostProperties` 기반 round-trip 비율(2×commission + secFee + 2×slippage + 2×exchangeRateSpread) 및 TAF(매도 수량×tafPerShareUsd) 적용. 있으면 기존 commPct/slipPct로 하위 호환.
+- **실전 매매 판단**: `FrictionCostService`(왕복 비용률/금액) 사용. `PositionSizingService`는 2:1 R:R 가정 시 기대 gross 수익률이 왕복 비용률을 상회하는 종목만 권장. 트레이딩 포트폴리오·기대수익 표시는 순손익(기대수익률 − 왕복 비용률, 예상 수익 − 왕복 비용 금액) 기준.
 
 ---
 

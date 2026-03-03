@@ -30,30 +30,12 @@ class AutoBuyOrchestratorTest {
     }
 
     @Test
-    @DisplayName("run 호출 시 로보 먼저, 파이프라인 다음 순서로 실행")
+    @DisplayName("run 호출 시 로보 먼저, 파이프라인 다음 순서로 실행 (실제 주문 여부는 각 스케줄러가 DB에서 조회)")
     void run_invokesRoboThenPipeline() {
-        orchestrator.run(true);
+        orchestrator.run();
 
         InOrder order = inOrder(roboRebalanceScheduler, pipelineExecutionScheduler);
-        order.verify(roboRebalanceScheduler).runNow(true);
-        order.verify(pipelineExecutionScheduler).runNow(true);
-    }
-
-    @Test
-    @DisplayName("run(false) 시 dryRun false로 양쪽 전달")
-    void run_withFalse_passesFalseToBoth() {
-        orchestrator.run(false);
-
-        verify(roboRebalanceScheduler).runNow(false);
-        verify(pipelineExecutionScheduler).runNow(false);
-    }
-
-    @Test
-    @DisplayName("run(null) 시 로보는 true, 파이프라인은 null 전달")
-    void run_withNull_passesNullToPipeline() {
-        orchestrator.run(null);
-
-        verify(roboRebalanceScheduler).runNow(true);
-        verify(pipelineExecutionScheduler).runNow(null);
+        order.verify(roboRebalanceScheduler).runNow();
+        order.verify(pipelineExecutionScheduler).runNow(null);
     }
 }

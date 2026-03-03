@@ -13,7 +13,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 
@@ -44,7 +43,7 @@ class IntradayBreakoutSchedulerTest {
     @Test
     @DisplayName("breakout 비활성 시 getBreakoutCandidates 미호출")
     void runIntradayBreakout_disabled_skips() {
-        ReflectionTestUtils.setField(intradayBreakoutScheduler, "breakoutEnabled", false);
+        when(systemSettingService.getBoolean("intraday.breakoutEnabled")).thenReturn(false);
 
         intradayBreakoutScheduler.runIntradayBreakout();
 
@@ -54,7 +53,7 @@ class IntradayBreakoutSchedulerTest {
     @Test
     @DisplayName("자동투자 ON 계좌 없으면 스킵")
     void runIntradayBreakout_noSettings_skips() {
-        ReflectionTestUtils.setField(intradayBreakoutScheduler, "breakoutEnabled", true);
+        when(systemSettingService.getBoolean("intraday.breakoutEnabled")).thenReturn(true);
         when(systemSettingService.getBoolean("pipeline.autoExecute")).thenReturn(true);
         when(tradingSettingRepository.findAllByAutoTradingEnabledTrue()).thenReturn(List.of());
 

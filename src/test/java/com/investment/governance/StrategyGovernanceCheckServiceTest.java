@@ -7,6 +7,7 @@ import com.investment.backtest.dto.BacktestRunResult;
 import com.investment.config.GovernanceProperties;
 import com.investment.domain.entity.GovernanceCheckResult;
 import com.investment.domain.repository.GovernanceCheckResultRepository;
+import com.investment.setting.service.SystemSettingService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,6 +38,8 @@ class StrategyGovernanceCheckServiceTest {
     private GovernanceCheckResultRepository governanceCheckResultRepository;
     @Mock
     private GovernanceHaltService governanceHaltService;
+    @Mock
+    private SystemSettingService systemSettingService;
 
     @InjectMocks
     private StrategyGovernanceCheckService strategyGovernanceCheckService;
@@ -44,7 +47,7 @@ class StrategyGovernanceCheckServiceTest {
     @Test
     @DisplayName("enabled false면 검사 스킵")
     void checkAndSendAlerts_disabled_skips() {
-        when(governanceProperties.isEnabled()).thenReturn(false);
+        when(systemSettingService.getBoolean("governance.enabled")).thenReturn(false);
 
         strategyGovernanceCheckService.checkAndSendAlerts();
 
@@ -55,13 +58,13 @@ class StrategyGovernanceCheckServiceTest {
     @Test
     @DisplayName("검사 후 결과 저장 및 열화 시 autoHaltOnDegradation true면 setHalt 호출")
     void checkAndSendAlerts_degraded_savesResultAndSetHalt() {
-        when(governanceProperties.isEnabled()).thenReturn(true);
+        when(systemSettingService.getBoolean("governance.enabled")).thenReturn(true);
+        when(systemSettingService.getBoolean("governance.alertOnly")).thenReturn(false);
+        when(systemSettingService.getBoolean("governance.autoHaltOnDegradation")).thenReturn(true);
         when(governanceProperties.getLookbackMonths()).thenReturn(12);
         when(governanceProperties.getDefaultCapital()).thenReturn(new BigDecimal("100000000"));
         when(governanceProperties.getMddThresholdPct()).thenReturn(new BigDecimal("-15"));
         when(governanceProperties.getSharpeMin()).thenReturn(BigDecimal.ZERO);
-        when(governanceProperties.isAlertOnly()).thenReturn(false);
-        when(governanceProperties.isAutoHaltOnDegradation()).thenReturn(true);
 
         BacktestRunResult degradedResult = BacktestRunResult.builder()
                 .mddPct(new BigDecimal("-20"))
@@ -83,12 +86,12 @@ class StrategyGovernanceCheckServiceTest {
     @Test
     @DisplayName("열화여도 alertOnly true면 setHalt 미호출")
     void checkAndSendAlerts_alertOnly_true_noSetHalt() {
-        when(governanceProperties.isEnabled()).thenReturn(true);
+        when(systemSettingService.getBoolean("governance.enabled")).thenReturn(true);
+        when(systemSettingService.getBoolean("governance.alertOnly")).thenReturn(true);
         when(governanceProperties.getLookbackMonths()).thenReturn(12);
         when(governanceProperties.getDefaultCapital()).thenReturn(new BigDecimal("100000000"));
         when(governanceProperties.getMddThresholdPct()).thenReturn(new BigDecimal("-15"));
         when(governanceProperties.getSharpeMin()).thenReturn(BigDecimal.ZERO);
-        when(governanceProperties.isAlertOnly()).thenReturn(true);
         // autoHaltOnDegradation is not read when alertOnly is true, so do not stub to avoid UnnecessaryStubbingException
 
         BacktestRunResult degradedResult = BacktestRunResult.builder()

@@ -300,6 +300,27 @@ Spring Boot 애플리케이션은 프로젝트 루트의 `.env` 파일을 자동
 3. **스케줄**: 파이프라인 실행 09:10 KST, 청산 장중 5분마다, 체결 확인 매분. 로그에서 주문 요청·서버 타입(모의) 확인.
 4. **모의 Rate Limit**: 한국투자증권 모의투자 1초당 2건 제한. 동시 다수 종목 주문 시 대기 발생할 수 있음.
 
+### 3-6. 로컬 Docker 풀스택 배포 시 모의투자 실제 실행
+
+**investment-infra**의 `docker-compose.local-full.yml`로 로컬 풀스택을 띄우면 **모의투자 실제 실행**이 기본 적용됩니다.
+
+- **Backend** 서비스에 다음 환경 변수가 설정됨:
+  - `PIPELINE_AUTO_EXECUTE=true` — dry-run 비활성화, 스케줄러/수동 트리거 시 실제 주문 실행
+  - `PIPELINE_ALLOW_REAL_EXECUTION=false` — 실전 계좌(serverType=0) 자동 실행 차단, **모의계좌만** 주문 실행
+  - `PIPELINE_SCHEDULER_DEFAULT_CAPITAL=10000000` — 계정별 최대투자금 미설정 시 스케줄러용 기본 자본(1천만 원)
+
+**배포 절차** (프로젝트 루트 또는 investment-infra):
+
+```powershell
+# Backend JAR 빌드 후 풀스택 기동
+cd investment-infra
+.\scripts\local-up.ps1
+# 또는: docker compose -f docker-compose.local-full.yml up -d --build
+```
+
+접속: **http://localhost** (프론트), **http://localhost:8080** 또는 **http://localhost/api** (백엔드 API).  
+모의계좌 인증·거래설정(자동 매매 ON, 최대 투자금 등) 후 09:10 KST 스케줄 또는 `POST /api/v1/trigger/auto-buy` 수동 트리거 시 **실제 모의 주문**이 실행됩니다.
+
 ## 4단계: MCP 설치 (선택사항)
 
 MCP(Model Context Protocol)는 Cursor에서 프로젝트를 더 효율적으로 개발할 수 있게 해주는 도구입니다.

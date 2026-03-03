@@ -658,12 +658,17 @@ redis-cli DEL "auth_failure:username"
 
 ### 4. CORS 오류
 
-**증상**: 브라우저에서 CORS 에러
+**증상**: 브라우저에서 `Access to fetch at '...' from origin 'https://...' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header` 또는 preflight 실패
 
-**원인 및 해결**:
-- CORS 설정 확인: `CORS_ALLOWED_ORIGINS` 환경 변수 확인
-- Origin 확인: 요청 Origin이 허용 목록에 있는지 확인
-- `allowCredentials` 확인: `*`와 함께 사용 불가
+**원인**:
+1. **백엔드**: 배포 환경에서 `CORS_ALLOWED_ORIGINS` 미설정 시 기본값은 로컬(localhost, 5173)만 허용. 프로덕션 프론트 도메인(예: `https://neekly-report.cloud`)이 목록에 없으면 CORS 헤더가 붙지 않음.
+2. **프론트엔드**: 프로덕션 빌드 시 `VITE_API_BASE_URL` 미설정이면 기본값 `http://localhost:8080`으로 요청 → 브라우저 기준으로는 사용자 PC의 localhost를 호출하게 되어, 배포 서버의 백엔드가 아닌 잘못된 대상으로 요청 가능.
+
+**해결**:
+- **백엔드(배포 서버)**: 환경변수 설정. 예: `CORS_ALLOWED_ORIGINS=https://neekly-report.cloud` (프론트가 제공되는 도메인과 일치해야 함). 여러 도메인은 콤마 구분.
+- **프론트엔드(빌드 시)**: 프로덕션 빌드 시 `VITE_API_BASE_URL`을 실제 백엔드 API URL로 설정 후 빌드. 예: `VITE_API_BASE_URL=https://api.neekly-report.cloud` 또는 동일 호스트면 `https://neekly-report.cloud`. 빌드 시점에 주입되므로 배포 서버의 `.env`가 아닌 **빌드 시 사용하는 환경변수**에 설정.
+- Origin 확인: 요청 Origin이 허용 목록에 있는지 확인.
+- `allowCredentials` 확인: `*`와 함께 사용 불가.
 
 ### 5. 쿠키 설정 오류
 

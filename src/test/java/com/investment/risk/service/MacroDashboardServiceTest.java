@@ -3,6 +3,7 @@ package com.investment.risk.service;
 import com.investment.config.RiskProperties;
 import com.investment.risk.dto.MacroDashboardResponse;
 import com.investment.risk.dto.MacroIndicatorDto;
+import com.investment.setting.service.SystemSettingService;
 import com.investment.strategy.engine.MacroEconomicStrategyEngine;
 import com.investment.strategy.engine.MacroIndicatorProvider;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,6 +27,9 @@ class MacroDashboardServiceTest {
     @Mock
     private MacroIndicatorProvider macroIndicatorProvider;
 
+    @Mock
+    private SystemSettingService systemSettingService;
+
     private RiskProperties riskProperties;
     private MacroDashboardService service;
 
@@ -36,7 +40,7 @@ class MacroDashboardServiceTest {
         riskProperties.setVixThreshold(new BigDecimal("30"));
         riskProperties.setReduceSizeOnHighVolPct(new BigDecimal("50"));
 
-        service = new MacroDashboardServiceImpl(macroIndicatorProvider, riskProperties);
+        service = new MacroDashboardServiceImpl(macroIndicatorProvider, riskProperties, systemSettingService);
     }
 
     @Nested
@@ -156,6 +160,7 @@ class MacroDashboardServiceTest {
         @Test
         @DisplayName("VIX 높을 때 리스크 게이트 트리거")
         void shouldTriggerRiskGateWhenVixHigh() {
+            when(systemSettingService.getBoolean("risk.regimeGateEnabled")).thenReturn(true);
             MacroEconomicStrategyEngine.MacroEconomicIndicators indicators =
                     MacroEconomicStrategyEngine.MacroEconomicIndicators.builder()
                             .vix(new BigDecimal("35"))

@@ -1,6 +1,7 @@
 package com.investment.factor.service;
 
 import com.investment.config.RiskProperties;
+import com.investment.setting.service.SystemSettingService;
 import com.investment.strategy.engine.MacroEconomicStrategyEngine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,6 +13,7 @@ import java.math.RoundingMode;
 /**
  * 리스크 게이트 — 파이프라인 실행 전 시장 레짐·VIX 확인.
  * 고변동성 시 신규 매수 비중 축소 또는 스킵 (전문 투자자 흐름 P0).
+ * 활성 여부는 Admin 시스템 설정(risk.regimeGateEnabled)에서 조회.
  */
 @Slf4j
 @Service
@@ -20,6 +22,11 @@ public class RiskGateService {
 
     private final RiskProperties riskProperties;
     private final MacroEconomicStrategyEngine macroEconomicStrategyEngine;
+    private final SystemSettingService systemSettingService;
+
+    private boolean isRegimeGateEnabled() {
+        return Boolean.TRUE.equals(systemSettingService.getBoolean("risk.regimeGateEnabled"));
+    }
 
     /**
      * 현재 레짐·VIX(선택) 기준으로 신규 매수 허용 여부와 비중 배율 반환.
@@ -29,7 +36,7 @@ public class RiskGateService {
      * @return allowNewBuy, sizeMultiplier (0~1)
      */
     public RiskGateResult evaluate(BigDecimal vix) {
-        if (!riskProperties.isRegimeGateEnabled()) {
+        if (!isRegimeGateEnabled()) {
             return RiskGateResult.allow(BigDecimal.ONE);
         }
         if (vix == null) {
@@ -58,7 +65,7 @@ public class RiskGateService {
      * 지표 미제공 시 허용 + 1.0.
      */
     public RiskGateResult evaluateWithIndicators(MacroEconomicStrategyEngine.MacroEconomicIndicators indicators) {
-        if (!riskProperties.isRegimeGateEnabled() || indicators == null) {
+        if (!isRegimeGateEnabled() || indicators == null) {
             return RiskGateResult.allow(BigDecimal.ONE);
         }
         try {

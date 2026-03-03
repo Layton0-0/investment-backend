@@ -38,6 +38,10 @@ class PositionSizingServiceTest {
         private DailyStockRepository dailyStockRepository;
         @Mock
         private NewsSignalService newsSignalService;
+        @Mock
+        private FrictionCostService frictionCostService;
+        @Mock
+        private CorrelationPenaltyService correlationPenaltyService;
 
         @InjectMocks
         private PositionSizingService positionSizingService;
@@ -48,6 +52,9 @@ class PositionSizingServiceTest {
                 ReflectionTestUtils.setField(positionSizingService, "kellyP", new BigDecimal("0.6"));
                 ReflectionTestUtils.setField(positionSizingService, "kellyB", new BigDecimal("2.0"));
                 lenient().when(newsSignalService.getSymbolsWithSignalNews(any(), any())).thenReturn(java.util.Set.of());
+                lenient().when(frictionCostService.getRoundTripCostRate(anyString())).thenReturn(new BigDecimal("0.002"));
+                lenient().when(correlationPenaltyService.applyPenalty(anyList(), any(), anyString(), any()))
+                        .thenAnswer(inv -> inv.getArgument(0));
         }
 
         @Test

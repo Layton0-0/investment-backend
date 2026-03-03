@@ -38,6 +38,7 @@ public class UniverseFilterService {
     private final SectorReturnRepository sectorReturnRepository;
     private final SymbolSectorRepository symbolSectorRepository;
     private final EarningsSurpriseRepository earningsSurpriseRepository;
+    private final CorporateActionService corporateActionService;
 
     /** 순위 API(거래량 순위) 연동. provider=korea-investment일 때만 빈 존재. 미존재 시 volume rank 필터 스킵 */
     @Autowired(required = false)
@@ -116,6 +117,9 @@ public class UniverseFilterService {
                     .distinct()
                     .collect(Collectors.toList());
         }
+
+        // 기업 이벤트(액면분할·배당락 등) 제외
+        finalSymbols = corporateActionService.filterExcluded(finalSymbols, basDt, market);
 
         if (finalSymbols.isEmpty()) {
             log.debug("유니버스 필터: basDt={}, market={}, 최종 통과 종목 없음", basDt, market);

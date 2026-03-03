@@ -126,6 +126,8 @@ public class MarketDataProperties {
             private long heartbeatIntervalSeconds = 30L;
             /** 세션당 최대 구독 종목 수 (KIS 제한: 41개) */
             private int maxSubscriptionsPerSession = 41;
+            /** 장 시작 전 WebSocket 연결·구독 크론 (비우면 기동 후 1회만 연결). 예: 0 0 8 * * MON-FRI (08:00 KST 평일) */
+            private String connectCron = "";
         }
 
         @Getter

@@ -11,6 +11,10 @@
 ## 1. 완료 (Completed)
 
 ### 도메인·DB·API
+- [x] **매매 시 수수료·세금 필수 반영(득실 순손익 기준)**
+  모든 매매 판단·기대수익·손익 계산을 수수료·세금 포함 순손익(net) 기준으로 통일. `FrictionCostService`(왕복 비용률/금액), `PositionSizingService`(2:1 R:R 가정 시 기대 gross 수익률이 왕복 비용률 초과 시에만 권장), `ShortTermTradingStrategyService`(기대수익률·예상 수익 = gross − 왕복 비용). 전략 레지스트리 §2.10 원칙 및 실전 매매 판단 문단 추가.
+- [x] **퀀트 매매 유리 시간대(Trading Window)**
+  한국·미국 시장별 유리 구간에만 파이프라인 진입 실행. `PipelineTradingWindowProperties`(investment.pipeline.trading-window), `TradingWindowService`(isInKrWindow/isInUsWindow), `PipelineExecutionScheduler.runNow(forceDryRun, marketFilter)`·runPipelineForAccount 시장별 윈도우 검사 및 `OUTSIDE_TRADING_WINDOW` 스킵. Batch Job `auto-buy-us`(23:35 KST cron), `AutoBuyUsTasklet`, `POST /api/v1/trigger/auto-buy-us`. [14-trading-window-quant.md](../02-architecture/14-trading-window-quant.md), application.yml trading-window.*, PipelineSkipReason.OUTSIDE_TRADING_WINDOW.
 - [x] **자동매매 실행 선행 조건 종합**
   문서·yml 통일: `investment.pipeline.auto-execute` 기본값 false로 통일(application.yml, 12-auto-investment-strategy.md). 13-manual-operator-tasks.md §1.11 자동매매 가동 전 점검 절 추가(인프라·데이터 파이프라인·계좌·게이트·준비 상태 API·수동 검증). 파이프라인 스킵 사유 코드: PipelineSkipReason enum 도입, PipelineExecutionScheduler 로그에 code·description 일관 출력. 자동매매 준비 상태 API: GET /api/v1/ops/auto-trading-readiness(ADMIN), AutoTradingReadinessService·Dto, 자동투자 ON 계좌 수·전일 일봉/시그널 건수·활성 halt 수. Repository: countByBasDt(DailyStock, SignalScore), countByAutoTradingEnabledTrue(TradingSetting). 프론트 opsApi.getAutoTradingReadiness·AutoTradingReadinessDto. 02-api-endpoints·01-api-overview·11-api-frontend-mapping 반영.
 - [x] **퀀트 시스템 설계서 대조 점검 반영 (시장 급락 게이트·전략 비교)**
@@ -73,7 +77,11 @@
   NewsItem 엔티티, NewsItemRepository, NewsItemService, GET `/api/v1/news` (필터·페이징). API 개요 문서 반영.
 - [x] **TB_NEWS_ITEMS EVENT_TYPE 확장 (V11)**  
   DART report_nm 등 긴 보고서명 저장 시 50자 초과 오류 방지. DB V11(EVENT_TYPE VARCHAR(500)), NewsItem.MAX_EVENT_TYPE_LENGTH·truncateEventType, InternalDataCollectionController(수집기→Spring 수신)에서 eventType 500자 truncate 적용. (V11 롤백 스크립트는 Flyway·마이그레이션 정리로 제거됨. 필요 시 git history 참조.)
-- [x] **캐시 키 정리**  
+- [x] **포지션 정합성(Reconciliation)·Re-sync API**
+  브로커 실잔고 vs TB_STRATEGY_POSITION 비교. ReconciliationService(ops.service)·ReconciliationResultDto(ops.dto), reconcile(userId, accountNo). ReconciliationTasklet·Batch Job `reconcile`(08:00·16:10 평일), 불일치 시 EmergencyAlertService.sendRiskEventAlert(ReconciliationMismatch). GET /api/v1/ops/reconcile(ADMIN, accountNo 선택)·POST /api/v1/trigger/reconcile. 실전 배포 전 체크리스트: [plans/qa/실전_배포_전_필수_확인_체크리스트.md](../../../plans/qa/실전_배포_전_필수_확인_체크리스트.md).
+- [x] **WebSocket·단타 실시간 시세 개선 (plans/qa/20260303 검증 문서 기준)**
+  문서 정리: 14-multi-account-realtime-streaming.md 5.2·검증 문서에 WebSocketPriceCacheListener 연동·getCurrentPriceBlocking WebSocket 우선 반영. 단타/청산 캐시: CacheConfig 현재가 TTL 프로퍼티화(`investment.market-data.current-price-cache-ttl-seconds`, 기본 300, 단타 시 5 등). WebSocketConnectScheduler: websocket.enabled=true 시 기동 5초 후·선택 크론(connect-cron)으로 연결·체결통보 구독. 단위 테스트: RealtimeMarketDataServiceTest WebSocket 우선 조회, WebSocketPriceCacheListenerTest 호가/체결 이벤트 시 updateFromWebSocket 검증.
+- [x] **캐시 키 정리**
   CacheConfig에 CACHE_CURRENT_PRICE 정의, RealtimeMarketDataService에서 상수 사용.
 - [x] **KIS Open API 실전 구축 (Phase 4·3·2·1 스켈레톤·문서)**  
   **Phase 4**: TokenRefreshScheduler(장 시작 30분 전 토큰 갱신), KoreaInvestmentTokenService.forceRefreshAllTokensForMarketOpen, pre-market-refresh-cron. **Phase 3**: OrderRequestQueue(BlockingQueue+RateLimiter), OrderExecutor, throttle.* 설정. **Phase 2**: KoreaInvestmentRankClient(getVolumeRank, getInvestorDailyByMarket), RankApiProperties, path/TR_ID 미설정 시 빈 리스트; MCP volume_rank·inquire_investor_daily_by_market 확인 후 설정. **Phase 1**: KoreaInvestmentWebSocketClient 인터페이스, NoOpKoreaInvestmentWebSocketClient(미구현). **문서**: 09-korea-investment-api-guide.md 실전 구축 요약, decisions.md ADR 18.
@@ -459,3 +467,4 @@
 | 1.48 | 2026-02-24 | 완료: 국내/미국 전략 시스템 기본화·조회 중심 — getStrategies 시 계좌+시장별 기본 3개 전략 ensure, 파이프라인 Strategy STOPPED/PAUSED 스킵, 프론트 전략 추가 제거·문구 변경, 01-screen-menu-spec·02-development-status·decisions ADR 25 갱신. |
 | 1.49 | 2026-02-26 | 완료: 해외주식 잔고·매수 메인 반영 — 모의·실계좌 자산 0원 수정(output/output2 파싱·tot_evlu_amt 0 시 예수금+주문가능 합산), 잔고 별도 API(positions?market=KR|US), 대시보드 국내/해외 잔고 구역 분리·시장 컬럼, 09-korea-investment-api-guide·11-api-frontend-mapping 갱신. |
 | 1.50 | 2026-02-27 | 퀀트 시스템 설계서 대조 점검 반영: 시장 급락 게이트(MarketCrashGateService, 벤치마크 전일 낙폭 시 당일 매수 중단), 전략 비교 API·화면(GET /api/v1/strategies/comparison, StrategyComparisonService, 전략별 MDD·Sharpe 테이블). 00-strategy-registry §2.9, decisions ADR 28, 02-api-endpoints §4.0. |
+| 1.51 | 2026-03-03 | 완료: 포지션 정합성(Reconciliation)·Re-sync API — ReconciliationService·배치·GET /api/v1/ops/reconcile·POST /api/v1/trigger/reconcile, UnfilledOrderCheckScheduler 쿨타임, 실전 배포 전 체크리스트 문서(plans/qa). 00-strategy-registry·02-api-endpoints 반영. |

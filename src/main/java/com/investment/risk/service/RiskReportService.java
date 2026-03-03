@@ -4,6 +4,7 @@ import com.investment.common.security.EncryptionUtil;
 import com.investment.common.security.LogMaskingUtil;
 import com.investment.config.RiskProperties;
 import com.investment.domain.entity.UserAccount;
+import com.investment.setting.service.SystemSettingService;
 import com.investment.domain.repository.PortfolioPeakRepository;
 import com.investment.domain.repository.UserAccountRepository;
 import com.investment.factor.service.DailyLossLimitService;
@@ -44,6 +45,7 @@ public class RiskReportService {
     private final DailyLossLimitService dailyLossLimitService;
     private final PortfolioPeakRepository portfolioPeakRepository;
     private final RiskProperties riskProperties;
+    private final SystemSettingService systemSettingService;
     private final TradingSettingRepository tradingSettingRepository;
     private final UserAccountRepository userAccountRepository;
     private final EncryptionUtil encryptionUtil;
@@ -71,7 +73,7 @@ public class RiskReportService {
         BigDecimal cvar95Pct = varCalculator.calculateCvar95(null);
         return RiskSummaryDto.builder()
                 .killSwitchActive(killSwitch)
-                .regimeGateEnabled(riskProperties.isRegimeGateEnabled())
+                .regimeGateEnabled(Boolean.TRUE.equals(systemSettingService.getBoolean("risk.regimeGateEnabled")))
                 .riskGateAllowsNewBuy(gateResult.isAllowNewBuy())
                 .riskGateSizeMultiplier(gateResult.getSizeMultiplier())
                 .accounts(accounts)
@@ -133,7 +135,7 @@ public class RiskReportService {
      */
     public RiskLimitsDto getLimits() {
         return RiskLimitsDto.builder()
-                .regimeGateEnabled(riskProperties.isRegimeGateEnabled())
+                .regimeGateEnabled(Boolean.TRUE.equals(systemSettingService.getBoolean("risk.regimeGateEnabled")))
                 .vixThreshold(riskProperties.getVixThreshold() != null ? riskProperties.getVixThreshold() : new BigDecimal("30"))
                 .reduceSizeOnHighVolPct(riskProperties.getReduceSizeOnHighVolPct() != null ? riskProperties.getReduceSizeOnHighVolPct() : new BigDecimal("50"))
                 .dailyLossLimitPct(riskProperties.getDailyLossLimitPct() != null ? riskProperties.getDailyLossLimitPct() : new BigDecimal("5"))

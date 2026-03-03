@@ -6,6 +6,7 @@ import com.investment.domain.repository.StrategyRepository;
 import com.investment.domain.repository.TradingSettingRepository;
 import com.investment.strategy.domain.StrategyStatus;
 import com.investment.factor.execution.PipelineExecutor;
+import com.investment.factor.service.CapitalDrawdownConstraintService;
 import com.investment.factor.service.DailyLossLimitService;
 import com.investment.factor.service.MarketCrashGateService;
 import com.investment.factor.service.RiskGateService;
@@ -16,6 +17,7 @@ import com.investment.strategy.dto.StrategyWeights;
 import com.investment.strategy.engine.MacroIndicatorProvider;
 import com.investment.setting.service.SystemSettingService;
 import com.investment.strategy.service.StrategyWeightResolver;
+import com.investment.factor.service.TradingWindowService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -51,11 +53,18 @@ public class PipelineExecutionScheduler {
     private final GovernanceHaltService governanceHaltService;
     private final StrategyWeightResolver strategyWeightResolver;
     private final SystemSettingService systemSettingService;
+    private final TradingWindowService tradingWindowService;
+    private final CapitalDrawdownConstraintService capitalDrawdownConstraintService;
 
     /**
-     * 수동/배치 트리거용. forceDryRun가 null이면 설정(auto-execute)에 따르고, non-null이면 해당 값으로 실행.
+     * 수동/배치 트리거용. 실제 주문 여부는 DB 시스템 설정·계정별 pipelineAutoExecute에 따름.
+     * marketFilter가 null이면 KR/US 모두 유리 시간대일 때만 실행; "KR"이면 KR만, "US"이면 US만(각각 해당 윈도우 내일 때만).
      */
-    public void runNow(Boolean forceDryRun) {
+    public void runNow() {
+        runNow(null);
+    }
+
+    public void runNow(String marketFilter) {
         LocalDate basDt = LocalDate.now().minusDays(1);
         List<TradingSetting> settings = tradingSettingRepository.findAllByAutoTradingEnabledTrue();
         if (settings.isEmpty()) {
@@ -70,8 +79,7 @@ public class PipelineExecutionScheduler {
             boolean effectiveAutoExecute = setting.getPipelineAutoExecute() != null
                     ? setting.getPipelineAutoExecute()
                     : serverAutoExecute;
-            boolean dryRun = forceDryRun != null ? forceDryRun : !effectiveAutoExecute;
-            if (!effectiveAutoExecute && forceDryRun == null) {
+            if (!effectiveAutoExecute) {
                 log.info("파이프라인 실행 스킵: code={}, accountNo={}, {}",
                         PipelineSkipReason.ACCOUNT_AUTO_EXECUTE_OFF.getCode(), LogMaskingUtil.maskAccountNo(accountNo),
                         PipelineSkipReason.ACCOUNT_AUTO_EXECUTE_OFF.getDescription());
@@ -138,7 +146,7 @@ public class PipelineExecutionScheduler {
                 continue;
             }
             try {
-                runPipelineForAccount(basDt, accountNo, shortCapital, midCapital, longCapital, dryRun);
+                runPipelineForAccount(basDt, accountNo, shortCapital, midCapital, longCapital, effectiveAutoExecute, marketFilter);
             } catch (Exception e) {
                 log.warn("파이프라인 실행 스킵: code={}, accountNo={}, error={}",
                         PipelineSkipReason.RUN_FAILED.getCode(), LogMaskingUtil.maskAccountNo(accountNo), e.getMessage(), e);
@@ -147,18 +155,34 @@ public class PipelineExecutionScheduler {
     }
 
     private void runPipelineForAccount(LocalDate basDt, String accountNo,
-            BigDecimal shortCapital, BigDecimal midCapital, BigDecimal longCapital, boolean dryRun) {
-        runIfNotHalted(basDt, "KR", accountNo, StrategyType.SHORT_TERM, shortCapital, dryRun);
-        runIfNotHalted(basDt, "KR", accountNo, StrategyType.MEDIUM_TERM, midCapital, dryRun);
-        runIfNotHalted(basDt, "KR", accountNo, StrategyType.LONG_TERM, longCapital, dryRun);
-        runIfNotHalted(basDt, "US", accountNo, StrategyType.SHORT_TERM, shortCapital, dryRun);
-        runIfNotHalted(basDt, "US", accountNo, StrategyType.MEDIUM_TERM, midCapital, dryRun);
-        runIfNotHalted(basDt, "US", accountNo, StrategyType.LONG_TERM, longCapital, dryRun);
-        log.debug("파이프라인 실행 완료: accountNo={}, basDt={}, dryRun={}", accountNo, basDt, dryRun);
+            BigDecimal shortCapital, BigDecimal midCapital, BigDecimal longCapital, boolean autoExecute, String marketFilter) {
+        boolean runKr = (marketFilter == null || "KR".equals(marketFilter)) && tradingWindowService.isInKrWindow();
+        boolean runUs = (marketFilter == null || "US".equals(marketFilter)) && tradingWindowService.isInUsWindow();
+        if ((marketFilter == null || "KR".equals(marketFilter)) && !runKr) {
+            log.info("파이프라인 실행 스킵: code={}, market=KR, accountNo={}, {}",
+                    PipelineSkipReason.OUTSIDE_TRADING_WINDOW.getCode(), LogMaskingUtil.maskAccountNo(accountNo),
+                    PipelineSkipReason.OUTSIDE_TRADING_WINDOW.getDescription());
+        }
+        if (runKr) {
+            runIfNotHalted(basDt, "KR", accountNo, StrategyType.SHORT_TERM, shortCapital, autoExecute);
+            runIfNotHalted(basDt, "KR", accountNo, StrategyType.MEDIUM_TERM, midCapital, autoExecute);
+            runIfNotHalted(basDt, "KR", accountNo, StrategyType.LONG_TERM, longCapital, autoExecute);
+        }
+        if ((marketFilter == null || "US".equals(marketFilter)) && !runUs) {
+            log.info("파이프라인 실행 스킵: code={}, market=US, accountNo={}, {}",
+                    PipelineSkipReason.OUTSIDE_TRADING_WINDOW.getCode(), LogMaskingUtil.maskAccountNo(accountNo),
+                    PipelineSkipReason.OUTSIDE_TRADING_WINDOW.getDescription());
+        }
+        if (runUs) {
+            runIfNotHalted(basDt, "US", accountNo, StrategyType.SHORT_TERM, shortCapital, autoExecute);
+            runIfNotHalted(basDt, "US", accountNo, StrategyType.MEDIUM_TERM, midCapital, autoExecute);
+            runIfNotHalted(basDt, "US", accountNo, StrategyType.LONG_TERM, longCapital, autoExecute);
+        }
+        log.debug("파이프라인 실행 완료: accountNo={}, basDt={}, autoExecute={}, marketFilter={}", accountNo, basDt, autoExecute, marketFilter);
     }
 
     private void runIfNotHalted(LocalDate basDt, String market, String accountNo,
-            StrategyType strategyType, BigDecimal capital, boolean dryRun) {
+            StrategyType strategyType, BigDecimal capital, boolean autoExecute) {
         if (governanceHaltService.isHalted(market, strategyType.name())) {
             log.info("파이프라인 실행 스킵: code={}, market={}, strategyType={}, accountNo={}, {}",
                     PipelineSkipReason.GOVERNANCE_HALT.getCode(), market, strategyType,
@@ -176,6 +200,8 @@ public class PipelineExecutionScheduler {
                 return;
             }
         }
-        pipelineExecutor.run(basDt, market, accountNo, strategyType, capital, dryRun);
+        BigDecimal multiplier = capitalDrawdownConstraintService.getCapitalMultiplier(market, strategyType.name());
+        BigDecimal effectiveCapital = capital.multiply(multiplier != null ? multiplier : BigDecimal.ONE).setScale(0, RoundingMode.DOWN);
+        pipelineExecutor.run(basDt, market, accountNo, strategyType, effectiveCapital, autoExecute);
     }
 }

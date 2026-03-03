@@ -10,6 +10,7 @@ import com.investment.domain.repository.UserAccountRepository;
 import com.investment.factor.service.DailyLossLimitService;
 import com.investment.factor.service.RiskGateService;
 import com.investment.domain.repository.TradingSettingRepository;
+import com.investment.setting.service.SystemSettingService;
 import com.investment.risk.dto.RiskLimitsDto;
 import com.investment.risk.dto.RiskSummaryDto;
 import com.investment.risk.util.VarCalculator;
@@ -55,12 +56,15 @@ class RiskReportServiceTest {
     private EncryptionUtil encryptionUtil;
     @Mock
     private VarCalculator varCalculator;
+    @Mock
+    private SystemSettingService systemSettingService;
 
     @InjectMocks
     private RiskReportService riskReportService;
 
     @BeforeEach
     void setUp() {
+        lenient().when(systemSettingService.getBoolean("risk.regimeGateEnabled")).thenReturn(false);
         lenient().when(riskProperties.getVixThreshold()).thenReturn(new BigDecimal("30"));
         lenient().when(riskProperties.getReduceSizeOnHighVolPct()).thenReturn(new BigDecimal("50"));
         lenient().when(riskProperties.getDailyLossLimitPct()).thenReturn(new BigDecimal("5"));
@@ -117,7 +121,7 @@ class RiskReportServiceTest {
     @Test
     @DisplayName("getLimits RiskProperties 기반 반환")
     void getLimits_returnsFromProperties() {
-        when(riskProperties.isRegimeGateEnabled()).thenReturn(true);
+        when(systemSettingService.getBoolean("risk.regimeGateEnabled")).thenReturn(true);
         when(riskProperties.getVixThreshold()).thenReturn(new BigDecimal("28"));
         when(riskProperties.getReduceSizeOnHighVolPct()).thenReturn(new BigDecimal("40"));
         when(riskProperties.getDailyLossLimitPct()).thenReturn(new BigDecimal("3"));

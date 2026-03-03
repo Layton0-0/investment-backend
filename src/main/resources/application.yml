@@ -67,6 +67,11 @@ server:
       enabled: true
       force: true
 
+# CORS: 프론트엔드 Origin 허용. 미설정 시 로컬(localhost, 5173)만 허용.
+# 배포만: CORS_ALLOWED_ORIGINS=https://neekly-report.cloud
+# 로컬+배포 동시: CORS_ALLOWED_ORIGINS=https://neekly-report.cloud,http://localhost,http://localhost:5173,http://127.0.0.1,http://127.0.0.1:5173
+# 참고: docs/07-security/02-security-configuration-reference.md § CORS 설정
+
 logging:
   level:
     root: INFO
@@ -127,7 +132,8 @@ investment:
       collector-url: ${US_COLLECTOR_URL:}
       # 로컬 스크립트 경로. collector-url 미설정일 때만 사용. 스크립트는 investment-data-collector 레포에 있음.
       yfinance-script-path: ${US_YFINANCE_SCRIPT_PATH:}
-      symbols: ${US_SYMBOLS:AAPL,MSFT,GOOGL,AMZN,META,TSLA,NVDA,JPM,V,JNJ,SPY,IEF,TLT,GLD,DBC,BIL}
+      # 퀀트 유니버스: 지수·섹터 ETF(듀얼모멘텀) + 대표 메가캡. 환경변수 US_SYMBOLS로 덮어쓰기
+      symbols: ${US_SYMBOLS:SPY,QQQ,IWM,TLT,IEF,BIL,GLD,DBC,XLK,XLF,XLE,XLV,XLY,XLP,XLB,XLI,XLC,AAPL,MSFT,GOOGL,AMZN,META,TSLA,NVDA,JPM,V,JNJ,WMT,UNH,HD,PG,MA,BAC,XOM,CVX}
       python-command: ${US_PYTHON_COMMAND:python}
       # HTTP 호출 실패 시 재시도 (연결/타임아웃/5xx). 0이면 재시도 없음.
       retry-max: ${US_COLLECTOR_RETRY_MAX:2}
@@ -190,6 +196,10 @@ investment:
     # 리스크 기반 포지션 사이징: 종목당 비중 상한 (기본 비활성). true 시 risk-based-cap-max-pct 적용
     risk-based-cap-enabled: ${FACTOR_RISK_BASED_CAP_ENABLED:false}
     risk-based-cap-max-pct: ${FACTOR_RISK_BASED_CAP_MAX_PCT:0.05}  # 종목당 최대 비중 (5%). 0.05 = 5%
+    # 포트폴리오 상관관계 패널티: 고상관 종목 쌍 시 비중 스케일 다운 (기본 비활성)
+    correlation-penalty-enabled: ${FACTOR_CORRELATION_PENALTY_ENABLED:false}
+    correlation-threshold: ${FACTOR_CORRELATION_THRESHOLD:0.7}      # 상관계수 이 값 이상이면 패널티
+    correlation-penalty-scale: ${FACTOR_CORRELATION_PENALTY_SCALE:0.8}  # 적용 시 비중 배율 (0~1)
   # 분석 API (상관관계 등)
   analysis:
     correlation-lookback-days: ${INVESTMENT_ANALYSIS_CORRELATION_LOOKBACK_DAYS:60}
@@ -212,6 +222,8 @@ investment:
     alert-mdd-threshold-pct: ${INVESTMENT_RISK_ALERT_MDD_THRESHOLD_PCT:0.8}
     # 리스크 이벤트 알림: VaR 95% 초과 시 Discord 알림 사용 여부
     alert-var-exceed-enabled: ${INVESTMENT_RISK_ALERT_VAR_EXCEED_ENABLED:true}
+    # 단기(5일) 열화 시 자본 절반 제한. 데이터 연동 전에는 비활성(1.0 배율)
+    capital-drawdown-constraint-enabled: ${INVESTMENT_RISK_CAPITAL_DRAWDOWN_CONSTRAINT_ENABLED:false}
     # Monte Carlo 시뮬레이션 설정 (P0: 헤지펀드급 리스크 분석)
     montecarlo:
       scenarios: ${INVESTMENT_RISK_MC_SCENARIOS:10000}              # 시뮬레이션 시나리오 수
@@ -234,9 +246,20 @@ investment:
   # 4단계 파이프라인 실행. auto-execute=false 시 주문 생성 없이 dry-run만. 기본 false(문서 §6.2).
   pipeline:
     auto-execute: ${PIPELINE_AUTO_EXECUTE:false}
+    # true 시 PipelineOrderExecutor(알고리즘 실행) 사용. 기본은 단일 주문(OrderService)
+    use-algo-execution: ${PIPELINE_USE_ALGO_EXECUTION:false}
     # 실전 계좌(serverType=0) 자동 실행 허용. false면 모의계좌만 실제 주문 실행.
     allow-real-execution: ${PIPELINE_ALLOW_REAL_EXECUTION:false}
-    execution-schedule-cron: ${PIPELINE_EXECUTION_SCHEDULE_CRON:0 10 9 * * *}  # 장 시작 후 1회 (09:10 KST)
+    execution-schedule-cron: ${PIPELINE_EXECUTION_SCHEDULE_CRON:0 10 9 * * *}  # 한국장 유리 구간 (09:10 KST)
+    # 퀀트 매매 유리 시간대: 해당 구간에만 진입 실행. 14-trading-window-quant.md 참조.
+    trading-window:
+      enabled: ${PIPELINE_TRADING_WINDOW_ENABLED:true}
+      kr:
+        start: ${PIPELINE_TRADING_WINDOW_KR_START:09:00}
+        end: ${PIPELINE_TRADING_WINDOW_KR_END:10:00}
+      us:
+        start: ${PIPELINE_TRADING_WINDOW_US_START:23:30}
+        end: ${PIPELINE_TRADING_WINDOW_US_END:01:00}
     exit-schedule-cron: ${PIPELINE_EXIT_SCHEDULE_CRON:0 */5 9-15 * * MON-FRI}  # 장중 5분마다 청산 평가 (09:00~15:59, 평일)
     fill-confirmation-cron: ${PIPELINE_FILL_CONFIRMATION_CRON:0 * * * * *}  # 매분 체결 확인 후 포지션 등록
     medium-term-rebalance-cron: ${PIPELINE_MEDIUM_TERM_REBALANCE_CRON:0 30 8 1 * *}  # 매월 1일 08:30 KST (스텁)
@@ -255,6 +278,8 @@ investment:
     alert-base-url: ${PIPELINE_ALERT_BASE_URL:}
     # 미체결 확인 대기 분 (기본 1분)
     unfilled-check-minutes: ${PIPELINE_UNFILLED_CHECK_MINUTES:1}
+    # 동일 주문 미체결 Discord 알림 쿨타임(분). 30분 내 중복 알림 방지
+    unfilled-alert-cooldown-minutes: ${PIPELINE_UNFILLED_ALERT_COOLDOWN_MINUTES:30}
     # KR 시초가/변동성 돌파 시 주문구분(ORD_DVSN). 미설정 또는 빈값이면 지정가(00). 02=최유리, 03=IOC. §6.2 항목 3.
     kr-opening-order-dvsn: ${PIPELINE_KR_OPENING_ORDER_DVSN:}
   # 장중 변동성 돌파 (P2). 09:00~10:00 구간에서 돌파 종목 1회 매수
@@ -263,6 +288,10 @@ investment:
     breakout-schedule-cron: ${INVESTMENT_INTRADAY_BREAKOUT_CRON:0 10,40 9 * * MON-FRI}
     breakout-max-positions: ${INVESTMENT_INTRADAY_BREAKOUT_MAX_POSITIONS:3}
     breakout-position-pct: ${INVESTMENT_INTRADAY_BREAKOUT_POSITION_PCT:0.005}
+  # 포지션 정합성(Reconciliation). 자동투자 ON 계좌별 브로커-DB 비교, 불일치 시 Discord 알림
+  reconciliation:
+    enabled: ${INVESTMENT_RECONCILIATION_ENABLED:true}
+    alert-on-mismatch: ${INVESTMENT_RECONCILIATION_ALERT_ON_MISMATCH:true}
   # 일일 PnL 집계·리뷰 (P3). 장 마감 후 계좌별 당일 수익률 기록
   daily-pnl:
     schedule-cron: ${INVESTMENT_DAILY_PNL_SCHEDULE_CRON:0 5 16 * * MON-FRI}
@@ -328,6 +357,8 @@ investment:
     provider: ${MARKET_DATA_PROVIDER:korea-investment}
     timeout: ${MARKET_DATA_TIMEOUT:30000}
     use-mock-data: ${MARKET_DATA_USE_MOCK_DATA:false}
+    # 현재가 캐시 TTL(초). 기본 300(5분). 단타/WebSocket 활성화 시 5 등 짧게 설정 권장
+    current-price-cache-ttl-seconds: ${MARKET_DATA_CURRENT_PRICE_CACHE_TTL_SECONDS:300}
     # 한국투자증권 API 설정
     # [주의] app-key/app-secret/server-type은 계정별로 DB에서 관리됨
     # - SUPER_ADMIN: env의 SUPER_ADMIN_VIRTUAL_*/SUPER_ADMIN_REAL_*로 설정 (SuperAdminSeeder가 DB 동기화)
@@ -363,6 +394,8 @@ investment:
         subscription-interval-ms: ${KOREA_INVESTMENT_WEBSOCKET_SUBSCRIPTION_INTERVAL_MS:200}
         approval-key: ${KOREA_INVESTMENT_WEBSOCKET_APPROVAL_KEY:}
         approval-key-fetch-enabled: ${KOREA_INVESTMENT_WEBSOCKET_APPROVAL_KEY_FETCH_ENABLED:false}
+        # 장 시작 전 연결·구독 크론 (비우면 기동 후 1회만 연결). 예: 0 0 8 * * MON-FRI (08:00 KST 평일)
+        connect-cron: ${KOREA_INVESTMENT_WEBSOCKET_CONNECT_CRON:}
   trading:
     max-investment-amount: ${MAX_INVESTMENT_AMOUNT:1000000}
     min-investment-amount: ${MIN_INVESTMENT_AMOUNT:10000}

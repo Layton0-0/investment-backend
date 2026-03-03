@@ -17,7 +17,8 @@ public enum PipelineSkipReason {
     DAILY_LOSS_LIMIT("DAILY_LOSS_LIMIT", "일일 손실 한도 초과"),
     GOVERNANCE_HALT("GOVERNANCE_HALT", "거버넌스 halt"),
     STRATEGY_STOPPED_OR_PAUSED("STRATEGY_STOPPED_OR_PAUSED", "전략 중지/일시정지"),
-    RUN_FAILED("RUN_FAILED", "파이프라인 실행 실패");
+    RUN_FAILED("RUN_FAILED", "파이프라인 실행 실패"),
+    OUTSIDE_TRADING_WINDOW("OUTSIDE_TRADING_WINDOW", "퀀트 매매 유리 시간대 밖(해당 시장 run 스킵)");
 
     private final String code;
     private final String description;

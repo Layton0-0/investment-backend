@@ -41,6 +41,8 @@ public class PositionSizingService {
     private final SignalScoreRepository signalScoreRepository;
     private final DailyStockRepository dailyStockRepository;
     private final NewsSignalService newsSignalService;
+    private final FrictionCostService frictionCostService;
+    private final CorrelationPenaltyService correlationPenaltyService;
 
     /** 1회 매매당 총자산 대비 리스크 비율 (예: 0.01 = 1%) */
     @Value("${investment.factor.position-risk-pct:0.01}")
@@ -188,6 +190,12 @@ public class PositionSizingService {
                 continue;
             }
             BigDecimal riskPerShare = entry.subtract(stopLoss);
+            // 수수료·세금 반영: 2:1 R:R 가정 시 기대 gross 수익률이 왕복 비용률을 상회할 때만 진입
+            BigDecimal roundTripRate = frictionCostService.getRoundTripCostRate(market);
+            BigDecimal minGrossReturn2to1 = riskPerShare.multiply(BigDecimal.valueOf(2)).divide(entry, 6, RoundingMode.HALF_UP);
+            if (minGrossReturn2to1.compareTo(roundTripRate) <= 0) {
+                continue;
+            }
             BigDecimal riskAmount = totalCapital.multiply(positionRiskPct);
             long qty = riskAmount.divide(riskPerShare, 0, RoundingMode.DOWN).longValue();
             if (qty <= 0) {
@@ -214,6 +222,8 @@ public class PositionSizingService {
             if (riskBasedCapEnabled && riskBasedCapMaxPct != null && riskBasedCapMaxPct.compareTo(BigDecimal.ZERO) > 0) {
                 out = applyRiskBasedCap(out, totalCapital);
             }
+            // 포트폴리오 상관관계 패널티: 고상관 쌍 시 비중 스케일 다운 (설정 시)
+            out = correlationPenaltyService.applyPenalty(out, totalCapital, market, basDt);
             // 일일 최대 신규 매수 종목 수 상한
             if (maxNewPositionsPerDay > 0 && out.size() > maxNewPositionsPerDay) {
                 out = new ArrayList<>(out.subList(0, maxNewPositionsPerDay));

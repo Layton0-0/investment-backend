@@ -40,8 +40,9 @@ public class IntradayBreakoutScheduler {
     private final OrderService orderService;
     private final SystemSettingService systemSettingService;
 
-    @Value("${investment.intraday.breakout-enabled:false}")
-    private boolean breakoutEnabled = false;
+    private boolean isBreakoutEnabled() {
+        return Boolean.TRUE.equals(systemSettingService.getBoolean("intraday.breakoutEnabled"));
+    }
 
     @Value("${investment.intraday.breakout-max-positions:3}")
     private int breakoutMaxPositions = 3;
@@ -50,9 +51,9 @@ public class IntradayBreakoutScheduler {
     @Value("${investment.pipeline.kr-opening-order-dvsn:}")
     private String krOpeningOrderDvsn = "";
 
-    /** Spring Batch Job에서 호출. */
+    /** Spring Batch Job에서 호출. 활성 여부는 Admin 시스템 설정(intraday.breakoutEnabled)에서 조회. */
     public void runIntradayBreakout() {
-        if (!breakoutEnabled) {
+        if (!isBreakoutEnabled()) {
             log.trace("장중 돌파 스킵: 비활성");
             return;
         }

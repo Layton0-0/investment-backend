@@ -38,6 +38,25 @@ class RealtimeMarketDataServiceTest {
     }
     
     @Test
+    void getCurrentPriceBlocking_WebSocket에_값이_있으면_해당_값_반환() {
+        // given: WebSocket으로 수신한 현재가를 먼저 반영
+        CurrentPriceDto wsPrice = CurrentPriceDto.builder()
+                .symbol("005930")
+                .currentPrice(new BigDecimal("75100"))
+                .queriedAt(LocalDateTime.now())
+                .build();
+        realtimeMarketDataService.updateFromWebSocket("005930", wsPrice);
+
+        // when
+        CurrentPriceDto result = realtimeMarketDataService.getCurrentPriceBlocking("005930");
+
+        // then: REST 호출 없이 WebSocket 값이 반환됨
+        assertNotNull(result);
+        assertEquals("005930", result.getSymbol());
+        assertEquals(new BigDecimal("75100"), result.getCurrentPrice());
+    }
+
+    @Test
     void 현재가_조회_성공() {
         // given
         CurrentPriceDto mockPrice = CurrentPriceDto.builder()

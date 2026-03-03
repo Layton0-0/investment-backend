@@ -15,11 +15,14 @@ import com.investment.factor.dto.PositionRecommendationDto;
 import com.investment.factor.service.PositionSizingService;
 import com.investment.ops.service.AuditLogService;
 import com.investment.order.dto.OrderRequestDto;
+import com.investment.order.dto.OrderResponseDto;
 import com.investment.order.service.OrderService;
+import com.investment.order.service.PipelineOrderExecutor;
 import com.investment.setting.service.SystemSettingService;
 import com.investment.strategy.domain.StrategyType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,7 +34,7 @@ import java.util.List;
 
 /**
  * 4단계 파이프라인 실행 — 권장 포지션 주문 실행.
- * 1차: dry-run 모드 기본. auto-execute=false 시 주문 생성 없이 로그만.
+ * 실제 주문 여부는 호출부에서 전달하는 autoExecute(DB 시스템 설정·계정별 pipelineAutoExecute 반영값)에 따름.
  */
 @Slf4j
 @Service
@@ -44,6 +47,8 @@ public class PipelineExecutor {
 
     private final PositionSizingService positionSizingService;
     private final OrderService orderService;
+    @Autowired(required = false)
+    private PipelineOrderExecutor pipelineOrderExecutor;
     private final StrategyPositionRepository strategyPositionRepository;
     private final OrderRepository orderRepository;
     private final TradingSettingRepository tradingSettingRepository;
@@ -59,6 +64,10 @@ public class PipelineExecutor {
     /** KR 시초가/변동성 돌파 시 주문구분(ORD_DVSN). 02=최유리, 03=IOC. 빈값이면 지정가(00). KR+SHORT_TERM일 때만 적용 */
     @Value("${investment.pipeline.kr-opening-order-dvsn:}")
     private String krOpeningOrderDvsn = "";
+
+    /** true 시 PipelineOrderExecutor(TWAP/VWAP 등) 사용, false 시 OrderService 단일 주문 직접 호출 */
+    @Value("${investment.pipeline.use-algo-execution:false}")
+    private boolean useAlgoExecution = false;
 
     /**
      * 계좌의 서버 타입 조회 (모의=1, 실전=0). userId·accountNo에 해당하는 UserAccount 기준.
@@ -87,8 +96,8 @@ public class PipelineExecutor {
      */
     @Transactional
     public PipelineRunResult run(LocalDate basDt, String market, String accountNo, BigDecimal totalCapital,
-            boolean dryRun) {
-        return run(basDt, market, accountNo, StrategyType.SHORT_TERM, totalCapital, dryRun);
+            boolean autoExecute) {
+        return run(basDt, market, accountNo, StrategyType.SHORT_TERM, totalCapital, autoExecute);
     }
 
     /**
@@ -99,18 +108,17 @@ public class PipelineExecutor {
      * @param accountNo        계좌번호
      * @param strategyType     기간 (SHORT_TERM, MEDIUM_TERM, LONG_TERM)
      * @param allocatedCapital 해당 기간 배분 자산 (원)
-     * @param dryRun           true면 주문 실행 없이 권장 목록만 반환
-     * @return 실행(또는 dry-run) 결과 요약
+     * @param autoExecute      true면 주문 실행(DB·계정별 pipelineAutoExecute 반영값), false면 권장 목록만 반환
+     * @return 실행(또는 권장만) 결과 요약
      */
     @Transactional
     public PipelineRunResult run(LocalDate basDt, String market, String accountNo, StrategyType strategyType,
-            BigDecimal allocatedCapital, boolean dryRun) {
-        boolean serverAutoExecute = systemSettingService.getBoolean("pipeline.autoExecute");
+            BigDecimal allocatedCapital, boolean autoExecute) {
         boolean serverAllowRealExecution = systemSettingService.getBoolean("pipeline.allowRealExecution");
         List<PositionRecommendationDto> recommendations = positionSizingService.getRecommendations(
                 basDt, market, strategyType, allocatedCapital);
         List<PipelineRunResult.OrderResult> orderResults = new ArrayList<>();
-        boolean actuallyExecute = serverAutoExecute && !dryRun;
+        boolean actuallyExecute = autoExecute;
 
         for (PositionRecommendationDto rec : recommendations) {
             if (rec.getRecommendedQty() <= 0)
@@ -153,8 +161,9 @@ public class PipelineExecutor {
                                 rec.getEntryPrice()));
                         continue;
                     }
-                    com.investment.order.dto.OrderResponseDto orderResponse = orderService
-                            .executeOrderForPipeline(request, userId);
+                    OrderResponseDto orderResponse = (useAlgoExecution && pipelineOrderExecutor != null)
+                            ? pipelineOrderExecutor.executeOrderForPipeline(request, userId)
+                            : orderService.executeOrderForPipeline(request, userId);
 
                     // 포지션 등록: 체결 확인 후 등록 옵션에 따라 분기
                     if (registerPositionOnExecution) {
@@ -199,7 +208,7 @@ public class PipelineExecutor {
                     orderResults.add(PipelineRunResult.OrderResult.failure(rec.getSymbol(), e.getMessage()));
                 }
             } else {
-                log.debug("파이프라인 dry-run: symbol={}, qty={}, price={}", rec.getSymbol(), rec.getRecommendedQty(),
+                log.debug("파이프라인 권장만(주문 미실행): symbol={}, qty={}, price={}", rec.getSymbol(), rec.getRecommendedQty(),
                         rec.getEntryPrice());
                 orderResults.add(PipelineRunResult.OrderResult.dryRun(rec.getSymbol(), rec.getRecommendedQty(),
                         rec.getEntryPrice()));

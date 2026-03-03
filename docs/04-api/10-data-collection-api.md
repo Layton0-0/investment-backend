@@ -13,7 +13,10 @@ DART/SEC는 Spring에 설정 없음. Python 수집기 환경변수(DART_API_KEY,
 | investment.data.krx.auth-key | KRX_AUTH_KEY | KRX Open API 인증키 (로그 마스킹 대상) |
 | investment.data.krx.base-url | KRX_BASE_URL | 기본: https://openapi.krx.co.kr |
 | investment.data.us.collector-url | US_COLLECTOR_URL | Python 수집기 URL. 수동 DART/SEC 수집 및 US 일봉 호출에 사용 |
+| investment.data.us.symbols | US_SYMBOLS | US 일봉 수집 대상. 기본: 지수·섹터 ETF(SPY,QQQ,XLK,XLF 등) + 대표 주식(퀀트 유니버스) |
 | investment.data.internal-api-key | DATA_COLLECTION_INTERNAL_KEY | 내부 수집 API 키. 미설정 시 내부 API 비활성화 |
+
+**SEC 유니버스**(Python 수집기): `SEC_CIKS` 미설정 시 **매 실행마다** SEC에서 최신 company_tickers.json을 수신한 뒤 `SEC_UNIVERSE=top100|top200|top500`만큼 CIK 사용(기본 top200). TOP N은 상장·변동으로 달라지므로 캐시 없이 매번 수신 후 진행.
 
 ## 내부 API (수집기 → Spring)
 

@@ -7,6 +7,7 @@ import com.investment.backtest.dto.BacktestRunResult;
 import com.investment.config.GovernanceProperties;
 import com.investment.domain.entity.GovernanceCheckResult;
 import com.investment.domain.repository.GovernanceCheckResultRepository;
+import com.investment.setting.service.SystemSettingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,13 +35,26 @@ public class StrategyGovernanceCheckService {
     private final GovernanceProperties governanceProperties;
     private final GovernanceCheckResultRepository governanceCheckResultRepository;
     private final GovernanceHaltService governanceHaltService;
+    private final SystemSettingService systemSettingService;
+
+    private boolean isGovernanceEnabled() {
+        return Boolean.TRUE.equals(systemSettingService.getBoolean("governance.enabled"));
+    }
+
+    private boolean isGovernanceAlertOnly() {
+        return Boolean.TRUE.equals(systemSettingService.getBoolean("governance.alertOnly"));
+    }
+
+    private boolean isGovernanceAutoHaltOnDegradation() {
+        return Boolean.TRUE.equals(systemSettingService.getBoolean("governance.autoHaltOnDegradation"));
+    }
 
     /**
      * 최근 lookbackMonths 구간에 대해 백테스트를 실행하고, 결과 저장·열화 시 알림·(설정 시) halt 등록.
      */
     @Transactional
     public void checkAndSendAlerts() {
-        if (!governanceProperties.isEnabled()) {
+        if (!isGovernanceEnabled()) {
             log.debug("Governance disabled, skip check");
             return;
         }
@@ -86,7 +100,7 @@ public class StrategyGovernanceCheckService {
                                 governanceProperties.getSharpeMin().toPlainString());
                         degradedMessages.add(msg);
 
-                        if (!governanceProperties.isAlertOnly() && governanceProperties.isAutoHaltOnDegradation()) {
+                        if (!isGovernanceAlertOnly() && isGovernanceAutoHaltOnDegradation()) {
                             governanceHaltService.setHalt(market, strategyType, msg);
                         }
                     }

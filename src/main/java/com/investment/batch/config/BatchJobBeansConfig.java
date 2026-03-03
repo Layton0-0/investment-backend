@@ -113,6 +113,14 @@ public class BatchJobBeansConfig {
                                 step(jobRepository, tx, "auto-buy-step", tasklet));
         }
 
+        @Bean(name = "auto-buy-us")
+        public Job autoBuyUsJob(JobRepository jobRepository,
+                        PlatformTransactionManager tx,
+                        AutoBuyUsTasklet tasklet) {
+                return job(jobRepository, "auto-buy-us",
+                                step(jobRepository, tx, "auto-buy-us-step", tasklet));
+        }
+
         @Bean(name = "pipeline-execution")
         public Job pipelineExecutionJob(JobRepository jobRepository,
                         PlatformTransactionManager tx,
@@ -191,5 +199,13 @@ public class BatchJobBeansConfig {
                         StrategyGovernanceCheckTasklet tasklet) {
                 return job(jobRepository, "strategy-governance-check",
                                 step(jobRepository, tx, "strategy-governance-check-step", tasklet));
+        }
+
+        @Bean(name = "reconcile")
+        public Job reconcileJob(JobRepository jobRepository,
+                        PlatformTransactionManager tx,
+                        ReconciliationTasklet tasklet) {
+                return job(jobRepository, "reconcile",
+                                step(jobRepository, tx, "reconcile-step", tasklet));
         }
 }

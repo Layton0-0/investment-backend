@@ -229,9 +229,9 @@ public interface KoreaInvestmentWebSocketClient {
 | approval_key 발급 | ✅ 완료 | REST API로 WebSocket용 approval_key 자동 발급 |
 | 호가 구독 | ✅ 완료 | `H0STCNT0` TR_ID로 종목별 구독 |
 | 체결통보 구독 | ✅ 완료 | `H0STCNI0` TR_ID로 계좌 체결통보 구독 |
-| 구독 해제 | ⏳ 스텁 | 해제 메시지 포맷 확인 필요 |
-| 재연결 | ⏳ 미구현 | 연결 끊김 시 자동 재연결 필요 |
-| Heartbeat | ⏳ 미구현 | 연결 유지용 ping/pong 필요 |
+| 구독 해제 | ✅ 완료 | tr_type "2"로 해제 메시지 전송 |
+| 재연결 | ✅ 완료 | 연결 끊김 시 지수 백오프로 자동 재연결, 구독 복원 |
+| Heartbeat | ✅ 완료 | PINGPONG(tr_type "9") 주기 전송으로 연결 유지 |
 
 ### 3.3 KIS WebSocket 스펙
 
@@ -316,6 +316,22 @@ EVERY 30 seconds:
 │  * 세션별 구독 종목/체결통보 독립 관리                     │
 └────────────────────────────────────────────────────────────┘
 ```
+
+#### 3.4.4 재연결 후 REST 1회 보정 (옵션)
+
+재연결 성공 후 **갭 구간** 동안 누락된 틱은 복구하지 않는다. 다만 청산/단타 판단에 사용하는 **현재가**는 다음 방식으로 보정된다.
+
+- **현재 동작**: `RealtimeMarketDataService.getCurrentPrice(symbol)` 호출 시 `webSocketLivePrices`에 값이 없으면 즉시 REST API(`marketDataClient.getCurrentPrice`) 호출 후 캐시에 적재. 따라서 재연결 직후 첫 조회부터 REST Fallback으로 최신가를 사용한다.
+- **선택적 보정**: 재연결 성공 시 구독 중인 종목에 대해 REST 현재가를 1회 호출해 `webSocketLivePrices`(및 캐시)를 미리 채우는 로직은 **현재 미구현**. 필요 시 `KoreaInvestmentWebSocketClientImpl`의 `restoreSubscriptions` 완료 콜백에서 `RealtimeMarketDataService`에 보정 요청을 넣는 방식으로 도입 가능.
+
+#### 3.4.5 당일 고가(todayHigh) 출처 정책
+
+청산 규칙(ATR Trailing Stop, -3% Trailing 등)에서 사용하는 **당일 고가**는 다음 순서로 결정된다.
+
+- **1순위**: `PipelineExitScheduler`가 `RealtimeMarketDataService.getCurrentPrices()`로 조회한 DTO의 `highPrice`(당일 고가). 동일 API가 WebSocket 수신 데이터가 있으면 WS 기반, 없으면 REST 기반으로 반환하므로 **현재가와 동일한 채널(WS 우선, REST Fallback)**을 사용한다.
+- **2순위**: `todayHighBySymbol`이 없거나 해당 종목이 없으면 `ExitRuleService` 내부에서 `DailyStock`(일봉) 당일 고가를 조회해 사용한다.
+
+**재연결/갭 구간**: WS 끊김 구간에는 REST Fallback으로 조회한 현재가·당일 고가가 사용되므로, 끊김 동안의 고가가 REST 1회 조회 시점 기준으로만 반영될 수 있다. 실시간 틱 복구는 하지 않으며, “현재가·당일 고가 기준” Fallback으로 일관성은 유지된다.
 
 ### 3.5 해외주식 실시간 시세 (선택)
 
@@ -407,11 +423,12 @@ investment:
 | 순서 | 항목 | 설명 | 상태 |
 |------|------|------|------|
 | 1 | WebSocket 연결/구독 | 기본 연결, 호가/체결 구독 | ✅ 완료 |
-| 2 | 메시지 파싱 | 수신 데이터 파싱 및 DTO 변환 | ⏳ 확장 필요 |
-| 3 | 재연결 로직 | 연결 끊김 시 자동 재연결 | ⏳ 구현 필요 |
-| 4 | Heartbeat | 연결 유지용 ping/pong | ⏳ 구현 필요 |
-| 5 | 알림 연동 | Toast/Discord 알림 발송 | ⏳ 구현 필요 |
-| 6 | 통합 포트폴리오 API | 다중 계좌 자산 통합 조회 | ⏳ 구현 필요 |
+| 2 | 메시지 파싱 | 수신 데이터 파싱 및 WebSocketDataEvent 발행, WebSocketPriceCacheListener에서 수신 시 현재가 갱신 연동됨 | ✅ 완료 |
+| 3 | 재연결 로직 | 연결 끊김 시 자동 재연결 | ✅ 완료 |
+| 4 | Heartbeat | 연결 유지용 ping/pong | ✅ 완료 |
+| 5 | WebSocket → 단타/청산 연동 | 이벤트 리스너에서 현재가 반영, RealtimeMarketDataService.getCurrentPriceBlocking에서 webSocketLivePrices 우선 조회·REST fallback | ✅ 완료 |
+| 6 | 알림 연동 | Toast/Discord 알림 발송 | ⏳ 구현 필요 |
+| 7 | 통합 포트폴리오 API | 다중 계좌 자산 통합 조회 | ⏳ 구현 필요 |
 
 ### 5.3 테스트 계획
 
@@ -420,6 +437,16 @@ investment:
 | 단위 테스트 | WebSocketClientImpl | 메시지 생성, 파싱 |
 | 통합 테스트 | 모의투자 연결 | 연결/구독/수신 |
 | E2E 테스트 | 체결통보 | 주문 → 체결 → 알림 |
+
+### 5.4 재연결·Fallback 검증 시나리오
+
+실전 배포 전 체크리스트([plans/qa/실전_배포_전_필수_확인_체크리스트.md](../../../plans/qa/실전_배포_전_필수_확인_체크리스트.md)) 대응용 검증 시나리오이다.
+
+| 시나리오 | 절차 | 기대 결과 |
+|----------|------|-----------|
+| **재연결** | WS 수동 끊기 → 재연결 및 `restoreSubscriptions` 대기 → 해당 종목에 대해 `RealtimeMarketDataService.getCurrentPrice(symbol)` 호출 | 재연결 후 첫 조회 시 `webSocketLivePrices` 미갱신이면 REST 호출 발생·캐시 갱신. 이후 WS 수신 재개 시 WS 값으로 전환. |
+| **Fallback(비구독/WS 비활성)** | WS 비구독 종목 또는 `websocket.enabled=false` 상태에서 `getCurrentPrice`/`getCurrentPrices` 호출 | REST API 호출·5분 TTL 캐시 응답. Circuit Breaker fallback 시 null 등 정의된 동작. |
+| **당일 고가 출처** | `PipelineExitScheduler` 실행 시 보유 종목에 대해 `getCurrentPrices()` → `getSellSignals(..., currentPriceBySymbol, todayHighBySymbol)` | todayHigh는 동일 채널(WS 우선·REST Fallback)의 DTO `highPrice` 사용. 미제공 시 DailyStock 당일 고가 fallback. |
 
 ---
 

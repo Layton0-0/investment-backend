@@ -3,12 +3,12 @@ package com.investment.batch.scheduler;
 import com.investment.alert.EmergencyAlertService;
 import com.investment.batch.registry.BatchJobDefinition;
 import com.investment.batch.registry.BatchJobRegistry;
+import com.investment.setting.service.SystemSettingService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.support.CronTrigger;
@@ -20,6 +20,7 @@ import java.time.ZoneId;
 /**
  * 레지스트리 cron에 따라 각 Job을 주기적으로 실행.
  * 기동 시 모든 Job 정의에 대해 TaskScheduler에 등록.
+ * Job 실패 알림 여부는 Admin 시스템 설정(batch.failureAlertEnabled)에서 조회.
  */
 @Slf4j
 @Component
@@ -33,19 +34,19 @@ public class BatchJobScheduler {
     private final JobLauncher jobLauncher;
     private final ApplicationContext applicationContext;
     private final TaskScheduler taskScheduler;
-
-    @Value("${investment.batch.failure-alert-enabled:false}")
-    private boolean failureAlertEnabled;
+    private final SystemSettingService systemSettingService;
 
     @Autowired(required = false)
     private EmergencyAlertService emergencyAlertService;
 
     public BatchJobScheduler(BatchJobRegistry batchJobRegistry, JobLauncher jobLauncher,
-                             ApplicationContext applicationContext, TaskScheduler taskScheduler) {
+                             ApplicationContext applicationContext, TaskScheduler taskScheduler,
+                             SystemSettingService systemSettingService) {
         this.batchJobRegistry = batchJobRegistry;
         this.jobLauncher = jobLauncher;
         this.applicationContext = applicationContext;
         this.taskScheduler = taskScheduler;
+        this.systemSettingService = systemSettingService;
     }
 
     @PostConstruct
@@ -79,6 +80,7 @@ public class BatchJobScheduler {
                 log.warn("Batch job skipped (metadata tables missing): jobId={}. {}", jobId, BATCH_TABLE_MISSING_HINT);
             } else if (!isBatchTableMissing(e)) {
                 log.error("Batch job execution failed: jobId={}", jobId, e);
+                boolean failureAlertEnabled = Boolean.TRUE.equals(systemSettingService.getBoolean("batch.failureAlertEnabled"));
                 if (failureAlertEnabled && emergencyAlertService != null) {
                     String message = "배치 Job 실패: jobId=" + jobId + ", error=" + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
                     emergencyAlertService.sendRiskEventAlert("ERROR", "BatchJob", message);

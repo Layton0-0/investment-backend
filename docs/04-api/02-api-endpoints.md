@@ -828,7 +828,7 @@ curl -X GET "http://localhost:8080/api/v1/accounts/12345678/profit-loss?startDat
 
 **응답 (200 OK)**: 갱신된 항목 1건(동일 DTO 구조).
 
-**허용 키 (Phase 1)**: `pipeline.autoExecute`, `pipeline.allowRealExecution`, `pipeline.scheduler.defaultCapital`
+**허용 키**: `pipeline.autoExecute`, `pipeline.allowRealExecution`, `pipeline.scheduler.defaultCapital`, `pipeline.tradingWindowEnabled`, `governance.enabled`, `governance.alertOnly`, `governance.autoHaltOnDegradation`, `batch.failureAlertEnabled`, `risk.regimeGateEnabled`, `intraday.breakoutEnabled`. 활성/비활성 등 모든 항목은 Admin 화면(시스템 설정)에서 조회·저장.
 
 ---
 
@@ -1268,6 +1268,12 @@ Admin 전용 메뉴 `/ops/audit`에서 설정 변경·수동 트리거·실계�
 
 ### 12.1 감사 로그 목록
 
+**엔드포인트**: `GET /api/v1/ops/reconcile?accountNo=선택`
+
+**설명**: 브로커 실잔고 vs DB(TB_STRATEGY_POSITION) 포지션 정합성(Re-sync) 리포트. `accountNo` 미지정 시 자동투자 ON 전체 계좌에 대해 비교 결과를 반환. 응답: `{ accounts: ReconciliationResultDto[] }` (각 계좌별 mismatchItems, onlyInDb, onlyInBroker, summary). **인가**: `hasRole('ADMIN')`.
+
+---
+
 **엔드포인트**: `GET /api/v1/ops/audit`
 
 **설명**: 감사 이력을 페이징·이벤트유형·기간 필터로 조회합니다.
@@ -1382,7 +1388,7 @@ Admin 전용: 전략 거버넌스 검사 결과 이력·(market, strategyType)�
 
 ## 트리거 API (수동 실행)
 
-스케줄 작업을 수동으로 한 번 실행할 때 사용합니다. 스케줄 현황(`/batch`) 화면의 "지금 실행" 버튼 및 자동투자 현황의 "파이프라인 수동 실행 (dry-run)" 등에서 호출합니다. **인증 필요**. 구현은 Spring Batch Job을 `JobLauncher.run`으로 실행하며, 경로·요청 파라미터·응답 형식(`success`, `message` 등)은 기존과 동일합니다.
+스케줄 작업을 수동으로 한 번 실행할 때 사용합니다. 스케줄 현황(`/batch`) 화면의 "지금 실행" 버튼 등에서 호출합니다. 실제 주문 실행 여부는 DB 시스템 설정(pipeline.autoExecute) 및 계정별 pipelineAutoExecute에 따릅니다. **인증 필요**. 구현은 Spring Batch Job을 `JobLauncher.run`으로 실행하며, 경로·요청 파라미터·응답 형식(`success`, `message` 등)은 기존과 동일합니다.
 
 **공통 응답**: `200 OK` 시 JSON `{ "success": true|false, "message": "..." }` 및 작업별 추가 필드. 실패 시에도 200으로 반환하고 `success: false`, `message`에 사유.
 
@@ -1395,13 +1401,13 @@ Admin 전용: 전략 거버넌스 검사 결과 이력·(market, strategyType)�
 | `POST /api/v1/trigger/krx-daily-backfill` | KRX 일별 시세 기간 백필 (스트레스 구간 등) | `from`, `to` (required, yyyy-MM-dd) |
 | `POST /api/v1/trigger/us-daily-backfill` | US 일별 시세 기간 백필 (스트레스 구간 등) | `from`, `to` (required, yyyy-MM-dd) |
 | `POST /api/v1/trigger/factor-calculation` | 유니버스 필터 및 팩터(시그널) 계산 즉시 실행 | - |
-| `POST /api/v1/trigger/auto-buy` | 자동매수(통합): 공통 전처리 → 로보(ETF) → 파이프라인(개별종목) 순 실행 | `dryRun` (optional, boolean). true면 실제 주문 없이 실행. 응답에 `dryRun` 포함 |
-| `POST /api/v1/trigger/pipeline-execution` | 4단계 파이프라인만 수동 실행 (스케줄은 자동매수 통합 사용) | `dryRun` (optional, boolean). true면 실제 주문 없이 실행. 응답에 `dryRun` 포함 |
+| `POST /api/v1/trigger/auto-buy` | 자동매수(통합): 공통 전처리 → 로보(ETF) → 파이프라인(개별종목) 순 실행 | (없음). 실제 주문 여부는 DB 시스템 설정·계정별 pipelineAutoExecute에 따름 |
+| `POST /api/v1/trigger/pipeline-execution` | 4단계 파이프라인만 수동 실행 (스케줄은 자동매수 통합 사용) | (없음). 실제 주문 여부는 DB 시스템 설정·계정별 pipelineAutoExecute에 따름 |
 | `POST /api/v1/trigger/pipeline-exit` | 보유 포지션 청산 규칙 평가 및 매도 시그널 시 주문 실행 | - |
 | `POST /api/v1/trigger/fill-confirmation` | 체결된 주문에 대해 포지션 등록 | - |
 | `POST /api/v1/trigger/unfilled-check` | PENDING N분 경과 주문에 대해 Discord 긴급 알림 | - |
 | `POST /api/v1/trigger/risk-event-alert` | 일일 손실 한도 임박·VaR 95% 초과 검사 후 Discord 리스크 이벤트 알림 발송 | - |
-| `POST /api/v1/trigger/robo-rebalance` | 로보 리밸런싱만 수동 실행 (스케줄은 자동매수 통합 사용) | `dryRun` (optional, boolean). true면 백테스트만 실행·저장, ETF 주문 없음. 응답에 `dryRun` 포함 |
+| `POST /api/v1/trigger/robo-rebalance` | 로보 리밸런싱만 수동 실행 (스케줄은 자동매수 통합 사용) | (없음). 실제 ETF 주문 여부는 DB 시스템 설정 pipeline.autoExecute에 따름 |
 | `POST /api/v1/trigger/daily-pnl` | 장 마감 후 계좌별 당일 수익률 기록 | - |
 | `POST /api/v1/trigger/intraday-breakout` | 장중 변동성 돌파(09:00~10:00 구간) 실행 | 설정 시에만 유효 |
 | `POST /api/v1/trigger/medium-term-rebalance` | 중기(MEDIUM_TERM) 월 1회 리밸런싱 훅 (스텁) | - |
@@ -1411,7 +1417,7 @@ Admin 전용: 전략 거버넌스 검사 결과 이력·(market, strategyType)�
 **요청 예시**:
 ```bash
 curl -X POST "http://localhost:8080/api/v1/trigger/dart-collect" -H "Content-Type: application/json" --cookie "token=..."
-curl -X POST "http://localhost:8080/api/v1/trigger/pipeline-execution?dryRun=true" -H "Content-Type: application/json" --cookie "token=..."
+curl -X POST "http://localhost:8080/api/v1/trigger/pipeline-execution" -H "Content-Type: application/json" --cookie "token=..."
 ```
 
 ---

@@ -13,8 +13,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 미체결 주문 확인 스케줄러.
@@ -42,6 +46,12 @@ public class UnfilledOrderCheckScheduler {
     @Value("${investment.pipeline.alert-discord-webhook-url:}")
     private String alertDiscordWebhookUrl;
 
+    /** 동일 주문에 대해 미체결 알림을 재발송하지 않는 쿨타임(분). 기본 30분. */
+    @Value("${investment.pipeline.unfilled-alert-cooldown-minutes:30}")
+    private int unfilledAlertCooldownMinutes = 30;
+
+    private final Map<String, Instant> lastSentByOrderId = new ConcurrentHashMap<>();
+
     /** Spring Batch Job에서 호출. */
     @Transactional(readOnly = true)
     public void checkUnfilledOrders() {
@@ -53,8 +63,13 @@ public class UnfilledOrderCheckScheduler {
         if (pending.isEmpty()) {
             return;
         }
+        Duration cooldown = Duration.ofMinutes(unfilledAlertCooldownMinutes);
         for (Order order : pending) {
             try {
+                if (!shouldSendUnfilledAlert(order.getId(), cooldown)) {
+                    log.trace("미체결 알림 쿨타임 내 스킵: orderId={}", order.getId());
+                    continue;
+                }
                 String userId = order.getUserId();
                 String accountNo = order.getAccountNo();
                 String serverType = resolveServerType(userId, accountNo);
@@ -73,10 +88,19 @@ public class UnfilledOrderCheckScheduler {
                         serverType,
                         BROKER_NAME,
                         alertBaseUrl);
+                lastSentByOrderId.put(order.getId(), Instant.now());
             } catch (Exception e) {
                 log.warn("미체결 알림 발송 실패: orderId={}, error={}", order.getId(), e.getMessage());
             }
         }
+    }
+
+    private boolean shouldSendUnfilledAlert(String orderId, Duration cooldown) {
+        Instant last = lastSentByOrderId.get(orderId);
+        if (last == null) {
+            return true;
+        }
+        return Duration.between(last, Instant.now()).compareTo(cooldown) >= 0;
     }
 
     private String resolveServerType(String userId, String accountNo) {

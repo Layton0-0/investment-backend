@@ -42,8 +42,8 @@ public class DataCollectionProperties {
          * http://us-daily-collector:8001). 설정 시 스크립트 대신 HTTP 호출
          */
         private String collectorUrl = "";
-        /** 수집 대상 종목 코드 (쉼표 구분). 스크립트에 --symbols 로 전달 */
-        private String symbols = "AAPL,MSFT,GOOGL,AMZN,META,TSLA,NVDA,JPM,V,JNJ";
+        /** 수집 대상 종목 코드 (쉼표 구분). 지수·섹터 ETF + 대표 주식. 스크립트에 --symbols 로 전달 */
+        private String symbols = "SPY,QQQ,IWM,TLT,IEF,BIL,GLD,DBC,XLK,XLF,XLE,XLV,XLY,XLP,XLB,XLI,XLC,AAPL,MSFT,GOOGL,AMZN,META,TSLA,NVDA,JPM,V,JNJ,WMT,UNH,HD,PG,MA,BAC,XOM,CVX";
         /** Python 실행 명령 (예: python, python3, py). 기본 python. collector-url 사용 시 무시 */
         private String pythonCommand = "python";
         /** HTTP 호출 실패 시 재시도 횟수 (0이면 재시도 없음). 기본 2 */

@@ -1,5 +1,6 @@
 package com.investment.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
@@ -20,7 +21,7 @@ import java.util.Map;
  *
  * 캐시 전략:
  * - marketData: 시장 데이터 (5분 TTL)
- * - currentPrice: 실시간 현재가 (5분 TTL)
+ * - currentPrice: 실시간 현재가 (TTL은 investment.market-data.current-price-cache-ttl-seconds, 기본 300초. 단타/WebSocket 사용 시 5 등 짧게 설정 권장)
  * - analysis: 종목 분석 결과 (10분 TTL)
  * - account: 계좌 정보 (1분 TTL)
  *
@@ -45,9 +46,12 @@ public class CacheConfig {
 
         /**
          * Redis 캐시 매니저 설정
+         * @param currentPriceCacheTtlSeconds 현재가 캐시 TTL(초). 단타/WebSocket 활성화 환경에서는 5 등 짧은 값 권장.
          */
         @Bean
-        public CacheManager cacheManager(RedisConnectionFactory redisConnectionFactory) {
+        public CacheManager cacheManager(
+                        RedisConnectionFactory redisConnectionFactory,
+                        @Value("${investment.market-data.current-price-cache-ttl-seconds:300}") int currentPriceCacheTtlSeconds) {
                 // 기본 캐시 설정
                 RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
                                 .entryTtl(Duration.ofMinutes(10)) // 기본 10분
@@ -62,8 +66,8 @@ public class CacheConfig {
 
                 // 시장 데이터: 5분 TTL
                 cacheConfigurations.put(CACHE_MARKET_DATA, defaultConfig.entryTtl(Duration.ofMinutes(5)));
-                // 실시간 현재가: 5분 TTL
-                cacheConfigurations.put(CACHE_CURRENT_PRICE, defaultConfig.entryTtl(Duration.ofMinutes(5)));
+                // 실시간 현재가: 프로퍼티 TTL (기본 300초, 단타/WebSocket 시 짧게 설정)
+                cacheConfigurations.put(CACHE_CURRENT_PRICE, defaultConfig.entryTtl(Duration.ofSeconds(currentPriceCacheTtlSeconds)));
 
                 // 종목 분석 결과: 10분 TTL
                 cacheConfigurations.put(CACHE_ANALYSIS, defaultConfig.entryTtl(Duration.ofMinutes(10)));

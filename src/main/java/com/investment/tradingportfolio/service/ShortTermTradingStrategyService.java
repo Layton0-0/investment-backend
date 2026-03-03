@@ -4,6 +4,7 @@ import com.investment.marketdata.config.MarketDataProperties;
 import com.investment.domain.entity.TradingPortfolio;
 import com.investment.domain.entity.TradingPortfolioItem;
 import com.investment.factor.dto.PositionRecommendationDto;
+import com.investment.factor.service.FrictionCostService;
 import com.investment.factor.service.PositionSizingService;
 import com.investment.strategy.domain.StrategyType;
 import com.investment.taapi.dto.StockAnalysisDto;
@@ -34,6 +35,7 @@ import java.util.List;
 public class ShortTermTradingStrategyService {
 
     private final PositionSizingService positionSizingService;
+    private final FrictionCostService frictionCostService;
     private final StockScreeningService stockScreeningService;
     private final StockAnalysisService stockAnalysisService;
     private final MarketDataProperties marketDataProperties;
@@ -123,8 +125,11 @@ public class ShortTermTradingStrategyService {
         BigDecimal entryMax = entry.multiply(new BigDecimal("1.01"));
         BigDecimal avgEntry = entryMin.add(entryMax).divide(new BigDecimal("2"), 2, RoundingMode.HALF_UP);
         BigDecimal profit1 = target1.subtract(avgEntry);
-        BigDecimal expectedReturnRate = profit1.divide(avgEntry, 4, RoundingMode.HALF_UP)
+        BigDecimal grossReturnRatePct = profit1.divide(avgEntry, 4, RoundingMode.HALF_UP)
                 .multiply(new BigDecimal("100"));
+        String market = rec.getMarket() != null ? rec.getMarket() : "KR";
+        BigDecimal roundTripRatePct = frictionCostService.getRoundTripCostRate(market).multiply(new BigDecimal("100"));
+        BigDecimal expectedReturnRate = grossReturnRatePct.subtract(roundTripRatePct).max(BigDecimal.ZERO);
         BigDecimal investmentAmount = rec.getRecommendedAmt() != null ? rec.getRecommendedAmt() : new BigDecimal("10000");
         BigDecimal expectedProfit = investmentAmount.multiply(expectedReturnRate)
                 .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
@@ -241,14 +246,17 @@ public class ShortTermTradingStrategyService {
                 // 진입가, 손절가, 목표가 계산
                 PriceTargets targets = calculatePriceTargets(analysis, currentPrice);
                 
-                // 기대수익률 계산
+                // 기대수익률 계산 (수수료·세금 반영한 순손익 기준)
                 BigDecimal avgEntry = targets.entryMin.add(targets.entryMax)
                         .divide(new BigDecimal("2"), 2, RoundingMode.HALF_UP);
                 BigDecimal profit1 = targets.target1.subtract(avgEntry);
-                BigDecimal expectedReturnRate = profit1.divide(avgEntry, 4, RoundingMode.HALF_UP)
+                BigDecimal grossReturnRatePct = profit1.divide(avgEntry, 4, RoundingMode.HALF_UP)
                         .multiply(new BigDecimal("100"));
-                
-                // 투자금액 및 예상 수익 계산
+                String marketForAnalysis = "KR";
+                BigDecimal roundTripRatePctAnalysis = frictionCostService.getRoundTripCostRate(marketForAnalysis).multiply(new BigDecimal("100"));
+                BigDecimal expectedReturnRate = grossReturnRatePct.subtract(roundTripRatePctAnalysis).max(BigDecimal.ZERO);
+
+                // 투자금액 및 예상 수익 계산 (순손익)
                 BigDecimal investmentAmount = new BigDecimal("10000");
                 BigDecimal expectedProfit = investmentAmount.multiply(expectedReturnRate)
                         .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
@@ -372,13 +380,15 @@ public class ShortTermTradingStrategyService {
             
             BigDecimal avgEntry = entryMin.add(entryMax).divide(new BigDecimal("2"), 2, RoundingMode.HALF_UP);
             BigDecimal profit1 = target1.subtract(avgEntry);
-            BigDecimal expectedReturnRate = profit1.divide(avgEntry, 4, RoundingMode.HALF_UP)
+            BigDecimal grossReturnRatePctMock = profit1.divide(avgEntry, 4, RoundingMode.HALF_UP)
                     .multiply(new BigDecimal("100"));
-            
+            BigDecimal roundTripRatePctMock = frictionCostService.getRoundTripCostRate("KR").multiply(new BigDecimal("100"));
+            BigDecimal expectedReturnRate = grossReturnRatePctMock.subtract(roundTripRatePctMock).max(BigDecimal.ZERO);
+
             BigDecimal investmentAmount = new BigDecimal("10000");
             BigDecimal expectedProfit = investmentAmount.multiply(expectedReturnRate)
                     .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
-            
+
             // 매수 시간: 10:00, 10:30, 11:00, 11:30, 12:00 (분이 60을 초과하지 않도록 처리)
             int hour = 10 + (i * 30) / 60;
             int minute = (i * 30) % 60;

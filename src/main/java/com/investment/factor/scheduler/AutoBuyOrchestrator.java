@@ -19,18 +19,12 @@ public class AutoBuyOrchestrator {
     private final PipelineExecutionScheduler pipelineExecutionScheduler;
 
     /**
-     * 통합 자동매수 실행. dryRun이 null이면 서버 설정(auto-execute 등)에 따르고, non-null이면 해당 값으로 로보·파이프라인 각각 전달.
-     *
-     * @param dryRun true=실제 주문 없음, false=실제 주문 가능, null=설정 따름
+     * 통합 자동매수 실행. 실제 주문 여부는 DB 시스템 설정(pipeline.autoExecute) 및 계정별 pipelineAutoExecute에 따름.
      */
-    public void run(Boolean dryRun) {
-        log.info("자동매수(통합) 시작: dryRun={}", dryRun);
-
-        boolean roboDryRun = dryRun != null ? dryRun : true;
-        roboRebalanceScheduler.runNow(roboDryRun);
-
-        pipelineExecutionScheduler.runNow(dryRun);
-
-        log.info("자동매수(통합) 완료: dryRun={}", dryRun);
+    public void run() {
+        log.info("자동매수(통합) 시작");
+        roboRebalanceScheduler.runNow();
+        pipelineExecutionScheduler.runNow(null);
+        log.info("자동매수(통합) 완료");
     }
 }

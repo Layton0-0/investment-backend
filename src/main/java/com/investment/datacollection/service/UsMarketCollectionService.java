@@ -198,7 +198,17 @@ public class UsMarketCollectionService {
 
     private String resolveSymbolsString(List<String> symbolsOverride) {
         List<String> list = resolveSymbolsList(symbolsOverride);
-        return list.isEmpty() ? "AAPL,MSFT,GOOGL,AMZN,META,TSLA,NVDA,JPM,V,JNJ" : String.join(",", list);
+        return list.isEmpty() ? String.join(",", getDefaultUsSymbols()) : String.join(",", list);
+    }
+
+    /** 퀀트용 기본 US 유니버스: 지수·섹터 ETF + 대표 주식 (듀얼모멘텀·벤치마크·유동성) */
+    private static List<String> getDefaultUsSymbols() {
+        return List.of(
+                "SPY", "QQQ", "IWM", "TLT", "IEF", "BIL", "GLD", "DBC",
+                "XLK", "XLF", "XLE", "XLV", "XLY", "XLP", "XLB", "XLI", "XLC",
+                "AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA",
+                "JPM", "V", "JNJ", "WMT", "UNH", "HD", "PG", "MA", "BAC", "XOM", "CVX"
+        );
     }
 
     private List<String> resolveSymbolsList(List<String> symbolsOverride) {
@@ -209,9 +219,9 @@ public class UsMarketCollectionService {
         }
         String symbols = dataCollectionProperties.getUs().getSymbols();
         if (symbols == null || symbols.isBlank()) {
-            return List.of("AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA", "JPM", "V", "JNJ");
+            return getDefaultUsSymbols();
         }
-        return java.util.Arrays.stream(symbols.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
+        return java.util.Arrays.stream(symbols.split(",")).map(String::trim).filter(s -> !s.isEmpty()).distinct().toList();
     }
 
     /**

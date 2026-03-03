@@ -16,14 +16,7 @@ public class RoboRebalanceTasklet implements Tasklet {
 
     @Override
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) {
-        boolean dryRun = false;
-        var params = chunkContext.getStepContext().getJobParameters();
-        if (params != null && params.containsKey("dryRun")) {
-            String v = params.get("dryRun") != null ? String.valueOf(params.get("dryRun")) : null;
-            if (v != null)
-                dryRun = Boolean.parseBoolean(v);
-        }
-        roboRebalanceScheduler.runNow(dryRun);
+        roboRebalanceScheduler.runNow();
         return RepeatStatus.FINISHED;
     }
 }

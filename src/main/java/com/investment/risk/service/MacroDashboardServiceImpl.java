@@ -3,6 +3,7 @@ package com.investment.risk.service;
 import com.investment.config.RiskProperties;
 import com.investment.risk.dto.MacroDashboardResponse;
 import com.investment.risk.dto.MacroIndicatorDto;
+import com.investment.setting.service.SystemSettingService;
 import com.investment.strategy.engine.MacroEconomicStrategyEngine;
 import com.investment.strategy.engine.MacroIndicatorProvider;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +38,11 @@ public class MacroDashboardServiceImpl implements MacroDashboardService {
 
     private final MacroIndicatorProvider macroIndicatorProvider;
     private final RiskProperties riskProperties;
+    private final SystemSettingService systemSettingService;
+
+    private boolean isRegimeGateEnabled() {
+        return Boolean.TRUE.equals(systemSettingService.getBoolean("risk.regimeGateEnabled"));
+    }
 
     private static final Map<String, IndicatorMetadata> INDICATOR_METADATA = Map.ofEntries(
             Map.entry("VIX", new IndicatorMetadata("VIX (공포 지수)", MacroIndicatorDto.IndicatorCategory.MARKET, "CBOE")),
@@ -82,7 +88,7 @@ public class MacroDashboardServiceImpl implements MacroDashboardService {
             int riskScore = calculateOverallRiskScore(allIndicators);
 
             MacroDashboardResponse.RiskGateStatus riskGateStatus = MacroDashboardResponse.RiskGateStatus.builder()
-                    .enabled(riskProperties.isRegimeGateEnabled())
+                    .enabled(isRegimeGateEnabled())
                     .currentVix(allIndicators.containsKey("VIX") ? allIndicators.get("VIX").getValue().doubleValue() : null)
                     .vixThreshold(riskProperties.getVixThreshold().doubleValue())
                     .triggered(isRiskGateTriggered(allIndicators))
@@ -322,7 +328,7 @@ public class MacroDashboardServiceImpl implements MacroDashboardService {
     }
 
     private boolean isRiskGateTriggered(Map<String, MacroIndicatorDto> indicators) {
-        if (!riskProperties.isRegimeGateEnabled()) {
+        if (!isRegimeGateEnabled()) {
             return false;
         }
         MacroIndicatorDto vix = indicators.get("VIX");
@@ -343,7 +349,7 @@ public class MacroDashboardServiceImpl implements MacroDashboardService {
                 .currencyIndicators(Collections.emptyList())
                 .allIndicators(Collections.emptyMap())
                 .riskGateStatus(MacroDashboardResponse.RiskGateStatus.builder()
-                        .enabled(riskProperties.isRegimeGateEnabled())
+                        .enabled(isRegimeGateEnabled())
                         .triggered(false)
                         .build())
                 .timestamp(Instant.now())

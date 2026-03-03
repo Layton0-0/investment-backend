@@ -155,38 +155,27 @@ public class TriggerController {
         return result;
     }
 
-    @Operation(summary = "자동매수(통합)", description = "공통 전처리 → 로보(ETF) → 파이프라인(개별종목) 순으로 통합 실행. dryRun=true면 실제 주문 없음")
+    @Operation(summary = "자동매수(통합)", description = "공통 전처리 → 로보(ETF) → 파이프라인(개별종목) 순으로 통합 실행. 실제 주문 여부는 DB 시스템 설정·계정별 pipelineAutoExecute에 따름")
     @PostMapping("/auto-buy")
-    public ResponseEntity<Map<String, Object>> triggerAutoBuy(
-            Principal principal,
-            @Parameter(description = "true면 실제 주문 없이 실행") @RequestParam(required = false) Boolean dryRun) {
-        JobParametersBuilder params = new JobParametersBuilder();
-        if (dryRun != null)
-            params.addString("dryRun", dryRun.toString());
-        ResponseEntity<Map<String, Object>> result = runTrigger("/auto-buy", "자동매수(통합) 완료", "자동매수(통합) 실패", params);
+    public ResponseEntity<Map<String, Object>> triggerAutoBuy(Principal principal) {
+        ResponseEntity<Map<String, Object>> result = runTrigger("/auto-buy", "자동매수(통합) 완료", "자동매수(통합) 실패", new JobParametersBuilder());
         recordManualTrigger(principal, "/auto-buy", result);
-        if (result.getBody() != null && result.getBody().get("success") == Boolean.TRUE) {
-            return ResponseEntity
-                    .ok(Map.of("success", true, "message", "자동매수(통합) 완료", "dryRun", Boolean.TRUE.equals(dryRun)));
-        }
         return result;
     }
 
-    @Operation(summary = "파이프라인 실행", description = "4단계 파이프라인 실행. dryRun=true면 주문 미실행")
+    @Operation(summary = "자동매수(미국장)", description = "파이프라인 US 시장만 실행. 퀀트 유리 시간대(23:30~01:00 KST) 내에서만 진입. 실제 주문 여부는 DB 시스템 설정·계정별 pipelineAutoExecute에 따름")
+    @PostMapping("/auto-buy-us")
+    public ResponseEntity<Map<String, Object>> triggerAutoBuyUs(Principal principal) {
+        ResponseEntity<Map<String, Object>> result = runTrigger("/auto-buy-us", "자동매수(미국장) 완료", "자동매수(미국장) 실패", new JobParametersBuilder());
+        recordManualTrigger(principal, "/auto-buy-us", result);
+        return result;
+    }
+
+    @Operation(summary = "파이프라인 실행", description = "4단계 파이프라인 실행. 실제 주문 여부는 DB 시스템 설정·계정별 pipelineAutoExecute에 따름")
     @PostMapping("/pipeline-execution")
-    public ResponseEntity<Map<String, Object>> triggerPipelineExecution(
-            Principal principal,
-            @Parameter(description = "true면 실제 주문 없이 실행") @RequestParam(required = false) Boolean dryRun) {
-        JobParametersBuilder params = new JobParametersBuilder();
-        if (dryRun != null)
-            params.addString("dryRun", dryRun.toString());
-        ResponseEntity<Map<String, Object>> result = runTrigger("/pipeline-execution", "파이프라인 실행 완료", "파이프라인 실행 실패",
-                params);
+    public ResponseEntity<Map<String, Object>> triggerPipelineExecution(Principal principal) {
+        ResponseEntity<Map<String, Object>> result = runTrigger("/pipeline-execution", "파이프라인 실행 완료", "파이프라인 실행 실패", new JobParametersBuilder());
         recordManualTrigger(principal, "/pipeline-execution", result);
-        if (result.getBody() != null && result.getBody().get("success") == Boolean.TRUE) {
-            return ResponseEntity
-                    .ok(Map.of("success", true, "message", "파이프라인 실행 완료", "dryRun", Boolean.TRUE.equals(dryRun)));
-        }
         return result;
     }
 
@@ -222,20 +211,19 @@ public class TriggerController {
         return result;
     }
 
-    @Operation(summary = "로보 리밸런싱", description = "로보 어드바이저 리밸런싱. dryRun=true면 백테스트만 실행·저장")
+    @Operation(summary = "포지션 정합성(Reconciliation)", description = "자동투자 ON 계좌별 브로커-DB 포지션 비교, 불일치 시 Discord 알림")
+    @PostMapping("/reconcile")
+    public ResponseEntity<Map<String, Object>> triggerReconcile(Principal principal) {
+        ResponseEntity<Map<String, Object>> result = runTrigger("/reconcile", "포지션 정합성 검사 완료", "포지션 정합성 검사 실패", new JobParametersBuilder());
+        recordManualTrigger(principal, "/reconcile", result);
+        return result;
+    }
+
+    @Operation(summary = "로보 리밸런싱", description = "로보 어드바이저 리밸런싱. 실제 ETF 주문 여부는 DB 시스템 설정 pipeline.autoExecute에 따름")
     @PostMapping("/robo-rebalance")
-    public ResponseEntity<Map<String, Object>> triggerRoboRebalance(
-            Principal principal,
-            @Parameter(description = "true면 실제 ETF 주문 없이 백테스트만 실행") @RequestParam(required = false) Boolean dryRun) {
-        JobParametersBuilder params = new JobParametersBuilder();
-        if (dryRun != null)
-            params.addString("dryRun", dryRun.toString());
-        ResponseEntity<Map<String, Object>> result = runTrigger("/robo-rebalance", "로보 리밸런싱 완료", "로보 리밸런싱 실패", params);
+    public ResponseEntity<Map<String, Object>> triggerRoboRebalance(Principal principal) {
+        ResponseEntity<Map<String, Object>> result = runTrigger("/robo-rebalance", "로보 리밸런싱 완료", "로보 리밸런싱 실패", new JobParametersBuilder());
         recordManualTrigger(principal, "/robo-rebalance", result);
-        if (result.getBody() != null && result.getBody().get("success") == Boolean.TRUE) {
-            return ResponseEntity
-                    .ok(Map.of("success", true, "message", "로보 리밸런싱 완료", "dryRun", Boolean.TRUE.equals(dryRun)));
-        }
         return result;
     }
 

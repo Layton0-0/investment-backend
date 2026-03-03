@@ -6,6 +6,7 @@ import com.investment.domain.repository.StrategyRepository;
 import com.investment.domain.repository.TradingSettingRepository;
 import com.investment.factor.execution.PipelineExecutor;
 import com.investment.strategy.domain.StrategyStatus;
+import com.investment.factor.service.CapitalDrawdownConstraintService;
 import com.investment.factor.service.DailyLossLimitService;
 import com.investment.factor.service.MarketCrashGateService;
 import com.investment.factor.service.RiskGateService;
@@ -15,6 +16,8 @@ import com.investment.strategy.dto.StrategyWeights;
 import com.investment.setting.service.SystemSettingService;
 import com.investment.strategy.engine.MacroIndicatorProvider;
 import com.investment.strategy.service.StrategyWeightResolver;
+import com.investment.factor.service.TradingWindowService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -54,9 +57,20 @@ class PipelineExecutionSchedulerTest {
     private StrategyWeightResolver strategyWeightResolver;
     @Mock
     private SystemSettingService systemSettingService;
+    @Mock
+    private TradingWindowService tradingWindowService;
+    @Mock
+    private CapitalDrawdownConstraintService capitalDrawdownConstraintService;
 
     @InjectMocks
     private PipelineExecutionScheduler pipelineExecutionScheduler;
+
+    @BeforeEach
+    void setUpTradingWindow() {
+        lenient().when(tradingWindowService.isInKrWindow()).thenReturn(true);
+        lenient().when(tradingWindowService.isInUsWindow()).thenReturn(true);
+        lenient().when(capitalDrawdownConstraintService.getCapitalMultiplier(anyString(), anyString())).thenReturn(BigDecimal.ONE);
+    }
 
     @Test
     @DisplayName("자동투자 ON 계좌 없으면 파이프라인 미실행")
@@ -146,7 +160,7 @@ class PipelineExecutionSchedulerTest {
         pipelineExecutionScheduler.runNow(null);
 
         verify(pipelineExecutor, times(6)).run(eq(LocalDate.now().minusDays(1)), anyString(), eq("1234567890"),
-                any(StrategyType.class), any(BigDecimal.class), eq(false));
+                any(StrategyType.class), any(BigDecimal.class), eq(true));
     }
 
     @Test

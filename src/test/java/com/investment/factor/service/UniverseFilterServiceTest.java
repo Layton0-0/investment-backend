@@ -41,6 +41,8 @@ class UniverseFilterServiceTest {
     private SymbolSectorRepository symbolSectorRepository;
     @Mock
     private EarningsSurpriseRepository earningsSurpriseRepository;
+    @Mock
+    private CorporateActionService corporateActionService;
 
     @InjectMocks
     private UniverseFilterService universeFilterService;
@@ -56,6 +58,7 @@ class UniverseFilterServiceTest {
         ReflectionTestUtils.setField(universeFilterService, "earningsSurpriseTopPct", 0.2);
         lenient().when(sectorReturnRepository.findByBasDtAndMarketOrderByReturnPctDesc(any(LocalDate.class), anyString())).thenReturn(List.of());
         lenient().when(earningsSurpriseRepository.findByMarketAndReportDtGreaterThanEqualOrderBySurpriseScoreDesc(anyString(), any(LocalDate.class))).thenReturn(List.of());
+        lenient().when(corporateActionService.filterExcluded(anyList(), any(LocalDate.class), anyString())).thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Test
