@@ -46,11 +46,20 @@ public class AuditLog {
     @Column(name = "IP_ADDRESS", length = 64)
     private String ipAddress;
 
+    /** 트레이드 결정 등 상세 데이터 (JSON). EVENT_TYPE=TRADE_DECISION 시 사용 */
+    @Column(name = "DETAIL_JSON", columnDefinition = "TEXT")
+    private String detailJson;
+
     @Column(name = "CREATED_AT", nullable = false)
     private Instant createdAt;
 
     public static AuditLog of(Instant occurredAt, String eventType, String userIdMasked,
             String accountNoMasked, String summary, String result, String ipAddress) {
+        return of(occurredAt, eventType, userIdMasked, accountNoMasked, summary, result, ipAddress, null);
+    }
+
+    public static AuditLog of(Instant occurredAt, String eventType, String userIdMasked,
+            String accountNoMasked, String summary, String result, String ipAddress, String detailJson) {
         AuditLog log = new AuditLog();
         log.occurredAt = occurredAt != null ? occurredAt : Instant.now();
         log.eventType = eventType != null ? eventType : "UNKNOWN";
@@ -59,6 +68,7 @@ public class AuditLog {
         log.summary = summary;
         log.result = result;
         log.ipAddress = ipAddress;
+        log.detailJson = detailJson;
         log.createdAt = Instant.now();
         return log;
     }

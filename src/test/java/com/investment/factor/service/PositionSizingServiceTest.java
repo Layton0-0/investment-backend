@@ -1,9 +1,12 @@
 package com.investment.factor.service;
 
+import com.investment.core.engine.portfolio.InverseVolatilityPortfolioService;
 import com.investment.domain.entity.DailyStock;
 import com.investment.domain.entity.SignalScore;
 import com.investment.domain.repository.DailyStockRepository;
 import com.investment.domain.repository.SignalScoreRepository;
+import com.investment.domain.repository.TradingSettingRepository;
+import com.investment.risk.service.RiskReportService;
 import com.investment.factor.dto.PositionRecommendationDto;
 import com.investment.news.service.NewsSignalService;
 import com.investment.strategy.domain.StrategyType;
@@ -42,18 +45,29 @@ class PositionSizingServiceTest {
         private FrictionCostService frictionCostService;
         @Mock
         private CorrelationPenaltyService correlationPenaltyService;
+        @Mock
+        private InverseVolatilityPortfolioService inverseVolatilityPortfolioService;
+        @Mock
+        private TradingSettingRepository tradingSettingRepository;
+        @Mock
+        private RiskReportService riskReportService;
+        @Mock
+        private RiskGateService riskGateService;
 
         @InjectMocks
         private PositionSizingService positionSizingService;
 
         @BeforeEach
         void setUp() {
+                ReflectionTestUtils.setField(positionSizingService, "portfolioMode", "stub");
                 ReflectionTestUtils.setField(positionSizingService, "positionRiskPct", new BigDecimal("0.01"));
                 ReflectionTestUtils.setField(positionSizingService, "kellyP", new BigDecimal("0.6"));
                 ReflectionTestUtils.setField(positionSizingService, "kellyB", new BigDecimal("2.0"));
                 lenient().when(newsSignalService.getSymbolsWithSignalNews(any(), any())).thenReturn(java.util.Set.of());
                 lenient().when(frictionCostService.getRoundTripCostRate(anyString())).thenReturn(new BigDecimal("0.002"));
                 lenient().when(correlationPenaltyService.applyPenalty(anyList(), any(), anyString(), any()))
+                        .thenAnswer(inv -> inv.getArgument(0));
+                lenient().when(correlationPenaltyService.applySectorConcentrationLimit(anyList(), any(), anyString()))
                         .thenAnswer(inv -> inv.getArgument(0));
         }
 

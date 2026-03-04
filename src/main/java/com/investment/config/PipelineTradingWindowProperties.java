@@ -20,6 +20,9 @@ public class PipelineTradingWindowProperties {
     /** 사용 여부. true면 허용 구간 밖에서는 해당 시장 run 스킵 */
     private boolean enabled = true;
 
+    /** 변동성 구간(장 시작/마감) 신규 매수 회피. true면 9:00-9:10, 15:20-15:30(KR) 등에서 매수 지연 */
+    private boolean avoidVolatileWindow = true;
+
     private Kr kr = new Kr();
     private Us us = new Us();
 

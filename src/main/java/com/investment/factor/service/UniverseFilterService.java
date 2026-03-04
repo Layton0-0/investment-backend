@@ -48,6 +48,10 @@ public class UniverseFilterService {
     @Value("${investment.factor.liquidity-min-trd-val:1000000000}")
     private long liquidityMinTrdVal = 1_000_000_000L;
 
+    /** KR 유동성 필터 시 최근 5일 평균 거래대금 사용 여부 (true 시 PIT: basDt 포함 5일) */
+    @Value("${investment.factor.use-5d-avg-liquidity:true}")
+    private boolean use5DayAvgLiquidity = true;
+
     /** Sector RS: 상위 N개 업종만 유니버스에 포함 (미설정 시 5) */
     @Value("${investment.factor.sector-rs-top-n:5}")
     private int sectorRsTopN = 5;
@@ -90,9 +94,8 @@ public class UniverseFilterService {
     public int run(LocalDate basDt, String market) {
         universeRepository.deleteByBasDtAndMarket(basDt, market);
 
-        // 1. 유동성 필터
-        List<DailyStock> liquidityPassed = dailyStockRepository.findByBasDtAndMarketAndTrdValGreaterThanEqual(
-                basDt, market, liquidityMinTrdVal);
+        // 1. 유동성 필터 (KR: 선택 시 최근 5일 평균 거래대금, US/기타: 당일)
+        List<DailyStock> liquidityPassed = resolveLiquidityPassed(basDt, market);
         if (liquidityPassed.isEmpty()) {
             log.debug("유니버스 필터: basDt={}, market={}, 유동성 통과 종목 없음", basDt, market);
             return 0;
@@ -136,6 +139,24 @@ public class UniverseFilterService {
         universeRepository.saveAll(toSave);
         log.info("유니버스 필터 완료: basDt={}, market={}, count={}", basDt, market, toSave.size());
         return toSave.size();
+    }
+
+    /**
+     * 유동성 필터 적용. KR이고 use5DayAvgLiquidity=true면 basDt 포함 최근 5일 평균 거래대금 사용 (PIT).
+     */
+    private List<DailyStock> resolveLiquidityPassed(LocalDate basDt, String market) {
+        if ("KR".equals(market) && use5DayAvgLiquidity) {
+            LocalDate fromDt = basDt.minusDays(4);
+            List<String> symbols = dailyStockRepository.findSymbolsByMarketAndBasDtBetweenWithAvgTrdValGreaterThanEqual(
+                    market, fromDt, basDt, liquidityMinTrdVal);
+            if (symbols.isEmpty()) {
+                return List.of();
+            }
+            List<DailyStock> forBasDt = dailyStockRepository.findByBasDtAndMarketAndSymbolIn(basDt, market, symbols);
+            return forBasDt;
+        }
+        return dailyStockRepository.findByBasDtAndMarketAndTrdValGreaterThanEqual(
+                basDt, market, liquidityMinTrdVal);
     }
 
     /**

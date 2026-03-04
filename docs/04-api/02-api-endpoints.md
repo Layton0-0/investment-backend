@@ -748,9 +748,19 @@ curl -X GET "http://localhost:8080/api/v1/accounts/12345678/profit-loss?startDat
 - `INVALID_INPUT`: 잘못된 입력값
 - `INVALID_SETTING_VALUE`: 설정값이 유효 범위를 벗어남
 
+### 5.3 원클릭 자동투자 시작 (quick-start)
+
+**엔드포인트**: `POST /api/v1/settings/quick-start`
+
+**설명**: 계좌 연결 후 원클릭으로 자동투자를 시작합니다. 초보자용 센서블 디폴트(autoTradingEnabled=true, pipelineAutoExecute=true, 단기/중기/장기 비율 0.2/0.4/0.4) 적용. 계좌가 없으면 400.
+
+**요청 본문 (QuickStartRequestDto)**: `maxInvestmentAmount` (필수), `accountNo` (선택, 미설정 시 사용자 첫 계좌)
+
+**성공 응답 (200 OK, QuickStartResponseDto)**: `success`, `message`, `setting` (TradingSettingDto). 에러: `SETTING_NOT_FOUND`(계좌 미연결), `UNAUTHORIZED`
+
 ---
 
-### 5.3 Kill Switch (Phase 2)
+### 5.4 Kill Switch (Phase 2)
 
 **엔드포인트**: `GET /api/v1/system/kill-switch`
 
@@ -781,7 +791,7 @@ curl -X GET "http://localhost:8080/api/v1/accounts/12345678/profit-loss?startDat
 
 ---
 
-### 5.4 시스템 설정 (서버 전역 기본값, ADMIN 전용)
+### 5.5 시스템 설정 (서버 전역 기본값, ADMIN 전용)
 
 **엔드포인트**: `GET /api/v1/system/settings`
 
@@ -1155,6 +1165,16 @@ curl -X POST "http://localhost:8080/api/v1/market-data/current-prices" \
 
 **성공 응답 (200 OK)**: `RiskHistoryItemDto[]` (예: `[]`). 항목이 있으면 `eventType`, `accountNoMasked`, `description`, `occurredAt`(ISO-8601) 포함.
 
+### 9.3.1 성과 귀인
+
+**엔드포인트**: `GET /api/v1/risk/attribution`
+
+**설명**: 팩터(시그널)·전략별 수익 기여도. 사용자 계좌별 TB_STRATEGY_POSITION 청산 포지션(exitDt not null) 기준 실현 PnL을 signalType·strategyType별 집계, 기여율(%) 합 100%.
+
+**성공 응답 (200 OK, PerformanceAttributionDto)**: `totalRealizedPnl`, `byFactor` (factor, pnl, contributionPct), `byStrategy` (strategy, pnl, contributionPct).
+
+---
+
 ### 9.4 포트폴리오 리스크 메트릭
 
 **엔드포인트**: `GET /api/v1/risk/portfolio-metrics?accountNo={accountNo}`
@@ -1187,7 +1207,7 @@ curl -X POST "http://localhost:8080/api/v1/market-data/current-prices" \
 }
 ```
 
-**DTO**: `DashboardPerformanceSummaryDto` — totalCurrentValue, maxMddPct, sharpeRatio, sortinoRatio, var95Pct, cvar95Pct. 데이터 없으면 null.
+**DTO**: `DashboardPerformanceSummaryDto` — totalCurrentValue, maxMddPct, sharpeRatio, sortinoRatio, var95Pct, cvar95Pct, **dailyProfitLoss**(당일 손익 합계, 원), **riskLevel**(낮음/중간/높음, VaR·MDD 기반). 데이터 없으면 null.
 
 **기타 API 참고**: 섹터 분석 `GET /api/v1/analysis/sector`(accountNo 또는 symbols+market), 리밸런싱 제안 `GET /api/v1/trading-portfolios/rebalance-suggestions`(accountNo, market=US) — 11-api-frontend-mapping 및 컨트롤러 스펙 참조.
 
@@ -1383,6 +1403,20 @@ Admin 전용: 전략 거버넌스 검사 결과 이력·(market, strategyType)�
 **쿼리 파라미터**: `year` (int, optional): 기준 연도. `format` (string, 기본 "csv"): `csv` 또는 `pdf`.
 
 **성공 응답 (200 OK)**: `Content-Disposition: attachment`, 본문은 CSV(UTF-8) 또는 PDF 바이너리.
+
+---
+
+## 14. 온보딩 API (초보자 위험 성향 퀴즈)
+
+3문항 퀴즈(투자기간·위험감수·투자금액)로 프로필(보수/균형/공격) 및 전략 비율(단기/중기/장기) 산출. `applyToSettings: true` 시 인증 사용자의 TradingSetting에 비율 반영.
+
+### 14.1 프로필 제출
+
+**엔드포인트**: `POST /api/v1/onboarding/profile`
+
+**요청 본문 (OnboardingQuizRequestDto)**: `investmentHorizon` (3M | 1Y | 3Y_PLUS), `riskTolerance` (N5 | N10 | N20), `investmentAmount` (1M | 5M | 10M_PLUS), `applyToSettings` (boolean, optional), `accountNo` (optional, 미설정 시 사용자 첫 계좌)
+
+**성공 응답 (200 OK, OnboardingProfileResponseDto)**: `profile` (CONSERVATIVE | BALANCED | AGGRESSIVE), `shortTermRatio`, `mediumTermRatio`, `longTermRatio`, `appliedToSettings`
 
 ---
 

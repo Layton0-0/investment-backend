@@ -101,9 +101,43 @@
 
 ---
 
-## 6. 참조
+## 6. Phase 1~3 워크포워드 검증 (최근 1년)
 
-- [00-strategy-registry.md §1.1](./00-strategy-registry.md) — 데이터·백테스트 원칙
+**목적**: Phase 1~3(Universe·시그널·레짐·포트폴리오·실행) 완료 후, 워크포워드(롤링 OOS) 백테스트로 전략 성능을 검증한다. [P8-1] 전략 엔진 통합 테스트.
+
+### 6.1 목표 지표
+
+| 지표 | 목표 | 비고 |
+|------|------|------|
+| CAGR | ≥ 20% | 연평균 복합 수익률 |
+| MDD | ≥ -15% | 최대 낙폭(음수). -15% 이내로 통제 |
+| Sharpe | ≥ 1.0 | fold 중 최소 Sharpe (minSharpeRatio) |
+| 팩터별 | 단독 Sharpe > 0 | 각 팩터 단독 성과 양수 유지 (선택 검증) |
+
+### 6.2 실행 방법
+
+- **API**: `POST /api/v1/backtest/walk-forward` (인증 필요).
+- **요청 본문 (WalkForwardBacktestRequest)**: `startDate`, `endDate`, `market` (KR/US), `strategyType` (SHORT_TERM/MEDIUM_TERM/LONG_TERM), `initialCapital` (필수). `trainDays` (기본 252), `testDays` (기본 63), `stepDays` (기본 63).
+- **최근 1년 예시**: `startDate`: (오늘 - 1년), `endDate`: (오늘), `trainDays`: 252, `testDays`: 63, `stepDays`: 63.
+
+### 6.3 실행 결과 (데이터 수집·실행 후 기입)
+
+| 항목 | KR SHORT_TERM | KR MEDIUM_TERM | US SHORT_TERM | US MEDIUM_TERM | 비고 |
+|------|----------------|----------------|---------------|----------------|------|
+| 실행일 | — | — | — | — | |
+| foldCount | — | — | — | — | |
+| avgCagr % | — | — | — | — | 목표 ≥ 20 |
+| avgMddPct % | — | — | — | — | 목표 ≥ -15 |
+| minSharpeRatio | — | — | — | — | 목표 ≥ 1.0 |
+| 이슈·비고 | | | | | TB_DAILY_STOCK·TB_SIGNAL_SCORE 해당 구간 확보 후 실행 |
+
+- **검증 완료 시**: [02-development-status.md](../09-planning/02-development-status.md) §1 완료에 P8-1 항목 추가, [00-strategy-registry.md](./00-strategy-registry.md) 버전 스택에 결과·교훈 반영.
+
+---
+
+## 7. 참조
+
+- [00-strategy-registry.md §1.1](./00-strategy-registry.md) — 데이터·백테스트 원칙, §7 버전 스택
 - [02-development-status.md](../09-planning/02-development-status.md) — 완료·진행예정
 - [02-api-endpoints.md §백테스트](../04-api/02-api-endpoints.md) — POST /api/v1/backtest 스펙
 - [02-development-status.md §3 진행예정](../09-planning/02-development-status.md) — 스트레스 구간 데이터 수집 후 결과 기입 태스크

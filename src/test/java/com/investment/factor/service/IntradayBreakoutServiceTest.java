@@ -36,6 +36,8 @@ class IntradayBreakoutServiceTest {
         private DailyStockRepository dailyStockRepository;
         @Mock
         private RealtimeMarketDataService realtimeMarketDataService;
+        @Mock
+        private FactorCalculationService factorCalculationService;
 
         @InjectMocks
         private IntradayBreakoutService intradayBreakoutService;
@@ -72,6 +74,8 @@ class IntradayBreakoutServiceTest {
         @Test
         @DisplayName("돌파 충족 종목만 후보 반환")
         void getBreakoutCandidates_breakoutMet_returnsCandidates() {
+                when(factorCalculationService.getVolatilityBreakoutK(eq("005930"), eq(MARKET), eq(TODAY)))
+                                .thenReturn(new BigDecimal("0.5"));
                 when(universeRepository.findByBasDtAndMarketOrderBySymbol(YESTERDAY, MARKET))
                                 .thenReturn(List.of(Universe.builder().basDt(YESTERDAY).market(MARKET).symbol("005930")
                                                 .build()));
@@ -105,6 +109,8 @@ class IntradayBreakoutServiceTest {
         @Test
         @DisplayName("현재가가 Target 미만 시 후보 제외")
         void getBreakoutCandidates_belowTarget_returnsEmpty() {
+                when(factorCalculationService.getVolatilityBreakoutK(eq("005930"), eq(MARKET), eq(TODAY)))
+                                .thenReturn(new BigDecimal("0.5"));
                 when(universeRepository.findByBasDtAndMarketOrderBySymbol(YESTERDAY, MARKET))
                                 .thenReturn(List.of(Universe.builder().basDt(YESTERDAY).market(MARKET).symbol("005930")
                                                 .build()));

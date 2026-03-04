@@ -10,7 +10,71 @@
 
 ## 1. 완료 (Completed)
 
+### Shrimp 헤지펀드급 퀀트 고도화 (2026-03-04)
+- [x] **P2-3 섹터 집중도 제한 (단일 섹터 30% 상한)**  
+  CorrelationPenaltyService.applySectorConcentrationLimit: TB_SYMBOL_SECTOR로 종목별 섹터 조회, 동일 섹터 비중 합이 sector-concentration-limit-pct(0.30) 초과 시 해당 섹터 권장 비중 비례 축소. PositionSizingService.getRecommendations 내 applyRiskBasedCap 이후 호출. investment.factor.sector-concentration-limit-pct: 0.30. CorrelationPenaltyServiceTest(단일 섹터 초과 축소·다양한 섹터 시 미적용)·PositionSizingServiceTest(stub) 추가.
+- [x] **P2-2 동적 리밸런싱 서비스 (drift tolerance 기반)**  
+  DriftRebalancingService: 현재 비중 vs 목표 비중(로보 어드바이저 US 동일 소스) 절대 차이 max &gt; drift-tolerance-pct(5%) 시 리밸런스 트리거. getRebalanceListIfDriftExceeded → Rebalancer.computeRebalanceList, checkAndExecuteDriftRebalance로 주문 실행. PipelineExecutionScheduler.runNow 내 계좌별 US 시 drift 검사·실행 추가. application.yml investment.pipeline.drift-tolerance-pct, drift-rebalance-enabled. DriftRebalancingServiceTest(5% 초과 트리거, 임계값 미만 미실행, KR 스킵, getRebalanceList).
+- [x] **P7-1 불필요 복잡성 제거 (중복 서브모듈/Dead Code 정리)**  
+  .gitmodules에서 중복 서브모듈 investment-front 제거(investment-frontend만 유지). PreTradeComplianceEngine을 디폴트 ComplianceEngine으로 통합(@ConditionalOnProperty 제거). ComplianceEngineStub은 @Component 제거·테스트 전용 클래스로 유지. StrategyService/TradingStrategyService TODO 정리: 현재가·보유수량 주석 정리, TradingStrategyService 거시경제는 MacroIndicatorProvider.getCurrentIndicators() 활용·미제공 시 폴백. 00-strategy-registry·01-system-architecture 문서 반영.
+- [x] **P7-2 설정 간소화 (초보자 디폴트 프로필 제공)**  
+  SettingsPage에 설정 보기 모드 탭(초보자/중급자/고급) 추가, localStorage 키 settingsProfileMode로 상태 유지, 디폴트 초보자. System.tsx Settings: 초보자 모드 시 자동투자 ON/OFF·최대 투자금액·위험 성향(온보딩 안내) 3개만 표시; 중급자 시 전략별 비중(단기/중기/장기)·손절·리밸런싱 안내 추가; 고급 시 최소 투자금액·파이프라인 자동실행·실계좌 자동실행·로보 어드바이저 스위치 및 비율 전송(buildTradingDto) 추가.
+- [x] **P6-4 Discord 알림 체계화 (매매/리스크/시스템 채널 분리)**  
+  DiscordEmergencyAlertService: 알림 타입별 웹훅 URL 분리(trade-webhook, risk-webhook, system-webhook). investment.alert.discord.* 3개 설정, 미설정 시 pipeline.alert-discord-webhook-url 폴백. 매매 알림: sendTradeAlert(symbol, quantity, side, pnlPct) → 평문 "**매매 체결** {symbol} {qty}주 {side} 완료. 수익률: {pnl}%." 리스크: sendRiskEventAlert → risk 채널, 시스템(미체결·실패): sendUnfilledAlert/sendFailureAlert → system 채널. DiscordEmergencyAlertServiceTest(채널별 URL·폴백·미설정 스킵) 추가.
+- [x] **P3-1 VWAP 실행 알고리즘**  
+  VwapExecutionAlgorithm 기존 구현 확인·U자형 거래량 프로파일 검증용 VwapExecutionAlgorithmTest 추가 (planSlices U-shape, getType VWAP). AlgorithmicOrderService·Controller VWAP 연동 유지.
+- [x] **P6-2 성과 귀인 분석 (팩터/전략별 수익 기여도)**  
+  PerformanceAttributionService: 사용자 계좌별 TB_STRATEGY_POSITION 청산 포지션(exitDt not null) 집계, (exitPrice−entryPrice)*quantity로 실현 PnL, signalType별·strategyType별 기여율(합 100%). GET /api/v1/risk/attribution. StrategyPositionRepository.findByAccountNoAndExitDtIsNotNullOrderByExitDtDesc·findByAccountNoAndExitDtBetween 추가. RiskReportController.getAttribution. 프론트 DashboardAttributionCard(recharts PieChart 팩터/전략별), riskApi.getAttribution. PerformanceAttributionServiceTest(기여도 합계 100%, 청산 없음 0).
+- [x] **P6-3 자동 트레이드 저널 (매매 결정 사유 기록)**  
+  AuditLogService.logTradeDecision(action, symbol, market, strategyType, factors, regime, riskGate, result, reason) 추가. TB_AUDIT_LOG에 DETAIL_JSON(TEXT) 컬럼·AuditLog.detailJson, EVENT_TRADE_DECISION. PipelineExecutor에서 매수/스킵(변동성 구간·실계좌 가드)/성공/실패/DRY_RUN 시 저널 기록. GET /api/v1/ops/trade-journal(OpsTradeJournalController), 프론트 Ops 트레이드 저널 탭(getTradeJournal·TradeJournalView). AuditLogServiceTest.logTradeDecision_savesWithDetailJson 추가.
+- [x] **P4-4 평문 알림 시스템 (매매 사유 한글 설명)**  
+  TradeExplanationService: symbol·quantity·side·signalType/exitRuleType → 한글 평문 생성 (예: 삼성전자 10주 매수 - 이유: 듀얼 모멘텀 시그널). Order 엔티티 explanation VARCHAR(500), OrderService 주문 생성 시 설명 설정·OrderResponseDto.explanation 반환. Flyway V34__orders_explanation.sql. 프론트 ordersApi OrderResponseDto.explanation, Market.tsx 주문·체결 내역 테이블 "사유" 컬럼 표시. TradeExplanationServiceTest·OrderServiceTest(stub) 추가.
+- [x] **P4-1 초보자 위험 성향 퀴즈 + 자동 전략 선택**  
+  3문항 퀴즈(투자기간 3M/1Y/3Y_PLUS, 위험감수 N5/N10/N20, 투자금액 1M/5M/10M_PLUS) → 프로필(CONSERVATIVE/BALANCED/AGGRESSIVE) 및 단기/중기/장기 비율 산출. POST /api/v1/onboarding/profile, OnboardingService·OnboardingController. applyToSettings true 시 TradingSetting.updateStrategyRatios 반영. 프론트 OnboardingPage.tsx(3단계 선택·결과·설정 반영), onboardingApi.ts. AppRoutes /onboarding 추가. 02-api-endpoints §14.
+- [x] **P4-2 원클릭 자동투자 시작 (센서블 디폴트)**  
+  POST /api/v1/settings/quick-start: 초보자 디폴트(autoTradingEnabled=true, pipelineAutoExecute=true, 단기/중기/장기 0.2/0.4/0.4)로 TradingSetting 생성/갱신. QuickStartRequestDto(maxInvestmentAmount, accountNo), QuickStartResponseDto. TradingSettingService.quickStart·saveSettingWithUserId(userId 반영). 프론트 AutoInvestPage: "자동투자 시작하기" 버튼, Dialog(안내·위험 안내·동의 체크·최대 투자 금액 입력)→quickStart 호출 후 대시보드 이동. settingsApi.quickStart. 02-api-endpoints §5.3, SettingControllerTest.quickStart_returnsOk.
+- [x] **P3-2 스마트 주문 타이밍 (장 시작/마감 변동성 회피)**  
+  TradingWindowService.isVolatilePeriod(market, nowKst): KR 9:00-9:10·15:20-15:30, US 23:30-23:40·05:50-06:00 KST. PipelineTradingWindowProperties.avoidVolatileWindow, investment.pipeline.trading-window.avoid-volatile-window. PipelineExecutor: 변동성 구간 시 신규 매수 지연(dryRun 결과·주문 미실행). 청산(EXIT)은 기존대로. TradingWindowServiceTest·PipelineExecutorTest(변동성 구간 스킵) 추가.
+- [x] **P3-3 시장 충격 추정 모델 (주문 규모 대비 충격 예측)**  
+  TransactionCostAnalyzerImpl.estimateMarketImpact: Square-Root Impact 모델 적용 (impact = sigma * sqrt(Q/V) * 0.5). sigma=일간변동성, Q=주문수량, V=평균일거래량, C=0.5. GET /api/v1/tca/market-impact 응답에 recommendAlgoExecution 추가(충격 > 1% 시 TWAP/VWAP 알고리즘 실행 권장). TransactionCostAnalyzerTest(제곱근 모델·대규모 주문 시 1% 초과)·TcaControllerTest(market-impact API recommendAlgo 플래그) 추가.
+- [x] **P4-3 대시보드 간소화 (핵심 지표 3개 + 한줄 요약)**  
+  상단 Hero: DashboardKpiCards를 총자산·수익률·MDD 3개만 크게(text-2xl) 표시. 한줄 요약: 시장 상태(레짐 상승장/하락장/횡보장)·파이프라인(정상 동작중/중지됨)·보유 N종목. macroApi.getMarketRegime 연동, useDashboardData에 marketRegime 추가. Dry-Run Guardrail은 pipelineAutoExecute===false일 때만 표시(현재 탭 계좌 기준). investment-frontend Dashboard.tsx·DashboardKpiCards.tsx·macroApi.ts.
+- [x] **P6-1 드로다운 회복 모드 (MDD -10% 이후 노출 축소)**  
+  RiskGateService.isDrawdownRecoveryMode(maxMddPct): MDD ≥ drawdown-recovery-threshold-pct(0.10) 시 true, ≤ exit(0.05) 시 false. RiskReportService.getMaxMddPctForUser(userId) 추가. PositionSizingService.getRecommendations(..., accountNo) 오버로드, 계좌별 userId 조회 후 회복 모드 시 권장 금액을 getDrawdownRecoveryScale(0.5)로 스케일. PipelineExecutor에서 accountNo 전달. investment.risk.drawdown-recovery-threshold-pct, drawdown-recovery-exit-pct, drawdown-recovery-scale. RiskGateServiceTest(회복 ON/OFF·스케일)·PositionSizingServiceTest·PipelineExecutorTest(5-arg mock) 반영.
+- [x] **P5-2 뉴스 센티멘트 스코어링 (경량 키워드/감성사전)**  
+  NewsSentimentScorer: 긍정/부정 키워드(+1~+3, -1~-3) 매칭, scoreText(title, summary) → [-3,3]. NewsItemRepository.findByMarketAndCollectedAtSince(24h). NewsSignalService.getSymbolScoresWithSignalNews에 종목별 최근 24시간 뉴스 센티멘트 평균 반영(score = signalWeight + sentimentAvg * sentiment-weight). calculateNewsSentimentBySymbol 추가. investment.news.sentiment-weight(0.1). NewsSentimentScorerTest·NewsSignalServiceTest(센티멘트 합산·빈 뉴스 0) 추가.
+- [x] **P8-1 전략 엔진 통합 테스트 (워크포워드 백테스트 검증)**  
+  WalkForwardBacktestService 활용 최근 1년 목표(CAGR≥20%, MDD≥-15%, Sharpe≥1.0) 검증. WalkForwardBacktestServiceTest에 Phase 1~3 목표 충족 시 집계 결과 검증 테스트 추가. BacktestControllerTest에 POST /api/v1/backtest/walk-forward 200·foldCount·avgCagr·avgMddPct·minSharpeRatio 반환 테스트 추가. backtest-stress-results.md §6 Phase 1~3 워크포워드 검증 섹션·실행 결과 표·실행 방법 추가. 00-strategy-registry.md 버전 스택 v1.19 추가.
+- [x] **P8-2 초보자 온보딩 E2E 테스트**  
+  e2e/onboarding.spec.ts 신규: 로그인(E2E_USERNAME/E2E_PASSWORD) → /onboarding 퀴즈 3단계(투자기간·손실감수·투자금액) → 결과(나의 투자 성향) → /auto-invest 원클릭 시작(동의·금액·시작하기) → /dashboard 리다이렉트 → 핵심 지표(총 자산·수익률·일일손익/MDD/리스크) 표시 확인. test.info().attach로 퀴즈 결과·대시보드 스크린샷 리포트 저장. 인증 미설정 시 스킵.
+- [x] **P8-3 문서 최종 갱신 (strategy-registry/decisions/development-status)**  
+  00-strategy-registry.md: 현재 전략 문서 버전 v2.0으로 갱신, 버전 스택 v2.0 행 추가(레짐탐지·Factor Decay·역변동성 포트폴리오·드로다운 회복·VWAP·온보딩·E2E). 문서 변경 이력 2.0 추가. decisions.md: ADR 30 초보자 온보딩 UX(퀴즈·원클릭 시작), ADR 31 시장 레짐 탐지 규칙엔진(HMM 대신 VIX/이평선) 추가, 변경 이력 1.16 추가. 02-development-status.md 본 항목 반영.
+- [x] **P5-1 KRX 일봉 수집 안정화 (한투 API 보조 소스)**  
+  1차 KRX API 실패 시 2차 한투 API 일봉(inquire-daily-itemchartprice, FID_ORG_ADJ_PRC=0) 폴백. `KoreaInvestmentDailyChartClient`(종목·일자별 조회), `KoreaInvestmentKrxFallbackSupplier`(전일/설정 종목 목록으로 수집). `DataCollectionProperties.krx`: koreaInvestmentFallbackEnabled, koreaInvestmentFallbackUserId, fallbackSymbolsSource(PREVIOUS_DAY|CONFIG), fallbackSymbols. 수집 결과 로그에 source=KRX|KOREA_INVESTMENT_FALLBACK|NONE 기록. 전일 대비 50% 이상 변동 시 이상치 경고 로그. KrxCollectionServiceTest(1차 성공/폴백 비활성/폴백 활성 저장) 추가. application.yml·10-data-collection-api 반영.
+- [x] **P1-1 UniverseFilterService 실제 구현**  
+  KR 유동성 필터: 최근 5일 평균 거래대금 옵션(use-5d-avg-liquidity). DailyStockRepository에 findSymbolsByMarketAndBasDtBetweenWithAvgTrdValGreaterThanEqual, findByBasDtAndMarketAndSymbolIn 추가. resolveLiquidityPassed()로 PIT 5일 기준 적용. 00-strategy-registry v1.12, 모의계좌 API 연동 검증(13-manual-operator-tasks §1.14, plans/qa/api-qa.http §8) 반영.
+- [x] **P1-2 MediumTermRebalance 모멘텀 순위 재계산**  
+  MediumTermMomentumService: 1M·3M·6M 수익률 가중합(0.3,0.4,0.3) PIT 계산, 상위 10% 종목 집합 반환. MediumTermRebalanceScheduler: 순위 하락 종목 매도·포지션 close(MOMENTUM_RANK_DROP), ENTRY 후보 로그. MediumTermMomentumServiceTest 추가.
+- [x] **P1-3 한국장 동적 k값 변동성 돌파**  
+  FactorCalculationService: 최근 20일 시가 대비 고가/저가 변동폭으로 평균·최근(5일) 변동폭 계산, k_dynamic = k_base×(평균/최근), [0.3, 0.7] 클램핑. getVolatilityBreakoutK(symbol, market, asOfDate) 공개 메서드 추가. IntradayBreakoutService에서 동적 k 사용 연동. FactorCalculationServiceTest·IntradayBreakoutServiceTest 보강.
+- [x] **P1-4 RegimeDetectionService (VIX/이평선 기반 시장 레짐)**  
+  RegimeDetectionService: SPY 50일선/200일선 + VIX 규칙(BULL=50>200∧VIX<20, BEAR=50<200∧VIX>30, 그 외 NEUTRAL). Redis 캐시 regime 1시간 TTL. RiskGateService에서 BEAR 시 신규 매수 비중 축소. MacroDashboardServiceImpl 레짐 탐지 사용 시 동일 레짐·신뢰도 노출. application.yml regime-detection-enabled, RegimeDetectionServiceTest·RiskGateServiceTest 보강.
+- [x] **P1-5 FactorDecayMonitorService (팩터 성과 추적·열화 알림)**  
+  FactorDecayMonitorService: 최근 3개월 시그널 기반 팩터별 5일 수익률·Sharpe 계산, sharpe&lt;0.5 시 DEGRADED Discord 알림. SignalScoreRepository.findByMarketAndBasDtBetween 추가. factor-decay-check Job·BatchJobRegistry(월 1회)·POST /api/v1/trigger/factor-decay-check. getDegradedFactorTypes()로 StrategyGovernanceCheck 연동용 열화 목록 노출. FactorDecayMonitorServiceTest.
+- [x] **P2-1 PortfolioComponents 실제 구현 (역변동성 가중)**  
+  InverseVolatilityPortfolioService: TB_DAILY_STOCK 20일 수익률 표준편차 기반 역변동성 가중(weight_i = (1/sigma_i)/sum(1/sigma_j)), 종목당 최대 할당 비율 캡. StubPortfolioComponents는 investment.portfolio.mode=stub(기본)일 때만 로드(@ConditionalOnProperty). mode=inverse-volatility 시 TaxAwareOptimizerImpl·RebalancerImpl 사용. PositionSizingService에서 portfolio.mode=inverse-volatility일 때 InverseVolatilityPortfolioService 적용. application.yml investment.portfolio.mode, investment.portfolio.inverse-volatility.max-allocation-pct. InverseVolatilityPortfolioServiceTest·PositionSizingServiceTest 보강.
+
+### 퍼블·프론트
+- [x] **smart-portfolio-pal 최신 pull 및 전면 퍼블 정렬(국내/미국 포함)**
+  서브모듈 smart-portfolio-pal 최신 main pull 후, investment-frontend 전체 화면을 해당 프로젝트 퍼블 기준으로 정렬. 디자인 토큰(globals.css: chart-stocks-kr/us, sidebar·semantic)·레이아웃(AppLayout max-w 1200px, bg-background·border-border·sidebar semantic)·메뉴(단일 메뉴+운영 Ops, 라벨·순서 smart-portfolio-pal 일치)·대시보드·로그인·계좌탭 semantic 토큰 적용. publish/ Attributions에 디자인 소스 명시. 02-architecture.md 갱신.
+
 ### 도메인·DB·API
+- [x] **수동 주문 가격 자동 채움 보강·주문 실패 트러블슈팅**
+  주문·체결 수동 주문: 종목 선택 후 수량 입력 시(KR) 가격 필드에 현재가 자동 채움(useEffect 조건: 종목·수량 유효·가격 비어 있을 때 fetchCurrentPriceForOrder). 가격 필드는 수정 가능 유지. OrderService Circuit Breaker 폴백 메시지에 "회로가 일시 중단되었습니다. 30초 후 다시 시도해 주세요." 안내 추가. [13-manual-operator-tasks.md §1.13](../06-deployment/13-manual-operator-tasks.md#113-주문-실패-시-점검-수동-주문circuit-breaker) 주문 실패 시 점검(Circuit Breaker·가격 자동 채움·모의/실전 계좌) 트러블슈팅 추가.
+- [x] **대시보드 이미지 스펙 구현 (4요약 카드·자동투자 상태·킬스위치·보유/주문 단일 테이블)**
+  상단 4요약 카드(총 자산·총 수익률·일일 손익·리스크), 자동투자 상태 카드(ON/OFF·마지막 실행·시그널 수 KR/US·상세 링크), 킬스위치(Admin 시 동일 행 우측), 보유 종목 단일 테이블(KR/US 태그·수량·손익), 최근 주문 단일 테이블(매수/매도 태그·상태 체결/대기). 백엔드: DashboardPerformanceSummaryDto에 dailyProfitLoss·riskLevel 추가, DashboardController에서 계좌별 당일 손익 합산·RiskReportService.deriveRiskLevel(VaR/MDD 기반), PipelineSummaryDto.lastRunAt 추가. 프론트: DashboardKpiCards·DashboardAutoInvestStatusCard·DashboardHoldingsTable·DashboardRecentOrdersTable, Dashboard 레이아웃 재구성. E2E dashboard.spec.ts 추가. 02-api-endpoints·11-api-frontend-mapping 반영.
+- [x] **자동투자 현황 이미지 정렬**
+  상단 제목·부제, 4단계 카드(1~4단계 라벨·유니버스 KR/US·시그널 녹색·자금 배분 "최대 비중 적용"+비율·보유 포지션 "종목 보유중"), 시그널 목록 테이블(종목·시장·시그널·강도·목표가), 보유 포지션 테이블(종목·시장·수량·평균가·현재가·손익·손익 색상). pipelineApi DTO(signalListKr/Us, allocationRatioSummary, currentPrice·pnlPercent). 백엔드 PipelineSummaryDto.allocationRatioSummary, OpenPositionItemDto.currentPrice·pnlPercent, PipelineSummaryService 비율 문자열·현재가 조회·손익률 계산. S03-auto-invest.md 스펙 보강.
 - [x] **매매 시 수수료·세금 필수 반영(득실 순손익 기준)**
   모든 매매 판단·기대수익·손익 계산을 수수료·세금 포함 순손익(net) 기준으로 통일. `FrictionCostService`(왕복 비용률/금액), `PositionSizingService`(2:1 R:R 가정 시 기대 gross 수익률이 왕복 비용률 초과 시에만 권장), `ShortTermTradingStrategyService`(기대수익률·예상 수익 = gross − 왕복 비용). 전략 레지스트리 §2.10 원칙 및 실전 매매 판단 문단 추가.
 - [x] **퀀트 매매 유리 시간대(Trading Window)**
@@ -87,6 +151,8 @@
   **Phase 4**: TokenRefreshScheduler(장 시작 30분 전 토큰 갱신), KoreaInvestmentTokenService.forceRefreshAllTokensForMarketOpen, pre-market-refresh-cron. **Phase 3**: OrderRequestQueue(BlockingQueue+RateLimiter), OrderExecutor, throttle.* 설정. **Phase 2**: KoreaInvestmentRankClient(getVolumeRank, getInvestorDailyByMarket), RankApiProperties, path/TR_ID 미설정 시 빈 리스트; MCP volume_rank·inquire_investor_daily_by_market 확인 후 설정. **Phase 1**: KoreaInvestmentWebSocketClient 인터페이스, NoOpKoreaInvestmentWebSocketClient(미구현). **문서**: 09-korea-investment-api-guide.md 실전 구축 요약, decisions.md ADR 18.
 
 ### 화면·메뉴
+- [x] **수동 주문: 국내 종목 현재가 자동 조회·미국 종목 검색 확장**
+  종목 선택 시 국내(KR)는 현재가 API로 가격 자동 조회 후 가격 필드 반영(수동 수정 가능). 미국(US) 종목은 가격 수동 입력(백엔드 해외 현재가 API 연동 전). 종목 검색 모달에 시장 필터(전체/국내(KR)/미국(US)) 추가. 미국 종목 검색은 TB_DAILY_STOCK에 수집된 종목을 DB에서 조회(캐시 5분), 하드코딩 제거.
 - [x] **대시보드·설정 UX 개선 (킬스위치 노출·서버 설정 계정별·저장 확인·투자금액 도움말)**  
   대시보드: 킬스위치(긴급실행 중지) 카드는 상단 토글(모의/실)의 자동투자 ON일 때만 표시(useCurrentAccountAutoTrade 훅). 설정: 서버 설정을 계정별 편집 가능하게 전환(TB_TRADING_SETTINGS PIPELINE_AUTO_EXECUTE·PIPELINE_ALLOW_REAL_EXECUTION, Flyway V33), PipelineExecutionScheduler·PipelineExecutor에서 계정별 플래그 우선·서버 기본값 fallback. 자동투자 설정 저장 시 확인 모달(AlertDialog) 추가. 최소/최대 투자금액 라벨에 Tooltip 도움말(한 종목 최소 주문 금액·총 투자 가능 상한 의미) 추가. [06-setting-api.md](../04-api/06-setting-api.md), [02-api-endpoints.md](../04-api/02-api-endpoints.md) 반영.
 - [x] **한국투자증권 토큰 과다 발급 방지**  
@@ -468,3 +534,8 @@
 | 1.49 | 2026-02-26 | 완료: 해외주식 잔고·매수 메인 반영 — 모의·실계좌 자산 0원 수정(output/output2 파싱·tot_evlu_amt 0 시 예수금+주문가능 합산), 잔고 별도 API(positions?market=KR|US), 대시보드 국내/해외 잔고 구역 분리·시장 컬럼, 09-korea-investment-api-guide·11-api-frontend-mapping 갱신. |
 | 1.50 | 2026-02-27 | 퀀트 시스템 설계서 대조 점검 반영: 시장 급락 게이트(MarketCrashGateService, 벤치마크 전일 낙폭 시 당일 매수 중단), 전략 비교 API·화면(GET /api/v1/strategies/comparison, StrategyComparisonService, 전략별 MDD·Sharpe 테이블). 00-strategy-registry §2.9, decisions ADR 28, 02-api-endpoints §4.0. |
 | 1.51 | 2026-03-03 | 완료: 포지션 정합성(Reconciliation)·Re-sync API — ReconciliationService·배치·GET /api/v1/ops/reconcile·POST /api/v1/trigger/reconcile, UnfilledOrderCheckScheduler 쿨타임, 실전 배포 전 체크리스트 문서(plans/qa). 00-strategy-registry·02-api-endpoints 반영. |
+| 1.52 | 2026-03-04 | 완료: P7-2 설정 간소화 — SettingsPage 초보자/중급자/고급 탭, localStorage settingsProfileMode, System.tsx Settings 프로필별 필드 표시(초보 3개·중급+비중·고급 전체)·buildTradingDto 프로필별 전송. |
+| 1.53 | 2026-03-04 | 완료: P4-4 평문 알림 — TradeExplanationService 신규(한글 시그널/청산 라벨 매핑·500자 제한), V34__orders_explanation.sql(EXPLANATION 컬럼), TradeExplanationServiceTest(매수/매도·기본문구·500자 제한 검증). Order·OrderResponseDto·Market.tsx 사유 컬럼 기존 반영. |
+| 1.54 | 2026-03-04 | 완료: P6-3 자동 트레이드 저널 — TB_AUDIT_LOG DETAIL_JSON(V35), AuditLogService.logTradeDecision·EVENT_TRADE_DECISION, PipelineExecutor 매수/스킵/실패/DRY_RUN 시 저널 기록, GET /api/v1/ops/trade-journal·프론트 트레이드 저널 탭. |
+| 1.55 | 2026-03-04 | P7-1 Shrimp 검증 완료 — .gitmodules 중복 investment-front 없음 확인, PreTradeComplianceEngine @Component 디폴트·ComplianceEngineStub 비-빈 유지 확인. TradingStrategyService createSellOrder Javadoc TODO 제거·보유 종목 연동 예정 문구로 정리. |
+| 1.56 | 2026-03-04 | P5-1 Shrimp 검증 완료 — KrxCollectionService 1차 KRX·2차 한투 폴백·이상치 경고 기존 구현 확인. KrxCollectionServiceTest에 전일 대비 50% 이상 변동 시 이상치 경고 후 저장 검증 테스트 추가. |

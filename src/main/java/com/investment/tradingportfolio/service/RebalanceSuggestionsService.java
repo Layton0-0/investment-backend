@@ -35,6 +35,15 @@ public class RebalanceSuggestionsService {
     private final TradingSettingRepository tradingSettingRepository;
 
     /**
+     * US 시장 로보 어드바이저 목표 비중 (동적 리밸런싱 등 동일 소스 사용).
+     *
+     * @return symbol → weight (합 1 미만이면 나머지 현금)
+     */
+    public Map<String, BigDecimal> getTargetWeightsForUs() {
+        return computeRoboTargetWeights();
+    }
+
+    /**
      * 계좌·시장에 대한 리밸런싱 제안 (로보 목표 비중 기준).
      *
      * @param userId    사용자 ID

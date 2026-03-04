@@ -316,7 +316,7 @@ TradingPortfolioService
 
 - `core.engine.alpha`: AlphaEngine, AlphaEngineFacade
 - `core.engine.portfolio`: TaxAwareOptimizer, TaxAwareOptimizerImpl, Rebalancer, RebalancerImpl, StubPortfolioComponents
-- `core.engine.risk`: ComplianceEngine, PreTradeComplianceEngine, ComplianceEngineStub, ComplianceResult
+- `core.engine.risk`: ComplianceEngine, PreTradeComplianceEngine(디폴트), ComplianceEngineStub(테스트 전용), ComplianceResult
 - `core.engine.execution`: ExecutionGateway, OrderServiceExecutionGateway
 - `core.pipeline`: DataPipelineService
 - `risk.service`: TradingHaltService, PortfolioPeakService

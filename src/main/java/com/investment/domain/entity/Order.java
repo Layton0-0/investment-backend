@@ -86,6 +86,10 @@ public class Order {
     @Column(name = "EXIT_RULE_TYPE", length = 64)
     private String exitRuleType;
 
+    /** 매매 사유 한글 평문 설명 (초보자 친화). 예: 삼성전자 10주 매수 - 이유: 듀얼 모멘텀 시그널 */
+    @Column(name = "EXPLANATION", length = 500)
+    private String explanation;
+
     @Column(name = "CREATED_AT", nullable = false)
     private LocalDateTime createdAt;
 
@@ -190,6 +194,11 @@ public class Order {
     /** 거래 사유: 청산 규칙 유형 설정 (파이프라인 매도 시). */
     public void setExitRuleType(String exitRuleType) {
         this.exitRuleType = exitRuleType;
+    }
+
+    /** 매매 사유 평문 설명 설정. */
+    public void setExplanation(String explanation) {
+        this.explanation = explanation;
     }
 
     public enum OrderType {

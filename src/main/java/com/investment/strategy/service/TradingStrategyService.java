@@ -7,6 +7,7 @@ import com.investment.domain.entity.TradingSetting;
 import com.investment.domain.repository.TradingSettingRepository;
 import com.investment.order.dto.OrderRequestDto;
 import com.investment.strategy.engine.MacroEconomicStrategyEngine;
+import com.investment.strategy.engine.MacroIndicatorProvider;
 import com.investment.strategy.engine.QuantitativeRuleEngine;
 import com.investment.taapi.dto.StockAnalysisDto;
 import com.investment.taapi.service.StockAnalysisService;
@@ -46,6 +47,7 @@ public class TradingStrategyService {
     private final TradingSettingRepository tradingSettingRepository;
     private final QuantitativeRuleEngine quantitativeRuleEngine;
     private final MacroEconomicStrategyEngine macroEconomicStrategyEngine;
+    private final MacroIndicatorProvider macroIndicatorProvider;
 
     /**
      * 자동 매매 결정
@@ -108,14 +110,13 @@ public class TradingStrategyService {
             return null;
         }
 
-        // 3. 거시경제 지표 조회 및 전략 결정
-        // TODO: 실제 거시경제 데이터 API 연동 필요 (현재는 더미 데이터 사용)
-        MacroEconomicStrategyEngine.MacroEconomicIndicators indicators = MacroEconomicStrategyEngine.MacroEconomicIndicators
-                .builder()
-                .vix(new BigDecimal("20")) // 더미 데이터
-                .interestRate(new BigDecimal("3.5")) // 더미 데이터
-                .inflationRate(new BigDecimal("2.0")) // 더미 데이터
-                .build();
+        // 3. 거시경제 지표 조회 및 전략 결정 (MacroIndicatorProvider·대시보드와 동일 소스, 없으면 폴백)
+        MacroEconomicStrategyEngine.MacroEconomicIndicators indicators = macroIndicatorProvider.getCurrentIndicators()
+                .orElseGet(() -> MacroEconomicStrategyEngine.MacroEconomicIndicators.builder()
+                        .vix(new BigDecimal("20"))
+                        .interestRate(new BigDecimal("3.5"))
+                        .inflationRate(new BigDecimal("2.0"))
+                        .build());
 
         MacroEconomicStrategyEngine.InvestmentStrategy macroStrategy = macroEconomicStrategyEngine
                 .decideStrategy(indicators);
@@ -195,17 +196,9 @@ public class TradingStrategyService {
     }
 
     /**
-     * 매도 주문 생성
-     * 
-     * <p>
-     * 매도 결정에 따라 주문 요청 DTO를 생성합니다.
-     * 현재는 보유 종목 정보가 없어 구현이 보류되어 있습니다.
-     * </p>
-     * 
-     * <p>
-     * TODO: 보유 종목 정보를 조회하여 매도 수량을 결정하는 로직 구현 필요
-     * </p>
-     * 
+     * 매도 주문 생성.
+     * 보유 종목/수량은 AccountService·포지션 조회 연동 후 구현 예정. 현재는 null 반환.
+     *
      * @param accountNo 계좌번호
      * @param symbol    종목코드
      * @param setting   거래 설정
@@ -219,8 +212,7 @@ public class TradingStrategyService {
             QuantitativeRuleEngine.TradingDecision decision,
             StockAnalysisDto analysis) {
 
-        // TODO: 보유 종목 정보 조회 필요
-        // 현재 보유 종목 정보가 없어 매도 주문을 생성할 수 없음
+        // 보유 종목 정보는 AccountService/포지션 조회로 확장 예정
         log.debug("보유 종목 정보가 없어 매도 주문을 생성할 수 없습니다: symbol={}", symbol);
         return null;
     }

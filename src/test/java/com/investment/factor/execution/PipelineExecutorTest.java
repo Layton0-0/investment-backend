@@ -12,6 +12,7 @@ import com.investment.domain.repository.UserAccountRepository;
 import com.investment.common.security.EncryptionUtil;
 import com.investment.factor.dto.PositionRecommendationDto;
 import com.investment.factor.service.PositionSizingService;
+import com.investment.factor.service.TradingWindowService;
 import com.investment.ops.service.AuditLogService;
 import com.investment.order.dto.OrderRequestDto;
 import com.investment.order.dto.OrderResponseDto;
@@ -61,6 +62,8 @@ class PipelineExecutorTest {
         private AuditLogService auditLogService;
         @Mock
         private SystemSettingService systemSettingService;
+        @Mock
+        private TradingWindowService tradingWindowService;
 
         @InjectMocks
         private PipelineExecutor pipelineExecutor;
@@ -74,6 +77,7 @@ class PipelineExecutorTest {
         void setUp() {
                 lenient().when(systemSettingService.getBoolean("pipeline.autoExecute")).thenReturn(false);
                 lenient().when(systemSettingService.getBoolean("pipeline.allowRealExecution")).thenReturn(false);
+                lenient().when(tradingWindowService.isVolatilePeriod(anyString(), any())).thenReturn(false);
                 ReflectionTestUtils.setField(pipelineExecutor, "registerPositionOnExecution", false);
                 ReflectionTestUtils.setField(pipelineExecutor, "useAlgoExecution", false);
         }
@@ -99,7 +103,7 @@ class PipelineExecutorTest {
                                 .build();
 
                 when(positionSizingService.getRecommendations(eq(basDt), eq(market), eq(StrategyType.SHORT_TERM),
-                                eq(totalCapital)))
+                                eq(totalCapital), any()))
                                 .thenReturn(List.of(recommendation));
 
                 // when (autoExecute=false: DB에서 주문 미실행으로 설정된 경우)
@@ -113,6 +117,31 @@ class PipelineExecutorTest {
                 assertThat(result.getOrderResults().get(0).getSymbol()).isEqualTo("005930");
                 verify(orderService, never()).executeOrderForPipeline(any(), any());
                 verify(strategyPositionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("변동성 구간이면 신규 매수 지연(주문 미실행)")
+        void run_volatilePeriod_skipsBuy() {
+                when(tradingWindowService.isVolatilePeriod(eq("KR"), any())).thenReturn(true);
+                lenient().when(systemSettingService.getBoolean("pipeline.allowRealExecution")).thenReturn(false);
+                LocalDate basDt = LocalDate.of(2026, 1, 30);
+                String market = "KR";
+                String accountNo = "1234567890";
+                BigDecimal totalCapital = new BigDecimal("100000000");
+                TradingSetting setting = TradingSetting.builder().accountNo(accountNo).userId("u1").build();
+                lenient().when(tradingSettingRepository.findByAccountNo(accountNo)).thenReturn(Optional.of(setting));
+                PositionRecommendationDto rec = PositionRecommendationDto.builder()
+                                .basDt(basDt).symbol("005930").market(market).recommendedAmt(new BigDecimal("10000000"))
+                                .recommendedQty(100).entryPrice(new BigDecimal("100000"))
+                                .stopLoss(new BigDecimal("95000")).method("ATR").build();
+                when(positionSizingService.getRecommendations(eq(basDt), eq(market), eq(StrategyType.SHORT_TERM), eq(totalCapital), any()))
+                                .thenReturn(List.of(rec));
+
+                PipelineExecutor.PipelineRunResult result = pipelineExecutor.run(basDt, market, accountNo, totalCapital, true);
+
+                assertThat(result.getOrderResults()).hasSize(1);
+                assertThat(result.getOrderResults().get(0).getSymbol()).isEqualTo("005930");
+                verify(orderService, never()).executeOrderForPipeline(any(), any());
         }
 
         @Test
@@ -163,7 +192,7 @@ class PipelineExecutorTest {
                                 .build();
 
                 when(positionSizingService.getRecommendations(eq(basDt), eq(market), eq(StrategyType.SHORT_TERM),
-                                eq(totalCapital)))
+                                eq(totalCapital), any()))
                                 .thenReturn(List.of(recommendation));
 
                 OrderResponseDto orderResponse = OrderResponseDto.builder()
@@ -237,7 +266,7 @@ class PipelineExecutorTest {
                                 .method("ATR")
                                 .build();
                 when(positionSizingService.getRecommendations(eq(basDt), eq(market), eq(StrategyType.SHORT_TERM),
-                                eq(totalCapital)))
+                                eq(totalCapital), any()))
                                 .thenReturn(List.of(recommendation));
                 lenient().when(orderService.executeOrderForPipeline(any(OrderRequestDto.class), eq(userId)))
                                 .thenReturn(OrderResponseDto.builder()
@@ -302,7 +331,7 @@ class PipelineExecutorTest {
                                 .build();
 
                 when(positionSizingService.getRecommendations(eq(basDt), eq(market), eq(StrategyType.SHORT_TERM),
-                                eq(totalCapital)))
+                                eq(totalCapital), any()))
                                 .thenReturn(List.of(recommendation));
 
                 OrderResponseDto orderResponse = OrderResponseDto.builder()
@@ -415,7 +444,7 @@ class PipelineExecutorTest {
                                 .method("ATR")
                                 .build();
                 when(positionSizingService.getRecommendations(eq(basDt), eq(market), eq(StrategyType.SHORT_TERM),
-                                eq(totalCapital)))
+                                eq(totalCapital), any()))
                                 .thenReturn(List.of(recommendation));
 
                 // autoExecute=true로 진입하지만 실전 계좌 가드로 주문만 스킵

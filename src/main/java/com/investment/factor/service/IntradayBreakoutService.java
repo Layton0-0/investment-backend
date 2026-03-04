@@ -30,6 +30,7 @@ public class IntradayBreakoutService {
     private final UniverseRepository universeRepository;
     private final DailyStockRepository dailyStockRepository;
     private final RealtimeMarketDataService realtimeMarketDataService;
+    private final FactorCalculationService factorCalculationService;
 
     @Value("${investment.factor.volatility-breakout-k:0.5}")
     private BigDecimal volatilityBreakoutK = new BigDecimal("0.5");
@@ -89,7 +90,8 @@ public class IntradayBreakoutService {
                 if (openPrice == null || openPrice.compareTo(BigDecimal.ZERO) <= 0) {
                     continue;
                 }
-                target = openPrice.add(range.multiply(volatilityBreakoutK));
+                BigDecimal k = factorCalculationService.getVolatilityBreakoutK(symbol, market, today);
+                target = openPrice.add(range.multiply(k));
                 if (currentPrice.compareTo(target) < 0) {
                     continue;
                 }

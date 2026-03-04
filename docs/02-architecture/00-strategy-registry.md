@@ -10,8 +10,8 @@
 
 | 항목 | 내용 |
 |------|------|
-| **현재 전략 문서 버전** | v1.11 |
-| **최종 갱신일** | 2026-02-24 |
+| **현재 전략 문서 버전** | v2.0 |
+| **최종 갱신일** | 2026-03-04 |
 | **코드 참조** | `factor.service.*`, `factor.execution.ExitRuleService`, `application.yml` (investment.factor, investment.fees, investment.pipeline) |
 
 ### 1.1 데이터·백테스트 원칙 (필수)
@@ -125,7 +125,7 @@ Monte Carlo 시뮬레이션 기반 VaR/CVaR 계산으로 꼬리 위험(tail risk
 - **Kill Switch**: `TB_TRADING_HALT.halt_all_orders=true` 시 모든 주문 거부. API: GET/PUT `/api/v1/system/kill-switch`. ADMIN만 설정 가능.
 - **단일 종목 비중 상한**: 주문 후 해당 종목 비중 > 10%가 되면 거부. 계좌 평가총액·포지션 평가금액 기반.
 - **MDD 게이트**: 계좌별 피크(`TB_PORTFOLIO_PEAK`) 대비 현재 평가액으로 MDD 계산. MDD > 15% 시 **신규 매수만** 차단(매도 허용).
-- **구현**: `PreTradeComplianceEngine`, `TradingHaltService`, `PortfolioPeakService`. 스텁 사용 시 `investment.compliance.use-stub=true`.
+- **구현**: `PreTradeComplianceEngine`, `TradingHaltService`, `PortfolioPeakService`. 디폴트는 실 구현체; 테스트용 스텁은 `ComplianceEngineStub`을 @TestConfiguration으로 제공.
 - **브로커-DB 정합성(Reconciliation)**: 자동투자 ON 계좌별 TB_STRATEGY_POSITION vs 증권사 실잔고 비교. `ReconciliationService.reconcile`, Batch Job `reconcile`(08:00·16:10), 불일치 시 Discord 알림. Re-sync 리포트: GET `/api/v1/ops/reconcile`(ADMIN). 실전 배포 전 체크리스트: [plans/qa/실전_배포_전_필수_확인_체크리스트.md](../../../plans/qa/실전_배포_전_필수_확인_체크리스트.md).
 
 ### 2.9.2 TaxAwareOptimizer (Phase 2)
@@ -187,7 +187,7 @@ Monte Carlo 시뮬레이션 기반 VaR/CVaR 계산으로 꼬리 위험(tail risk
 
 | 구분 | 알고리즘 | 수식/로직 | 설정/구현 |
 |------|----------|-----------|-----------|
-| **공통** | Liquidity Cut-off | 거래대금 ≥ 최소 거래대금 | `investment.factor.liquidity-min-trd-val` (기본 10억 원), `UniverseFilterService` |
+| **공통** | Liquidity Cut-off | 거래대금 ≥ 최소 거래대금 (KR 선택 시 최근 5일 평균) | `investment.factor.liquidity-min-trd-val`, `use-5d-avg-liquidity` (KR 기본 true, PIT: basDt 포함 5일), `UniverseFilterService` |
 | **한국(KR) 시초가** | Liquidity Cut-off (Opening) | 시초가/변동성 돌파 시 거래대금 ≥ 300억 원 | `investment.factor.liquidity-min-trd-val-opening` (기본 300억), KR 단기 파이프라인에서 적용 (`PositionSizingService`) |
 | **한국(KR)** | Sector Relative Strength | 시장 대비 강한 주도 업종 내 종목만 | TB_SECTOR_RETURN·TB_SYMBOL_SECTOR 데이터 수집 후 적용. `sector-rs-top-n` (상위 N개 업종). 데이터 없으면 유동성만. |
 | **미국(US)** | Post-Earnings Drift | 어닝 서프라이즈 강도 상위 20% | TB_EARNINGS_SURPRISE 데이터 수집 후 적용. `earnings-surprise-lookback-days`, `earnings-surprise-top-pct`. 데이터 없으면 유동성만. |
@@ -272,6 +272,7 @@ Monte Carlo 시뮬레이션 기반 VaR/CVaR 계산으로 꼬리 위험(tail risk
 | Half-Kelly | f* = (bp−q)/b, 50% 적용 | kelly-p: 0.6, kelly-b: 2.0 | PositionSizingService.applyHalfKelly |
 | 미국 갭 스킵 | 전일 종가 대비 갭 N% 이상 시 진입 스킵 | us-gap-up-skip-pct: 5 | PositionSizingService.filterByUsGapUpSkip |
 | Discord 긴급 알림 | 미체결 N분 경과 시 Discord Webhook 발송 | alert-discord-webhook-url, alert-base-url, unfilled-check-minutes: 1 | EmergencyAlertService, UnfilledOrderCheckScheduler |
+| Discord 채널 분리 (P6-4) | 매매/리스크/시스템 별도 웹훅, 미설정 시 기본 URL 폴백. 매매: sendTradeAlert 평문 "{symbol} {qty}주 {side} 완료. 수익률: {pnl}%." | investment.alert.discord.trade-webhook, risk-webhook, system-webhook | DiscordEmergencyAlertService (TRADE/RISK/SYSTEM) |
 | 리스크 이벤트 알림 | 일일 손실 한도 임박(한도 대비 N% 도달)·VaR 95% 초과 시 Discord 발송 | investment.risk.alert-mdd-threshold-pct: 0.8, alert-var-exceed-enabled: true | RiskEventAlertService, RiskEventAlertTasklet (Batch risk-event-alert, 장중 10분마다) |
 | Monte Carlo VaR | VaR(α) = -Percentile(SimReturns, 1-α), 10,000+ 시나리오, Student-t 분포(팻테일) | investment.risk.montecarlo.scenarios: 10000, distribution: STUDENT_T, degrees-of-freedom: 5 | MonteCarloVarService.calculateVaR |
 | Monte Carlo CVaR | CVaR(α) = E[Loss｜Loss > VaR], Expected Shortfall | (동일) | MonteCarloVarService.calculateCVaR |
@@ -291,6 +292,8 @@ Monte Carlo 시뮬레이션 기반 VaR/CVaR 계산으로 꼬리 위험(tail risk
 | 수급 강도 | 순매수/시총 비율(%) | smart-money-intensity-threshold-pct: 0.005 | FactorCalculationService.addSmartMoneyIntensity (TB_ORDER_FLOW) |
 | 퀄리티-성장 | PEG 점수 + Rule of 40 | TB_FUNDAMENTALS (PER, PEG, 매출증가율, 영업이익률) | FactorCalculationService.addQualityGrowth |
 | 로보 동적 자산배분 | 모멘텀 N개월·MA 필터·변동성 역가중·Top N | investment.backtest.robo.* (asset-symbols, momentum-months, ma-window-days, top-n, rebalance-frequency, comm-pct, slip-pct, pre-execution-*) | RoboAllocationEngine, RoboBacktestService, RoboRebalanceScheduler |
+| 동적 리밸런싱 (P2-2) | 비중 이탈(drift) &gt; 5% 시 자동 리밸런스. 목표 비중(로보 US)·현재 비중 비교 | investment.pipeline.drift-tolerance-pct: 0.05, drift-rebalance-enabled: true | DriftRebalancingService, PipelineExecutionScheduler(US 계좌별 검사) |
+| 섹터 집중도 제한 (P2-3) | 단일 섹터 비중 30% 상한. 초과 시 해당 섹터 비중 비례 축소 | investment.factor.sector-concentration-limit-pct: 0.30, TB_SYMBOL_SECTOR | CorrelationPenaltyService.applySectorConcentrationLimit, PositionSizingService |
 | 로보 듀얼 모멘텀(노트) | 절대: SPY 12M vs 무위험; 상대: 섹터 ETF 6M 상위 2개 | dual-momentum-mode, robo-sector-etf-symbols, robo-momentum-months-relative: 6, robo-top-n-sector: 2 | RoboAllocationEngine(모드 분기), RoboBacktestProperties |
 | 한국 역발상 RSI | RSI(14)&lt;30/40 시 매수 시그널 가중 | contrarian-rsi-threshold: 40 | FactorCalculationService.addContrarianRsiSignal |
 | 매크로 레짐 판정 | VIX·금리·경제지표 종합 → BULL/BEAR/NEUTRAL | investment.risk.vix-threshold, regime-gate-enabled | MacroDashboardService.getMarketRegime |
@@ -328,7 +331,9 @@ Monte Carlo 시뮬레이션 기반 VaR/CVaR 계산으로 꼬리 위험(tail risk
 | v1.15 | 2026-02-20 | KR, US | 리스크 모니터링 | 매크로 지표 대시보드 API 구현. VIX·채권·경제지표·환율 통합 조회. 시장 레짐(BULL/BEAR/NEUTRAL) 판정. 리스크 게이트 상태. Redis 캐싱(1시간 TTL). MacroDashboardService·MacroController. REST API /api/v1/macro/*. | 미검증 | 거시경제 기반 리스크 의사결정 |
 | v1.16 | 2026-02-20 | KR, US | 리스크 분석 | Historical Stress Test 자동화. 기본 4개 시나리오(2008 금융위기, 2020 코로나, 2022 금리 인상, 1987 블랙 먼데이). 사용자 정의 시나리오. 자산군별·종목별 충격률. StressTestService·StressTestController. REST API /api/v1/stress-test/*. | 미검증 | 과거 위기 시나리오 포트폴리오 영향 분석 |
 | v1.17 | 2026-02-20 | KR, US | 알파 생성 | Factor Zoo 프레임워크 구현. 15개 팩터(Value 3, Momentum 3, Quality 3, Size 1, Volatility 2, Technical 2, Flow 1). IC/IR 계산, 분위 수익률, 팩터 등급(A~F). 기존 팩터(이격도, 수급강도) 통합. FactorZooService·FactorZooController. REST API /api/v1/factor-zoo/*. | 미검증 | 체계적 팩터 테스트 및 랭킹 |
-|| v1.18 | 2026-02-20 | KR, US | ?ㅽ뻾 理쒖쟻??| TWAP/VWAP/POV 二쇰Ц 遺꾪븷 ?뚭퀬由ъ쬁 援ы쁽. ?쒓컙 洹좊벑(TWAP), 嫄곕옒??媛以?VWAP), ?쒖옣 李몄뿬??POV). ?щ씪?댁뒪 怨꾪쉷쨌?ㅽ뻾쨌吏꾪뻾?곹깭 議고쉶쨌痍⑥냼쨌?ш컻. AlgorithmicOrderService쨌AlgorithmicOrderController. REST API /api/v1/algo-orders/*. | 誘멸?利?| ???二쇰Ц ?쒖옣 異⑷꺽 理쒖냼??|
+|| v1.18 | 2026-02-20 | KR, US | ?ㅽ뻾 理쒖쟻??| TWAP/VWAP/POV 二쇰Ц 遺꾪븷 ?뚭퀬由ъ쬁 援ы쁽. ... | 誘멸?利?| ???二쇰Ц ?쒖옣 異⑷꺽 理쒖냼??|
+| v1.19 | 2026-03-04 | KR, US | 백테스트 검증 | Phase 1~3 워크포워드 검증(P8-1). 최근 1년 Walk-Forward 백테스트 실행·목표(CAGR≥20%, MDD≥-15%, Sharpe≥1.0) 대비 결과 문서화. backtest-stress-results.md §6 Phase 1~3 섹션·실행 결과 표 추가. WalkForwardBacktestServiceTest 목표 충족 시 집계 검증·BacktestController walk-forward API 테스트 추가. | 미검증 | 데이터 확보 후 §6.3 결과 기입·development-status 완료 반영 |
+| v2.0 | 2026-03-04 | KR, US | Phase 1~8 통합 | 레짐탐지(RegimeDetectionService: SPY 50/200일선+VIX 규칙 BULL/BEAR/NEUTRAL, Redis 캐시). Factor Decay(FactorDecayMonitorService: 팩터별 Sharpe 열화 시 Discord 알림). 역변동성 포트폴리오(InverseVolatilityPortfolioService, StubPortfolioComponents 대체 옵션). 드로다운 회복(RiskGateService.isDrawdownRecoveryMode, MDD -10% 초과 시 신규 매수 50% 축소). VWAP(VwapExecutionAlgorithm: U자형 거래량 프로파일). 초보자 온보딩(P4-1 퀴즈→프로필·P4-2 원클릭 quick-start). E2E(Playwright onboarding.spec.ts 퀴즈→원클릭→대시보드). | 미검증 | 전략·리스크·UX·검증 통합 문서화(P8-3) |
 
 ---
 
@@ -347,9 +352,12 @@ Monte Carlo 시뮬레이션 기반 VaR/CVaR 계산으로 꼬리 위험(tail risk
 | 1.8 | 2026-02-02 | 자동매매 직전 점검: Time-Cut 단기 전용·Hunter 분기(Case A/B)·시초가 유동성 opening·켈리 초기 고정 비율·미국 갭 스킵·Discord 긴급 알림·§2·§3·§6·버전 스택 v1.8 추가 |
 | 1.10 | 2026-02-11 | §2.5.1 리스크 기반 포지션 사이징 옵션·버전 스택 v1.10 추가. 상관관계 분석 API(02-api-endpoints·01-api-overview·11-api-frontend-mapping) 반영. |
 | 1.11 | 2026-02-11 | §1.1 데이터·백테스트 원칙 추가 — PIT·Look-ahead 방지·수정주가·백테스트-실전 분리·Survivorship·전략 거버넌스·중단 원칙. |
+| 1.12 | 2026-03-04 | KR 유니버스 유동성 필터: 최근 5일 평균 거래대금 옵션(use-5d-avg-liquidity). DailyStockRepository 5일 평균 쿼리·UniverseFilterService resolveLiquidityPassed. |
 | 1.13 | 2026-02-20 | §2.8.1 Monte Carlo VaR/CVaR 추가 — 10,000+ 시나리오 시뮬레이션, Student-t(팻테일), Cholesky(상관관계), 비동기 처리. §6 수식 일람·버전 스택 v1.13 추가. |
 | 1.14 | 2026-02-20 | TCA (Transaction Cost Analysis) 서비스 추가 — 명시적/암묵적 비용, Implementation Shortfall, Market Impact 모델. REST API /api/v1/tca/*. 버전 스택 v1.14 추가. |
 | 1.15 | 2026-02-20 | 매크로 지표 대시보드 API 추가 — VIX·채권·경제지표·환율 통합 조회, 시장 레짐 판정, 리스크 게이트 상태, Redis 캐싱. REST API /api/v1/macro/*. 버전 스택 v1.15 추가. |
 | 1.16 | 2026-02-20 | Historical Stress Test 자동화 — 4개 기본 시나리오(2008 금융위기, 2020 코로나, 2022 금리 인상, 1987 블랙 먼데이), 사용자 정의 시나리오, 자산군별 충격률 모델. REST API /api/v1/stress-test/*. 버전 스택 v1.16 추가. |
 | 1.17 | 2026-02-20 | Factor Zoo 프레임워크 — 15개 팩터(VALUE·MOMENTUM·QUALITY·SIZE·VOLATILITY·TECHNICAL·FLOW), IC/IR 계산, 분위 수익률, 팩터 등급(A~F), 복합 팩터 점수. 기존 팩터 통합. REST API /api/v1/factor-zoo/*. 버전 스택 v1.17 추가. |
-|| 1.18 | 2026-02-20 | TWAP/VWAP/POV 二쇰Ц 遺꾪븷 ?뚭퀬由ъ쬁 - ?쒓컙 洹좊벑(TWAP), 嫄곕옒??媛以?VWAP), ?쒖옣 李몄뿬??POV). ?щ씪?댁뒪 怨꾪쉷 ?ㅽ뻾 痍⑥냼 ?ш컻. VWAP 愿대━??10% ?대궡. REST API /api/v1/algo-orders/*. 踰꾩쟾 ?ㅽ깮 v1.18 異붽?. |
+|| 1.18 | 2026-02-20 | TWAP/VWAP/POV ... 踰꾩쟾 ?ㅽ깮 v1.18 異붽?. |
+| 1.19 | 2026-03-04 | Phase 1~3 워크포워드 검증(P8-1). backtest-stress-results.md §6 추가. 버전 스택 v1.19 추가. |
+| 2.0 | 2026-03-04 | Phase 1~8 통합: 레짐탐지·Factor Decay·역변동성 포트폴리오·드로다운 회복·VWAP·온보딩·E2E 반영. 버전 스택 v2.0 추가. decisions.md ADR 30·31 추가. |

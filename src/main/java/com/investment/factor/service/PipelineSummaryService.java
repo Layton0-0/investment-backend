@@ -8,6 +8,8 @@ import com.investment.domain.repository.UniverseRepository;
 import com.investment.factor.dto.OpenPositionItemDto;
 import com.investment.factor.dto.PipelineSummaryDto;
 import com.investment.factor.dto.SignalScoreDto;
+import com.investment.marketdata.dto.CurrentPriceDto;
+import com.investment.marketdata.service.RealtimeMarketDataService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -16,7 +18,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -37,6 +41,7 @@ public class PipelineSummaryService {
     private final SignalScoreService signalScoreService;
     private final StrategyPositionRepository strategyPositionRepository;
     private final TradingSettingRepository tradingSettingRepository;
+    private final RealtimeMarketDataService realtimeMarketDataService;
 
     /**
      * 기준일·계좌에 대한 파이프라인 요약 조회.
@@ -55,6 +60,7 @@ public class PipelineSummaryService {
         int openPositionCount = 0;
         List<OpenPositionItemDto> openPositionList = Collections.emptyList();
         String allocationSummary = null;
+        String allocationRatioSummary = null;
 
         try {
             universeCountKr = universeRepository.countByBasDtAndMarket(basDt, "KR");
@@ -77,13 +83,15 @@ public class PipelineSummaryService {
                 openPositionCount = (int) strategyPositionRepository.countByAccountNoAndExitDtIsNull(accountNo);
                 List<StrategyPosition> positions = strategyPositionRepository
                         .findByAccountNoAndExitDtIsNullOrderByEntryDtAsc(accountNo);
+                Map<String, BigDecimal> currentPriceBySymbol = getCurrentPriceBySymbol(positions);
                 openPositionList = positions.stream()
-                        .map(this::toOpenPositionItemDto)
+                        .map(p -> toOpenPositionItemDto(p, currentPriceBySymbol))
                         .collect(Collectors.toList());
             } catch (Exception e) {
                 log.debug("보유 포지션 조회 실패(스킵): {}", e.getMessage());
             }
             allocationSummary = buildAllocationSummary(accountNo);
+            allocationRatioSummary = buildAllocationRatioSummary(accountNo);
         }
 
         return PipelineSummaryDto.builder()
@@ -93,10 +101,12 @@ public class PipelineSummaryService {
                 .signalCountKr(signalCountKr)
                 .signalCountUs(signalCountUs)
                 .allocationSummary(allocationSummary)
+                .allocationRatioSummary(allocationRatioSummary)
                 .openPositionCount(openPositionCount)
                 .signalListKr(signalListKr)
                 .signalListUs(signalListUs)
                 .openPositionList(openPositionList)
+                .lastRunAt(null)
                 .build();
     }
 
@@ -113,6 +123,29 @@ public class PipelineSummaryService {
                         && s.getMaxInvestmentAmount().compareTo(BigDecimal.ZERO) > 0)
                 .map(this::formatAllocationSummary)
                 .orElse(null);
+    }
+
+    /**
+     * 계좌 거래 설정 기준 비율 문자열 생성 (예: "단기 40% / 중기 35% / 장기 25%").
+     * 설정 없으면 null.
+     */
+    private String buildAllocationRatioSummary(String accountNo) {
+        if (accountNo == null || accountNo.trim().isEmpty()) {
+            return null;
+        }
+        return tradingSettingRepository.findByAccountNo(accountNo)
+                .map(this::formatAllocationRatioSummary)
+                .orElse(null);
+    }
+
+    private String formatAllocationRatioSummary(TradingSetting s) {
+        BigDecimal shortPct = s.getShortTermRatio() != null ? s.getShortTermRatio() : DEFAULT_SHORT;
+        BigDecimal midPct = s.getMediumTermRatio() != null ? s.getMediumTermRatio() : DEFAULT_MEDIUM;
+        BigDecimal longPct = s.getLongTermRatio() != null ? s.getLongTermRatio() : DEFAULT_LONG;
+        int shortInt = shortPct.multiply(new BigDecimal("100")).setScale(0, RoundingMode.HALF_UP).intValue();
+        int midInt = midPct.multiply(new BigDecimal("100")).setScale(0, RoundingMode.HALF_UP).intValue();
+        int longInt = longPct.multiply(new BigDecimal("100")).setScale(0, RoundingMode.HALF_UP).intValue();
+        return "단기 " + shortInt + "% / 중기 " + midInt + "% / 장기 " + longInt + "%";
     }
 
     private String formatAllocationSummary(TradingSetting s) {
@@ -139,7 +172,47 @@ public class PipelineSummaryService {
         return String.format("%,d만", man);
     }
 
-    private OpenPositionItemDto toOpenPositionItemDto(StrategyPosition p) {
+    private Map<String, BigDecimal> getCurrentPriceBySymbol(List<StrategyPosition> positions) {
+        if (positions == null || positions.isEmpty()) {
+            return new HashMap<>();
+        }
+        List<String> symbols = positions.stream()
+                .map(StrategyPosition::getSymbol)
+                .filter(s -> s != null && !s.isBlank())
+                .distinct()
+                .collect(Collectors.toList());
+        if (symbols.isEmpty()) {
+            return new HashMap<>();
+        }
+        try {
+            List<CurrentPriceDto> priceDtos = realtimeMarketDataService.getCurrentPrices(symbols)
+                    .blockOptional()
+                    .orElse(List.of());
+            Map<String, BigDecimal> map = new HashMap<>();
+            for (CurrentPriceDto dto : priceDtos) {
+                if (dto.getSymbol() != null && dto.getCurrentPrice() != null
+                        && dto.getCurrentPrice().compareTo(BigDecimal.ZERO) > 0) {
+                    map.put(dto.getSymbol(), dto.getCurrentPrice());
+                }
+            }
+            return map;
+        } catch (Exception e) {
+            log.debug("보유 포지션 현재가 조회 실패(스킵): {}", e.getMessage());
+            return new HashMap<>();
+        }
+    }
+
+    private OpenPositionItemDto toOpenPositionItemDto(StrategyPosition p, Map<String, BigDecimal> currentPriceBySymbol) {
+        BigDecimal currentPrice = currentPriceBySymbol != null && p.getSymbol() != null
+                ? currentPriceBySymbol.get(p.getSymbol())
+                : null;
+        BigDecimal pnlPercent = null;
+        if (currentPrice != null && p.getEntryPrice() != null
+                && p.getEntryPrice().compareTo(BigDecimal.ZERO) > 0) {
+            pnlPercent = currentPrice.subtract(p.getEntryPrice())
+                    .divide(p.getEntryPrice(), 4, RoundingMode.HALF_UP)
+                    .multiply(new BigDecimal("100"));
+        }
         return OpenPositionItemDto.builder()
                 .positionId(p.getId())
                 .symbol(p.getSymbol())
@@ -149,6 +222,8 @@ public class PipelineSummaryService {
                 .entryDt(p.getEntryDt())
                 .signalType(p.getSignalType())
                 .exitRuleType(p.getExitRuleType())
+                .currentPrice(currentPrice)
+                .pnlPercent(pnlPercent)
                 .build();
     }
 }

@@ -6,6 +6,8 @@ import com.investment.common.security.LogMaskingUtil;
 import com.investment.config.TradingProperties;
 import com.investment.domain.entity.TradingSetting;
 import com.investment.domain.repository.TradingSettingRepository;
+import com.investment.setting.dto.QuickStartRequestDto;
+import com.investment.setting.dto.QuickStartResponseDto;
 import com.investment.setting.dto.TradingSettingDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -111,6 +114,102 @@ public class TradingSettingService {
             }
         }
 
+        setting = tradingSettingRepository.save(setting);
+        return convertToDto(setting);
+    }
+
+    /**
+     * 원클릭 자동투자 시작: 초보자 디폴트(autoTradingEnabled=true, pipelineAutoExecute=true, 균형 비율)로 설정 생성/갱신.
+     * userId가 있으면 신규 생성 시 엔티티에 설정.
+     */
+    @Transactional
+    public QuickStartResponseDto quickStart(String userId, QuickStartRequestDto request) {
+        String accountNo = resolveAccountNoForQuickStart(userId, request.getAccountNo());
+        TradingSettingDto dto = TradingSettingDto.builder()
+                .maxInvestmentAmount(request.getMaxInvestmentAmount())
+                .minInvestmentAmount(tradingProperties.getMinInvestmentAmount())
+                .defaultCurrency("KRW")
+                .autoTradingEnabled(true)
+                .roboAdvisorEnabled(false)
+                .shortTermRatio(DEFAULT_SHORT)
+                .mediumTermRatio(DEFAULT_MEDIUM)
+                .longTermRatio(DEFAULT_LONG)
+                .pipelineAutoExecute(true)
+                .pipelineAllowRealExecution(null)
+                .build();
+        TradingSettingDto saved = saveSettingWithUserId(accountNo, userId, dto);
+        log.info("quick-start 완료: accountNo={}, maxAmount={}", LogMaskingUtil.maskAccountNo(accountNo), request.getMaxInvestmentAmount());
+        return QuickStartResponseDto.builder()
+                .success(true)
+                .message("자동투자가 시작되었습니다.")
+                .setting(saved)
+                .build();
+    }
+
+    private String resolveAccountNoForQuickStart(String userId, String requestAccountNo) {
+        if (requestAccountNo != null && !requestAccountNo.isBlank()) {
+            tradingSettingRepository.findByAccountNo(requestAccountNo.trim())
+                    .filter(s -> userId.equals(s.getUserId()))
+                    .orElseThrow(() -> new DomainException(ErrorCode.SETTING_NOT_FOUND, "해당 계좌 설정을 찾을 수 없습니다"));
+            return requestAccountNo.trim();
+        }
+        List<TradingSetting> list = tradingSettingRepository.findByUserIdOrderByAccountNo(userId);
+        if (list.isEmpty()) {
+            throw new DomainException(ErrorCode.SETTING_NOT_FOUND, "계좌를 먼저 연결해 주세요. 설정 화면에서 계좌를 등록한 뒤 다시 시도해 주세요.");
+        }
+        return list.get(0).getAccountNo();
+    }
+
+    @Transactional
+    public TradingSettingDto saveSettingWithUserId(String accountNo, String userId, TradingSettingDto dto) {
+        BigDecimal resolvedMin = dto.getMinInvestmentAmount() != null
+                ? dto.getMinInvestmentAmount()
+                : tradingProperties.getMinInvestmentAmount();
+        BigDecimal shortR = dto.getShortTermRatio() != null ? dto.getShortTermRatio() : DEFAULT_SHORT;
+        BigDecimal midR = dto.getMediumTermRatio() != null ? dto.getMediumTermRatio() : DEFAULT_MEDIUM;
+        BigDecimal longR = dto.getLongTermRatio() != null ? dto.getLongTermRatio() : DEFAULT_LONG;
+        validateSetting(dto.getMaxInvestmentAmount(), resolvedMin, shortR, midR, longR);
+
+        TradingSetting setting = tradingSettingRepository.findByAccountNo(accountNo)
+                .orElse(TradingSetting.builder()
+                        .accountNo(accountNo)
+                        .maxInvestmentAmount(dto.getMaxInvestmentAmount())
+                        .minInvestmentAmount(resolvedMin)
+                        .defaultCurrency(dto.getDefaultCurrency())
+                        .autoTradingEnabled(dto.getAutoTradingEnabled() != null ? dto.getAutoTradingEnabled() : false)
+                        .roboAdvisorEnabled(dto.getRoboAdvisorEnabled() != null && dto.getRoboAdvisorEnabled())
+                        .riskLevel(dto.getRiskLevel())
+                        .shortTermRatio(shortR)
+                        .mediumTermRatio(midR)
+                        .longTermRatio(longR)
+                        .pipelineAutoExecute(dto.getPipelineAutoExecute() != null ? dto.getPipelineAutoExecute() : Boolean.FALSE)
+                        .pipelineAllowRealExecution(dto.getPipelineAllowRealExecution() != null && dto.getPipelineAllowRealExecution())
+                        .build());
+        if (setting.getUserId() == null && userId != null) {
+            setting.setUserId(userId);
+        }
+        if (setting.getId() != null && !setting.getId().isEmpty()) {
+            setting.updateMaxInvestmentAmount(dto.getMaxInvestmentAmount());
+            if (dto.getMinInvestmentAmount() != null) {
+                setting.updateMinInvestmentAmount(dto.getMinInvestmentAmount());
+            }
+            setting.updateAutoTradingEnabled(dto.getAutoTradingEnabled() != null ? dto.getAutoTradingEnabled() : false);
+            if (dto.getRoboAdvisorEnabled() != null) {
+                setting.updateRoboAdvisorEnabled(dto.getRoboAdvisorEnabled());
+            }
+            if (dto.getRiskLevel() != null) {
+                setting.updateRiskLevel(dto.getRiskLevel());
+            }
+            if (dto.getShortTermRatio() != null && dto.getMediumTermRatio() != null && dto.getLongTermRatio() != null) {
+                setting.updateStrategyRatios(dto.getShortTermRatio(), dto.getMediumTermRatio(), dto.getLongTermRatio());
+            }
+            if (dto.getPipelineAutoExecute() != null) {
+                setting.updatePipelineAutoExecute(dto.getPipelineAutoExecute());
+            }
+            if (dto.getPipelineAllowRealExecution() != null) {
+                setting.updatePipelineAllowRealExecution(dto.getPipelineAllowRealExecution());
+            }
+        }
         setting = tradingSettingRepository.save(setting);
         return convertToDto(setting);
     }

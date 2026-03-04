@@ -259,6 +259,14 @@ public class TriggerController {
         return result;
     }
 
+    @Operation(summary = "팩터 열화 검사 수동 실행", description = "팩터별 5일 수익률 Sharpe 미달 시 Discord 알림 발송")
+    @PostMapping("/factor-decay-check")
+    public ResponseEntity<Map<String, Object>> triggerFactorDecayCheck(Principal principal) {
+        ResponseEntity<Map<String, Object>> result = runTrigger("/factor-decay-check", "팩터 열화 검사 완료", "팩터 열화 검사 실패", new JobParametersBuilder());
+        recordManualTrigger(principal, "/factor-decay-check", result);
+        return result;
+    }
+
     @Operation(summary = "Discord 웹훅 테스트", description = "Discord 긴급 알림 Webhook 연결 테스트. Webhook URL 설정 시 테스트 메시지 1건 발송")
     @PostMapping("/discord-test")
     public ResponseEntity<Map<String, Object>> triggerDiscordTest() {

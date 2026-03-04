@@ -29,4 +29,10 @@ public class OpenPositionItemDto {
 
     /** 거래 사유: 청산 규칙 유형 (청산 시 설정). 예: ATR_TRAILING_STOP, TIME_CUT, STOP_LOSS */
     private String exitRuleType;
+
+    /** 현재가 (자동투자 현황 표시용). 미조회 시 null. */
+    private BigDecimal currentPrice;
+
+    /** 손익률 % (자동투자 현황 표시용). 미계산 시 null. */
+    private BigDecimal pnlPercent;
 }

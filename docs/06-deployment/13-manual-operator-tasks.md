@@ -177,6 +177,48 @@
 
 ---
 
+### 1.13 주문 실패 시 점검 (수동 주문·Circuit Breaker)
+
+- **증상**: 주문·체결 화면에서 수동 주문 시 "일시적으로 주문 API를 사용할 수 없습니다. 회로가 일시 중단되었습니다. 30초 후 다시 시도해 주세요." 등 오류 표시.
+- **점검 항목** (순서대로 확인):
+  1. **Circuit Breaker**: 주문 API 호출이 연속 실패 시 Resilience4j Circuit Breaker가 OPEN 상태가 됨. **30초 대기 후** 재시도하면 회로가 HALF_OPEN으로 전환되어 주문이 다시 시도됨. 동일 오류가 반복되면 KIS API·네트워크·토큰을 점검.
+  2. **가격 자동 채움**: 국내(KR) 종목은 종목 선택 후 수량을 입력하면 현재가가 자동으로 가격 필드에 채워짐. 가격이 비정상(예: 1원)이면 한국투자증권 API에서 거부될 수 있으므로, 종목·수량 입력 후 가격이 채워졌는지 확인하고 필요 시 수동 수정.
+  3. **모의/실전 계좌·API 키**: 사용 중인 계좌가 모의/실전 중 어느 쪽인지, 해당 계좌에 맞는 한국투자증권 앱키·시크릿이 TB_USER_API_KEYS 등에 등록되어 있는지 확인. 토큰 만료·401 시 Backend 로그에서 재발급 시도 여부 확인.
+- **참조**: [09-korea-investment-api-guide.md](../04-api/09-korea-investment-api-guide.md), application.yml `resilience4j.circuitbreaker.instances.orderService` (waitDurationInOpenState: 30s).
+
+---
+
+### 1.14 API 연동 검증 — 모의계좌 주문·잔고·체결 확인
+
+- **목적**: 한국투자증권 API가 정상 연동되었는지 **모의계좌**로 주문·잔고·매수가능금액 등을 호출해 확인. **실계좌는 사용하지 않음.**
+- **전제 조건**:
+  1. Backend `.env`(또는 배포 환경)에 한국투자증권 **모의투자** 앱키·시크릿 설정.
+  2. TB_USER_ACCOUNTS에 **모의계좌** 계좌번호 등록, 해당 사용자로 로그인 가능.
+  3. 킬스위치 비활성: `GET /api/v1/system/kill-switch` → `haltAllOrders: false`.
+- **검증 순서** ( [plans/qa/api-qa.http](../../../plans/qa/api-qa.http) §8 참조 ):
+  1. **로그인** → JWT 토큰 획득.
+  2. **모의계좌 잔고**: `GET /api/v1/accounts/{모의계좌번호}/balance` → 200, 예수금·총자산 등 반환.
+  3. **매수가능금액**: `GET /api/v1/accounts/{모의계좌번호}/buyable-amount?symbol=005930&price=50000&quantity=1` → 200.
+  4. **주문 실행** (소액 권장): `POST /api/v1/orders` body에 accountNo(모의계좌), symbol=005930, market=KR, side=BUY, quantity=1, price=현재가 근처, orderType=LIMIT → 200 및 orderId 반환.
+  5. **주문 목록**: `GET /api/v1/orders?accountNo={모의계좌번호}` → 방금 넣은 주문 포함 확인.
+  6. (선택) **미체결 취소**: `DELETE /api/v1/orders/{orderId}?accountNo={모의계좌번호}`.
+- **실패 시**: §1.13 주문 실패 시 점검 참조. 모의계좌·모의 API 키·토큰 갱신·Circuit Breaker 대기 확인.
+
+---
+
+### 1.15 Backend 기동 실패 및 스레드 정리 경고 (Unable to start web server / Lettuce·Hikari)
+
+- **증상**: Backend 기동 시 `ApplicationContextException: Unable to start web server` 발생 후, Tomcat 종료 시 `lettuce-timer-*-*`, `HikariPool-* housekeeper`, `HikariPool-* connection adder` 스레드가 정리되지 않았다는 메모리 누수 경고가 로그에 남음.
+- **원인**:
+  1. **웹 서버 기동 실패**: 로그 **상단**에서 실제 원인 확인. 흔한 경우는 **포트 사용 중** (예: 8080 이미 사용) → `Address already in use` 또는 `Port 8080 was already in use`. 로컬에서 Agent/다른 인스턴스가 이미 8080을 쓰고 있으면 해당 프로세스 종료 후 재기동.
+  2. **스레드 경고**: 기동 실패로 컨텍스트가 취소될 때 Redis(Lettuce)·HikariCP가 이미 스레드를 띄운 뒤라, 종료 단계에서 이들이 완전히 정리되기 전에 검사가 이뤄지면 위 경고가 출력됨.
+- **완화 조치** (이미 적용됨):
+  - **그레이스풀 셧다운**: `server.shutdown=graceful`, `spring.lifecycle.timeout-per-shutdown-phase=35s` 로 컨텍스트 종료 시 Bean 정리 대기 시간 확보.
+  - **Lettuce 종료 대기**: `spring.data.redis.lettuce.shutdown-timeout=5s` 로 Redis 연결·타이머 정리 시간 확보.
+- **운영자 확인**: "Unable to start web server" 발생 시 로그 **맨 위**부터 확인해 포트·바인딩·DB/Redis 연결 실패 등 **실제 예외 메시지**를 찾고, 해당 원인 해결 후 재기동. 스레드 경고만으로는 정상 기동 후에는 영향 없을 수 있으나, 동일 포트 중복 기동 등은 반드시 제거.
+
+---
+
 ## 2. 완료 이력 (참고)
 
 | 일자       | 항목 | 비고 |

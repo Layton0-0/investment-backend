@@ -246,6 +246,27 @@ class TransactionCostAnalyzerTest {
 
             assertThat(impact).isEqualByComparingTo(BigDecimal.ZERO);
         }
+
+        @Test
+        @DisplayName("Square-Root 모델: impact = sigma * sqrt(Q/V) * 0.5")
+        void shouldFollowSquareRootModel() {
+            int q = 1000;
+            long v = 10_000;
+            BigDecimal sigma = new BigDecimal("0.02");
+            BigDecimal impact = analyzer.estimateMarketImpact(q, v, sigma);
+            double expected = sigma.doubleValue() * Math.sqrt((double) q / v) * 0.5;
+            assertThat(impact.doubleValue()).isBetween(expected * 0.99, expected * 1.01);
+        }
+
+        @Test
+        @DisplayName("대규모 주문 시 시장 충격 1% 초과 → 알고리즘 실행 권장")
+        void shouldExceedOnePctForLargeOrder() {
+            int largeQty = 12_000_000;
+            long adv = 10_000_000;
+            BigDecimal sigma = new BigDecimal("0.02");
+            BigDecimal impact = analyzer.estimateMarketImpact(largeQty, adv, sigma);
+            assertThat(impact.multiply(new BigDecimal("100")).doubleValue()).isGreaterThan(1.0);
+        }
     }
 
     @Nested

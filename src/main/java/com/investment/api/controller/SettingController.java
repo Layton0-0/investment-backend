@@ -4,6 +4,8 @@ import com.investment.auth.service.AuthService;
 import com.investment.common.exception.DomainException;
 import com.investment.common.exception.ErrorCode;
 import com.investment.ops.service.AuditLogService;
+import com.investment.setting.dto.QuickStartRequestDto;
+import com.investment.setting.dto.QuickStartResponseDto;
 import com.investment.setting.dto.SettingsAccountsResponseDto;
 import com.investment.setting.dto.SettingsAccountsUpdateRequestDto;
 import com.investment.setting.dto.TradingSettingDto;
@@ -13,6 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
@@ -73,6 +76,30 @@ public class SettingController {
         return tradingSettingService.getSettingOptional(accountNo)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.noContent().build());
+    }
+
+    /**
+     * 원클릭 자동투자 시작. 초보자 디폴트(autoTradingEnabled=true, pipelineAutoExecute=true, 균형 비율) 적용.
+     */
+    @PostMapping("/quick-start")
+    @Operation(summary = "원클릭 자동투자 시작", description = "초보자용 디폴트 설정으로 자동투자를 시작합니다. 계좌가 없으면 400.")
+    public ResponseEntity<QuickStartResponseDto> quickStart(
+            Authentication authentication,
+            @RequestBody @Valid QuickStartRequestDto request) {
+        String userId = getUserIdFromAuth(authentication);
+        if (userId == null || userId.isBlank()) {
+            throw new DomainException(ErrorCode.UNAUTHORIZED, "인증되지 않은 사용자입니다");
+        }
+        QuickStartResponseDto response = tradingSettingService.quickStart(userId, request);
+        return ResponseEntity.ok(response);
+    }
+
+    private static String getUserIdFromAuth(Authentication authentication) {
+        if (authentication != null && authentication.getName() != null && !authentication.getName().isBlank()) {
+            return authentication.getName();
+        }
+        var ctx = SecurityContextHolder.getContext().getAuthentication();
+        return ctx != null ? ctx.getName() : null;
     }
 
     @PutMapping("/{accountNo}")

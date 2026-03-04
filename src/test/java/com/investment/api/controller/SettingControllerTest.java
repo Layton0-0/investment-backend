@@ -6,6 +6,8 @@ import com.investment.common.security.JwtAuthenticationFilter;
 import com.investment.common.security.RateLimitFilter;
 import com.investment.config.SecurityHeadersConfig;
 import com.investment.ops.service.AuditLogService;
+import com.investment.setting.dto.QuickStartRequestDto;
+import com.investment.setting.dto.QuickStartResponseDto;
 import com.investment.setting.dto.TradingSettingDto;
 import com.investment.setting.service.TradingSettingService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,6 +18,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
@@ -25,6 +29,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -95,5 +100,37 @@ class SettingControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.defaultCurrency").value("KRW"));
+    }
+
+    @Test
+    @WithMockUser(username = "user-1")
+    @DisplayName("POST /api/v1/settings/quick-start 인증 시 200 및 success 반환")
+    void quickStart_returnsOk() throws Exception {
+        QuickStartRequestDto request = QuickStartRequestDto.builder()
+                .maxInvestmentAmount(new BigDecimal("1000000"))
+                .build();
+        TradingSettingDto settingDto = TradingSettingDto.builder()
+                .maxInvestmentAmount(new BigDecimal("1000000"))
+                .minInvestmentAmount(new BigDecimal("100000"))
+                .defaultCurrency("KRW")
+                .autoTradingEnabled(true)
+                .pipelineAutoExecute(true)
+                .build();
+        QuickStartResponseDto response = QuickStartResponseDto.builder()
+                .success(true)
+                .message("자동투자가 시작되었습니다.")
+                .setting(settingDto)
+                .build();
+        when(tradingSettingService.quickStart(eq("user-1"), any(QuickStartRequestDto.class))).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/settings/quick-start")
+                        .with(SecurityMockMvcRequestPostProcessors.user("user-1"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("자동투자가 시작되었습니다."))
+                .andExpect(jsonPath("$.setting.autoTradingEnabled").value(true))
+                .andExpect(jsonPath("$.setting.pipelineAutoExecute").value(true));
     }
 }

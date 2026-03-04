@@ -8,12 +8,14 @@ import com.investment.domain.repository.TradingSettingRepository;
 import com.investment.domain.repository.UniverseRepository;
 import com.investment.factor.dto.PipelineSummaryDto;
 import com.investment.factor.dto.SignalScorePageResponseDto;
+import com.investment.marketdata.service.RealtimeMarketDataService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -37,6 +39,8 @@ class PipelineSummaryServiceTest {
         private StrategyPositionRepository strategyPositionRepository;
         @Mock
         private TradingSettingRepository tradingSettingRepository;
+        @Mock
+        private RealtimeMarketDataService realtimeMarketDataService;
 
         @InjectMocks
         private PipelineSummaryService pipelineSummaryService;
@@ -81,6 +85,7 @@ class PipelineSummaryServiceTest {
                                                                 .quantity(5)
                                                                 .build()));
                 when(tradingSettingRepository.findByAccountNo(accountNo)).thenReturn(Optional.empty());
+                when(realtimeMarketDataService.getCurrentPrices(anyList())).thenReturn(Mono.just(Collections.emptyList()));
 
                 PipelineSummaryDto result = pipelineSummaryService.getSummary(basDt, accountNo);
 
@@ -147,6 +152,8 @@ class PipelineSummaryServiceTest {
                 assertThat(result.getAllocationSummary()).isNotNull();
                 assertThat(result.getAllocationSummary()).contains("단기").contains("중기").contains("장기");
                 assertThat(result.getAllocationSummary()).contains("2,000만").contains("4,000만");
+                assertThat(result.getAllocationRatioSummary()).isNotNull();
+                assertThat(result.getAllocationRatioSummary()).contains("단기 20%").contains("중기 40%").contains("장기 40%");
         }
 
         @Test

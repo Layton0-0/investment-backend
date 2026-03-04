@@ -1,24 +1,28 @@
 package com.investment.datacollection.service;
 
+import com.investment.config.DataCollectionProperties;
 import com.investment.datacollection.client.KrxApiClient;
 import com.investment.domain.entity.DailyStock;
 import com.investment.domain.repository.DailyStockRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * KRX 일별 시세 수집 → TB_DAILY_STOCK 저장.
- * API 응답 OutBlock_1의 Map 키는 서비스별로 상이할 수 있으므로 여러 키명을 시도해 파싱한다.
+ * 1차 KRX API, 실패 시 2차 한투 API 차트 보조 소스 폴백. 양쪽 실패 시 로그 및 알림.
  * <p>수정주가 정책(ADR 19): 일봉 저장·팩터·백테스트는 수정주가만 사용. KRX 유가증권 일별매매정보
  * 원천이며, 수정주가 반영 여부는 KRX 공식 문서 참조. 한투 API 일봉 조회 시에는 FID_ORG_ADJ_PRC=0(수정주가) 사용.
  */
@@ -29,12 +33,24 @@ public class KrxCollectionService {
 
     private static final String MARKET_KR = "KR";
     private static final DateTimeFormatter KRX_DATE = DateTimeFormatter.ofPattern("yyyyMMdd");
+    /** 전일 대비 50% 이상 변동 시 이상치 경고 */
+    private static final double OUTLIER_CHANGE_RATIO = 0.50;
 
     private final KrxApiClient krxApiClient;
     private final DailyStockRepository dailyStockRepository;
+    private final DataCollectionProperties dataCollectionProperties;
+
+    @Autowired(required = false)
+    private KoreaInvestmentKrxFallbackSupplier koreaInvestmentKrxFallbackSupplier;
+
+    /** 테스트용 폴백 주입 (일반 실행에서는 @Autowired로 주입) */
+    void setKoreaInvestmentKrxFallbackSupplier(KoreaInvestmentKrxFallbackSupplier supplier) {
+        this.koreaInvestmentKrxFallbackSupplier = supplier;
+    }
 
     /**
      * 기준일 KRX 유가증권 일별매매정보 수집 후 저장.
+     * 1차: KRX API → 실패(빈 결과) 시 2차: 한투 API 폴백(설정 시). 수집 결과 로그에 성공/실패/폴백 상태 기록.
      *
      * @param basDt 기준일
      * @return 저장 건수
@@ -42,10 +58,32 @@ public class KrxCollectionService {
     @Transactional
     public int collectAndSave(LocalDate basDt) {
         List<Map<String, Object>> rows = krxApiClient.fetchDailyStockKospi(basDt);
-        if (rows.isEmpty()) {
-            log.info("KRX 일별 수집 스킵 또는 결과 없음: basDt={}, rows=0 (AUTH_KEY 미설정 또는 API 빈 응답)", basDt);
-            return 0;
+        if (!rows.isEmpty()) {
+            int saved = parseAndSave(rows, basDt, "KRX");
+            if (saved > 0) {
+                log.info("KRX 일별 수집 완료: basDt={}, source=KRX, saved={}", basDt, saved);
+                return saved;
+            }
         }
+
+        log.info("KRX 일별 수집 스킵 또는 결과 없음: basDt={}, rows=0 (AUTH_KEY 미설정 또는 API 빈 응답)", basDt);
+
+        if (dataCollectionProperties.getKrx().isKoreaInvestmentFallbackEnabled()
+                && koreaInvestmentKrxFallbackSupplier != null) {
+            List<DailyStock> fallbackEntities = koreaInvestmentKrxFallbackSupplier.fetchForDate(basDt);
+            if (!fallbackEntities.isEmpty()) {
+                validateOutliersAndWarn(fallbackEntities, basDt);
+                dailyStockRepository.saveAll(fallbackEntities);
+                log.info("KRX 일별 수집 완료(폴백): basDt={}, source=KOREA_INVESTMENT_FALLBACK, saved={}", basDt, fallbackEntities.size());
+                return fallbackEntities.size();
+            }
+        }
+
+        log.warn("KRX 일별 수집 실패: basDt={}, source=NONE (1차 KRX 빈 결과, 2차 한투 폴백 미사용 또는 수집 0건). 수동 확인 또는 트리거 권장.", basDt);
+        return 0;
+    }
+
+    private int parseAndSave(List<Map<String, Object>> rows, LocalDate basDt, String source) {
         List<DailyStock> entities = new ArrayList<>();
         for (Map<String, Object> row : rows) {
             try {
@@ -53,17 +91,40 @@ public class KrxCollectionService {
                 if (e != null) {
                     entities.add(e);
                 }
-            } catch (Exception e) {
-                log.warn("KRX 행 파싱 스킵: basDt={}, row={}, error={}", basDt, row.keySet(), e.getMessage());
+            } catch (Exception ex) {
+                log.warn("KRX 행 파싱 스킵: basDt={}, source={}, row={}, error={}", basDt, source, row.keySet(), ex.getMessage());
             }
         }
         if (entities.isEmpty()) {
-            log.info("KRX 일별 수집 결과 없음: basDt={}, parsed=0", basDt);
             return 0;
         }
+        validateOutliersAndWarn(entities, basDt);
         dailyStockRepository.saveAll(entities);
-        log.info("KRX 일별 수집 완료: basDt={}, saved={}", basDt, entities.size());
         return entities.size();
+    }
+
+    /**
+     * 수집된 일봉에 대해 전일 대비 50% 이상 변동 시 경고 로그.
+     */
+    private void validateOutliersAndWarn(List<DailyStock> entities, LocalDate basDt) {
+        LocalDate prev = basDt.minusDays(1);
+        for (DailyStock e : entities) {
+            if (e.getClosePrice() == null) continue;
+            List<DailyStock> prevList = dailyStockRepository.findByBasDtAndMarketAndSymbolIn(prev, MARKET_KR, List.of(e.getSymbol()));
+            if (prevList.isEmpty()) continue;
+            BigDecimal prevClose = prevList.get(0).getClosePrice();
+            if (prevClose == null || prevClose.compareTo(BigDecimal.ZERO) == 0) continue;
+            BigDecimal high = e.getHighPrice();
+            BigDecimal low = e.getLowPrice();
+            if (high != null && low != null) {
+                BigDecimal range = high.subtract(low);
+                BigDecimal changeRatio = range.divide(prevClose, 4, RoundingMode.HALF_UP).abs();
+                if (changeRatio.compareTo(BigDecimal.valueOf(OUTLIER_CHANGE_RATIO)) > 0) {
+                    log.warn("KRX 일봉 이상치 경고: basDt={}, symbol={}, 전일종가={}, 고가={}, 저가={}, 변동비율={}",
+                            basDt, e.getSymbol(), prevClose, high, low, changeRatio);
+                }
+            }
+        }
     }
 
     /**

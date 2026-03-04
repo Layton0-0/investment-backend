@@ -201,6 +201,14 @@ public class BatchJobBeansConfig {
                                 step(jobRepository, tx, "strategy-governance-check-step", tasklet));
         }
 
+        @Bean(name = "factor-decay-check")
+        public Job factorDecayCheckJob(JobRepository jobRepository,
+                        PlatformTransactionManager tx,
+                        FactorDecayCheckTasklet tasklet) {
+                return job(jobRepository, "factor-decay-check",
+                                step(jobRepository, tx, "factor-decay-check-step", tasklet));
+        }
+
         @Bean(name = "reconcile")
         public Job reconcileJob(JobRepository jobRepository,
                         PlatformTransactionManager tx,

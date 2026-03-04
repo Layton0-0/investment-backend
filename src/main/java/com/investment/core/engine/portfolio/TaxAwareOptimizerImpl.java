@@ -4,6 +4,7 @@ import com.investment.config.FrictionCostProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -20,6 +21,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "investment.portfolio.mode", havingValue = "inverse-volatility")
 @ConditionalOnMissingBean(TaxAwareOptimizer.class)
 @RequiredArgsConstructor
 public class TaxAwareOptimizerImpl implements TaxAwareOptimizer {

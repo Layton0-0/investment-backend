@@ -90,10 +90,11 @@ public class TcaController {
         BigDecimal impact = transactionCostAnalyzer.estimateMarketImpact(
                 orderQuantity, avgDailyVolume, volatility);
         double participationRate = avgDailyVolume > 0 ? (double) orderQuantity / avgDailyVolume * 100 : 0;
+        BigDecimal impactPct = impact.multiply(new BigDecimal("100")).setScale(4, java.math.RoundingMode.HALF_UP);
+        boolean recommendAlgoExecution = impactPct.compareTo(new BigDecimal("1")) > 0;
 
         return ResponseEntity.ok(new MarketImpactResponse(
-                orderQuantity, avgDailyVolume, participationRate,
-                impact.multiply(new BigDecimal("100")).setScale(4, java.math.RoundingMode.HALF_UP)));
+                orderQuantity, avgDailyVolume, participationRate, impactPct, recommendAlgoExecution));
     }
 
     public record TcaEstimateRequestDto(
@@ -126,10 +127,12 @@ public class TcaController {
             BigDecimal roundTripCostPct
     ) {}
 
+    /** 시장 충격 예측 응답. 충격 > 1% 시 TWAP/VWAP 알고리즘 실행 권장(P3-3). */
     public record MarketImpactResponse(
             int orderQuantity,
             long avgDailyVolume,
             double participationRatePct,
-            BigDecimal marketImpactPct
+            BigDecimal marketImpactPct,
+            boolean recommendAlgoExecution
     ) {}
 }

@@ -1,0 +1,2 @@
+-- 매매 사유 한글 평문 설명 (초보자 친화). P4-4 평문 알림 시스템.
+ALTER TABLE TB_ORDERS ADD COLUMN IF NOT EXISTS EXPLANATION VARCHAR(500);

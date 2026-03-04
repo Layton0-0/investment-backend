@@ -28,6 +28,14 @@ public class DataCollectionProperties {
         private String baseUrl = "https://openapi.krx.co.kr";
         /** 일별 시세 수집 cron. 기본 매일 16:00 KST (장 마감 후) */
         private String scheduleCron = "0 0 16 * * *";
+        /** KRX 실패 시 한투 API 일봉 보조 소스 사용 여부. 기본 false */
+        private boolean koreaInvestmentFallbackEnabled = false;
+        /** 폴백 시 한투 API 호출에 사용할 사용자 ID (해당 사용자의 API 키로 토큰 발급). 미설정 시 폴백 비활성화 */
+        private String koreaInvestmentFallbackUserId = "";
+        /** 폴백 시 종목 목록 소스: PREVIOUS_DAY(전일 TB_DAILY_STOCK), CONFIG(아래 fallbackSymbols 사용) */
+        private String fallbackSymbolsSource = "PREVIOUS_DAY";
+        /** fallbackSymbolsSource=CONFIG 일 때 사용할 종목 코드 (쉼표 구분, 예: 005930,000660) */
+        private String fallbackSymbols = "";
     }
 
     @Getter

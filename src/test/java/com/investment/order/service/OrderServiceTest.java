@@ -8,6 +8,7 @@ import com.investment.domain.entity.Order;
 import com.investment.domain.entity.TradingSetting;
 import com.investment.domain.repository.OrderRepository;
 import com.investment.domain.repository.TradingSettingRepository;
+import com.investment.order.TradeExplanationService;
 import com.investment.order.client.KoreaInvestmentOrderClient;
 import com.investment.order.dto.OrderRequestDto;
 import com.investment.order.dto.OrderResponseDto;
@@ -45,6 +46,9 @@ class OrderServiceTest {
         @Mock
         private ComplianceEngine complianceEngine;
 
+        @Mock
+        private TradeExplanationService tradeExplanationService;
+
         @InjectMocks
         private OrderService orderService;
 
@@ -72,6 +76,9 @@ class OrderServiceTest {
                                 .quantity(10)
                                 .price(new BigDecimal("70000.00"))
                                 .build();
+
+                lenient().when(tradeExplanationService.buildExplanation(anyString(), anyInt(), any(), any(), any()))
+                                .thenReturn("테스트 설명");
         }
 
         @AfterEach

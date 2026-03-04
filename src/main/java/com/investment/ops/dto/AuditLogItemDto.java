@@ -24,4 +24,6 @@ public class AuditLogItemDto {
     private String summary;
     private String result;
     private String ipAddress;
+    /** 트레이드 결정 상세 (EVENT_TYPE=TRADE_DECISION 시 JSON 문자열) */
+    private String detailJson;
 }

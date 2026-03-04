@@ -39,6 +39,7 @@ public class MacroDashboardServiceImpl implements MacroDashboardService {
     private final MacroIndicatorProvider macroIndicatorProvider;
     private final RiskProperties riskProperties;
     private final SystemSettingService systemSettingService;
+    private final RegimeDetectionService regimeDetectionService;
 
     private boolean isRegimeGateEnabled() {
         return Boolean.TRUE.equals(systemSettingService.getBoolean("risk.regimeGateEnabled"));
@@ -84,9 +85,19 @@ public class MacroDashboardServiceImpl implements MacroDashboardService {
 
             addMockIndicatorsIfEmpty(allIndicators, marketIndicators, interestRateIndicators, economyIndicators, currencyIndicators);
 
-            MacroDashboardResponse.MarketRegime regime = determineMarketRegime(allIndicators);
+            MacroDashboardResponse.MarketRegime regime;
+            double regimeConfidence;
+            if (riskProperties.isRegimeDetectionEnabled()) {
+                RegimeDetectionService.RegimeResult detected = regimeDetectionService.getCurrentRegime(null);
+                regime = detected.regime();
+                regimeConfidence = detected.confidence();
+            } else {
+                regime = determineMarketRegime(allIndicators);
+                regimeConfidence = 0.75;
+            }
             int riskScore = calculateOverallRiskScore(allIndicators);
 
+            final double finalRegimeConfidence = regimeConfidence;
             MacroDashboardResponse.RiskGateStatus riskGateStatus = MacroDashboardResponse.RiskGateStatus.builder()
                     .enabled(isRegimeGateEnabled())
                     .currentVix(allIndicators.containsKey("VIX") ? allIndicators.get("VIX").getValue().doubleValue() : null)
@@ -100,7 +111,7 @@ public class MacroDashboardServiceImpl implements MacroDashboardService {
 
             return MacroDashboardResponse.builder()
                     .regime(regime)
-                    .regimeConfidence(0.75)
+                    .regimeConfidence(finalRegimeConfidence)
                     .overallRiskScore(riskScore)
                     .marketIndicators(marketIndicators)
                     .interestRateIndicators(interestRateIndicators)

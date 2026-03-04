@@ -30,6 +30,9 @@ class MacroDashboardServiceTest {
     @Mock
     private SystemSettingService systemSettingService;
 
+    @Mock
+    private RegimeDetectionService regimeDetectionService;
+
     private RiskProperties riskProperties;
     private MacroDashboardService service;
 
@@ -37,10 +40,11 @@ class MacroDashboardServiceTest {
     void setUp() {
         riskProperties = new RiskProperties();
         riskProperties.setRegimeGateEnabled(true);
+        riskProperties.setRegimeDetectionEnabled(false);
         riskProperties.setVixThreshold(new BigDecimal("30"));
         riskProperties.setReduceSizeOnHighVolPct(new BigDecimal("50"));
 
-        service = new MacroDashboardServiceImpl(macroIndicatorProvider, riskProperties, systemSettingService);
+        service = new MacroDashboardServiceImpl(macroIndicatorProvider, riskProperties, systemSettingService, regimeDetectionService);
     }
 
     @Nested

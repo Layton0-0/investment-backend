@@ -6,6 +6,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -36,4 +37,11 @@ public interface StrategyPositionRepository extends JpaRepository<StrategyPositi
      */
     @Query("SELECT DISTINCT p.accountNo FROM StrategyPosition p WHERE p.exitDt IS NULL")
     List<String> findDistinctAccountNosWithOpenPositions();
+
+    /** 청산된 포지션 (성과 귀인용). exitDt 기준 내림차순. */
+    List<StrategyPosition> findByAccountNoAndExitDtIsNotNullOrderByExitDtDesc(String accountNo);
+
+    /** 기간별 청산 포지션 (성과 귀인 기간 필터). */
+    List<StrategyPosition> findByAccountNoAndExitDtBetweenOrderByExitDtDesc(
+            String accountNo, LocalDate exitDtStart, LocalDate exitDtEnd);
 }

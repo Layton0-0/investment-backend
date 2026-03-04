@@ -36,4 +36,10 @@ public class DashboardPerformanceSummaryDto {
 
     @Schema(description = "1일 CVaR 95% (%). 없으면 null")
     private BigDecimal cvar95Pct;
+
+    @Schema(description = "당일 손익 합계 (원). 계좌별 일일 손익 합산, 없으면 null")
+    private BigDecimal dailyProfitLoss;
+
+    @Schema(description = "리스크 수준: 낮음 / 중간 / 높음. VaR·MDD 기반")
+    private String riskLevel;
 }

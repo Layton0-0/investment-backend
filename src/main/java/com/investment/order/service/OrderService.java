@@ -11,6 +11,7 @@ import com.investment.domain.entity.Order;
 import com.investment.domain.entity.TradingSetting;
 import com.investment.domain.repository.OrderRepository;
 import com.investment.domain.repository.TradingSettingRepository;
+import com.investment.order.TradeExplanationService;
 import com.investment.order.client.KoreaInvestmentOrderClient;
 import com.investment.order.dto.OrderRequestDto;
 import com.investment.order.dto.OrderResponseDto;
@@ -54,6 +55,7 @@ public class OrderService implements OrderExecutor {
     private final TradingSettingRepository tradingSettingRepository;
     private final KoreaInvestmentOrderClient orderClient;
     private final ComplianceEngine complianceEngine;
+    private final TradeExplanationService tradeExplanationService;
 
     @Lazy
     @Autowired(required = false)
@@ -95,7 +97,7 @@ public class OrderService implements OrderExecutor {
         log.warn("주문 API Circuit Breaker fallback: accountNo={}, symbol={}, error={}",
                 LogMaskingUtil.maskAccountNo(request.getAccountNo()), request.getSymbol(), e.getMessage());
         throw new DomainException(ErrorCode.ORDER_FAILED,
-                "일시적으로 주문 API를 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.", e);
+                "일시적으로 주문 API를 사용할 수 없습니다. 회로가 일시 중단되었습니다. 30초 후 다시 시도해 주세요.", e);
     }
 
     /**
@@ -129,7 +131,7 @@ public class OrderService implements OrderExecutor {
         log.warn("파이프라인 주문 API Circuit Breaker fallback: accountNo={}, symbol={}, error={}",
                 LogMaskingUtil.maskAccountNo(request.getAccountNo()), request.getSymbol(), e.getMessage());
         throw new DomainException(ErrorCode.ORDER_FAILED,
-                "일시적으로 주문 API를 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.", e);
+                "일시적으로 주문 API를 사용할 수 없습니다. 회로가 일시 중단되었습니다. 30초 후 다시 시도해 주세요.", e);
     }
 
     /**
@@ -172,6 +174,10 @@ public class OrderService implements OrderExecutor {
         if (request.getExitRuleType() != null) {
             order.setExitRuleType(request.getExitRuleType());
         }
+        String explanation = tradeExplanationService.buildExplanation(
+                request.getSymbol(), request.getQuantity(), request.getOrderType(),
+                request.getSignalType(), request.getExitRuleType());
+        order.setExplanation(explanation);
 
         try {
             // 국내(KR): orderDvsn 있으면 사용, 없으면 지정가(00). 해외(US)는 지정가 00 유지.
@@ -365,6 +371,7 @@ public class OrderService implements OrderExecutor {
                 .message(order.getMessage())
                 .signalType(order.getSignalType())
                 .exitRuleType(order.getExitRuleType())
+                .explanation(order.getExplanation())
                 .build();
     }
 

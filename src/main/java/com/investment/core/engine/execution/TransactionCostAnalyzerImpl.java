@@ -24,7 +24,8 @@ public class TransactionCostAnalyzerImpl implements TransactionCostAnalyzer {
     private static final BigDecimal DEFAULT_SPREAD_KR = new BigDecimal("0.001");
     private static final BigDecimal DEFAULT_SPREAD_US = new BigDecimal("0.0005");
     private static final BigDecimal DEFAULT_VOLATILITY = new BigDecimal("0.02");
-    private static final BigDecimal MARKET_IMPACT_COEFFICIENT = new BigDecimal("0.1");
+    /** Square-Root Impact: impact = sigma * sqrt(Q/V) * C. C=0.5 (P3-3) */
+    private static final BigDecimal MARKET_IMPACT_COEFFICIENT = new BigDecimal("0.5");
 
     private final FrictionCostProperties frictionCostProperties;
 
@@ -203,6 +204,11 @@ public class TransactionCostAnalyzerImpl implements TransactionCostAnalyzer {
         return priceImpact.add(cost);
     }
 
+    /**
+     * 시장 충격 예측 (Square-Root Impact 모델, P3-3).
+     * impact = sigma * sqrt(Q/V) * C. sigma=일간변동성, Q=주문수량, V=평균일거래량, C=0.5.
+     * 충격 > 1% 시 TWAP/VWAP 등 알고리즘 실행 권장.
+     */
     @Override
     public BigDecimal estimateMarketImpact(int orderQuantity, long avgDailyVolume, BigDecimal volatility) {
         if (avgDailyVolume <= 0) {
@@ -210,9 +216,9 @@ public class TransactionCostAnalyzerImpl implements TransactionCostAnalyzer {
         }
 
         double participationRate = (double) orderQuantity / avgDailyVolume;
-        double sqrtPR = Math.sqrt(participationRate);
-        double vol = volatility != null ? volatility.doubleValue() : DEFAULT_VOLATILITY.doubleValue();
-        double impact = MARKET_IMPACT_COEFFICIENT.doubleValue() * sqrtPR * vol;
+        double sqrtQv = Math.sqrt(participationRate);
+        double sigma = volatility != null ? volatility.doubleValue() : DEFAULT_VOLATILITY.doubleValue();
+        double impact = sigma * sqrtQv * MARKET_IMPACT_COEFFICIENT.doubleValue();
 
         return BigDecimal.valueOf(impact).setScale(6, RoundingMode.HALF_UP);
     }

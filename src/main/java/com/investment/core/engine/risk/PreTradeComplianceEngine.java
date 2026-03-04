@@ -9,7 +9,6 @@ import com.investment.risk.service.PortfolioPeakService;
 import com.investment.risk.service.TradingHaltService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -18,14 +17,14 @@ import java.time.LocalDate;
 import java.util.Optional;
 
 /**
- * Phase 2: Pre-Trade 컴플라이언스 실제 구현.
+ * Pre-Trade 컴플라이언스 구현 (디폴트).
  * - Kill Switch: halt_all_orders 시 모든 주문 거부
  * - 단일 종목 비중 상한: 주문 후 해당 종목 비중 > 10% 시 거부
  * - MDD 게이트: MDD > 15% 시 신규 매수만 차단
+ * 테스트에서 스텁이 필요하면 @TestConfiguration으로 ComplianceEngineStub 제공.
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "investment.compliance.use-stub", havingValue = "false", matchIfMissing = true)
 @RequiredArgsConstructor
 public class PreTradeComplianceEngine implements ComplianceEngine {
 

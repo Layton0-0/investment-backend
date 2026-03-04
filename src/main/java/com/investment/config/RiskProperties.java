@@ -19,6 +19,9 @@ public class RiskProperties {
     /** 레짐 게이트 사용 여부. true면 VIX 등 초과 시 신규 매수 비중 축소 또는 스킵 */
     private boolean regimeGateEnabled = false;
 
+    /** VIX/이평선 기반 시장 레짐 탐지 사용 여부. true면 RegimeDetectionService로 BULL/BEAR/NEUTRAL 판정 */
+    private boolean regimeDetectionEnabled = true;
+
     /** VIX 임계값. 초과 시 고변동성으로 간주 (기본 30) */
     private BigDecimal vixThreshold = new BigDecimal("30");
 
@@ -71,4 +74,13 @@ public class RiskProperties {
 
     /** 리스크 이벤트 알림: VaR 95% 초과 시 Discord 알림 사용 여부. 기본 true */
     private boolean alertVarExceedEnabled = true;
+
+    /** 드로다운 회복 모드(P6-1): MDD가 이 값(0~1) 이상이면 회복 모드 ON. 기본 0.10 = 10% */
+    private BigDecimal drawdownRecoveryThresholdPct = new BigDecimal("0.10");
+
+    /** 드로다운 회복 모드 해제: MDD가 이 값 이하로 회복되면 정상 모드. 기본 0.05 = 5% */
+    private BigDecimal drawdownRecoveryExitPct = new BigDecimal("0.05");
+
+    /** 드로다운 회복 모드 시 신규 매수 권장 금액 스케일 (0~1). 기본 0.5 = 50% */
+    private BigDecimal drawdownRecoveryScale = new BigDecimal("0.5");
 }

@@ -185,6 +185,14 @@ public class BatchJobRegistry {
                                                 .triggerPath("/api/v1/trigger/strategy-governance-check")
                                                 .build(),
                                 BatchJobDefinition.builder()
+                                                .id("factor-decay-check")
+                                                .name("팩터 열화 검사")
+                                                .description("월 1회 팩터별 5일 수익률 Sharpe 미달 시 Discord 알림. 실행: Backend 내부.")
+                                                .cronExpression("0 0 3 1 * *")
+                                                .timeZone(TZ)
+                                                .triggerPath("/api/v1/trigger/factor-decay-check")
+                                                .build(),
+                                BatchJobDefinition.builder()
                                                 .id("reconcile")
                                                 .name("포지션 정합성(Reconciliation)")
                                                 .description("장 시작 전 08:00 또는 장 마감 후 16:10에 자동투자 ON 계좌별 브로커-DB 포지션 비교, 불일치 시 Discord 알림. 실행: Backend 내부.")

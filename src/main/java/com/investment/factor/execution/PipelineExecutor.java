@@ -13,6 +13,7 @@ import com.investment.domain.repository.TradingSettingRepository;
 import com.investment.domain.repository.UserAccountRepository;
 import com.investment.factor.dto.PositionRecommendationDto;
 import com.investment.factor.service.PositionSizingService;
+import com.investment.factor.service.TradingWindowService;
 import com.investment.ops.service.AuditLogService;
 import com.investment.order.dto.OrderRequestDto;
 import com.investment.order.dto.OrderResponseDto;
@@ -29,6 +30,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -56,6 +60,9 @@ public class PipelineExecutor {
     private final EncryptionUtil encryptionUtil;
     private final AuditLogService auditLogService;
     private final SystemSettingService systemSettingService;
+    private final TradingWindowService tradingWindowService;
+
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     /** 체결 확인 후 포지션 등록 여부 (true면 체결 확인 후, false면 주문 성공 시 즉시 등록) */
     @Value("${investment.pipeline.register-position-on-execution:false}")
@@ -116,9 +123,13 @@ public class PipelineExecutor {
             BigDecimal allocatedCapital, boolean autoExecute) {
         boolean serverAllowRealExecution = systemSettingService.getBoolean("pipeline.allowRealExecution");
         List<PositionRecommendationDto> recommendations = positionSizingService.getRecommendations(
-                basDt, market, strategyType, allocatedCapital);
+                basDt, market, strategyType, allocatedCapital, accountNo);
         List<PipelineRunResult.OrderResult> orderResults = new ArrayList<>();
         boolean actuallyExecute = autoExecute;
+        String userId = tradingSettingRepository.findByAccountNo(accountNo)
+                .map(com.investment.domain.entity.TradingSetting::getUserId)
+                .orElse(null);
+        String strategyTypeStr = strategyType != null ? strategyType.name() : StrategyType.SHORT_TERM.name();
 
         for (PositionRecommendationDto rec : recommendations) {
             if (rec.getRecommendedQty() <= 0)
@@ -139,31 +150,44 @@ public class PipelineExecutor {
                     .signalType(rec.getMethod())
                     .build();
             if (actuallyExecute) {
+                LocalTime nowKst = ZonedDateTime.now(KST).toLocalTime();
+                if (tradingWindowService.isVolatilePeriod(market, nowKst)) {
+                    log.info("변동성 구간으로 신규 매수 지연: market={}, symbol={}", market, rec.getSymbol());
+                    auditLogService.logTradeDecision(userId, accountNo, "SKIP", rec.getSymbol(),
+                            rec.getMarket() != null ? rec.getMarket() : market, strategyTypeStr,
+                            rec.getMethod(), null, null, AuditLogService.RESULT_SUCCESS, "변동성 구간");
+                    orderResults.add(PipelineRunResult.OrderResult.dryRun(rec.getSymbol(), rec.getRecommendedQty(),
+                            rec.getEntryPrice()));
+                    continue;
+                }
                 try {
                     // 스케줄러 등 인증 컨텍스트 없음: accountNo → userId 조회 후 파이프라인용 주문 실행
                     com.investment.domain.entity.TradingSetting setting = tradingSettingRepository
                             .findByAccountNo(accountNo)
                             .orElseThrow(() -> new DomainException(ErrorCode.SETTING_NOT_FOUND,
                                     "거래 설정을 찾을 수 없습니다: " + accountNo));
-                    String userId = setting.getUserId();
+                    String pipelineUserId = setting.getUserId();
                     boolean effectiveAllowReal = setting.getPipelineAllowRealExecution() != null
                             ? setting.getPipelineAllowRealExecution()
                             : serverAllowRealExecution;
                     // 실전 계좌(serverType=0)는 allow-real-execution=false 시 주문 스킵
-                    String serverType = resolveServerTypeForAccount(userId, accountNo);
+                    String serverType = resolveServerTypeForAccount(pipelineUserId, accountNo);
                     if ("0".equals(serverType) && !effectiveAllowReal) {
                         log.warn("실전 계좌 자동 실행 미허용(allow-real-execution=false), 주문 스킵: accountNo={}, symbol={}",
                                 accountNo, rec.getSymbol());
-                        auditLogService.record(AuditLogService.EVENT_REAL_ACCOUNT_GUARD_BLOCKED, userId, accountNo,
+                        auditLogService.record(AuditLogService.EVENT_REAL_ACCOUNT_GUARD_BLOCKED, pipelineUserId, accountNo,
                                 "실전 계좌 자동 실행 미허용으로 주문 스킵 symbol=" + rec.getSymbol(),
                                 AuditLogService.RESULT_SUCCESS, null);
+                        auditLogService.logTradeDecision(pipelineUserId, accountNo, "SKIP", rec.getSymbol(),
+                                rec.getMarket() != null ? rec.getMarket() : market, strategyTypeStr,
+                                rec.getMethod(), null, "실계좌 미허용", AuditLogService.RESULT_SUCCESS, "실전 계좌 자동 실행 미허용");
                         orderResults.add(PipelineRunResult.OrderResult.dryRun(rec.getSymbol(), rec.getRecommendedQty(),
                                 rec.getEntryPrice()));
                         continue;
                     }
                     OrderResponseDto orderResponse = (useAlgoExecution && pipelineOrderExecutor != null)
-                            ? pipelineOrderExecutor.executeOrderForPipeline(request, userId)
-                            : orderService.executeOrderForPipeline(request, userId);
+                            ? pipelineOrderExecutor.executeOrderForPipeline(request, pipelineUserId)
+                            : orderService.executeOrderForPipeline(request, pipelineUserId);
 
                     // 포지션 등록: 체결 확인 후 등록 옵션에 따라 분기
                     if (registerPositionOnExecution) {
@@ -173,6 +197,9 @@ public class PipelineExecutor {
                                     strategyType != null ? strategyType.name() : StrategyType.SHORT_TERM.name());
                             orderRepository.save(order);
                         });
+                        auditLogService.logTradeDecision(pipelineUserId, accountNo, "BUY", rec.getSymbol(),
+                                rec.getMarket() != null ? rec.getMarket() : market, strategyTypeStr,
+                                rec.getMethod(), null, null, AuditLogService.RESULT_SUCCESS, null);
                         log.debug("파이프라인 주문 성공 (체결 확인 후 포지션 등록 대기): orderId={}, symbol={}, qty={}, price={}",
                                 orderResponse.getOrderId(), rec.getSymbol(), rec.getRecommendedQty(),
                                 rec.getEntryPrice());
@@ -198,6 +225,9 @@ public class PipelineExecutor {
                                 .signalType(rec.getMethod())
                                 .build();
                         strategyPositionRepository.save(position);
+                        auditLogService.logTradeDecision(pipelineUserId, accountNo, "BUY", rec.getSymbol(),
+                                rec.getMarket() != null ? rec.getMarket() : market, strategyTypeStr,
+                                rec.getMethod(), null, null, AuditLogService.RESULT_SUCCESS, null);
                         log.debug("파이프라인 주문 성공 (포지션 즉시 등록): symbol={}, qty={}, price={}",
                                 rec.getSymbol(), rec.getRecommendedQty(), rec.getEntryPrice());
                         orderResults.add(PipelineRunResult.OrderResult.success(rec.getSymbol(), rec.getRecommendedQty(),
@@ -205,9 +235,15 @@ public class PipelineExecutor {
                     }
                 } catch (Exception e) {
                     log.warn("파이프라인 주문 실패: symbol={}, error={}", rec.getSymbol(), e.getMessage());
+                    auditLogService.logTradeDecision(userId, accountNo, "BUY", rec.getSymbol(),
+                            rec.getMarket() != null ? rec.getMarket() : market, strategyTypeStr,
+                            rec.getMethod(), null, null, AuditLogService.RESULT_FAILURE, e.getMessage());
                     orderResults.add(PipelineRunResult.OrderResult.failure(rec.getSymbol(), e.getMessage()));
                 }
             } else {
+                auditLogService.logTradeDecision(userId, accountNo, "DRY_RUN", rec.getSymbol(),
+                        rec.getMarket() != null ? rec.getMarket() : market, strategyTypeStr,
+                        rec.getMethod(), null, null, AuditLogService.RESULT_SUCCESS, "권장만(주문 미실행)");
                 log.debug("파이프라인 권장만(주문 미실행): symbol={}, qty={}, price={}", rec.getSymbol(), rec.getRecommendedQty(),
                         rec.getEntryPrice());
                 orderResults.add(PipelineRunResult.OrderResult.dryRun(rec.getSymbol(), rec.getRecommendedQty(),

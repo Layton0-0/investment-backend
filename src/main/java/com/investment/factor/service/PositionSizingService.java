@@ -1,9 +1,12 @@
 package com.investment.factor.service;
 
+import com.investment.core.engine.portfolio.InverseVolatilityPortfolioService;
 import com.investment.domain.entity.DailyStock;
 import com.investment.domain.entity.SignalScore;
 import com.investment.domain.repository.DailyStockRepository;
 import com.investment.domain.repository.SignalScoreRepository;
+import com.investment.domain.repository.TradingSettingRepository;
+import com.investment.risk.service.RiskReportService;
 import com.investment.news.service.NewsSignalService;
 import com.investment.factor.dto.PositionRecommendationDto;
 import com.investment.factor.util.TechnicalIndicatorUtil;
@@ -43,6 +46,10 @@ public class PositionSizingService {
     private final NewsSignalService newsSignalService;
     private final FrictionCostService frictionCostService;
     private final CorrelationPenaltyService correlationPenaltyService;
+    private final InverseVolatilityPortfolioService inverseVolatilityPortfolioService;
+    private final TradingSettingRepository tradingSettingRepository;
+    private final RiskReportService riskReportService;
+    private final RiskGateService riskGateService;
 
     /** 1회 매매당 총자산 대비 리스크 비율 (예: 0.01 = 1%) */
     @Value("${investment.factor.position-risk-pct:0.01}")
@@ -111,26 +118,38 @@ public class PositionSizingService {
     @Value("${investment.factor.max-new-positions-per-day:10}")
     private int maxNewPositionsPerDay = 10;
 
+    /** 포트폴리오 모드: inverse-volatility 시 InverseVolatilityPortfolioService 사용, 그 외 기존 내부 역변동성 로직 */
+    @Value("${investment.portfolio.mode:stub}")
+    private String portfolioMode = "stub";
+
     /**
      * 기준일·시장에 대한 포지션 권장 목록 산출 (기본 SHORT_TERM).
      */
     public List<PositionRecommendationDto> getRecommendations(LocalDate basDt, String market, BigDecimal totalCapital) {
-        return getRecommendations(basDt, market, StrategyType.SHORT_TERM, totalCapital);
+        return getRecommendations(basDt, market, StrategyType.SHORT_TERM, totalCapital, null);
+    }
+
+    /**
+     * 기준일·시장·기간별 포지션 권장 목록 산출 (드로다운 회복 미적용).
+     */
+    public List<PositionRecommendationDto> getRecommendations(LocalDate basDt, String market,
+            StrategyType strategyType, BigDecimal totalCapital) {
+        return getRecommendations(basDt, market, strategyType, totalCapital, null);
     }
 
     /**
      * 기준일·시장·기간별 포지션 권장 목록 산출.
-     * SHORT_TERM: RSI&gt;60 &amp; MACD&gt;Signal 필터. MEDIUM_TERM: 시그널 점수 상위 10%.
-     * LONG_TERM: 전체.
+     * accountNo가 있으면 해당 사용자 MDD로 드로다운 회복 모드 적용 시 권장 금액 스케일(P6-1).
      *
      * @param basDt        기준일
      * @param market       시장 (KR, US)
      * @param strategyType 기간 (SHORT_TERM, MEDIUM_TERM, LONG_TERM)
      * @param totalCapital 총 투자 가능 자산 (원)
+     * @param accountNo    계좌번호 (null이면 드로다운 회복 미적용)
      * @return 권장 포지션 목록
      */
     public List<PositionRecommendationDto> getRecommendations(LocalDate basDt, String market,
-            StrategyType strategyType, BigDecimal totalCapital) {
+            StrategyType strategyType, BigDecimal totalCapital, String accountNo) {
         if (totalCapital == null || totalCapital.compareTo(BigDecimal.ZERO) <= 0) {
             return List.of();
         }
@@ -216,12 +235,18 @@ public class PositionSizingService {
         if (!out.isEmpty()) {
             // Half-Kelly 적용 (전략별 p·b 사용, 백테스트 연동 시 설정)
             out = applyHalfKelly(out, totalCapital, strategyType);
-            // 변동성 역가중 적용
-            out = applyInverseVolatilityWeighting(out, totalCapital, fromDt, market);
+            // 변동성 역가중: investment.portfolio.mode=inverse-volatility 이면 InverseVolatilityPortfolioService 사용
+            if ("inverse-volatility".equalsIgnoreCase(portfolioMode)) {
+                out = inverseVolatilityPortfolioService.applyInverseVolatilityWeights(out, totalCapital, basDt, market);
+            } else {
+                out = applyInverseVolatilityWeighting(out, totalCapital, fromDt, market);
+            }
             // 리스크 기반 포지션 사이징: 종목당 비중 상한 (설정 시)
             if (riskBasedCapEnabled && riskBasedCapMaxPct != null && riskBasedCapMaxPct.compareTo(BigDecimal.ZERO) > 0) {
                 out = applyRiskBasedCap(out, totalCapital);
             }
+            // 단일 섹터 비중 30% 상한 (P2-3). TB_SYMBOL_SECTOR 기반, 초과분 비례 축소
+            out = correlationPenaltyService.applySectorConcentrationLimit(out, totalCapital, market);
             // 포트폴리오 상관관계 패널티: 고상관 쌍 시 비중 스케일 다운 (설정 시)
             out = correlationPenaltyService.applyPenalty(out, totalCapital, market, basDt);
             // 일일 최대 신규 매수 종목 수 상한
@@ -255,6 +280,42 @@ public class PositionSizingService {
                             .build());
                 }
                 out = capped;
+            }
+            // P6-1 드로다운 회복 모드: MDD -10% 초과 시 신규 매수 권장 금액 50% 스케일
+            if (accountNo != null && !accountNo.isBlank()) {
+                String userId = tradingSettingRepository.findByAccountNo(accountNo)
+                        .map(com.investment.domain.entity.TradingSetting::getUserId)
+                        .orElse(null);
+                if (userId != null) {
+                    BigDecimal maxMdd = riskReportService.getMaxMddPctForUser(userId);
+                    if (riskGateService.isDrawdownRecoveryMode(maxMdd)) {
+                        BigDecimal scale = riskGateService.getDrawdownRecoveryScale();
+                        if (scale != null && scale.compareTo(BigDecimal.ONE) < 0) {
+                            log.info("드로다운 회복 모드: userId={}, maxMdd={}, scale={} 적용", userId, maxMdd, scale);
+                            List<PositionRecommendationDto> scaled = new ArrayList<>();
+                            for (PositionRecommendationDto rec : out) {
+                                BigDecimal amt = rec.getRecommendedAmt().multiply(scale).setScale(0, RoundingMode.DOWN);
+                                if (rec.getEntryPrice() == null || rec.getEntryPrice().compareTo(BigDecimal.ZERO) <= 0) {
+                                    scaled.add(rec);
+                                    continue;
+                                }
+                                long qty = amt.divide(rec.getEntryPrice(), 0, RoundingMode.DOWN).longValue();
+                                if (qty <= 0) continue;
+                                scaled.add(PositionRecommendationDto.builder()
+                                        .basDt(rec.getBasDt())
+                                        .symbol(rec.getSymbol())
+                                        .market(rec.getMarket())
+                                        .recommendedAmt(amt)
+                                        .recommendedQty(qty)
+                                        .method(rec.getMethod())
+                                        .entryPrice(rec.getEntryPrice())
+                                        .stopLoss(rec.getStopLoss())
+                                        .build());
+                            }
+                            out = scaled;
+                        }
+                    }
+                }
             }
         }
         return out;

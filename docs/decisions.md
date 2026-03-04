@@ -32,6 +32,9 @@
 26. [Thymeleaf 제거 및 React 단일 클라이언트](#26-thymeleaf-제거-및-react-단일-클라이언트)
 27. [서버 기본값의 DB 저장 및 관리자 편집](#27-서버-기본값의-db-저장-및-관리자-편집)
 28. [시장 급락 시 동결 정책](#28-시장-급락-시-동결-정책)
+29. [대시보드 UI 이미지 스펙 통일](#29-대시보드-ui-이미지-스펙-통일)
+30. [초보자 온보딩 UX (퀴즈·원클릭 자동투자 시작)](#30-초보자-온보딩-ux-퀴즈원클릭-자동투자-시작)
+31. [시장 레짐 탐지 규칙엔진 (HMM 대신 VIX/이평선)](#31-시장-레짐-탐지-규칙엔진-hmm-대신-vix이평선)
 
 ---
 
@@ -865,6 +868,71 @@ API 설계 표준 수립 필요
 
 ---
 
+## 29. 대시보드 UI 이미지 스펙 통일
+
+**결정일**: 2026-03  
+**상태**: 확정  
+**결정**: 제공 이미지 스펙에 맞춰 대시보드 레이아웃·카드·테이블을 단일 뷰로 통일
+
+### 배경
+대시보드 화면을 기획 이미지와 동일한 구조(상단 4요약 카드, 자동투자 상태·킬스위치, 보유 종목·최근 주문 단일 테이블)로 통일할 필요가 있었다.
+
+### 결정 사항
+- **백엔드**: `DashboardPerformanceSummaryDto`에 `dailyProfitLoss`(당일 손익 합계), `riskLevel`(낮음/중간/높음) 추가. `DashboardController`에서 사용자 계좌별 기간별손익조회로 당일 손익 합산. `RiskReportService.getSummary`에서 VaR·MDD 기반 `riskLevel` 산출. `PipelineSummaryDto`에 `lastRunAt`(마지막 실행 시각) 필드 추가.
+- **프론트**: 상단 4카드(총 자산·총 수익률·일일 손익·리스크), 자동투자 상태 카드(ON/OFF·마지막 실행·시그널 수·상세 링크), 킬스위치(Admin 시 동일 행 우측), 보유 종목·최근 주문 각 1개 테이블(KR/US·매수/매도 태그). 기존 성과 요약 6칸·계좌 카드 2개·가격 차트·잔고 4테이블 제거.
+
+### 영향
+- GET `/api/v1/dashboard/performance-summary` 응답 스키마 확장. 파이프라인 요약 DTO에 `lastRunAt` 추가. 02-development-status·02-api-endpoints·11-api-frontend-mapping 반영.
+
+---
+
+## 30. 초보자 온보딩 UX (퀴즈·원클릭 자동투자 시작)
+
+**결정일**: 2026-03-04  
+**상태**: 확정  
+**결정**: 투자 초보자를 위한 3문항 퀴즈(투자기간·손실감수·투자금액)로 프로필(보수/균형/공격) 및 전략 비율을 산출하고, 계좌 연결 후 원클릭으로 자동투자 시작(초보자 디폴트)할 수 있는 플로우를 제공한다.
+
+### 배경
+- 전문가용 설정 항목이 많아 초보자가 진입 장벽을 느낌.
+- 최소 입력으로 합리적인 전략 비율·자동투자 ON 설정을 한 번에 적용할 수 있도록 요구됨.
+
+### 결정
+- **온보딩 퀴즈(P4-1)**: POST `/api/v1/onboarding/profile`. 3문항 응답 → CONSERVATIVE/BALANCED/AGGRESSIVE 프로필 및 단기/중기/장기 비율. `applyToSettings: true` 시 사용자 첫 계좌(또는 지정 계좌)의 TradingSetting 비율 반영.
+- **원클릭 시작(P4-2)**: POST `/api/v1/settings/quick-start`. `maxInvestmentAmount` 필수. 초보자 디폴트: autoTradingEnabled=true, pipelineAutoExecute=true, 균형 비율 0.2/0.4/0.4. 계좌 미연결 시 400.
+- **프론트**: OnboardingPage(3단계 선택·결과·대시보드 이동), AutoInvestPage(자동투자 시작하기 버튼·위험 안내 동의·금액 입력·시작하기).
+- **E2E(P8-2)**: Playwright onboarding.spec.ts — 로그인 → 퀴즈 3단계 → 원클릭 시작 → 대시보드 핵심 지표 확인.
+
+### 참고
+- [02-api-endpoints.md §14·§5.3](04-api/02-api-endpoints.md) 온보딩·quick-start API
+- [02-development-status.md](09-planning/02-development-status.md) P4-1·P4-2·P8-2
+
+---
+
+## 31. 시장 레짐 탐지 규칙엔진 (HMM 대신 VIX/이평선)
+
+**결정일**: 2026-03-04  
+**상태**: 확정  
+**결정**: 시장 레짐(Bull/Bear/Sideways) 탐지에 HMM(Hidden Markov Model) 대신 **VIX + 이평선 기반 규칙 엔진**을 1차 구현으로 채택한다.
+
+### 배경
+- 레짐 기반 리스크 게이트(신규 매수 비중 조절)가 필요하나, HMM은 계산 비용·데이터·튜닝 부담이 큼.
+- 실용적으로 낮은 지연·설정 단순·운영 부담 적은 방식이 요구됨.
+
+### 결정
+- **RegimeDetectionService**: SPY 50일/200일 이평선 위치 + VIX 수준으로 BULL(50>200 ∧ VIX<20), BEAR(50<200 ∧ VIX>30), NEUTRAL(그 외) 판정.
+- **캐시**: Redis 캐시 regime 1시간 TTL. 매크로 대시보드·RiskGateService에서 동일 레짐·신뢰도 노출.
+- **확장**: 향후 HMM 또는 다른 통계 모델 도입 시 동일 인터페이스로 교체 가능.
+
+### 대안
+- **HMM**: 레짐 전이 확률·상태 추정에 유리하나, 학습 데이터·계산 비용·튜닝 필요.
+- **규칙 엔진(선택)**: 구현 단순, 해석 가능, 실전 적용 빠름. 1차 구현으로 채택.
+
+### 참고
+- [00-strategy-registry.md](02-architecture/00-strategy-registry.md) v2.0 레짐탐지
+- RegimeDetectionService(Impl), RiskGateService 레짐 연동
+
+---
+
 ## 참고 문서
 
 - [시스템 아키텍처](./02-architecture/01-system-architecture.md)
@@ -893,3 +961,4 @@ API 설계 표준 수립 필요
 | 1.13 | 2026-02-25 | System | ADR 26 Thymeleaf 제거·React 단일 클라이언트 (의존성·템플릿·웹 컨트롤러·메뉴 설정 삭제, static error.html, 문서 갱신) |
 | 1.14 | 2026-02-27 | System | ADR 27 서버 기본값의 DB 저장 및 관리자 편집 (TB_SYSTEM_SETTINGS, SystemSettingService, GET/PUT /api/v1/system/settings, Ops 시스템 설정 화면) |
 | 1.15 | 2026-02-27 | System | ADR 28 시장 급락 시 동결 정책 (MarketCrashGateService, 벤치마크 전일 낙폭 임계값 시 당일 신규 매수 중단) |
+| 1.16 | 2026-03-04 | System | ADR 30 초보자 온보딩 UX (퀴즈·원클릭 quick-start), ADR 31 시장 레짐 탐지 규칙엔진 (HMM 대신 VIX/이평선) 추가 |

@@ -1,6 +1,8 @@
 package com.investment.factor.service;
 
 import com.investment.config.RiskProperties;
+import com.investment.risk.dto.MacroDashboardResponse;
+import com.investment.risk.service.RegimeDetectionService;
 import com.investment.setting.service.SystemSettingService;
 import com.investment.strategy.engine.MacroEconomicStrategyEngine;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,6 +30,8 @@ class RiskGateServiceTest {
     private MacroEconomicStrategyEngine macroEconomicStrategyEngine;
     @Mock
     private SystemSettingService systemSettingService;
+    @Mock
+    private RegimeDetectionService regimeDetectionService;
 
     @InjectMocks
     private RiskGateService riskGateService;
@@ -36,6 +40,10 @@ class RiskGateServiceTest {
     void setUp() {
         lenient().when(riskProperties.getVixThreshold()).thenReturn(new BigDecimal("30"));
         lenient().when(riskProperties.getReduceSizeOnHighVolPct()).thenReturn(new BigDecimal("50"));
+        lenient().when(riskProperties.isRegimeDetectionEnabled()).thenReturn(false);
+        lenient().when(riskProperties.getDrawdownRecoveryThresholdPct()).thenReturn(new BigDecimal("0.10"));
+        lenient().when(riskProperties.getDrawdownRecoveryExitPct()).thenReturn(new BigDecimal("0.05"));
+        lenient().when(riskProperties.getDrawdownRecoveryScale()).thenReturn(new BigDecimal("0.5"));
     }
 
     @Test
@@ -112,5 +120,47 @@ class RiskGateServiceTest {
 
         assertThat(result.isAllowNewBuy()).isTrue();
         assertThat(result.getSizeMultiplier()).isEqualByComparingTo(BigDecimal.ONE);
+    }
+
+    @Test
+    @DisplayName("레짐 탐지 활성·BEAR 시 비중 50% 축소")
+    void evaluate_regimeBear_reduceMultiplier() {
+        when(systemSettingService.getBoolean("risk.regimeGateEnabled")).thenReturn(true);
+        when(riskProperties.isRegimeDetectionEnabled()).thenReturn(true);
+        when(riskProperties.getReduceSizeOnHighVolPct()).thenReturn(new BigDecimal("50"));
+        when(regimeDetectionService.getCurrentRegime(null))
+                .thenReturn(new RegimeDetectionService.RegimeResult(
+                        MacroDashboardResponse.MarketRegime.BEAR, 0.85, null, null, new BigDecimal("35")));
+
+        RiskGateService.RiskGateResult result = riskGateService.evaluate(new BigDecimal("25"));
+
+        assertThat(result.isAllowNewBuy()).isTrue();
+        assertThat(result.getSizeMultiplier()).isEqualByComparingTo(new BigDecimal("0.5"));
+    }
+
+    @Test
+    @DisplayName("P6-1 isDrawdownRecoveryMode - MDD 10% 이상 시 회복 모드 ON")
+    void isDrawdownRecoveryMode_mddAboveThreshold_true() {
+        assertThat(riskGateService.isDrawdownRecoveryMode(new BigDecimal("0.10"))).isTrue();
+        assertThat(riskGateService.isDrawdownRecoveryMode(new BigDecimal("0.15"))).isTrue();
+    }
+
+    @Test
+    @DisplayName("P6-1 isDrawdownRecoveryMode - MDD 5% 이하 회복 시 정상 복구")
+    void isDrawdownRecoveryMode_mddAtOrBelowExit_false() {
+        assertThat(riskGateService.isDrawdownRecoveryMode(new BigDecimal("0.05"))).isFalse();
+        assertThat(riskGateService.isDrawdownRecoveryMode(new BigDecimal("0.02"))).isFalse();
+    }
+
+    @Test
+    @DisplayName("P6-1 isDrawdownRecoveryMode - MDD null 시 false")
+    void isDrawdownRecoveryMode_mddNull_false() {
+        assertThat(riskGateService.isDrawdownRecoveryMode(null)).isFalse();
+    }
+
+    @Test
+    @DisplayName("P6-1 getDrawdownRecoveryScale - 기본 0.5")
+    void getDrawdownRecoveryScale_returnsConfigured() {
+        assertThat(riskGateService.getDrawdownRecoveryScale()).isEqualByComparingTo(new BigDecimal("0.5"));
     }
 }

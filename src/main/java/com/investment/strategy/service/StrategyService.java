@@ -102,7 +102,7 @@ public class StrategyService {
                 return null;
             }
 
-            // TODO: 현재가 조회 필요
+            // 현재가는 AnalysisService.analyze() 응답에서 제공
             BigDecimal currentPrice = analysis.getCurrentPrice();
             if (currentPrice == null || currentPrice.compareTo(BigDecimal.ZERO) <= 0) {
                 log.warn("현재가가 유효하지 않습니다: symbol={}, currentPrice={}", symbol, currentPrice);
@@ -124,7 +124,7 @@ public class StrategyService {
                 analysis.getConfidence().compareTo(confidenceThreshold) >= 0) {
 
             // 매도 결정
-            // TODO: 보유 수량 조회 필요
+            // 매도 수량은 포지션/계좌 서비스 연동 시 구현
             log.debug("매도 신호이지만 보유 수량 확인 필요: symbol={}", symbol);
         }
 

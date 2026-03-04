@@ -78,4 +78,21 @@ class AuditLogServiceTest {
         assertThat(result.getItems()).isEmpty();
         assertThat(result.getTotalElements()).isEqualTo(0L);
     }
+
+    @Test
+    @DisplayName("logTradeDecision 호출 시 TRADE_DECISION 이벤트와 detailJson 저장")
+    void logTradeDecision_savesWithDetailJson() {
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        when(auditLogRepository.save(any(AuditLog.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        auditLogService.logTradeDecision("user-1", "acc-123", "BUY", "005930", "KR",
+                "SHORT_TERM", "VOLATILITY_BREAKOUT", null, null, AuditLogService.RESULT_SUCCESS, null);
+
+        verify(auditLogRepository).save(captor.capture());
+        AuditLog saved = captor.getValue();
+        assertThat(saved.getEventType()).isEqualTo(AuditLogService.EVENT_TRADE_DECISION);
+        assertThat(saved.getDetailJson()).contains("\"action\":\"BUY\"");
+        assertThat(saved.getDetailJson()).contains("\"symbol\":\"005930\"");
+        assertThat(saved.getDetailJson()).contains("\"market\":\"KR\"");
+    }
 }

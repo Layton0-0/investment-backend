@@ -40,4 +40,6 @@ public class RiskSummaryDto {
     private BigDecimal sharpeRatio;
     /** Sortino 비율 (연율화, 일수익 시계열 있으면 산출). 데이터 없으면 null */
     private BigDecimal sortinoRatio;
+    /** 리스크 수준: 낮음 / 중간 / 높음. VaR·MDD 기반 */
+    private String riskLevel;
 }

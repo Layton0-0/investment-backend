@@ -49,4 +49,30 @@ public interface DailyStockRepository extends JpaRepository<DailyStock, DailySto
 
     /** 기준일 일봉 건수 (자동매매 준비 상태 API용). */
     long countByBasDt(LocalDate basDt);
+
+    /** 시장별 종목 코드 목록 (종목 검색용). TB_DAILY_STOCK에 데이터가 있는 심볼만 반환. */
+    @Query("SELECT DISTINCT d.symbol FROM DailyStock d WHERE d.market = :market ORDER BY d.symbol")
+    List<String> findDistinctSymbolsByMarket(@Param("market") String market);
+
+    /** 기준일·시장별 종목 코드 목록 (KRX 폴백 시 전일 종목 목록 조회용). */
+    @Query("SELECT DISTINCT d.symbol FROM DailyStock d WHERE d.basDt = :basDt AND d.market = :market ORDER BY d.symbol")
+    List<String> findDistinctSymbolsByBasDtAndMarket(@Param("basDt") LocalDate basDt, @Param("market") String market);
+
+    /**
+     * 기준 기간 내 일별 거래대금 평균이 minTrdVal 이상인 종목 코드 목록 (PIT: fromDt~toDt 가용 데이터만).
+     * 유니버스 유동성 필터 5일 평균용.
+     */
+    @Query("SELECT d.symbol FROM DailyStock d WHERE d.market = :market AND d.basDt BETWEEN :fromDt AND :toDt AND d.trdVal IS NOT NULL GROUP BY d.symbol HAVING AVG(d.trdVal) >= :minTrdVal")
+    List<String> findSymbolsByMarketAndBasDtBetweenWithAvgTrdValGreaterThanEqual(
+            @Param("market") String market,
+            @Param("fromDt") LocalDate fromDt,
+            @Param("toDt") LocalDate toDt,
+            @Param("minTrdVal") long minTrdVal);
+
+    /** 기준일·시장·종목 목록에 해당하는 일봉 목록 (유니버스 5일 평균 후 보조 조회용). */
+    @Query("SELECT d FROM DailyStock d WHERE d.basDt = :basDt AND d.market = :market AND d.symbol IN :symbols ORDER BY d.symbol")
+    List<DailyStock> findByBasDtAndMarketAndSymbolIn(
+            @Param("basDt") LocalDate basDt,
+            @Param("market") String market,
+            @Param("symbols") List<String> symbols);
 }

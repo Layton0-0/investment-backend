@@ -4,8 +4,10 @@ import com.investment.common.exception.DomainException;
 import com.investment.common.exception.ErrorCode;
 import com.investment.risk.dto.PortfolioRiskMetricsDto;
 import com.investment.risk.dto.RiskHistoryItemDto;
+import com.investment.risk.dto.PerformanceAttributionDto;
 import com.investment.risk.dto.RiskLimitsDto;
 import com.investment.risk.dto.RiskSummaryDto;
+import com.investment.risk.service.PerformanceAttributionService;
 import com.investment.risk.service.RiskReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -32,6 +34,16 @@ import java.util.List;
 public class RiskReportController {
 
     private final RiskReportService riskReportService;
+    private final PerformanceAttributionService performanceAttributionService;
+
+    @Operation(summary = "성과 귀인", description = "팩터/전략별 수익 기여도. 청산 포지션 기준 실현 손익 집계.")
+    @GetMapping("/attribution")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<PerformanceAttributionDto> getAttribution(Principal principal) {
+        String userId = getUserId(principal);
+        PerformanceAttributionDto dto = performanceAttributionService.getAttribution(userId);
+        return ResponseEntity.ok(dto);
+    }
 
     @Operation(summary = "리스크 요약", description = "킬스위치·리스크 게이트·계좌별 일일 손실 한도·MDD 요약을 반환합니다.")
     @GetMapping("/summary")

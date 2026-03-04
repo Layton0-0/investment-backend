@@ -6,6 +6,7 @@ import com.investment.account.dto.BalanceAndPositionsDto;
 import com.investment.account.service.AccountService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -23,6 +24,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "investment.portfolio.mode", havingValue = "inverse-volatility")
 @RequiredArgsConstructor
 public class RebalancerImpl implements Rebalancer {
 

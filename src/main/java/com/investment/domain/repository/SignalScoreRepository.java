@@ -37,6 +37,12 @@ public interface SignalScoreRepository extends JpaRepository<SignalScore, Signal
 
     List<SignalScore> findByBasDtAndMarketOrderBySymbol(LocalDate basDt, String market, Pageable pageable);
 
+    @Query("SELECT s FROM SignalScore s WHERE s.market = :market AND s.basDt BETWEEN :fromDt AND :toDt ORDER BY s.basDt, s.symbol")
+    List<SignalScore> findByMarketAndBasDtBetween(
+            @Param("market") String market,
+            @Param("fromDt") LocalDate fromDt,
+            @Param("toDt") LocalDate toDt);
+
     long countByBasDtAndMarket(LocalDate basDt, String market);
 
     /** 기준일 시그널 건수 (자동매매 준비 상태 API용). */

@@ -1,7 +1,9 @@
 package com.investment.factor.service;
 
 import com.investment.domain.entity.DailyStock;
+import com.investment.domain.entity.SymbolSector;
 import com.investment.domain.repository.DailyStockRepository;
+import com.investment.domain.repository.SymbolSectorRepository;
 import com.investment.factor.dto.PositionRecommendationDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +20,7 @@ import java.util.stream.Collectors;
  * 포트폴리오 수준 상관관계 리스크 통제.
  * 권장 포지션 목록에 대해 종목 간 상관계수가 높을 때 비중을 스케일 다운하여
  * 섹터/자산 동시 폭락 시 포트폴리오 리스크를 완화한다.
+ * P2-3: 단일 섹터 비중 30% 상한(applySectorConcentrationLimit).
  *
  * @see PositionSizingService
  * @see investment-backend/docs/02-architecture/00-strategy-registry.md §2.5.2
@@ -29,11 +32,17 @@ public class CorrelationPenaltyService {
 
     private static final int LOOKBACK_DAYS = 60;
     private static final int MIN_DAYS_FOR_CORRELATION = 20;
+    private static final String SECTOR_UNKNOWN = "UNKNOWN";
 
     private final DailyStockRepository dailyStockRepository;
+    private final SymbolSectorRepository symbolSectorRepository;
 
     @Value("${investment.factor.correlation-penalty-enabled:false}")
     private boolean correlationPenaltyEnabled = false;
+
+    /** 단일 섹터 비중 상한 (0.30 = 30%). 적용 시 초과분 비례 축소 */
+    @Value("${investment.factor.sector-concentration-limit-pct:0.30}")
+    private BigDecimal sectorConcentrationLimitPct = new BigDecimal("0.30");
 
     /** 상관계수 임계값 초과 시 패널티 적용 (기본 0.7) */
     @Value("${investment.factor.correlation-threshold:0.7}")
@@ -42,6 +51,85 @@ public class CorrelationPenaltyService {
     /** 고상관 시 적용할 비중 스케일 팩터 (0~1, 기본 0.8) */
     @Value("${investment.factor.correlation-penalty-scale:0.8}")
     private double correlationPenaltyScale = 0.8;
+
+    /**
+     * 단일 섹터 비중 상한 적용 (P2-3). TB_SYMBOL_SECTOR로 종목별 섹터 조회 후,
+     * 동일 섹터 비중 합계가 limit 초과 시 해당 섹터 종목 비중을 비례 축소.
+     *
+     * @param recommendations applyRiskBasedCap 등 적용 후 목록
+     * @param totalCapital     총 투자 가능 자산
+     * @param market           시장 (KR, US)
+     * @return 섹터 상한 적용된 목록 (데이터 없거나 limit 미초과 시 입력 그대로)
+     */
+    public List<PositionRecommendationDto> applySectorConcentrationLimit(
+            List<PositionRecommendationDto> recommendations,
+            BigDecimal totalCapital,
+            String market) {
+        if (recommendations == null || recommendations.isEmpty()
+                || totalCapital == null || totalCapital.compareTo(BigDecimal.ZERO) <= 0
+                || sectorConcentrationLimitPct == null || sectorConcentrationLimitPct.compareTo(BigDecimal.ZERO) <= 0) {
+            return recommendations;
+        }
+        List<String> symbols = recommendations.stream()
+                .map(PositionRecommendationDto::getSymbol)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        if (symbols.isEmpty()) {
+            return recommendations;
+        }
+        List<SymbolSector> sectorList = symbolSectorRepository.findByMarketAndSymbolIn(market, symbols);
+        Map<String, String> symbolToSector = sectorList.stream()
+                .collect(Collectors.toMap(SymbolSector::getSymbol, SymbolSector::getSectorCode, (a, b) -> a));
+        Map<String, BigDecimal> sectorWeight = new HashMap<>();
+        for (PositionRecommendationDto rec : recommendations) {
+            String sector = symbolToSector.getOrDefault(rec.getSymbol(), SECTOR_UNKNOWN);
+            BigDecimal amt = rec.getRecommendedAmt() != null ? rec.getRecommendedAmt() : BigDecimal.ZERO;
+            BigDecimal w = totalCapital.compareTo(BigDecimal.ZERO) > 0
+                    ? amt.divide(totalCapital, 6, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+            sectorWeight.merge(sector, w, BigDecimal::add);
+        }
+        Map<String, BigDecimal> sectorScale = new HashMap<>();
+        for (Map.Entry<String, BigDecimal> e : sectorWeight.entrySet()) {
+            if (e.getValue().compareTo(sectorConcentrationLimitPct) > 0) {
+                BigDecimal scale = sectorConcentrationLimitPct.divide(e.getValue(), 6, RoundingMode.HALF_UP);
+                sectorScale.put(e.getKey(), scale);
+            }
+        }
+        if (sectorScale.isEmpty()) {
+            return recommendations;
+        }
+        log.info("SectorConcentrationLimit: scaling sectors above {}%, market={}, scaledSectors={}",
+                sectorConcentrationLimitPct.multiply(BigDecimal.valueOf(100)), market, sectorScale.keySet());
+        return recommendations.stream()
+                .map(rec -> scaleBySectorLimit(rec, symbolToSector.getOrDefault(rec.getSymbol(), SECTOR_UNKNOWN), sectorScale))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+    private PositionRecommendationDto scaleBySectorLimit(PositionRecommendationDto rec, String sector, Map<String, BigDecimal> sectorScale) {
+        BigDecimal scale = sectorScale.get(sector);
+        if (scale == null || rec.getEntryPrice() == null || rec.getEntryPrice().compareTo(BigDecimal.ZERO) <= 0) {
+            return rec;
+        }
+        BigDecimal newAmt = rec.getRecommendedAmt().multiply(scale).setScale(0, RoundingMode.DOWN);
+        long qty = newAmt.divide(rec.getEntryPrice(), 0, RoundingMode.DOWN).longValue();
+        if (qty <= 0) {
+            return null;
+        }
+        BigDecimal actualAmt = rec.getEntryPrice().multiply(BigDecimal.valueOf(qty));
+        return PositionRecommendationDto.builder()
+                .basDt(rec.getBasDt())
+                .symbol(rec.getSymbol())
+                .market(rec.getMarket())
+                .recommendedAmt(actualAmt)
+                .recommendedQty(qty)
+                .method(rec.getMethod() != null ? rec.getMethod() + "+SECTOR_CAP" : "SECTOR_CAP")
+                .entryPrice(rec.getEntryPrice())
+                .stopLoss(rec.getStopLoss())
+                .build();
+    }
 
     /**
      * 권장 포지션 목록에 상관관계 패널티 적용.

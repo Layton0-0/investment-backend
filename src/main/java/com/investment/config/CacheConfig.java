@@ -43,6 +43,10 @@ public class CacheConfig {
         public static final String CACHE_ACCOUNT = "account";
         /** 시스템 설정 (서버 기본값, 5분 TTL) */
         public static final String CACHE_SYSTEM_SETTINGS = "systemSettings";
+        /** 시장별 종목 목록 (TB_DAILY_STOCK 기반, 5분 TTL) */
+        public static final String CACHE_SYMBOL_LIST = "symbolList";
+        /** 시장 레짐 (VIX/이평선 기반, 1시간 TTL) */
+        public static final String CACHE_REGIME = "regime";
 
         /**
          * Redis 캐시 매니저 설정
@@ -76,6 +80,10 @@ public class CacheConfig {
                 cacheConfigurations.put(CACHE_ACCOUNT, defaultConfig.entryTtl(Duration.ofMinutes(1)));
                 // 시스템 설정: 5분 TTL (관리자 변경 후 짧은 시간 내 반영)
                 cacheConfigurations.put(CACHE_SYSTEM_SETTINGS, defaultConfig.entryTtl(Duration.ofMinutes(5)));
+                // 시장별 종목 목록: 5분 TTL (수집 배치 후 갱신 반영)
+                cacheConfigurations.put(CACHE_SYMBOL_LIST, defaultConfig.entryTtl(Duration.ofMinutes(5)));
+                // 시장 레짐: 1시간 TTL
+                cacheConfigurations.put(CACHE_REGIME, defaultConfig.entryTtl(Duration.ofHours(1)));
 
                 return RedisCacheManager.builder(redisConnectionFactory)
                                 .cacheDefaults(defaultConfig)

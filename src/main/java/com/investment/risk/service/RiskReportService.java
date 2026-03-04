@@ -71,6 +71,7 @@ public class RiskReportService {
                 .orElse(null);
         BigDecimal var95Pct = varCalculator.calculateVar95(null);
         BigDecimal cvar95Pct = varCalculator.calculateCvar95(null);
+        String riskLevel = deriveRiskLevel(maxMddPct, var95Pct);
         return RiskSummaryDto.builder()
                 .killSwitchActive(killSwitch)
                 .regimeGateEnabled(Boolean.TRUE.equals(systemSettingService.getBoolean("risk.regimeGateEnabled")))
@@ -83,7 +84,24 @@ public class RiskReportService {
                 .cvar95Pct(cvar95Pct)
                 .sharpeRatio(null)
                 .sortinoRatio(null)
+                .riskLevel(riskLevel)
                 .build();
+    }
+
+    /**
+     * VaR·MDD 기반 리스크 수준 문자열.
+     * MDD 20% 이상 또는 VaR 5% 이상 → 높음, MDD 10% 이상 또는 VaR 2% 이상 → 중간, 그 외 → 낮음.
+     */
+    private static String deriveRiskLevel(BigDecimal maxMddPct, BigDecimal var95Pct) {
+        double mdd = maxMddPct != null ? maxMddPct.doubleValue() : 0d;
+        double varPct = var95Pct != null ? var95Pct.doubleValue() : 0d;
+        if (mdd >= 0.20 || varPct >= 5.0) {
+            return "높음";
+        }
+        if (mdd >= 0.10 || varPct >= 2.0) {
+            return "중간";
+        }
+        return "낮음";
     }
 
     /**
@@ -128,6 +146,23 @@ public class RiskReportService {
                 .sharpeRatio(null)
                 .sortinoRatio(null)
                 .build();
+    }
+
+    /**
+     * 사용자 계좌들 중 최대 MDD (0~1). 드로다운 회복 모드 판단용(P6-1).
+     * 계좌 없거나 MDD 없으면 null.
+     */
+    @Transactional(readOnly = true)
+    public BigDecimal getMaxMddPctForUser(String userId) {
+        if (userId == null) {
+            return null;
+        }
+        List<RiskAccountSummaryDto> list = getAccountSummaries(userId);
+        return list.stream()
+                .map(RiskAccountSummaryDto::getMdd)
+                .filter(java.util.Objects::nonNull)
+                .max(BigDecimal::compareTo)
+                .orElse(null);
     }
 
     /**

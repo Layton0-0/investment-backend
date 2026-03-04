@@ -49,7 +49,10 @@ public class OrderResponseDto {
 
     /** 거래 사유: 청산 규칙 유형 (파이프라인 매도 시). 예: ATR_TRAILING_STOP, TIME_CUT, STOP_LOSS */
     private String exitRuleType;
-    
+
+    /** 매매 사유 한글 평문 설명 (초보자 친화) */
+    private String explanation;
+
     public enum OrderStatus {
         PENDING,    // 대기중
         EXECUTED,   // 체결완료

@@ -8,6 +8,7 @@ import com.investment.strategy.domain.StrategyStatus;
 import com.investment.factor.execution.PipelineExecutor;
 import com.investment.factor.service.CapitalDrawdownConstraintService;
 import com.investment.factor.service.DailyLossLimitService;
+import com.investment.factor.service.DriftRebalancingService;
 import com.investment.factor.service.MarketCrashGateService;
 import com.investment.factor.service.RiskGateService;
 import com.investment.domain.entity.Strategy;
@@ -55,6 +56,7 @@ public class PipelineExecutionScheduler {
     private final SystemSettingService systemSettingService;
     private final TradingWindowService tradingWindowService;
     private final CapitalDrawdownConstraintService capitalDrawdownConstraintService;
+    private final DriftRebalancingService driftRebalancingService;
 
     /**
      * 수동/배치 트리거용. 실제 주문 여부는 DB 시스템 설정·계정별 pipelineAutoExecute에 따름.
@@ -150,6 +152,13 @@ public class PipelineExecutionScheduler {
             } catch (Exception e) {
                 log.warn("파이프라인 실행 스킵: code={}, accountNo={}, error={}",
                         PipelineSkipReason.RUN_FAILED.getCode(), LogMaskingUtil.maskAccountNo(accountNo), e.getMessage(), e);
+            }
+            if (marketFilter == null || "US".equals(marketFilter)) {
+                try {
+                    driftRebalancingService.checkAndExecuteDriftRebalance(setting.getUserId(), accountNo, "US");
+                } catch (Exception e) {
+                    log.warn("드리프트 리밸런스 검사/실행 스킵: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo), e);
+                }
             }
         }
     }

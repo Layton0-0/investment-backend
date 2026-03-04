@@ -275,4 +275,40 @@ class FactorCalculationServiceTest {
         assertThat(dualMomentumSignal.getMetadata()).contains("momentum=");
         assertThat(dualMomentumSignal.getScore()).isNotNull();
     }
+
+    @Test
+    @DisplayName("getVolatilityBreakoutK - dynamic=false 시 고정 k 반환")
+    void getVolatilityBreakoutK_dynamicFalse_returnsFixedK() {
+        ReflectionTestUtils.setField(factorCalculationService, "volatilityBreakoutKDynamic", false);
+        ReflectionTestUtils.setField(factorCalculationService, "volatilityBreakoutK", new BigDecimal("0.5"));
+
+        BigDecimal k = factorCalculationService.getVolatilityBreakoutK("005930", "KR", LocalDate.of(2026, 2, 1));
+
+        assertThat(k).isEqualByComparingTo("0.5");
+        verify(dailyStockRepository, never()).findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(anyString(), anyString(), any(), any());
+    }
+
+    @Test
+    @DisplayName("getVolatilityBreakoutK - KR 동적 적용 시 0.3~0.7 범위")
+    void getVolatilityBreakoutK_dynamicKr_returnsClampedK() {
+        List<DailyStock> history = new ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            LocalDate d = LocalDate.of(2026, 2, 1).minusDays(19 - i);
+            history.add(DailyStock.builder()
+                    .basDt(d).symbol("005930").market("KR")
+                    .openPrice(BigDecimal.valueOf(100))
+                    .highPrice(BigDecimal.valueOf(105))
+                    .lowPrice(BigDecimal.valueOf(95))
+                    .closePrice(BigDecimal.valueOf(100))
+                    .build());
+        }
+        when(dailyStockRepository.findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(
+                eq("005930"), eq("KR"), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(history);
+
+        BigDecimal k = factorCalculationService.getVolatilityBreakoutK("005930", "KR", LocalDate.of(2026, 2, 1));
+
+        assertThat(k).isGreaterThanOrEqualTo(new BigDecimal("0.3"));
+        assertThat(k).isLessThanOrEqualTo(new BigDecimal("0.7"));
+    }
 }

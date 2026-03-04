@@ -56,6 +56,7 @@ class UniverseFilterServiceTest {
         ReflectionTestUtils.setField(universeFilterService, "sectorRsTopN", 5);
         ReflectionTestUtils.setField(universeFilterService, "earningsSurpriseLookbackDays", 90);
         ReflectionTestUtils.setField(universeFilterService, "earningsSurpriseTopPct", 0.2);
+        ReflectionTestUtils.setField(universeFilterService, "use5DayAvgLiquidity", false);
         lenient().when(sectorReturnRepository.findByBasDtAndMarketOrderByReturnPctDesc(any(LocalDate.class), anyString())).thenReturn(List.of());
         lenient().when(earningsSurpriseRepository.findByMarketAndReportDtGreaterThanEqualOrderBySurpriseScoreDesc(anyString(), any(LocalDate.class))).thenReturn(List.of());
         lenient().when(corporateActionService.filterExcluded(anyList(), any(LocalDate.class), anyString())).thenAnswer(inv -> inv.getArgument(0));
@@ -155,6 +156,32 @@ class UniverseFilterServiceTest {
 
         // then
         assertThat(count).isEqualTo(1); // 스텁이므로 유동성 통과 종목만 반환
+    }
+
+    @Test
+    @DisplayName("KR 5일 평균 유동성 필터 적용 시 해당 종목만 유니버스 저장 (PIT)")
+    void run_krWith5dAvgLiquidity_savesPassedStocks() {
+        ReflectionTestUtils.setField(universeFilterService, "use5DayAvgLiquidity", true);
+        LocalDate basDt = LocalDate.of(2026, 1, 30);
+        String market = "KR";
+
+        when(dailyStockRepository.findSymbolsByMarketAndBasDtBetweenWithAvgTrdValGreaterThanEqual(
+                eq(market), eq(basDt.minusDays(4)), eq(basDt), eq(1_000_000_000L)))
+                .thenReturn(List.of("005930", "000660"));
+
+        DailyStock d1 = DailyStock.builder().basDt(basDt).symbol("005930").market(market).trdVal(2_000_000_000L).build();
+        DailyStock d2 = DailyStock.builder().basDt(basDt).symbol("000660").market(market).trdVal(1_500_000_000L).build();
+        when(dailyStockRepository.findByBasDtAndMarketAndSymbolIn(eq(basDt), eq(market), anyList()))
+                .thenReturn(List.of(d1, d2));
+
+        doNothing().when(universeRepository).deleteByBasDtAndMarket(basDt, market);
+        when(universeRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+
+        int count = universeFilterService.run(basDt, market);
+
+        assertThat(count).isEqualTo(2);
+        verify(universeRepository).saveAll(saveAllCaptor.capture());
+        assertThat(saveAllCaptor.getValue().stream().map(Universe::getSymbol)).containsExactlyInAnyOrder("005930", "000660");
     }
 
     @Test

@@ -1,42 +1,46 @@
 package com.investment.marketdata.service;
 
+import com.investment.config.CacheConfig;
+import com.investment.domain.repository.DailyStockRepository;
 import com.investment.marketdata.dto.SymbolSearchItemDto;
 import com.investment.marketdata.util.StockCodeConverter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
  * 종목 통합 검색 서비스.
- * KR: StockCodeConverter 매핑 기반, US: 주요 종목 정적 목록 기반.
+ * KR: StockCodeConverter 매핑 기반, US: TB_DAILY_STOCK에 수집된 종목을 DB에서 조회(캐시 5분).
  */
 @Slf4j
 @Service
 public class SymbolSearchService {
 
-    /** US 주요 종목 (symbol -> name). 검색용. */
-    private static final Map<String, String> US_SYMBOL_NAMES = new LinkedHashMap<>();
-    static {
-        US_SYMBOL_NAMES.put("AAPL", "Apple Inc.");
-        US_SYMBOL_NAMES.put("MSFT", "Microsoft Corporation");
-        US_SYMBOL_NAMES.put("GOOGL", "Alphabet Inc. (Google)");
-        US_SYMBOL_NAMES.put("AMZN", "Amazon.com Inc.");
-        US_SYMBOL_NAMES.put("META", "Meta Platforms Inc.");
-        US_SYMBOL_NAMES.put("NVDA", "NVIDIA Corporation");
-        US_SYMBOL_NAMES.put("TSLA", "Tesla Inc.");
-        US_SYMBOL_NAMES.put("JPM", "JPMorgan Chase & Co.");
-        US_SYMBOL_NAMES.put("V", "Visa Inc.");
-        US_SYMBOL_NAMES.put("SPY", "SPDR S&P 500 ETF");
-        US_SYMBOL_NAMES.put("QQQ", "Invesco QQQ Trust");
+    private final DailyStockRepository dailyStockRepository;
+
+    public SymbolSearchService(DailyStockRepository dailyStockRepository) {
+        this.dailyStockRepository = dailyStockRepository;
+    }
+
+    /**
+     * 시장별 종목 코드 목록 조회 (US: DB, 캐시 5분).
+     */
+    @Cacheable(value = CacheConfig.CACHE_SYMBOL_LIST, key = "#market")
+    public List<String> getSymbolsByMarket(String market) {
+        if (market == null || market.isBlank()) {
+            return List.of();
+        }
+        return dailyStockRepository.findDistinctSymbolsByMarket(market.trim().toUpperCase());
     }
 
     /**
      * 종목 검색. q가 비어 있으면 전체 목록(제한), 아니면 종목명/코드에 q가 포함된 항목만 반환.
+     * US: TB_DAILY_STOCK에 데이터가 있는 종목만 검색됨(수집 배치 실행 후 반영).
      *
      * @param q     검색어 (null/blank 시 전체)
      * @param market KR, US 또는 null/blank(전체)
@@ -62,11 +66,12 @@ public class SymbolSearchService {
         }
 
         if (marketFilter == null || "US".equals(marketFilter)) {
-            for (Map.Entry<String, String> e : US_SYMBOL_NAMES.entrySet()) {
-                if (matches(query, e.getKey(), e.getValue())) {
+            List<String> usSymbols = getSymbolsByMarket("US");
+            for (String symbol : usSymbols) {
+                if (matches(query, symbol, symbol)) {
                     result.add(SymbolSearchItemDto.builder()
-                            .symbol(e.getKey())
-                            .name(e.getValue())
+                            .symbol(symbol)
+                            .name(symbol)
                             .market("US")
                             .build());
                 }

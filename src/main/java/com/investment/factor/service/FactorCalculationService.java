@@ -251,74 +251,74 @@ public class FactorCalculationService {
                 .build());
     }
 
+    private static final int DYNAMIC_K_LOOKBACK_DAYS = 20;
+    private static final int DYNAMIC_K_RECENT_DAYS = 5;
+
     /**
      * 변동성 돌파 k 값 동적 계산.
-     * 최근 N일의 변동성(평균 Range)을 분석해 높은 변동성일수록 낮은 k, 낮은 변동성일수록 높은 k 사용.
-     * 
-     * TODO: 한국장 9:00~10:00 시간대별 변동성 분석은 장중 데이터 수집 후 구현 예정.
-     * 현재는 일봉 데이터 기반 평균 변동성으로 근사합니다.
-     *
-     * @param symbol  종목 코드
-     * @param history 일별 시세 이력
-     * @param basDt   기준일
-     * @return 동적 조정된 k 값
+     * 최근 20일 시가 대비 고가/저가 변동폭으로 평균·최근 변동폭을 구하고,
+     * k_dynamic = k_base * (평균변동폭 / 최근변동폭), 결과를 [kMin, kMax]로 클램핑.
+     * (한국장 9:00~10:00 시간대별 데이터 없으면 일봉 기반으로 근사)
      */
     private BigDecimal calculateDynamicK(String symbol, List<DailyStock> history, LocalDate basDt) {
-        // 최근 5일의 평균 Range 계산
-        List<DailyStock> recent = history.stream()
+        List<DailyStock> ordered = history.stream()
                 .filter(d -> !d.getBasDt().isAfter(basDt))
                 .sorted((a, b) -> b.getBasDt().compareTo(a.getBasDt()))
-                .limit(5)
+                .limit(DYNAMIC_K_LOOKBACK_DAYS)
                 .collect(Collectors.toList());
 
-        if (recent.size() < 3) {
-            return volatilityBreakoutK; // 데이터 부족 시 기본값
-        }
-
-        BigDecimal sumRange = BigDecimal.ZERO;
-        int count = 0;
-        for (DailyStock d : recent) {
-            if (d.getHighPrice() != null && d.getLowPrice() != null) {
-                BigDecimal range = d.getHighPrice().subtract(d.getLowPrice());
-                if (d.getClosePrice() != null && d.getClosePrice().compareTo(BigDecimal.ZERO) > 0) {
-                    // Range를 종가 대비 비율로 정규화
-                    BigDecimal rangePct = range.divide(d.getClosePrice(), 6, RoundingMode.HALF_UP);
-                    sumRange = sumRange.add(rangePct);
-                    count++;
-                }
-            }
-        }
-
-        if (count == 0) {
+        if (ordered.size() < DYNAMIC_K_RECENT_DAYS) {
             return volatilityBreakoutK;
         }
 
-        BigDecimal avgVolatility = sumRange.divide(BigDecimal.valueOf(count), 6, RoundingMode.HALF_UP);
-
-        // 변동성에 따라 k 조정: 높은 변동성 → 낮은 k, 낮은 변동성 → 높은 k
-        // 변동성 임계값: 평균 0.02(2%) 이상이면 높은 변동성, 0.01(1%) 이하면 낮은 변동성
-        BigDecimal highVolThreshold = new BigDecimal("0.02");
-        BigDecimal lowVolThreshold = new BigDecimal("0.01");
-
-        BigDecimal adjustedK;
-        if (avgVolatility.compareTo(highVolThreshold) >= 0) {
-            // 높은 변동성: k를 최소값으로
-            adjustedK = volatilityBreakoutKMin;
-        } else if (avgVolatility.compareTo(lowVolThreshold) <= 0) {
-            // 낮은 변동성: k를 최대값으로
-            adjustedK = volatilityBreakoutKMax;
-        } else {
-            // 중간 변동성: 선형 보간
-            BigDecimal ratio = avgVolatility.subtract(lowVolThreshold)
-                    .divide(highVolThreshold.subtract(lowVolThreshold), 6, RoundingMode.HALF_UP);
-            adjustedK = volatilityBreakoutKMax.subtract(
-                    volatilityBreakoutKMax.subtract(volatilityBreakoutKMin).multiply(ratio));
+        List<BigDecimal> rangePcts = new ArrayList<>();
+        for (DailyStock d : ordered) {
+            if (d.getOpenPrice() != null && d.getOpenPrice().compareTo(BigDecimal.ZERO) > 0
+                    && d.getHighPrice() != null && d.getLowPrice() != null) {
+                BigDecimal range = d.getHighPrice().subtract(d.getLowPrice());
+                BigDecimal pct = range.divide(d.getOpenPrice(), 6, RoundingMode.HALF_UP);
+                rangePcts.add(pct);
+            }
+        }
+        if (rangePcts.size() < DYNAMIC_K_RECENT_DAYS) {
+            return volatilityBreakoutK;
         }
 
-        log.debug("변동성 돌파 k 동적 조정: symbol={}, avgVolatility={}, k={} -> {}",
-                symbol, avgVolatility, volatilityBreakoutK, adjustedK);
+        BigDecimal avgVolatility = rangePcts.stream()
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(BigDecimal.valueOf(rangePcts.size()), 6, RoundingMode.HALF_UP);
+        List<BigDecimal> recentPcts = rangePcts.subList(0, Math.min(DYNAMIC_K_RECENT_DAYS, rangePcts.size()));
+        BigDecimal recentVolatility = recentPcts.stream()
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(BigDecimal.valueOf(recentPcts.size()), 6, RoundingMode.HALF_UP);
 
+        if (recentVolatility.compareTo(BigDecimal.ZERO) <= 0) {
+            return volatilityBreakoutK;
+        }
+        // k_dynamic = k_base * (평균변동폭 / 최근변동폭)
+        BigDecimal ratio = avgVolatility.divide(recentVolatility, 6, RoundingMode.HALF_UP);
+        BigDecimal adjustedK = volatilityBreakoutK.multiply(ratio);
+        if (adjustedK.compareTo(volatilityBreakoutKMin) < 0) {
+            adjustedK = volatilityBreakoutKMin;
+        } else if (adjustedK.compareTo(volatilityBreakoutKMax) > 0) {
+            adjustedK = volatilityBreakoutKMax;
+        }
+
+        log.debug("변동성 돌파 k 동적 조정: symbol={}, avgVol={}, recentVol={}, k={} -> {}",
+                symbol, avgVolatility, recentVolatility, volatilityBreakoutK, adjustedK);
         return adjustedK;
+    }
+
+    /**
+     * 장중 변동성 돌파 등에서 사용할 k 값. KR이고 동적 적용 시 종목별 동적 k, 아니면 고정값.
+     */
+    public BigDecimal getVolatilityBreakoutK(String symbol, String market, LocalDate asOfDate) {
+        if (!volatilityBreakoutKDynamic || !MARKET_KR.equals(market)) {
+            return volatilityBreakoutK;
+        }
+        List<DailyStock> history = dailyStockRepository.findBySymbolAndMarketAndBasDtBetweenOrderByBasDtAsc(
+                symbol, market, asOfDate.minusDays(DYNAMIC_K_LOOKBACK_DAYS), asOfDate);
+        return calculateDynamicK(symbol, history, asOfDate);
     }
 
     /**

@@ -39,6 +39,16 @@ public interface EmergencyAlertService {
         void sendRiskEventAlert(String level, String component, String message);
 
         /**
+         * 매매 체결 알림 (초보자 친화 평문). 별도 Discord 매매 채널로 발송.
+         *
+         * @param symbol   종목
+         * @param quantity 수량
+         * @param side     매수/매도
+         * @param pnlPct   수익률 (%)
+         */
+        void sendTradeAlert(String symbol, int quantity, String side, String pnlPct);
+
+        /**
          * Discord 웹훅 연결 테스트용 알림 1건 발송.
          *
          * @return Webhook URL이 설정되어 있고 발송에 성공하면 true, 미설정 또는 실패 시 false

@@ -52,4 +52,8 @@ public interface NewsItemRepository extends JpaRepository<NewsItem, String> {
         @Query("SELECT n FROM NewsItem n WHERE (n.eventType LIKE 'DART_SIGNAL:%' OR n.eventType = '8K') " +
                         "AND n.collectedAt >= :since AND n.market = :market ORDER BY n.collectedAt DESC")
         List<NewsItem> findSignalRelevantSince(@Param("market") String market, @Param("since") LocalDateTime since);
+
+        /** 시장·수집 시각 기준 최근 뉴스 (센티멘트 스코어링용, 최근 24시간 등). */
+        @Query("SELECT n FROM NewsItem n WHERE n.market = :market AND n.collectedAt >= :since ORDER BY n.collectedAt DESC")
+        List<NewsItem> findByMarketAndCollectedAtSince(@Param("market") String market, @Param("since") LocalDateTime since);
 }

@@ -23,6 +23,13 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/** Phase 1~3 워크포워드 검증 목표 (P8-1). backtest-stress-results.md § Phase 1~3 와 동기화. */
+class WalkForwardBacktestTargets {
+    static final BigDecimal CAGR_TARGET_PCT = new BigDecimal("20");
+    static final BigDecimal MDD_TARGET_PCT = new BigDecimal("-15"); // MDD는 음수, -15% 이내
+    static final BigDecimal SHARPE_TARGET = new BigDecimal("1.0");
+}
+
 @ExtendWith(MockitoExtension.class)
 @DisplayName("WalkForwardBacktestService")
 class WalkForwardBacktestServiceTest {
@@ -143,5 +150,45 @@ class WalkForwardBacktestServiceTest {
         assertThat(first.getEndDate()).isEqualTo(LocalDate.of(2024, 3, 21));
         assertThat(first.getMarket()).isEqualTo("US");
         assertThat(first.getInitialCapital()).isEqualByComparingTo(new BigDecimal("50000000"));
+    }
+
+    @Test
+    @DisplayName("Phase 1~3 검증: fold 결과가 목표(CAGR≥20%, MDD≥-15%, Sharpe≥1.0) 충족 시 집계 결과도 목표 충족")
+    void run_whenFoldsMeetTargets_aggregatedResultMeetsPhase1_3Targets() {
+        LocalDate start = LocalDate.now().minusYears(1);
+        LocalDate end = LocalDate.now();
+        WalkForwardBacktestRequest request = WalkForwardBacktestRequest.builder()
+                .startDate(start)
+                .endDate(end)
+                .market("KR")
+                .strategyType("SHORT_TERM")
+                .initialCapital(new BigDecimal("100000000"))
+                .trainDays(252)
+                .testDays(63)
+                .stepDays(63)
+                .build();
+
+        when(backtestService.run(any(BacktestRunRequest.class))).thenAnswer(inv -> {
+            BacktestRunRequest req = inv.getArgument(0);
+            return BacktestRunResult.builder()
+                    .startDate(req.getStartDate())
+                    .endDate(req.getEndDate())
+                    .cagr(new BigDecimal("25.0"))
+                    .mddPct(new BigDecimal("-10.0"))
+                    .sharpeRatio(new BigDecimal("1.2"))
+                    .winRate(new BigDecimal("0.55"))
+                    .profitFactor(new BigDecimal("1.4"))
+                    .build();
+        });
+
+        WalkForwardBacktestResult result = walkForwardBacktestService.run(request);
+
+        assertThat(result.getFoldCount()).isGreaterThanOrEqualTo(1);
+        assertThat(result.getAvgCagr())
+                .isGreaterThanOrEqualTo(WalkForwardBacktestTargets.CAGR_TARGET_PCT);
+        assertThat(result.getAvgMddPct())
+                .isGreaterThanOrEqualTo(WalkForwardBacktestTargets.MDD_TARGET_PCT);
+        assertThat(result.getMinSharpeRatio())
+                .isGreaterThanOrEqualTo(WalkForwardBacktestTargets.SHARPE_TARGET);
     }
 }
