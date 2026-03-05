@@ -7,6 +7,7 @@ import com.investment.marketdata.client.IndicatorResponse;
 import com.investment.marketdata.client.MarketDataClient;
 import com.investment.marketdata.config.MarketDataProperties;
 import com.investment.marketdata.service.KoreaInvestmentTokenService;
+import com.investment.marketdata.util.KoreaInvestmentHashkeyUtil;
 import com.investment.marketdata.util.KoreaInvestmentRequestBuilder;
 import com.investment.marketdata.util.StockCodeConverter;
 import io.github.resilience4j.ratelimiter.RateLimiter;
@@ -55,6 +56,7 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
     private final KoreaInvestmentTokenService tokenService;
     private final UserApiKeyRepository userApiKeyRepository;
     private final EncryptionUtil encryptionUtil;
+    private final KoreaInvestmentHashkeyUtil hashkeyUtil;
 
     // 한국투자증권 API Base URL
     private static final String BASE_URL_REAL = "https://openapi.koreainvestment.com:9443"; // 실거래
@@ -119,12 +121,6 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
     public Mono<IndicatorResponse> getIndicator(String indicator, String symbol, String interval) {
         log.debug("한국투자증권 API 호출: indicator={}, symbol={}, interval={}", indicator, symbol, interval);
 
-        // 모의 데이터 사용 여부 확인
-        if (properties.isUseMockData()) {
-            log.debug("모의 데이터 사용: symbol={}", symbol);
-            return Mono.just(createMockIndicatorResponse(indicator, symbol));
-        }
-
         // 현재 사용자 ID 가져오기
         String userId = getCurrentUserId();
 
@@ -151,17 +147,6 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
             String symbol, String interval, String... indicators) {
 
         log.debug("한국투자증권 Bulk API 호출: symbol={}, interval={}, indicators={}", symbol, interval, indicators);
-
-        // 모의 데이터 사용 여부 확인
-        if (properties.isUseMockData()) {
-            log.debug("모의 데이터 사용: symbol={}, indicators={}", symbol, indicators);
-            String stockCode = StockCodeConverter.toStockCode(symbol);
-            Map<String, IndicatorResponse> resultMap = new HashMap<>();
-            for (String indicator : indicators) {
-                resultMap.put(indicator, createMockIndicatorResponse(indicator, stockCode));
-            }
-            return Mono.just(resultMap);
-        }
 
         // 종목 코드 변환
         String stockCode = StockCodeConverter.toStockCode(symbol);
@@ -206,19 +191,13 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
      * 주식 현재가 조회
      * 
      * 한국투자증권 API의 주식현재가 조회 API를 사용합니다.
-     * TR ID: FHKST01010100 (실거래/모의투자 동일)
+     * TR ID: 실전 FHPST01010100 / 모의 FHKST01010100
      * 
      * @param symbol 종목 코드 (6자리 또는 종목명)
      * @return 현재가 정보
      */
     public Mono<com.investment.marketdata.dto.CurrentPriceDto> getCurrentPrice(String symbol) {
         log.debug("한국투자증권 현재가 조회: symbol={}", symbol);
-
-        // 모의 데이터 사용 여부 확인
-        if (properties.isUseMockData()) {
-            log.debug("모의 데이터 사용: symbol={}", symbol);
-            return Mono.just(createMockCurrentPrice(symbol));
-        }
 
         // 현재 사용자 ID 가져오기
         String userId = getCurrentUserId();
@@ -250,13 +229,9 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
         String userId = tokenInfo.get("userId");
 
         String baseUrl = getBaseUrl(serverType);
-        String trId = "FHKST01010100"; // 주식현재가 조회 TR ID
+        String trId = getDomesticQuotationTrId("01010100", serverType); // 주식현재가 조회
 
-        // 요청 헤더 생성 (공통 유틸리티 사용)
-        HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
-                accessToken, appKey, appSecret, trId);
-
-        // 조회 파라미터 (GET query parameter로 전달)
+        // 조회 파라미터 (GET query parameter로 전달) — 명세: FID_COND_MRKT_DIV_CODE(J), FID_INPUT_ISCD(종목코드 6자리)
         Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createMarketDataRequestBody(
                 Map.of(
                         "FID_COND_MRKT_DIV_CODE", "J", // J: 주식, ETF, ETN
@@ -264,7 +239,14 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
                 ));
         URI uri = buildUriWithQueryParams(baseUrl, "/uapi/domestic-stock/v1/quotations/inquire-price", queryParams);
 
-        log.debug("한국투자증권 현재가 조회 API 호출: stockCode={}", stockCode);
+        // 요청 헤더: authorization, appkey, appsecret, tr_id, content-type, custtype, hashkey (명세 준수)
+        HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
+                accessToken, appKey, appSecret, trId);
+        headers.set("custtype", "P"); // 고객유형: P(개인)
+        Map<String, Object> paramsForHash = new HashMap<>(queryParams);
+        headers.set("hashkey", hashkeyUtil.generateHashkey(paramsForHash, appSecret));
+
+        log.debug("한국투자증권 현재가 조회 API 호출: stockCode={}, serverType={}, trId={}", stockCode, serverType, trId);
 
         // Rate Limiter 적용
         RateLimiter rateLimiter = getApiRateLimiter(serverType);
@@ -284,7 +266,7 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
                                     if (throwable instanceof org.springframework.web.reactive.function.client.WebClientResponseException) {
                                         org.springframework.web.reactive.function.client.WebClientResponseException ex = (org.springframework.web.reactive.function.client.WebClientResponseException) throwable;
                                         if (ex.getStatusCode().value() == 401) {
-                                            log.warn("401 에러 발생, 토큰 캐시 무효화 후 재시도: userId={}", userId);
+                                            log.warn("한국투자증권 현재가 401, 토큰 캐시 무효화 후 재시도: userId={}", userId);
                                             invalidateTokenCache(userId);
                                             return true;
                                         }
@@ -301,6 +283,8 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
                             if (rtCd == null || !"0".equals(rtCd)) {
                                 String msg1 = (String) responseMap.get("msg1");
                                 String msgCd = (String) responseMap.get("msg_cd");
+                                log.warn("한국투자증권 현재가 API 오류: stockCode={}, rt_cd={}, msg_cd={}, msg1={}",
+                                        stockCode, rtCd, msgCd, msg1);
                                 throw new RuntimeException(
                                         "한국투자증권 API 오류: rt_cd=" + rtCd + ", msg_cd=" + msgCd + ", msg1=" + msg1);
                             }
@@ -309,10 +293,19 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
                             @SuppressWarnings("unchecked")
                             Map<String, Object> output = (Map<String, Object>) responseMap.get("output");
                             if (output == null) {
+                                log.warn("한국투자증권 현재가 API 응답에 output 없음: stockCode={}", stockCode);
                                 throw new RuntimeException("한국투자증권 API 응답에 output이 없습니다");
                             }
 
                             return parseCurrentPriceResponse(output, stockCode);
+                        })
+                        .doOnError(e -> {
+                            if (e instanceof org.springframework.web.reactive.function.client.WebClientResponseException ex) {
+                                log.warn("한국투자증권 현재가 HTTP 오류: stockCode={}, status={}, body={}",
+                                        stockCode, ex.getStatusCode(), ex.getResponseBodyAsString());
+                            } else {
+                                log.warn("한국투자증권 현재가 조회 실패: stockCode={}, error={}", stockCode, e.getMessage());
+                            }
                         }));
     }
 
@@ -389,28 +382,6 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
     }
 
     /**
-     * 모의 현재가 데이터 생성
-     */
-    private com.investment.marketdata.dto.CurrentPriceDto createMockCurrentPrice(String symbol) {
-        return com.investment.marketdata.dto.CurrentPriceDto.builder()
-                .symbol(symbol)
-                .name("모의 종목")
-                .currentPrice(new BigDecimal("50000"))
-                .changeRate(new BigDecimal("1.5"))
-                .changeAmount(new BigDecimal("750"))
-                .previousClose(new BigDecimal("49250"))
-                .openPrice(new BigDecimal("49300"))
-                .highPrice(new BigDecimal("50200"))
-                .lowPrice(new BigDecimal("49200"))
-                .volume(1000000L)
-                .tradingValue(new BigDecimal("50000000000"))
-                .marketCap(new BigDecimal("1000000000000"))
-                .listedShares(20000000L)
-                .queriedAt(java.time.LocalDateTime.now())
-                .build();
-    }
-
-    /**
      * Access Token 확인 및 갱신.
      * 동일 요청 내(5초 TTL 캐시) 재호출 시 DB/발급 없이 캐시된 tokenInfo 재사용하여 N+1 제거.
      * tokenInfo: token, serverType, appKey, appSecret, userId.
@@ -471,17 +442,13 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
 
         String baseUrl = getBaseUrl(serverType);
 
-        String trId = "FHKST03010100"; // 주식현재가 일봉차트 조회 TR ID
+        String trId = getDomesticQuotationTrId("03010100", serverType); // 주식 일봉차트 조회
 
         // 날짜 설정 (최근 200일)
         LocalDate endDate = LocalDate.now();
         LocalDate startDate = endDate.minusDays(200);
         String endDateStr = endDate.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
         String startDateStr = startDate.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-
-        // 요청 헤더 생성 (공통 유틸리티 사용)
-        HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
-                accessToken, appKey, appSecret, trId);
 
         // 조회 파라미터 (GET query parameter로 전달)
         Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createMarketDataRequestBody(
@@ -495,6 +462,13 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
                 ));
         URI uri = buildUriWithQueryParams(baseUrl, "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice",
                 queryParams);
+
+        // 요청 헤더: 공통 + custtype, hashkey (명세 준수)
+        HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
+                accessToken, appKey, appSecret, trId);
+        headers.set("custtype", "P");
+        Map<String, Object> chartParamsForHash = new HashMap<>(queryParams);
+        headers.set("hashkey", hashkeyUtil.generateHashkey(chartParamsForHash, appSecret));
 
         log.debug("한국투자증권 차트 데이터 조회: stockCode={}, interval={}", stockCode, interval);
 
@@ -830,43 +804,17 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
     }
 
     /**
-     * 모의 지표 응답 생성 (개발/테스트용)
+     * 국내주식 시세 API TR_ID (실전 FHPST / 모의 FHKST 구분)
+     * 한국투자증권: 실전 도메인은 FHPST, 모의 도메인은 FHKST 접두사 사용.
+     *
+     * @param suffix TR_ID 접미사 (예: "01010100" 주식현재가, "03010100" 일봉차트)
+     * @param serverType "0" 실거래, "1" 모의투자
      */
-    private IndicatorResponse createMockIndicatorResponse(String indicator, String symbol) {
-        IndicatorResponse.IndicatorResponseBuilder builder = IndicatorResponse.builder();
-
-        switch (indicator.toLowerCase()) {
-            case "rsi":
-                builder.value(new BigDecimal("50.5"));
-                break;
-            case "macd":
-                builder.valueMacd(new BigDecimal("1.2"));
-                builder.valueMacdSignal(new BigDecimal("1.0"));
-                builder.valueMacdHist(new BigDecimal("0.2"));
-                break;
-            case "ema":
-                builder.values(new BigDecimal[] {
-                        new BigDecimal("50000"),
-                        new BigDecimal("51000"),
-                        new BigDecimal("52000")
-                });
-                break;
-            case "bbands":
-                builder.valueUpperBand(new BigDecimal("55000"));
-                builder.valueMiddleBand(new BigDecimal("50000"));
-                builder.valueLowerBand(new BigDecimal("45000"));
-                break;
-            case "atr":
-                builder.valueAtr(new BigDecimal("2000"));
-                break;
-            case "vwap":
-                builder.value(new BigDecimal("50500"));
-                break;
-            default:
-                return createErrorResponse("지원하지 않는 지표: " + indicator);
+    private String getDomesticQuotationTrId(String suffix, String serverType) {
+        if ("0".equals(serverType)) {
+            return "FHPST" + suffix; // 실전
         }
-
-        return builder.build();
+        return "FHKST" + suffix; // 모의
     }
 
     /**

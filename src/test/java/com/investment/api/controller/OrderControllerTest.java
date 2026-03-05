@@ -5,6 +5,8 @@ import com.investment.account.service.AccountService;
 import com.investment.common.security.JwtAuthenticationFilter;
 import com.investment.common.security.RateLimitFilter;
 import com.investment.config.SecurityHeadersConfig;
+import com.investment.common.exception.DomainException;
+import com.investment.common.exception.ErrorCode;
 import com.investment.order.dto.OrderRequestDto;
 import com.investment.order.dto.OrderResponseDto;
 import com.investment.order.service.OrderService;
@@ -83,6 +85,26 @@ class OrderControllerTest {
                                 .andExpect(jsonPath("$.orderId").value(orderId))
                                 .andExpect(jsonPath("$.symbol").value("005930"))
                                 .andExpect(jsonPath("$.orderType").value("BUY"));
+        }
+
+        @Test
+        void 주문_생성_도메인예외_시_400() throws Exception {
+                OrderRequestDto request = OrderRequestDto.builder()
+                                .accountNo("50161075-01")
+                                .symbol("005930")
+                                .orderType(OrderRequestDto.OrderType.BUY)
+                                .quantity(1)
+                                .price(new BigDecimal("50000"))
+                                .build();
+                when(orderService.executeOrder(any(OrderRequestDto.class)))
+                                .thenThrow(new DomainException(ErrorCode.ORDER_FAILED, "주문 실행에 실패했습니다"));
+
+                mockMvc.perform(post("/api/v1/orders")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value(ErrorCode.ORDER_FAILED))
+                                .andExpect(jsonPath("$.message").exists());
         }
 
         @Test

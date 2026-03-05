@@ -12,81 +12,86 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
- * 성과 귀인: 팩터/전략별 수익 기여도 분석.
- * TB_STRATEGY_POSITION 청산 포지션(exitDt not null) 기준으로 실현 PnL을 팩터(signalType)·전략(strategyType)별로 집계.
+ * 성과 귀인(Performance Attribution): 사용자 계좌별 청산 포지션 실현 PnL을
+ * signalType(팩터)·strategyType(전략)별로 집계하고 기여율(합 100%)을 산출.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class PerformanceAttributionService {
 
-    private final StrategyPositionRepository strategyPositionRepository;
-    private final TradingSettingRepository tradingSettingRepository;
-
+    private static final String UNKNOWN = "UNKNOWN";
     private static final int SCALE = 4;
-    private static final RoundingMode ROUND = RoundingMode.HALF_UP;
+
+    private final TradingSettingRepository tradingSettingRepository;
+    private final StrategyPositionRepository strategyPositionRepository;
 
     /**
-     * 사용자 계좌별 청산 포지션을 합쳐 팩터/전략별 기여도 산출.
-     * totalRealizedPnl = 0이면 기여율 0%로 반환.
+     * 사용자 기준 성과 귀인. 해당 사용자의 모든 계좌에 대한 청산 포지션 집계.
      */
     @Transactional(readOnly = true)
     public PerformanceAttributionDto getAttribution(String userId) {
-        List<StrategyPosition> closed = new ArrayList<>();
-        for (var setting : tradingSettingRepository.findByUserIdOrderByAccountNo(userId)) {
-            closed.addAll(strategyPositionRepository.findByAccountNoAndExitDtIsNotNullOrderByExitDtDesc(setting.getAccountNo()));
+        List<String> accountNos = tradingSettingRepository.findByUserIdOrderByAccountNo(userId).stream()
+                .map(s -> s.getAccountNo())
+                .distinct()
+                .collect(Collectors.toList());
+        if (accountNos.isEmpty()) {
+            return PerformanceAttributionDto.builder()
+                    .totalRealizedPnl(BigDecimal.ZERO)
+                    .bySignalType(Map.of())
+                    .byStrategyType(Map.of())
+                    .build();
         }
 
+        Map<String, BigDecimal> pnlBySignal = new HashMap<>();
+        Map<String, BigDecimal> pnlByStrategy = new HashMap<>();
         BigDecimal totalPnl = BigDecimal.ZERO;
-        Map<String, BigDecimal> pnlByFactor = new LinkedHashMap<>();
-        Map<String, BigDecimal> pnlByStrategy = new LinkedHashMap<>();
 
-        for (StrategyPosition p : closed) {
-            if (p.getExitPrice() == null) continue;
-            BigDecimal pnl = p.getExitPrice().subtract(p.getEntryPrice())
-                    .multiply(BigDecimal.valueOf(p.getQuantity()))
-                    .setScale(SCALE, ROUND);
-            totalPnl = totalPnl.add(pnl);
+        for (String accountNo : accountNos) {
+            List<StrategyPosition> closed = strategyPositionRepository
+                    .findByAccountNoAndExitDtIsNotNullOrderByExitDtDesc(accountNo);
+            for (StrategyPosition p : closed) {
+                if (p.getExitPrice() == null) continue;
+                BigDecimal pnl = p.getExitPrice().subtract(p.getEntryPrice())
+                        .multiply(BigDecimal.valueOf(p.getQuantity()));
+                totalPnl = totalPnl.add(pnl);
 
-            String factor = p.getSignalType() != null && !p.getSignalType().isBlank()
-                    ? p.getSignalType() : "UNKNOWN";
-            pnlByFactor.merge(factor, pnl, BigDecimal::add);
+                String signal = p.getSignalType() != null && !p.getSignalType().isBlank()
+                        ? p.getSignalType() : UNKNOWN;
+                pnlBySignal.merge(signal, pnl, BigDecimal::add);
 
-            String strategy = p.getStrategyType() != null ? p.getStrategyType().name() : StrategyType.SHORT_TERM.name();
-            pnlByStrategy.merge(strategy, pnl, BigDecimal::add);
-        }
-
-        List<PerformanceAttributionDto.FactorContribution> byFactor = new ArrayList<>();
-        List<PerformanceAttributionDto.StrategyContribution> byStrategy = new ArrayList<>();
-
-        if (totalPnl.compareTo(BigDecimal.ZERO) != 0) {
-            for (Map.Entry<String, BigDecimal> e : pnlByFactor.entrySet()) {
-                BigDecimal pct = e.getValue().divide(totalPnl.abs(), SCALE, ROUND).multiply(BigDecimal.valueOf(100));
-                byFactor.add(new PerformanceAttributionDto.FactorContribution(e.getKey(), e.getValue(), pct));
-            }
-            for (Map.Entry<String, BigDecimal> e : pnlByStrategy.entrySet()) {
-                BigDecimal pct = e.getValue().divide(totalPnl.abs(), SCALE, ROUND).multiply(BigDecimal.valueOf(100));
-                byStrategy.add(new PerformanceAttributionDto.StrategyContribution(e.getKey(), e.getValue(), pct));
-            }
-        } else {
-            for (String f : pnlByFactor.keySet()) {
-                byFactor.add(new PerformanceAttributionDto.FactorContribution(f, pnlByFactor.get(f), BigDecimal.ZERO));
-            }
-            for (String s : pnlByStrategy.keySet()) {
-                byStrategy.add(new PerformanceAttributionDto.StrategyContribution(s, pnlByStrategy.get(s), BigDecimal.ZERO));
+                String strategy = p.getStrategyType() != null ? p.getStrategyType().name() : UNKNOWN;
+                pnlByStrategy.merge(strategy, pnl, BigDecimal::add);
             }
         }
+
+        Map<String, BigDecimal> bySignalPct = toPercentMap(pnlBySignal, totalPnl);
+        Map<String, BigDecimal> byStrategyPct = toPercentMap(pnlByStrategy, totalPnl);
 
         return PerformanceAttributionDto.builder()
-                .totalRealizedPnl(totalPnl)
-                .byFactor(byFactor)
-                .byStrategy(byStrategy)
+                .totalRealizedPnl(totalPnl.setScale(SCALE, RoundingMode.HALF_UP))
+                .bySignalType(bySignalPct)
+                .byStrategyType(byStrategyPct)
                 .build();
+    }
+
+    private static Map<String, BigDecimal> toPercentMap(Map<String, BigDecimal> pnlByKey, BigDecimal totalPnl) {
+        if (totalPnl == null || totalPnl.compareTo(BigDecimal.ZERO) == 0) {
+            return pnlByKey.keySet().stream()
+                    .collect(Collectors.toMap(k -> k, k -> BigDecimal.ZERO.setScale(SCALE, RoundingMode.HALF_UP)));
+        }
+        Map<String, BigDecimal> out = new HashMap<>();
+        for (Map.Entry<String, BigDecimal> e : pnlByKey.entrySet()) {
+            BigDecimal pct = e.getValue().divide(totalPnl, SCALE + 2, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP);
+            out.put(e.getKey(), pct);
+        }
+        return out;
     }
 }

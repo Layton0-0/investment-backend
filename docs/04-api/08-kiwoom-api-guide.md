@@ -19,7 +19,6 @@ MarketDataClient (인터페이스)
 investment:
   market-data:
     provider: kiwoom
-    use-mock-data: ${MARKET_DATA_USE_MOCK_DATA:false}
     kiwoom:
       account-no: ${KIWOOM_ACCOUNT_NO:}
       password: ${KIWOOM_PASSWORD:}

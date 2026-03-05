@@ -10,6 +10,40 @@
 
 ## 1. 완료 (Completed)
 
+### 한국투자증권 전체 API 명세서 문서화 (2026-03-05)
+- [x] **한국투자증권 전체 API 명세서(10) 작성**  
+  [10-korea-investment-api-spec.md](../04-api/10-korea-investment-api-spec.md) 신규 작성. 원본 xlsx 목록(13개)·code 폴더(9개)·구현된 API 요약 표(path·TR_ID·HTTP)·신규 API 추가 절차·참조 링크. Excel Reader MCP로 xlsx 시트 확인. MCP 규칙(MCP.mdc)에 명세서 참조 문구 추가. 01-api-overview §9.2에 09 가이드·10 명세서 링크 반영.
+
+### 기간별손익조회 404 근본 원인 조치 (2026-03-05)
+- [x] **기간별손익일별합산조회 요청 파라미터·모의 미지원 처리**
+  명세(10-korea-investment-api-spec §6) 기준: 필수 쿼리 `PDNO`(공란=전체), `SORT_DVSN`(00), `CBLC_DVSN`(00) 추가, 명세에 없는 `SLL_BUY_DVSN_CD` 제거. 모의투자(serverType=1)는 명세상 미지원이므로 API 호출 없이 `ErrorCode.API_NOT_SUPPORTED` 예외 반환. GlobalExceptionHandler·AccountController 400 응답·문서 반영. (4xx 시 빈 DTO 반환 방식 지양, 근본 원인 수정 원칙 적용.)
+
+### 한국투자증권 API 명세 검증 (2026-03-05)
+- [x] **Account·Order·MarketData·Rank 클라이언트 명세 대조 검증**  
+  KoreaInvestmentAccountApiConstants PATH·TR_ID는 10-korea-investment-api-spec.md §4.2·§4.3과 일치(잔고·해외잔고·매수가능·매도가능·주문체결·자산현황·기간별손익·정정취소·실현손익·기간별현황). KoreaInvestmentOrderClient order-cash path·TTTC0011U/0012U·VTTC0011U/0012U 일치. KoreaInvestmentMarketDataClient getCurrentPrice path `/uapi/domestic-stock/v1/quotations/inquire-price`·TR_ID FHPST01010100/FHKST01010100. application.yml rank-api volume-rank·investor-daily path·TR_ID 명세와 일치. 불일치 없음.
+
+### 한국투자증권 계좌 API·WebSocket 캐시 연동 (2026-03-05)
+- [x] **주식잔고조회_실현손익·기간별매매손익현황조회 API**  
+  TTTC8494R/VTTC8494R 실현손익(inquire-balance-rlz-pl), TTTC8709R/VTTC8709R 기간별매매손익현황(inquire-period-profit-loss-status). BalanceRealizedProfitLossDto·PeriodProfitLossStatusDto, AccountController GET /{accountNo}/balance-rlz-pl·GET /{accountNo}/profit-loss-status. AccountApiRunner REQUIRES_NEW·AccountService·Client 연동. Shrimp 20117cf7·8f862189.
+- [x] **WebSocket 수신 → 현재가 캐시 반영·스케줄러 구독 연동**  
+  WebSocketPriceCacheListener: WebSocketDataEvent 수신 시 tr_id(호가/체결) 구분·JSON·파이프 구분 파싱 후 RealtimeMarketDataService.updateFromWebSocket 호출. PipelineExitScheduler·IntradayBreakoutScheduler에서 보유·대상 종목에 대해 KoreaInvestmentWebSocketClient.subscribeQuote 호출(연결 시·스케줄 실행 시). current-price-cache-ttl-seconds 프로퍼티 주석(단타/청산/WebSocket 시 짧은 TTL 권장). 14-multi-account-realtime-streaming.md §3.4.6 갱신. Shrimp a63b9466·bd72d1b7·0c97164c.
+- [x] **테스트 실행·development-status 갱신**  
+  AccountServiceTest inquireOverseasBalanceInNewTx 반환 타입 OverseasBalanceResult 수정. IntradayBreakoutSchedulerTest TradingWindowService 모킹 추가. TradingWindowServiceTest setUp stubbing lenient 처리. 전체 테스트 통과 후 §1 완료·§5 문서 변경 이력 반영. Shrimp 2cd6766d.
+
+### 퀀트 시간대 전략 다중 구간 (2026-03-05)
+- [x] **트레이딩 윈도우 다중 구간·스케줄 분리**  
+  KR 2구간(09:00~10:00, 14:30~15:30), US 2구간(23:30~01:00, 05:00~06:00 KST). PipelineTradingWindowProperties kr/us start2·end2, getKrSegments()/getUsSegments(). TradingWindowService isInKrWindow/isInUsWindow 세그먼트 순회 판단. PipelineExecutionScheduler runKrAfternoon(14:35, marketFilter=KR), runUsClose(05:05, US). application.yml execution-schedule-cron-kr-afternoon, execution-schedule-cron-us-close. 14-trading-window-quant.md 퀀트 근거·한산 구간(11:30~14:00)·변동성 vs 왜곡 원칙·VWAP 비고. 00-strategy-registry v2.1 버전 스택·트레이딩 윈도우 문단 추가.
+
+### QA 시나리오 점검·파이프라인 동기화 (2026-03-05)
+- [x] **Shrimp QA 태스크 의존성 정렬·전체 진행**  
+  전체 QA 파이프라인 점검(1ed426fe)에 6개 시나리오 점검 태스크 의존성 추가. QA-Backend/API/Python/PythonTests/E2E/Security 시나리오 점검 완료(03-test-execution 실패 시 안내, QA_시나리오_점검_요약 §3~§7 반영). 전체 QA 파이프라인 점검: qa-automation-flow.mdc에 Python 서비스 QA·Python 단위 테스트 단계 명시. QA-Security run(npm audit --audit-level=high)·QA-Report(리포트 경로·실패 루프) 완료. Pending 0.
+- [x] **한국투자증권 토큰 1분 1회 제한 대응 (재사용/캐시)**  
+  KoreaInvestmentTokenService.getAccessToken: 1분 쿨다운에 걸렸을 때 예외를 던지기 전에 DB에서 기존 유효 토큰을 조회해 반환하도록 수정(동시 발급 블록 내·복호화 실패 후 재발급 블록 내 두 곳). 기존 토큰이 유효하면 재사용, 없거나 복호화 실패 시에만 "접근토큰 발급은 1분당 1회만 가능합니다" 예외 발생. Shrimp task 16961bf7.
+- [x] **토큰 발급 실패 시 Transaction rollback 방지**  
+  AccountApiRunner에 inquireAssetsInNewTx, inquirePeriodProfitLossInNewTx, inquireBuyableAmountInNewTx, inquireSellableQuantityInNewTx, inquireOrderHistoryInNewTx 추가(REQUIRES_NEW). AccountService의 getAccountAssets, getPeriodProfitLoss, getBuyableAmount, getSellableQuantity, getOrderHistory를 accountClient 직접 호출에서 accountApiRunner 호출로 변경. 토큰/API 실패 시 새 트랜잭션만 rollback되어 UnexpectedRollbackException 방지. Shrimp task dbc97044.
+- [x] **한국투자증권 API 요청 로그 민감정보 마스킹**  
+  KoreaInvestmentAccountClient.logApiRequest: 요청 헤더 로그 시 authorization은 "Bearer ***"만 출력(DEBUG 전체 토큰 출력 제거), appkey/app-key는 LogMaskingUtil.maskApiKey, appsecret/app-secret은 LogMaskingUtil.maskSecret로 마스킹. 02-security-configuration-reference 로깅 규칙 준수. Shrimp task c1c9f58f.
+
 ### Shrimp 헤지펀드급 퀀트 고도화 (2026-03-04)
 - [x] **P2-3 섹터 집중도 제한 (단일 섹터 30% 상한)**  
   CorrelationPenaltyService.applySectorConcentrationLimit: TB_SYMBOL_SECTOR로 종목별 섹터 조회, 동일 섹터 비중 합이 sector-concentration-limit-pct(0.30) 초과 시 해당 섹터 권장 비중 비례 축소. PositionSizingService.getRecommendations 내 applyRiskBasedCap 이후 호출. investment.factor.sector-concentration-limit-pct: 0.30. CorrelationPenaltyServiceTest(단일 섹터 초과 축소·다양한 섹터 시 미적용)·PositionSizingServiceTest(stub) 추가.
@@ -65,6 +99,8 @@
   InverseVolatilityPortfolioService: TB_DAILY_STOCK 20일 수익률 표준편차 기반 역변동성 가중(weight_i = (1/sigma_i)/sum(1/sigma_j)), 종목당 최대 할당 비율 캡. StubPortfolioComponents는 investment.portfolio.mode=stub(기본)일 때만 로드(@ConditionalOnProperty). mode=inverse-volatility 시 TaxAwareOptimizerImpl·RebalancerImpl 사용. PositionSizingService에서 portfolio.mode=inverse-volatility일 때 InverseVolatilityPortfolioService 적용. application.yml investment.portfolio.mode, investment.portfolio.inverse-volatility.max-allocation-pct. InverseVolatilityPortfolioServiceTest·PositionSizingServiceTest 보강.
 
 ### 퍼블·프론트
+- [x] **대시보드 첫 화면 (모의계좌 국내·미국 포트폴리오 현황·데이터 연동)**  
+  DashboardPage: 제목 "대시보드", 부제목 "모의계좌 국내 미국 포트폴리오 현황", 글로벌 내비 탭(국내 전략, 미국 전략, 뉴스, 포트폴리오, 주문·체결, 설정). Dashboard: 자동투자 상태 카드·킬스위치 카드 2열, KR 국내 계좌 섹션(요약 4항목·국내 보유 종목·국내 최근 주문), US 미국 계좌 섹션(동일 구조). 주문 KR/US 구분(isKrSymbol), 매수 파란·매도 빨간 뱃지. lib/utils: formatCurrencyKr·formatCurrencyUs·formatPercent·profitLossColorClass·isKrSymbol. Shrimp 태스크 6건 완료(2b3a2c18, e0f169e7, 3a08e5cc, 89c1366c, 84749c08, 251dcf37).
 - [x] **smart-portfolio-pal 최신 pull 및 전면 퍼블 정렬(국내/미국 포함)**
   서브모듈 smart-portfolio-pal 최신 main pull 후, investment-frontend 전체 화면을 해당 프로젝트 퍼블 기준으로 정렬. 디자인 토큰(globals.css: chart-stocks-kr/us, sidebar·semantic)·레이아웃(AppLayout max-w 1200px, bg-background·border-border·sidebar semantic)·메뉴(단일 메뉴+운영 Ops, 라벨·순서 smart-portfolio-pal 일치)·대시보드·로그인·계좌탭 semantic 토큰 적용. publish/ Attributions에 디자인 소스 명시. 02-architecture.md 갱신.
 
@@ -539,3 +575,10 @@
 | 1.54 | 2026-03-04 | 완료: P6-3 자동 트레이드 저널 — TB_AUDIT_LOG DETAIL_JSON(V35), AuditLogService.logTradeDecision·EVENT_TRADE_DECISION, PipelineExecutor 매수/스킵/실패/DRY_RUN 시 저널 기록, GET /api/v1/ops/trade-journal·프론트 트레이드 저널 탭. |
 | 1.55 | 2026-03-04 | P7-1 Shrimp 검증 완료 — .gitmodules 중복 investment-front 없음 확인, PreTradeComplianceEngine @Component 디폴트·ComplianceEngineStub 비-빈 유지 확인. TradingStrategyService createSellOrder Javadoc TODO 제거·보유 종목 연동 예정 문구로 정리. |
 | 1.56 | 2026-03-04 | P5-1 Shrimp 검증 완료 — KrxCollectionService 1차 KRX·2차 한투 폴백·이상치 경고 기존 구현 확인. KrxCollectionServiceTest에 전일 대비 50% 이상 변동 시 이상치 경고 후 저장 검증 테스트 추가. |
+| 1.57 | 2026-03-05 | 완료: 한국투자증권·트랜잭션·로깅 개선(Shrimp 3건) — (1) 토큰 1분 1회 제한 시 쿨다운 구간에서 기존 유효 토큰 DB 재조회·반환(KoreaInvestmentTokenService). (2) 자산/손익/매수가능/매도가능/주문체결 조회를 AccountApiRunner REQUIRES_NEW로 이전하여 토큰 실패 시 UnexpectedRollbackException 방지. (3) KoreaInvestmentAccountClient 요청 헤더 로그에 appkey/appsecret 마스킹·authorization Bearer ***만 출력(DEBUG 전체 토큰 제거). |
+| 1.57 | 2026-03-04 | P5-2 Shrimp 검증 완료 — NewsSentimentScorer·NewsSignalService 센티멘트 연동 기존 구현 확인. NewsSentimentScorerTest 신규(긍정/부정/빈텍스트 0/클램핑/혼합 합산) 추가. |
+| 1.58 | 2026-03-04 | P6-2 성과 귀인 분석 구현 — PerformanceAttributionService·PerformanceAttributionDto 신규(TB_STRATEGY_POSITION 청산 포지션 기준 signalType·strategyType별 기여율 합 100%). GET /api/v1/risk/attribution(RiskReportController 기존). PerformanceAttributionServiceTest(청산 없음·기여 합 100%·계좌 없음). 프론트 riskApi PerformanceAttributionDto 정합·DashboardAttributionCard(recharts PieChart) 신규. |
+| 1.59 | 2026-03-04 | P6-4 Discord 알림 체계화 Shrimp 검증 완료 — DiscordEmergencyAlertService 기존 구현(trade/risk/system 웹훅·폴백·평문) 확인. DiscordEmergencyAlertServiceTest 신규: 채널별 URL(trade/risk/system)·미설정 시 기본 웹훅 폴백·매매 평문 형식(AlertLog 저장 검증)·웹훅 미설정 스킵 검증. lenient 스텁으로 미호출 시 UnnecessaryStubbing 방지. |
+| 1.60 | 2026-03-05 | 완료: 한국투자증권 전체 API 명세서(10) 작성 — 10-korea-investment-api-spec.md 신규(xlsx 13개·code 9개·구현 API 표·신규 API 절차). MCP.mdc 명세서 참조 문구. 01-api-overview §9.2 한투 09·10 링크. |
+| 1.61 | 2026-03-05 | 완료: 한국투자증권 API 명세 검증 — Constants·AccountClient·OrderClient·MarketDataClient·rank-api path·TR_ID 10-korea-investment-api-spec·09 가이드와 대조, 불일치 없음. 09-domestic-stock-order-account.md 기간 Path inquire-period-profit-loss 수정. Shrimp 한국투자증권 API 검증·WebSocket 연동 계획 Task 1·2 완료. |
+| 1.62 | 2026-03-05 | 완료: 계좌 실현손익·기간별매매손익 API·WebSocket 캐시 연동 — 주식잔고조회_실현손익/기간별매매손익현황조회 API·DTO·Controller·테스트. WebSocketPriceCacheListener·스케줄러 subscribeQuote 연동·current-price-cache-ttl 주석. 테스트 수정(AccountServiceTest·IntradayBreakoutSchedulerTest·TradingWindowServiceTest). §1 완료·§5 이력 추가. Shrimp 20117cf7·8f862189·a63b9466·bd72d1b7·0c97164c·2cd6766d. |

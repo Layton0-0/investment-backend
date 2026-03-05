@@ -282,6 +282,8 @@ investment:
     # 실전 계좌(serverType=0) 자동 실행 허용. false면 모의계좌만 실제 주문 실행.
     allow-real-execution: ${PIPELINE_ALLOW_REAL_EXECUTION:false}
     execution-schedule-cron: ${PIPELINE_EXECUTION_SCHEDULE_CRON:0 10 9 * * *}  # 한국장 유리 구간 (09:10 KST)
+    execution-schedule-cron-kr-afternoon: ${PIPELINE_EXECUTION_SCHEDULE_CRON_KR_AFTERNOON:0 35 14 * * MON-FRI}  # 한국장 마감 1시간 (14:35 KST)
+    execution-schedule-cron-us-close: ${PIPELINE_EXECUTION_SCHEDULE_CRON_US_CLOSE:0 5 5 * * MON-FRI}  # 미국장 마감 직전 (05:05 KST)
     # 퀀트 매매 유리 시간대: 해당 구간에만 진입 실행. 14-trading-window-quant.md 참조.
     trading-window:
       enabled: ${PIPELINE_TRADING_WINDOW_ENABLED:true}
@@ -289,9 +291,13 @@ investment:
       kr:
         start: ${PIPELINE_TRADING_WINDOW_KR_START:09:00}
         end: ${PIPELINE_TRADING_WINDOW_KR_END:10:00}
+        start2: ${PIPELINE_TRADING_WINDOW_KR_START2:14:30}
+        end2: ${PIPELINE_TRADING_WINDOW_KR_END2:15:30}
       us:
         start: ${PIPELINE_TRADING_WINDOW_US_START:23:30}
         end: ${PIPELINE_TRADING_WINDOW_US_END:01:00}
+        start2: ${PIPELINE_TRADING_WINDOW_US_START2:05:00}
+        end2: ${PIPELINE_TRADING_WINDOW_US_END2:06:00}
     exit-schedule-cron: ${PIPELINE_EXIT_SCHEDULE_CRON:0 */5 9-15 * * MON-FRI}  # 장중 5분마다 청산 평가 (09:00~15:59, 평일)
     fill-confirmation-cron: ${PIPELINE_FILL_CONFIRMATION_CRON:0 * * * * *}  # 매분 체결 확인 후 포지션 등록
     medium-term-rebalance-cron: ${PIPELINE_MEDIUM_TERM_REBALANCE_CRON:0 30 8 1 * *}  # 매월 1일 08:30 KST (스텁)
@@ -397,8 +403,7 @@ investment:
   market-data:
     provider: ${MARKET_DATA_PROVIDER:korea-investment}
     timeout: ${MARKET_DATA_TIMEOUT:30000}
-    use-mock-data: ${MARKET_DATA_USE_MOCK_DATA:false}
-    # 현재가 캐시 TTL(초). 기본 300(5분). 단타/WebSocket 활성화 시 5 등 짧게 설정 권장
+    # 현재가 캐시 TTL(초). 기본 300(5분). 단타/청산/WebSocket 활성화 시 5 등 짧은 TTL 설정 권장
     current-price-cache-ttl-seconds: ${MARKET_DATA_CURRENT_PRICE_CACHE_TTL_SECONDS:300}
     # 한국투자증권 API 설정
     # [주의] app-key/app-secret/server-type은 계정별로 DB에서 관리됨

@@ -25,11 +25,6 @@ public class MarketDataProperties {
     private int timeout = 30000;
     
     /**
-     * 모의 데이터 사용 여부
-     */
-    private boolean useMockData = false;
-    
-    /**
      * 한국투자증권 API 설정
      */
     private KoreaInvestmentProperties koreaInvestment = new KoreaInvestmentProperties();

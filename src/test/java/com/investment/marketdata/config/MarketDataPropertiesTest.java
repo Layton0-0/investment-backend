@@ -17,7 +17,6 @@ import static org.junit.jupiter.api.Assertions.*;
 @TestPropertySource(properties = {
         "investment.market-data.provider=korea-investment",
         "investment.market-data.timeout=30000",
-        "investment.market-data.use-mock-data=false",
         "investment.market-data.korea-investment.app-key=test-app-key",
         "investment.market-data.korea-investment.app-secret=test-app-secret",
         "investment.market-data.korea-investment.server-type=1",
@@ -77,26 +76,6 @@ class MarketDataPropertiesTest {
         
         // then
         assertEquals(expectedTimeout, properties.getTimeout());
-    }
-    
-    @Test
-    @DisplayName("기본 useMockData 값 확인")
-    void 기본_useMockData_값() {
-        // when
-        boolean useMockData = properties.isUseMockData();
-        
-        // then
-        assertFalse(useMockData);
-    }
-    
-    @Test
-    @DisplayName("useMockData 설정")
-    void useMockData_설정() {
-        // when
-        properties.setUseMockData(true);
-        
-        // then
-        assertTrue(properties.isUseMockData());
     }
     
     @Test

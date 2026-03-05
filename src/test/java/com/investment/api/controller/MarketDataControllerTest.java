@@ -74,6 +74,15 @@ class MarketDataControllerTest {
     }
 
     @Test
+    @DisplayName("GET /api/v1/market-data/current-price/{symbol} 조회 실패 시 404 반환")
+    void getCurrentPrice_returns404WhenNull() throws Exception {
+        when(realtimeMarketDataService.getCurrentPrice("005930")).thenReturn(Mono.empty());
+
+        mockMvc.perform(get("/api/v1/market-data/current-price/005930"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     @DisplayName("POST /api/v1/market-data/current-prices 여러 종목 현재가 일괄 조회 성공")
     void getCurrentPrices_returnsOk() throws Exception {
         CurrentPriceDto dto = CurrentPriceDto.builder()

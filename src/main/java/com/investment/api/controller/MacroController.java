@@ -11,7 +11,9 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -28,8 +30,12 @@ public class MacroController {
     @GetMapping("/dashboard")
     @Operation(summary = "매크로 대시보드", description = "전체 거시경제 지표와 시장 상태를 조회합니다.")
     public ResponseEntity<MacroDashboardResponse> getDashboard() {
-        MacroDashboardResponse response = macroDashboardService.getDashboard();
-        return ResponseEntity.ok(response);
+        try {
+            MacroDashboardResponse response = macroDashboardService.getDashboard();
+            return ResponseEntity.ok(response != null ? response : buildEmptyDashboardResponse());
+        } catch (Exception e) {
+            return ResponseEntity.ok(buildEmptyDashboardResponse());
+        }
     }
 
     @GetMapping("/indicators/{code}")
@@ -56,15 +62,23 @@ public class MacroController {
     @GetMapping("/regime")
     @Operation(summary = "시장 상태 조회", description = "현재 시장 상태(레짐)를 조회합니다.")
     public ResponseEntity<RegimeResponse> getMarketRegime() {
-        MacroDashboardResponse.MarketRegime regime = macroDashboardService.getMarketRegime();
-        MacroDashboardResponse dashboard = macroDashboardService.getDashboard();
-
-        return ResponseEntity.ok(new RegimeResponse(
-                regime,
-                dashboard.getRegimeConfidence(),
-                dashboard.getOverallRiskScore(),
-                getRegimeDescription(regime)
-        ));
+        try {
+            MacroDashboardResponse dashboard = macroDashboardService.getDashboard();
+            if (dashboard == null) {
+                return ResponseEntity.ok(new RegimeResponse(
+                        MacroDashboardResponse.MarketRegime.NEUTRAL, 0.0, 50, "횡보장: 데이터 없음"));
+            }
+            MacroDashboardResponse.MarketRegime regime = dashboard.getRegime();
+            return ResponseEntity.ok(new RegimeResponse(
+                    regime,
+                    dashboard.getRegimeConfidence() != null ? dashboard.getRegimeConfidence() : 0.0,
+                    dashboard.getOverallRiskScore() != null ? dashboard.getOverallRiskScore() : 50,
+                    getRegimeDescription(regime)
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.ok(new RegimeResponse(
+                    MacroDashboardResponse.MarketRegime.NEUTRAL, 0.0, 50, "횡보장: 데이터 없음"));
+        }
     }
 
     @GetMapping("/indicators")
@@ -93,5 +107,24 @@ public class MacroController {
             case BEAR -> "하락장: 높은 변동성, 리스크 오프 권장";
             case NEUTRAL -> "횡보장: 중립적 환경, 선별적 투자 권장";
         };
+    }
+
+    private static MacroDashboardResponse buildEmptyDashboardResponse() {
+        return MacroDashboardResponse.builder()
+                .regime(MacroDashboardResponse.MarketRegime.NEUTRAL)
+                .regimeConfidence(0.0)
+                .overallRiskScore(50)
+                .marketIndicators(Collections.emptyList())
+                .interestRateIndicators(Collections.emptyList())
+                .economyIndicators(Collections.emptyList())
+                .currencyIndicators(Collections.emptyList())
+                .allIndicators(Collections.emptyMap())
+                .riskGateStatus(MacroDashboardResponse.RiskGateStatus.builder()
+                        .enabled(false)
+                        .triggered(false)
+                        .build())
+                .timestamp(Instant.now())
+                .cached(false)
+                .build();
     }
 }

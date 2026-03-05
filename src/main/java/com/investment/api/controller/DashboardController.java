@@ -58,10 +58,14 @@ public class DashboardController {
     }
 
     /**
-     * 현재 사용자 계좌별 당일 손익을 조회해 합산.
-     * 계좌별 API 실패 시 해당 계좌는 0으로 간주.
+     * 현재 사용자 실계좌만 당일 손익을 조회해 합산. (기간별손익 API는 모의투자 미지원이므로 실계좌 기준.)
+     * 대시보드 "일일 손익"은 실계좌 기준으로 표기·제공.
      */
     private BigDecimal sumDailyProfitLossForUser(String userId) {
+        java.util.Set<String> realAccountNos = accountService.getRealAccountNumbersForUser(userId);
+        if (realAccountNos.isEmpty()) {
+            return null;
+        }
         List<com.investment.domain.entity.TradingSetting> settings = tradingSettingRepository.findByUserIdOrderByAccountNo(userId);
         if (settings == null || settings.isEmpty()) {
             return null;
@@ -69,6 +73,9 @@ public class DashboardController {
         LocalDate today = LocalDate.now();
         BigDecimal sum = BigDecimal.ZERO;
         for (com.investment.domain.entity.TradingSetting setting : settings) {
+            if (!realAccountNos.contains(setting.getAccountNo())) {
+                continue; // 모의계좌는 기간별손익 미지원 → 제외
+            }
             try {
                 ProfitLossDto pl = accountService.getPeriodProfitLoss(setting.getAccountNo(), today, today);
                 if (pl != null && pl.getDailyProfitLossList() != null) {

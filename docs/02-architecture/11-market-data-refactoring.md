@@ -30,7 +30,7 @@ MarketDataClient (인터페이스)
    - `apiKey`: API 키
    - `baseUrl`: Base URL
    - `timeout`: 타임아웃
-   - `useMockData`: 모의 데이터 사용 여부
+   - (mock 데이터는 테스트에서만 사용. 프로덕션 코드에는 없음. 규칙: .cursor/rules/no-mock-data-outside-tests.mdc)
    - `market`: 시장 선택 (us, hk, cn 등)
 
 ## 설정 방법
@@ -44,7 +44,6 @@ investment:
     api-key: ${MARKET_DATA_API_KEY:}
     base-url: ${MARKET_DATA_BASE_URL:https://open.itick.org}
     timeout: ${MARKET_DATA_TIMEOUT:30000}
-    use-mock-data: ${MARKET_DATA_USE_MOCK_DATA:false}
     market: us  # us, hk, cn 등
 ```
 

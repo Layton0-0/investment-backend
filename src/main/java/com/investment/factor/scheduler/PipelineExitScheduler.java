@@ -10,6 +10,7 @@ import com.investment.domain.repository.TradingSettingRepository;
 import com.investment.domain.repository.UserAccountRepository;
 import com.investment.factor.execution.ExitRuleService;
 import com.investment.marketdata.dto.CurrentPriceDto;
+import com.investment.marketdata.websocket.KoreaInvestmentWebSocketClient;
 import com.investment.ops.service.AuditLogService;
 import com.investment.marketdata.service.RealtimeMarketDataService;
 import com.investment.order.dto.OrderRequestDto;
@@ -17,6 +18,7 @@ import com.investment.order.service.OrderService;
 import com.investment.setting.service.SystemSettingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,6 +48,9 @@ public class PipelineExitScheduler {
     private final OrderService orderService;
     private final AuditLogService auditLogService;
     private final SystemSettingService systemSettingService;
+
+    @Autowired(required = false)
+    private KoreaInvestmentWebSocketClient webSocketClient;
 
     /**
      * 계좌의 서버 타입 조회 (모의=1, 실전=0).
@@ -103,6 +108,20 @@ public class PipelineExitScheduler {
                 .distinct()
                 .collect(Collectors.toList());
 
+        String userId = tradingSettingRepository.findByAccountNo(accountNo)
+                .map(TradingSetting::getUserId)
+                .orElse(null);
+        if (userId != null && webSocketClient != null) {
+            String serverType = resolveServerTypeForAccount(userId, accountNo);
+            if (webSocketClient.isConnected(userId, serverType)) {
+                try {
+                    webSocketClient.subscribeQuote(userId, serverType, symbols);
+                } catch (Exception e) {
+                    log.debug("WebSocket subscribeQuote 스킵: accountNo={}, error={}", accountNo, e.getMessage());
+                }
+            }
+        }
+
         List<CurrentPriceDto> priceDtos = realtimeMarketDataService.getCurrentPrices(symbols)
                 .blockOptional()
                 .orElse(List.of());
@@ -131,9 +150,6 @@ public class PipelineExitScheduler {
             return;
         }
 
-        String userId = tradingSettingRepository.findByAccountNo(accountNo)
-                .map(TradingSetting::getUserId)
-                .orElse(null);
         if (userId == null) {
             log.warn("청산 실행 스킵: 계좌에 대한 userId 없음, accountNo={}", accountNo);
             return;

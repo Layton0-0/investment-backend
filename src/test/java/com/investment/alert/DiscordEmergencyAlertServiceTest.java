@@ -1,10 +1,12 @@
 package com.investment.alert;
 
+import com.investment.domain.entity.AlertLog;
 import com.investment.domain.repository.AlertLogRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
@@ -13,25 +15,25 @@ import org.springframework.web.reactive.function.client.ClientRequest;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.ExchangeFunction;
 import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Mono;
 
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * Discord 알림 체계화(P6-4): 매매/리스크/시스템 채널 분리, 평문 형식, 미설정 시 기본 웹훅 폴백 검증.
+ */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("DiscordEmergencyAlertService")
 class DiscordEmergencyAlertServiceTest {
 
-    private static final String DEFAULT_WEBHOOK = "https://discord.com/api/webhooks/default";
-    private static final String TRADE_WEBHOOK = "https://discord.com/api/webhooks/trade";
-    private static final String RISK_WEBHOOK = "https://discord.com/api/webhooks/risk";
-    private static final String SYSTEM_WEBHOOK = "https://discord.com/api/webhooks/system";
-
-    @Mock
-    private WebClient.Builder webClientBuilder;
+    private static final String TRADE_URL = "https://discord.com/api/webhooks/trade/xxx";
+    private static final String RISK_URL = "https://discord.com/api/webhooks/risk/xxx";
+    private static final String SYSTEM_URL = "https://discord.com/api/webhooks/system/xxx";
+    private static final String DEFAULT_URL = "https://discord.com/api/webhooks/default/xxx";
 
     @Mock
     private AlertLogRepository alertLogRepository;
@@ -42,86 +44,98 @@ class DiscordEmergencyAlertServiceTest {
 
     @BeforeEach
     void setUp() {
-        capturedRequest.set(null);
-        ExchangeFunction exchangeFunction = request -> {
+        ExchangeFunction okResponse = request -> {
             capturedRequest.set(request);
-            return Mono.just(ClientResponse.create(HttpStatus.OK).build());
+            return reactor.core.publisher.Mono.just(
+                    ClientResponse.create(HttpStatus.OK).build()
+            );
         };
-        WebClient webClient = WebClient.builder().exchangeFunction(exchangeFunction).build();
-        lenient().when(webClientBuilder.build()).thenReturn(webClient);
+        WebClient webClient = WebClient.builder().exchangeFunction(okResponse).build();
+        WebClient.Builder builder = org.mockito.Mockito.mock(WebClient.Builder.class);
+        lenient().when(builder.build()).thenReturn(webClient);
+        service = new DiscordEmergencyAlertService(builder, alertLogRepository);
+    }
 
-        service = new DiscordEmergencyAlertService(webClientBuilder, alertLogRepository);
-        ReflectionTestUtils.setField(service, "defaultWebhookUrl", DEFAULT_WEBHOOK);
-        ReflectionTestUtils.setField(service, "tradeWebhookUrl", "");
-        ReflectionTestUtils.setField(service, "riskWebhookUrl", "");
-        ReflectionTestUtils.setField(service, "systemWebhookUrl", "");
+    private void setWebhookUrls(String defaultUrl, String tradeUrl, String riskUrl, String systemUrl) {
+        ReflectionTestUtils.setField(service, "defaultWebhookUrl", defaultUrl != null ? defaultUrl : "");
+        ReflectionTestUtils.setField(service, "tradeWebhookUrl", tradeUrl != null ? tradeUrl : "");
+        ReflectionTestUtils.setField(service, "riskWebhookUrl", riskUrl != null ? riskUrl : "");
+        ReflectionTestUtils.setField(service, "systemWebhookUrl", systemUrl != null ? systemUrl : "");
     }
 
     @Test
-    @DisplayName("웹훅 미설정 시 sendTradeAlert는 발송 스킵")
-    void sendTradeAlert_noWebhook_skips() {
-        ReflectionTestUtils.setField(service, "defaultWebhookUrl", "");
-        ReflectionTestUtils.setField(service, "tradeWebhookUrl", "");
+    @DisplayName("매매 알림은 trade-webhook URL로 발송된다")
+    void sendTradeAlert_usesTradeWebhook() {
+        setWebhookUrls(DEFAULT_URL, TRADE_URL, RISK_URL, SYSTEM_URL);
+        capturedRequest.set(null);
 
-        service.sendTradeAlert("005930", 10, "매수", "1.5");
-
-        assertThat(capturedRequest.get()).isNull();
-    }
-
-    @Test
-    @DisplayName("매매 알림 발송 시 기본 웹훅 사용 및 요청 1회 발생")
-    void sendTradeAlert_sendsToDefaultWhenNoTradeWebhook() {
         service.sendTradeAlert("005930", 10, "매수", "1.5");
 
         assertThat(capturedRequest.get()).isNotNull();
-        assertThat(capturedRequest.get().url().toString()).isEqualTo(DEFAULT_WEBHOOK);
+        assertThat(capturedRequest.get().url().toString()).isEqualTo(TRADE_URL);
     }
 
     @Test
-    @DisplayName("채널별 웹훅 설정 시 해당 URL로 발송 - TRADE")
-    void sendTradeAlert_usesTradeWebhookWhenSet() {
-        ReflectionTestUtils.setField(service, "tradeWebhookUrl", TRADE_WEBHOOK);
+    @DisplayName("리스크 알림은 risk-webhook URL로 발송된다")
+    void sendRiskEventAlert_usesRiskWebhook() {
+        setWebhookUrls(DEFAULT_URL, TRADE_URL, RISK_URL, SYSTEM_URL);
+        capturedRequest.set(null);
 
-        service.sendTradeAlert("005930", 1, "매도", null);
+        service.sendRiskEventAlert("WARNING", "DailyLoss", "일일 손실 한도 80% 도달");
 
-        assertThat(capturedRequest.get().url().toString()).isEqualTo(TRADE_WEBHOOK);
+        assertThat(capturedRequest.get()).isNotNull();
+        assertThat(capturedRequest.get().url().toString()).isEqualTo(RISK_URL);
     }
 
     @Test
-    @DisplayName("채널별 웹훅 설정 시 해당 URL로 발송 - RISK")
-    void sendRiskEventAlert_usesRiskWebhookWhenSet() {
-        ReflectionTestUtils.setField(service, "riskWebhookUrl", RISK_WEBHOOK);
+    @DisplayName("시스템 알림(실패)은 system-webhook URL로 발송된다")
+    void sendFailureAlert_usesSystemWebhook() {
+        setWebhookUrls(DEFAULT_URL, TRADE_URL, RISK_URL, SYSTEM_URL);
+        capturedRequest.set(null);
 
-        service.sendRiskEventAlert("WARNING", "VarExceeded", "VaR 95% 초과 알림");
+        service.sendFailureAlert("수집 실패", "KRX 일봉 수집 실패", "user1", "12345", "1", "한국투자증권", null);
 
-        assertThat(capturedRequest.get().url().toString()).isEqualTo(RISK_WEBHOOK);
+        assertThat(capturedRequest.get()).isNotNull();
+        assertThat(capturedRequest.get().url().toString()).isEqualTo(SYSTEM_URL);
     }
 
     @Test
-    @DisplayName("채널별 웹훅 설정 시 해당 URL로 발송 - SYSTEM(미체결)")
-    void sendUnfilledAlert_usesSystemWebhookWhenSet() {
-        ReflectionTestUtils.setField(service, "systemWebhookUrl", SYSTEM_WEBHOOK);
+    @DisplayName("trade-webhook 미설정 시 기본 webhook으로 폴백한다")
+    void sendTradeAlert_fallbackToDefaultWhenTradeWebhookEmpty() {
+        setWebhookUrls(DEFAULT_URL, "", "", "");
+        capturedRequest.set(null);
 
-        service.sendUnfilledAlert("ord-1", "005930", 5, 10,
-                "user1", "12345678", "1", "한국투자증권", null);
+        service.sendTradeAlert("005930", 5, "매도", "2.3");
 
-        assertThat(capturedRequest.get().url().toString()).isEqualTo(SYSTEM_WEBHOOK);
+        assertThat(capturedRequest.get()).isNotNull();
+        assertThat(capturedRequest.get().url().toString()).isEqualTo(DEFAULT_URL);
     }
 
     @Test
-    @DisplayName("채널 웹훅 미설정 시 기본 webhook 폴백")
-    void sendRiskEventAlert_fallbackToDefaultWhenChannelNotSet() {
-        service.sendRiskEventAlert("WARNING", "MDD", "MDD -10% 초과");
+    @DisplayName("매매 알림 본문은 초보자 친화 평문 형식이다")
+    void sendTradeAlert_plainTextFormat() {
+        setWebhookUrls(DEFAULT_URL, TRADE_URL, RISK_URL, SYSTEM_URL);
+        ArgumentCaptor<AlertLog> logCaptor = ArgumentCaptor.forClass(AlertLog.class);
 
-        assertThat(capturedRequest.get().url().toString()).isEqualTo(DEFAULT_WEBHOOK);
+        service.sendTradeAlert("005930", 10, "매수", "1.5");
+
+        verify(alertLogRepository).save(logCaptor.capture());
+        String message = logCaptor.getValue().getMessage();
+        assertThat(message).contains("매매 체결");
+        assertThat(message).contains("005930");
+        assertThat(message).contains("10");
+        assertThat(message).contains("매수");
+        assertThat(message).contains("1.5");
     }
 
     @Test
-    @DisplayName("sendTestAlert는 기본 채널로 발송")
-    void sendTestAlert_usesDefaultChannel() {
-        boolean result = service.sendTestAlert();
+    @DisplayName("웹훅 미설정 시 매매 알림은 스킵하고 예외를 던지지 않는다")
+    void sendTradeAlert_skipsWhenNoWebhook() {
+        setWebhookUrls("", "", "", "");
+        capturedRequest.set(null);
 
-        assertThat(result).isTrue();
-        assertThat(capturedRequest.get().url().toString()).isEqualTo(DEFAULT_WEBHOOK);
+        service.sendTradeAlert("005930", 10, "매수", null);
+
+        assertThat(capturedRequest.get()).isNull();
     }
 }

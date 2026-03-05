@@ -63,4 +63,26 @@ class PipelineControllerTest {
                                 .andExpect(jsonPath("$.openPositionCount").value(1))
                                 .andExpect(jsonPath("$.allocationSummary").value("단기 2,000만 · 중기 4,000만 · 장기 4,000만"));
         }
+
+        @Test
+        @DisplayName("GET /api/v1/pipeline/summary basDt 미입력 시 전일 기준으로 요약 조회")
+        void getSummary_withoutBasDt_usesYesterday() throws Exception {
+                LocalDate yesterday = LocalDate.now().minusDays(1);
+                PipelineSummaryDto dto = PipelineSummaryDto.builder()
+                                .basDt(yesterday)
+                                .universeCountKr(5)
+                                .universeCountUs(5)
+                                .signalCountKr(1)
+                                .signalCountUs(0)
+                                .openPositionCount(0)
+                                .build();
+                when(pipelineSummaryService.getSummary(eq(yesterday), eq("12345678-12")))
+                                .thenReturn(dto);
+
+                mockMvc.perform(get("/api/v1/pipeline/summary")
+                                .param("accountNo", "12345678-12"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.basDt").value(yesterday.toString()))
+                                .andExpect(jsonPath("$.signalCountKr").value(1));
+        }
 }

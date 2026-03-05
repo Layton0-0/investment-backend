@@ -350,22 +350,42 @@ public class MacroDashboardServiceImpl implements MacroDashboardService {
     }
 
     private MacroDashboardResponse buildEmptyDashboard() {
-        return MacroDashboardResponse.builder()
-                .regime(MacroDashboardResponse.MarketRegime.NEUTRAL)
-                .regimeConfidence(0.0)
-                .overallRiskScore(50)
-                .marketIndicators(Collections.emptyList())
-                .interestRateIndicators(Collections.emptyList())
-                .economyIndicators(Collections.emptyList())
-                .currencyIndicators(Collections.emptyList())
-                .allIndicators(Collections.emptyMap())
-                .riskGateStatus(MacroDashboardResponse.RiskGateStatus.builder()
-                        .enabled(isRegimeGateEnabled())
-                        .triggered(false)
-                        .build())
-                .timestamp(Instant.now())
-                .cached(false)
-                .build();
+        try {
+            return MacroDashboardResponse.builder()
+                    .regime(MacroDashboardResponse.MarketRegime.NEUTRAL)
+                    .regimeConfidence(0.0)
+                    .overallRiskScore(50)
+                    .marketIndicators(Collections.emptyList())
+                    .interestRateIndicators(Collections.emptyList())
+                    .economyIndicators(Collections.emptyList())
+                    .currencyIndicators(Collections.emptyList())
+                    .allIndicators(Collections.emptyMap())
+                    .riskGateStatus(MacroDashboardResponse.RiskGateStatus.builder()
+                            .enabled(false)
+                            .triggered(false)
+                            .build())
+                    .timestamp(Instant.now())
+                    .cached(false)
+                    .build();
+        } catch (Exception e) {
+            log.warn("buildEmptyDashboard fallback", e);
+            return MacroDashboardResponse.builder()
+                    .regime(MacroDashboardResponse.MarketRegime.NEUTRAL)
+                    .regimeConfidence(0.0)
+                    .overallRiskScore(50)
+                    .marketIndicators(Collections.emptyList())
+                    .interestRateIndicators(Collections.emptyList())
+                    .economyIndicators(Collections.emptyList())
+                    .currencyIndicators(Collections.emptyList())
+                    .allIndicators(Collections.emptyMap())
+                    .riskGateStatus(MacroDashboardResponse.RiskGateStatus.builder()
+                            .enabled(false)
+                            .triggered(false)
+                            .build())
+                    .timestamp(Instant.now())
+                    .cached(false)
+                    .build();
+        }
     }
 
     private record IndicatorMetadata(String name, MacroIndicatorDto.IndicatorCategory category, String source) {}

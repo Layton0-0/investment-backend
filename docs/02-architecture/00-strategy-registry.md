@@ -255,6 +255,8 @@ Monte Carlo 시뮬레이션 기반 VaR/CVaR 계산으로 꼬리 위험(tail risk
 
 향후 섹터/테마(반도체, AI, 2차전지 등)별 세부 전략은 본 섹션 하위에 확장한다.
 
+**트레이딩 윈도우**: 현재 단기/중기/장기 모두 **동일 트레이딩 윈도우**(한국 09:00~10:00·14:30~15:30, 미국 23:30~01:00·05:00~06:00 KST)를 적용한다. 변동성 기반 전략은 활발한 시간대에만 집중, 왜곡 기반(통계 차익·페어 트레이딩 등)은 상시 운용이 유리하므로, 향후 해당 전략 도입 시 **상시 운용 옵션**(시간 필터 무시) 확장 가능. [14-trading-window-quant.md](./14-trading-window-quant.md) 참조.
+
 **트레이딩 포트폴리오(일별 추천 목록)**: 화면용 일별 추천 종목은 단기 파이프라인과 동일한 시그널·필터·포지션 사이징을 사용한다. ShortTermTradingStrategyService가 1차로 PositionSizingService.getRecommendations(basDt, KR, SHORT_TERM, defaultCapital) 결과로 TB_TRADING_PORTFOLIOS/ITEMS를 채우고, 시그널이 없을 때만 실시간 API(StockScreeningService) fallback 또는 모의 데이터를 사용한다. 스케줄은 팩터 계산(08:00) 이후 09:00 KST.
 
 ---
@@ -306,6 +308,7 @@ Monte Carlo 시뮬레이션 기반 VaR/CVaR 계산으로 꼬리 위험(tail risk
 | Information Ratio (IR) | IC_mean / IC_stdDev, 팩터 안정성 | - | FactorTestResult.informationRatio |
 | 팩터 등급 | A(IC≥0.05,IR≥0.5), B(IC≥0.03,IR≥0.3), C(IC≥0.02,IR≥0.2), D(IC≥0.01), F | - | FactorTestResult.FactorGrade |
 | 복합 팩터 점수 | Σ(Factor_i × Weight_i) / Σ(Weight_i) | - | FactorZooService.getCombinedScore |
+| 트레이딩 윈도우 다중 구간 | KR: 09:00~10:00, 14:30~15:30; US: 23:30~01:00, 05:00~06:00 KST. 세그먼트 중 하나라도 포함 시 진입 허용 | investment.pipeline.trading-window.kr/us start,end,start2,end2; execution-schedule-cron-kr-afternoon, execution-schedule-cron-us-close | TradingWindowService.getKrSegments/getUsSegments, PipelineExecutionScheduler.runKrAfternoon/runUsClose |
 
 ---
 
@@ -334,6 +337,7 @@ Monte Carlo 시뮬레이션 기반 VaR/CVaR 계산으로 꼬리 위험(tail risk
 || v1.18 | 2026-02-20 | KR, US | ?ㅽ뻾 理쒖쟻??| TWAP/VWAP/POV 二쇰Ц 遺꾪븷 ?뚭퀬由ъ쬁 援ы쁽. ... | 誘멸?利?| ???二쇰Ц ?쒖옣 異⑷꺽 理쒖냼??|
 | v1.19 | 2026-03-04 | KR, US | 백테스트 검증 | Phase 1~3 워크포워드 검증(P8-1). 최근 1년 Walk-Forward 백테스트 실행·목표(CAGR≥20%, MDD≥-15%, Sharpe≥1.0) 대비 결과 문서화. backtest-stress-results.md §6 Phase 1~3 섹션·실행 결과 표 추가. WalkForwardBacktestServiceTest 목표 충족 시 집계 검증·BacktestController walk-forward API 테스트 추가. | 미검증 | 데이터 확보 후 §6.3 결과 기입·development-status 완료 반영 |
 | v2.0 | 2026-03-04 | KR, US | Phase 1~8 통합 | 레짐탐지(RegimeDetectionService: SPY 50/200일선+VIX 규칙 BULL/BEAR/NEUTRAL, Redis 캐시). Factor Decay(FactorDecayMonitorService: 팩터별 Sharpe 열화 시 Discord 알림). 역변동성 포트폴리오(InverseVolatilityPortfolioService, StubPortfolioComponents 대체 옵션). 드로다운 회복(RiskGateService.isDrawdownRecoveryMode, MDD -10% 초과 시 신규 매수 50% 축소). VWAP(VwapExecutionAlgorithm: U자형 거래량 프로파일). 초보자 온보딩(P4-1 퀴즈→프로필·P4-2 원클릭 quick-start). E2E(Playwright onboarding.spec.ts 퀴즈→원클릭→대시보드). | 미검증 | 전략·리스크·UX·검증 통합 문서화(P8-3) |
+| v2.1 | 2026-03-05 | KR, US | 트레이딩 윈도우 | 퀀트 시간대 다중 구간: KR 2구간(09:00~10:00, 14:30~15:30), US 2구간(23:30~01:00, 05:00~06:00). PipelineTradingWindowProperties start2/end2·getKrSegments/getUsSegments, TradingWindowService 세그먼트 판단, PipelineExecutionScheduler runKrAfternoon(14:35)·runUsClose(05:05). 변동성 vs 왜곡 전략 원칙 문서화(14-trading-window-quant.md). | 미검증 | 알파 존재 시간대만 진입·한산 구간(11:30~14:00) 회피 |
 
 ---
 

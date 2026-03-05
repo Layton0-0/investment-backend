@@ -1,5 +1,6 @@
 package com.investment.risk.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -41,7 +42,8 @@ public class MacroDashboardResponse {
     /** 리스크 게이트 상태 */
     private final RiskGateStatus riskGateStatus;
 
-    /** 조회 시점 */
+    /** 조회 시점 (ISO-8601) */
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
     private final Instant timestamp;
 
     /** 캐시 여부 */

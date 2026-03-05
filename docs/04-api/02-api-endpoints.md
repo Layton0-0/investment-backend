@@ -922,6 +922,8 @@ curl -X GET "http://localhost:8080/api/v1/accounts/12345678/profit-loss?startDat
 
 **엔드포인트**: `GET /api/v1/market-data/current-price/{symbol}`
 
+**인증**: 필요 (Bearer JWT). 사용자별 한국투자증권 API 키로 조회합니다. 비인증 요청 시 401 반환.
+
 **설명**: 한국투자증권 API를 통해 단일 종목의 실시간 현재가 정보를 조회합니다.
 
 **경로 파라미터**:
@@ -952,7 +954,12 @@ curl -X GET "http://localhost:8080/api/v1/market-data/current-price/005930"
 }
 ```
 
-**에러 응답 (404 Not Found)**:
+**에러 응답 (401 Unauthorized)**: 인증되지 않은 요청 시
+```json
+{"error":"인증이 필요합니다"}
+```
+
+**에러 응답 (404 Not Found)**: 종목 미존재 또는 API 조회 실패 시
 ```json
 {
   "code": "SYMBOL_NOT_FOUND",
@@ -963,6 +970,7 @@ curl -X GET "http://localhost:8080/api/v1/market-data/current-price/005930"
 ```
 
 **에러 코드**:
+- `401`: 인증 필요 (Authorization 헤더 없음 또는 만료)
 - `SYMBOL_NOT_FOUND`: 종목을 찾을 수 없음
 - `API_ERROR`: 한국투자증권 API 호출 실패
 
@@ -971,6 +979,8 @@ curl -X GET "http://localhost:8080/api/v1/market-data/current-price/005930"
 ### 8.2 여러 종목 현재가 일괄 조회
 
 **엔드포인트**: `POST /api/v1/market-data/current-prices`
+
+**인증**: 필요 (Bearer JWT). 사용자별 한국투자증권 API 키로 조회합니다. 비인증 요청 시 401 반환.
 
 **설명**: 한국투자증권 API를 통해 여러 종목의 실시간 현재가 정보를 일괄 조회합니다.
 
@@ -1210,6 +1220,14 @@ curl -X POST "http://localhost:8080/api/v1/market-data/current-prices" \
 **DTO**: `DashboardPerformanceSummaryDto` — totalCurrentValue, maxMddPct, sharpeRatio, sortinoRatio, var95Pct, cvar95Pct, **dailyProfitLoss**(당일 손익 합계, 원), **riskLevel**(낮음/중간/높음, VaR·MDD 기반). 데이터 없으면 null.
 
 **기타 API 참고**: 섹터 분석 `GET /api/v1/analysis/sector`(accountNo 또는 symbols+market), 리밸런싱 제안 `GET /api/v1/trading-portfolios/rebalance-suggestions`(accountNo, market=US) — 11-api-frontend-mapping 및 컨트롤러 스펙 참조.
+
+### 9.5.2 파이프라인 요약
+
+**엔드포인트**: `GET /api/v1/pipeline/summary`
+
+**쿼리 파라미터**: `accountNo` (필수), `basDt` (선택, yyyy-MM-dd). **basDt 미입력 시 전일(어제)**을 기준일로 사용합니다. 자동투자 실행·시그널 산출이 전일 기준으로 이뤄지므로, 대시보드/자동투자 현황에서 기준일을 넘기지 않으면 생략해도 됩니다.
+
+**설명**: 기준일·계좌에 대한 유니버스 수(KR/US)·시그널 건수·목록·자금배분·보유 포지션 요약을 반환합니다. 시그널 기준은 전략 레지스트리(00-strategy-registry.md) §3.2 시그널 기준을 사용합니다. 응답: `PipelineSummaryDto` (basDt, signalCountKr/Us, signalListKr/Us·factorType 포함, openPositionList 등).
 
 ---
 

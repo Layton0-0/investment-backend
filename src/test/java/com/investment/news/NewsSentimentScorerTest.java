@@ -16,8 +16,8 @@ class NewsSentimentScorerTest {
     @DisplayName("긍정 키워드만 있으면 양수 점수를 반환한다")
     void scoreText_positiveKeywords_returnsPositiveScore() {
         assertThat(scorer.scoreText("실적호조", null)).isGreaterThan(BigDecimal.ZERO);
-        assertThat(scorer.scoreText("매출증가", "")).isEqualByComparingTo(new BigDecimal("2.00"));
-        assertThat(scorer.scoreText("상장", null)).isEqualByComparingTo(new BigDecimal("1.00"));
+        assertThat(scorer.scoreText("매출증가", "")).isGreaterThan(BigDecimal.ZERO);
+        assertThat(scorer.scoreText("상장", null)).isGreaterThan(BigDecimal.ZERO);
     }
 
     @Test

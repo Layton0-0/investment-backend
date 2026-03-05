@@ -205,6 +205,7 @@
 - [트레이딩 포트폴리오 API](./07-trading-portfolio-api.md)
 - [데이터 수집 API 및 설정](./10-data-collection-api.md) (DART/KRX/Yahoo, 내부 수집 API)
 - [API–프론트엔드 매핑](./11-api-frontend-mapping.md) (엔드포인트별 프론트 연동 위치·미연동 정리)
+- **한국투자증권 Open API**: [구현 가이드](./09-korea-investment-api-guide.md), [전체 API 명세서](./10-korea-investment-api-spec.md) (계좌/주문·시세·인증 path·TR_ID 참조)
 
 ## 문서 변경 이력
 

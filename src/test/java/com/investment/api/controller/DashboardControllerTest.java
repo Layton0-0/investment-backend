@@ -61,6 +61,7 @@ class DashboardControllerTest {
                 .riskLevel("중간")
                 .build();
         when(riskReportService.getSummary(eq("user1"))).thenReturn(summary);
+        when(accountService.getRealAccountNumbersForUser(anyString())).thenReturn(Collections.<String>emptySet());
         when(tradingSettingRepository.findByUserIdOrderByAccountNo(anyString())).thenReturn(Collections.emptyList());
 
         mockMvc.perform(get("/api/v1/dashboard/performance-summary"))

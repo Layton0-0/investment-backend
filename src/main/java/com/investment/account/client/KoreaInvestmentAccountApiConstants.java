@@ -24,11 +24,15 @@ public final class KoreaInvestmentAccountApiConstants {
     public static final String PATH_INQUIRE_PSBL_ORDER2 = "/uapi/domestic-stock/v1/trading/inquire-psbl-order2";
     public static final String PATH_INQUIRE_PSBL_ORDER3 = "/uapi/domestic-stock/v1/trading/inquire-psbl-order3";
     public static final String PATH_INQUIRE_DAILY_CCLD = "/uapi/domestic-stock/v1/trading/inquire-daily-ccld";
+    /** 주식정정취소가능주문조회. TR_ID TTTC8002R/VTTC8002R. */
+    public static final String PATH_INQUIRE_PSBL_RVSECNCL = "/uapi/domestic-stock/v1/trading/inquire-psbl-rvsecncl";
     public static final String PATH_INQUIRE_BALANCE_RLZ_PL = "/uapi/domestic-stock/v1/trading/inquire-balance-rlz-pl";
     /** 투자계좌자산현황조회 (공식: inquire-account-balance, TR: CTRP6548R/VTRP6548R) */
     public static final String PATH_INQUIRE_ACCOUNT_BALANCE = "/uapi/domestic-stock/v1/trading/inquire-account-balance";
     public static final String PATH_INQUIRE_PERIOD_PROFIT_LOSS = "/uapi/domestic-stock/v1/trading/inquire-period-profit-loss";
-    
+    /** 기간별매매손익현황조회. TR_ID TTTC8709R/VTTC8709R. */
+    public static final String PATH_INQUIRE_PERIOD_PROFIT_LOSS_STATUS = "/uapi/domestic-stock/v1/trading/inquire-period-profit-loss-status";
+
     // 주식잔고조회 TR ID
     public static final String TR_ID_BALANCE_REAL = "TTTC8434R"; // 실거래
     public static final String TR_ID_BALANCE_VIRTUAL = "VTTC8434R"; // 모의투자
@@ -199,5 +203,18 @@ public final class KoreaInvestmentAccountApiConstants {
             return TR_ID_PERIOD_PROFIT_LOSS_REAL;
         }
         return TR_ID_PERIOD_PROFIT_LOSS_VIRTUAL;
+    }
+
+    /**
+     * 서버 타입에 따른 TR ID 반환 (기간별매매손익현황조회)
+     *
+     * @param serverType "0": 실거래, "1": 모의투자
+     * @return TR ID
+     */
+    public static String getPeriodProfitLossStatusTrId(String serverType) {
+        if ("0".equals(serverType)) {
+            return TR_ID_PERIOD_PROFIT_LOSS_STATUS_REAL;
+        }
+        return TR_ID_PERIOD_PROFIT_LOSS_STATUS_VIRTUAL;
     }
 }

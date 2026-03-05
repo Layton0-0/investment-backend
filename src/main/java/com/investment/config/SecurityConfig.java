@@ -61,11 +61,10 @@ public class SecurityConfig {
             
             // 요청 인가 설정
             .authorizeHttpRequests(auth -> auth
-                // 공개 엔드포인트 (읽기 전용 시세/차트는 비인증 허용)
-                .requestMatchers(
-                    HttpMethod.GET,
-                    "/api/v1/market-data/**"
-                ).permitAll()
+                // 시장 데이터: ping·일봉·종목검색은 비인증 허용, 현재가/일괄현재가는 사용자 API키 사용으로 인증 필요
+                .requestMatchers(HttpMethod.GET, "/api/v1/market-data/ping").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/market-data/daily-chart").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/market-data/symbols/search").permitAll()
                 .requestMatchers(
                     "/api/v1/auth/**",
                     "/api/v1/public/**",

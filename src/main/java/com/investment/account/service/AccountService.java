@@ -28,6 +28,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -247,17 +248,18 @@ public class AccountService {
 
             try {
                 if (usOnly) {
-                    List<AccountPositionDto> overseas = accountApiRunner.inquireOverseasBalanceInNewTx(userId, accountNo);
-                    return overseas != null ? overseas : new ArrayList<>();
+                    KoreaInvestmentAccountClient.OverseasBalanceResult overseas = getOverseasBalanceResult(accountNo);
+                    return overseas != null && overseas.getPositions() != null ? overseas.getPositions() : new ArrayList<>();
                 }
                 KoreaInvestmentAccountClient.BalanceAndPositionsResult result = accountApiRunner.inquireBalanceInNewTx(userId, accountNo);
                 List<AccountPositionDto> domestic = result.getPositions();
                 if (krOnly) {
                     return domestic != null ? domestic : new ArrayList<>();
                 }
-                // 전체: 국내 + 해외
+                // 전체: 국내 + 해외 (해외는 캐시된 getOverseasBalanceResult 사용)
                 List<AccountPositionDto> all = new ArrayList<>(domestic != null ? domestic : List.of());
-                List<AccountPositionDto> overseasPositions = accountApiRunner.inquireOverseasBalanceInNewTx(userId, accountNo);
+                KoreaInvestmentAccountClient.OverseasBalanceResult overseasResult = getOverseasBalanceResult(accountNo);
+                List<AccountPositionDto> overseasPositions = overseasResult != null ? overseasResult.getPositions() : null;
                 if (overseasPositions != null && !overseasPositions.isEmpty()) {
                     all.addAll(overseasPositions);
                 }
@@ -299,6 +301,27 @@ public class AccountService {
     }
 
     /**
+     * 해외(미국) 잔고 조회 결과(보유종목+output2 요약) 캐시. getPositions(US)·getOverseasSummary에서 공유.
+     */
+    @Transactional(readOnly = true, noRollbackFor = { RuntimeException.class, Exception.class })
+    @Cacheable(value = CacheConfig.CACHE_ACCOUNT, key = "'overseas_' + #accountNo")
+    public KoreaInvestmentAccountClient.OverseasBalanceResult getOverseasBalanceResult(String accountNo) {
+        log.debug("해외 잔고 조회: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo));
+        String userId = getCurrentUserId();
+        return accountApiRunner.inquireOverseasBalanceInNewTx(userId, accountNo);
+    }
+
+    /**
+     * 해외(미국) 계좌 요약 — 예수금·총자산 등. 대시보드 US 계좌 카드용.
+     * getOverseasBalanceResult와 동일 캐시를 사용하므로 positions 조회 후 호출 시 API 재호출 없음.
+     */
+    @Transactional(readOnly = true, noRollbackFor = { RuntimeException.class, Exception.class })
+    public OverseasBalanceSummaryDto getOverseasSummary(String accountNo) {
+        KoreaInvestmentAccountClient.OverseasBalanceResult result = getOverseasBalanceResult(accountNo);
+        return result != null ? result.getSummary() : null;
+    }
+
+    /**
      * 계좌 잔고와 보유 종목을 한 번에 조회
      * 주식잔고조회 API를 1회만 호출하여 중복 DB/API 호출을 줄인다.
      * 대시보드 등 잔고·보유종목을 동시에 필요로 하는 화면에서 사용한다.
@@ -318,9 +341,9 @@ public class AccountService {
                 KoreaInvestmentAccountClient.BalanceAndPositionsResult result = accountApiRunner.inquireBalanceInNewTx(userId,
                         accountNo);
                 List<AccountPositionDto> allPositions = new ArrayList<>(result.getPositions());
-                List<AccountPositionDto> overseasPositions = accountApiRunner.inquireOverseasBalanceInNewTx(userId, accountNo);
-                if (!overseasPositions.isEmpty()) {
-                    allPositions.addAll(overseasPositions);
+                KoreaInvestmentAccountClient.OverseasBalanceResult overseasResult = accountApiRunner.inquireOverseasBalanceInNewTx(userId, accountNo);
+                if (overseasResult != null && overseasResult.getPositions() != null && !overseasResult.getPositions().isEmpty()) {
+                    allPositions.addAll(overseasResult.getPositions());
                 }
                 return new BalanceAndPositionsDto(result.getBalance(), allPositions);
             } catch (Exception apiException) {
@@ -359,8 +382,9 @@ public class AccountService {
             KoreaInvestmentAccountClient.BalanceAndPositionsResult result = accountApiRunner.inquireBalanceInNewTx(userId,
                     accountNo);
             List<AccountPositionDto> allPositions = new ArrayList<>(result.getPositions());
-            List<AccountPositionDto> overseasPositions = accountApiRunner.inquireOverseasBalanceInNewTx(userId, accountNo);
-            if (!overseasPositions.isEmpty()) {
+            KoreaInvestmentAccountClient.OverseasBalanceResult overseasResult = accountApiRunner.inquireOverseasBalanceInNewTx(userId, accountNo);
+            List<AccountPositionDto> overseasPositions = overseasResult != null ? overseasResult.getPositions() : null;
+            if (overseasPositions != null && !overseasPositions.isEmpty()) {
                 allPositions.addAll(overseasPositions);
             }
             return new BalanceAndPositionsDto(result.getBalance(), allPositions);
@@ -431,7 +455,7 @@ public class AccountService {
         log.debug("매수가능조회: accountNo={}, symbol={}, price={}", LogMaskingUtil.maskAccountNo(accountNo), symbol, price);
 
         String userId = getCurrentUserId();
-        return accountClient.inquireBuyableAmount(userId, accountNo, symbol, price);
+        return accountApiRunner.inquireBuyableAmountInNewTx(userId, accountNo, symbol, price);
     }
 
     /**
@@ -443,7 +467,7 @@ public class AccountService {
         log.debug("매도가능수량조회: accountNo={}, symbol={}", LogMaskingUtil.maskAccountNo(accountNo), symbol);
 
         String userId = getCurrentUserId();
-        return accountClient.inquireSellableQuantity(userId, accountNo, symbol);
+        return accountApiRunner.inquireSellableQuantityInNewTx(userId, accountNo, symbol);
     }
 
     /**
@@ -455,7 +479,17 @@ public class AccountService {
                 endDate);
 
         String userId = getCurrentUserId();
-        return accountClient.inquireOrderHistory(userId, accountNo, startDate, endDate);
+        return accountApiRunner.inquireOrderHistoryInNewTx(userId, accountNo, startDate, endDate);
+    }
+
+    /**
+     * 주식정정취소가능주문조회 (미체결 주문 목록)
+     */
+    @Transactional(readOnly = true)
+    public List<CancelableOrderDto> getCancelableOrders(String accountNo) {
+        log.debug("주식정정취소가능주문조회: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo));
+        String userId = getCurrentUserId();
+        return accountApiRunner.inquireCancelableOrdersInNewTx(userId, accountNo);
     }
 
     /**
@@ -469,7 +503,7 @@ public class AccountService {
 
         try {
             String userId = getCurrentUserId();
-            return accountClient.inquireAssets(userId, accountNo);
+            return accountApiRunner.inquireAssetsInNewTx(userId, accountNo);
         } catch (IllegalStateException e) {
             log.debug("인증 없음, DB 폴백: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo));
             return getAccountAssetsFromDb(accountNo);
@@ -507,6 +541,17 @@ public class AccountService {
     }
 
     /**
+     * 사용자의 실계좌(serverType "0") 계좌번호 목록. 대시보드 일일손익 등 "실계좌 기준" 데이터 집계용.
+     */
+    @Transactional(readOnly = true)
+    public Set<String> getRealAccountNumbersForUser(String userId) {
+        List<UserAccount> realAccounts = userAccountRepository.findByUserIdAndServerTypeAndIsActiveTrue(userId, "0");
+        return realAccounts.stream()
+                .map(ua -> encryptionUtil.decrypt(ua.getAccountNoEncrypted()))
+                .collect(Collectors.toSet());
+    }
+
+    /**
      * 기간별손익조회
      */
     @Transactional(readOnly = true)
@@ -515,7 +560,28 @@ public class AccountService {
                 endDate);
 
         String userId = getCurrentUserId();
-        return accountClient.inquirePeriodProfitLoss(userId, accountNo, startDate, endDate);
+        return accountApiRunner.inquirePeriodProfitLossInNewTx(userId, accountNo, startDate, endDate);
+    }
+
+    /**
+     * 주식잔고조회_실현손익
+     */
+    @Transactional(readOnly = true)
+    public BalanceRealizedProfitLossDto getBalanceRealizedProfitLoss(String accountNo) {
+        log.debug("주식잔고조회_실현손익: accountNo={}", LogMaskingUtil.maskAccountNo(accountNo));
+        String userId = getCurrentUserId();
+        return accountApiRunner.inquireBalanceRealizedProfitLossInNewTx(userId, accountNo);
+    }
+
+    /**
+     * 기간별매매손익현황조회
+     */
+    @Transactional(readOnly = true)
+    public PeriodProfitLossStatusDto getPeriodProfitLossStatus(String accountNo, LocalDate startDate, LocalDate endDate) {
+        log.debug("기간별매매손익현황조회: accountNo={}, startDate={}, endDate={}",
+                LogMaskingUtil.maskAccountNo(accountNo), startDate, endDate);
+        String userId = getCurrentUserId();
+        return accountApiRunner.inquirePeriodProfitLossStatusInNewTx(userId, accountNo, startDate, endDate);
     }
 
     /**

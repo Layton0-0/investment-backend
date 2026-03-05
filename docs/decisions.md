@@ -35,6 +35,7 @@
 29. [대시보드 UI 이미지 스펙 통일](#29-대시보드-ui-이미지-스펙-통일)
 30. [초보자 온보딩 UX (퀴즈·원클릭 자동투자 시작)](#30-초보자-온보딩-ux-퀴즈원클릭-자동투자-시작)
 31. [시장 레짐 탐지 규칙엔진 (HMM 대신 VIX/이평선)](#31-시장-레짐-탐지-규칙엔진-hmm-대신-vix이평선)
+32. [트레이딩 윈도우 다중 구간 (한국 마감·미국 마감)](#32-트레이딩-윈도우-다중-구간-한국-마감미국-마감)
 
 ---
 
@@ -933,6 +934,14 @@ API 설계 표준 수립 필요
 
 ---
 
+## 32. 트레이딩 윈도우 다중 구간 (한국 마감·미국 마감)
+
+**결정일**: 2026년 3월  
+**상태**: 확정  
+**결정**: 퀀트 관점에서 "알파가 존재하는 시간대"만 진입하도록 한국장 2구간(개장 09:00~10:00, 마감 14:30~15:30), 미국장 2구간(개장 23:30~01:00, 마감 05:00~06:00 KST)을 지원한다. PipelineTradingWindowProperties에 start2/end2 및 getKrSegments/getUsSegments 도입, PipelineExecutionScheduler에 runKrAfternoon(14:35)·runUsClose(05:05) 스케줄 추가. [14-trading-window-quant.md](02-architecture/14-trading-window-quant.md) 참조.
+
+---
+
 ## 참고 문서
 
 - [시스템 아키텍처](./02-architecture/01-system-architecture.md)
@@ -962,3 +971,4 @@ API 설계 표준 수립 필요
 | 1.14 | 2026-02-27 | System | ADR 27 서버 기본값의 DB 저장 및 관리자 편집 (TB_SYSTEM_SETTINGS, SystemSettingService, GET/PUT /api/v1/system/settings, Ops 시스템 설정 화면) |
 | 1.15 | 2026-02-27 | System | ADR 28 시장 급락 시 동결 정책 (MarketCrashGateService, 벤치마크 전일 낙폭 임계값 시 당일 신규 매수 중단) |
 | 1.16 | 2026-03-04 | System | ADR 30 초보자 온보딩 UX (퀴즈·원클릭 quick-start), ADR 31 시장 레짐 탐지 규칙엔진 (HMM 대신 VIX/이평선) 추가 |
+| 1.17 | 2026-03-05 | System | ADR 32 트레이딩 윈도우 다중 구간 (한국 마감 14:30~15:30, 미국 마감 05:00~06:00 KST, 퀀트 시간대 전략) |

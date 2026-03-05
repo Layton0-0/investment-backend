@@ -1,5 +1,6 @@
 package com.investment.risk.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -40,7 +41,8 @@ public class MacroIndicatorDto {
     /** 데이터 소스 */
     private final String source;
 
-    /** 최종 업데이트 시간 */
+    /** 최종 업데이트 시간 (ISO-8601) */
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
     private final Instant updatedAt;
 
     public enum IndicatorCategory {

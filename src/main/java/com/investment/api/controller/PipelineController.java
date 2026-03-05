@@ -27,9 +27,9 @@ public class PipelineController {
     @GetMapping("/summary")
     public ResponseEntity<PipelineSummaryDto> getSummary(
             @Parameter(description = "계좌번호(필수)") @RequestParam String accountNo,
-            @Parameter(description = "기준일(yyyy-MM-dd), 미입력 시 오늘") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate basDt) {
+            @Parameter(description = "기준일(yyyy-MM-dd). 미입력 시 전일(자동투자 실행 기준일과 맞춤)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate basDt) {
 
-        LocalDate targetDate = basDt != null ? basDt : LocalDate.now();
+        LocalDate targetDate = basDt != null ? basDt : LocalDate.now().minusDays(1);
         PipelineSummaryDto dto = pipelineSummaryService.getSummary(targetDate, accountNo);
         return ResponseEntity.ok(dto);
     }

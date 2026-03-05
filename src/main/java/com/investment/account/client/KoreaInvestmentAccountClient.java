@@ -4,10 +4,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.investment.account.dto.AccountBalanceDto;
 import com.investment.account.dto.AccountPositionDto;
+import com.investment.account.dto.BalanceRealizedProfitLossDto;
 import com.investment.account.dto.BuyableAmountDto;
 import com.investment.account.dto.SellableQuantityDto;
 import com.investment.account.dto.OrderHistoryDto;
+import com.investment.account.dto.CancelableOrderDto;
 import com.investment.account.dto.AccountAssetDto;
+import com.investment.account.dto.OverseasBalanceSummaryDto;
+import com.investment.account.dto.PeriodProfitLossStatusDto;
 import com.investment.account.dto.ProfitLossDto;
 import com.investment.common.exception.DomainException;
 import com.investment.common.exception.ErrorCode;
@@ -99,12 +103,13 @@ public class KoreaInvestmentAccountClient {
                 log.info("요청 URL: {}", uri.toString());
                 log.info("요청 헤더:");
                 headers.forEach((name, values) -> {
+                    String valueToLog = (values != null && !values.isEmpty()) ? values.get(0) : "";
                     if ("authorization".equalsIgnoreCase(name)) {
-                        // INFO: 마스킹, DEBUG: 실제 값 노출 (로컬 디버깅용)
                         log.info("  {}: Bearer ***", name);
-                        if (log.isDebugEnabled()) {
-                            log.debug("  {}: {}", name, values);
-                        }
+                    } else if ("appkey".equalsIgnoreCase(name) || "app-key".equalsIgnoreCase(name)) {
+                        log.info("  {}: {}", name, LogMaskingUtil.maskApiKey(valueToLog));
+                    } else if ("appsecret".equalsIgnoreCase(name) || "app-secret".equalsIgnoreCase(name)) {
+                        log.info("  {}: {}", name, LogMaskingUtil.maskSecret(valueToLog));
                     } else {
                         log.info("  {}: {}", name, values);
                     }
@@ -359,20 +364,20 @@ public class KoreaInvestmentAccountClient {
 
     /**
      * 해외주식 현재잔고(체결기준) 조회 — 미국(840) 외화(02) 기준.
-     * GET + query parameter. 보유 종목만 반환하며, 국내 잔고와 병합해 대시보드 등에서 KR/US 구분 표시에 사용.
+     * GET + query parameter. output1(보유종목) + output2(예수금·총자산 요약) 파싱.
      *
      * @param userId    사용자 ID
      * @param accountNo 계좌번호 (8-2 형식)
-     * @return 해외(US) 보유 종목 목록 (실패 시 빈 목록, 예외 없음)
+     * @return 보유 종목 목록과 요약(예수금·총자산). 실패 시 빈 목록과 null 요약, 예외 없음
      */
-    public List<AccountPositionDto> inquireOverseasBalance(String userId, String accountNo) {
+    public OverseasBalanceResult inquireOverseasBalance(String userId, String accountNo) {
         if (userId == null || accountNo == null || accountNo.trim().isEmpty()) {
-            return new ArrayList<>();
+            return new OverseasBalanceResult(new ArrayList<>(), null);
         }
         try {
             UserApiKey userApiKey = getUserApiKeyForAccount(userId, accountNo).orElse(null);
             if (userApiKey == null) {
-                return new ArrayList<>();
+                return new OverseasBalanceResult(new ArrayList<>(), null);
             }
             String accessToken = tokenService.getAccessToken(userId, userApiKey.getServerType());
             String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
@@ -407,7 +412,7 @@ public class KoreaInvestmentAccountClient {
                     .block();
 
             if (responseJson == null) {
-                return new ArrayList<>();
+                return new OverseasBalanceResult(new ArrayList<>(), null);
             }
             logApiResponse("해외주식현재잔고조회", responseJson);
 
@@ -415,16 +420,56 @@ public class KoreaInvestmentAccountClient {
             String rtCd = rootNode.path("rt_cd").asText();
             if (!"0".equals(rtCd)) {
                 log.warn("해외주식 잔고 조회 실패: rt_cd={}, msg1={}", rtCd, rootNode.path("msg1").asText(""));
-                return new ArrayList<>();
+                return new OverseasBalanceResult(new ArrayList<>(), null);
             }
 
             JsonNode output1 = rootNode.path("output1");
-            return parseOverseasPositionsOutput(output1);
+            List<AccountPositionDto> positions = parseOverseasPositionsOutput(output1);
+
+            JsonNode output2 = rootNode.path("output2");
+            OverseasBalanceSummaryDto summary = parseOverseasBalanceOutput2(output2);
+
+            return new OverseasBalanceResult(positions, summary);
         } catch (Exception e) {
             log.debug("해외주식 잔고 조회 실패(스킵): accountNo={}, error={}",
                     LogMaskingUtil.maskAccountNo(accountNo), e.getMessage());
-            return new ArrayList<>();
+            return new OverseasBalanceResult(new ArrayList<>(), null);
         }
+    }
+
+    /**
+     * 해외주식 잔고조회 API output2 파싱.
+     * 한투 명세(해외주식 잔고조회): 예수금 pchs_amt(매수가능금액/현금예수금), 총자산 tot_ass_amt.
+     * 응답 구조에 따라 fallback: frcr_dprs_amt, tot_dncl_amt / ovrs_tot_ast_amt, tot_asst_amt.
+     */
+    private OverseasBalanceSummaryDto parseOverseasBalanceOutput2(JsonNode output2) {
+        if (output2 == null || output2.isNull()) {
+            return null;
+        }
+        JsonNode node = output2.isArray() && output2.size() > 0 ? output2.get(0) : output2;
+        if (!node.isObject()) {
+            return null;
+        }
+        BigDecimal deposit = pathDecimal(node, "pchs_amt", "frcr_dprs_amt", "tot_dncl_amt");
+        BigDecimal totalAsset = pathDecimal(node, "tot_ass_amt", "ovrs_tot_ast_amt", "tot_asst_amt");
+        BigDecimal totalProfitLoss = pathDecimal(node, "tot_evlu_pfls_amt");
+        BigDecimal totalProfitLossRate = pathDecimal(node, "evlu_erng_rt1", "evlu_pfls_rt");
+        if (deposit == null) {
+            deposit = BigDecimal.ZERO;
+        }
+        if (totalAsset == null) {
+            totalAsset = BigDecimal.ZERO;
+        }
+        if (totalProfitLoss == null) {
+            totalProfitLoss = BigDecimal.ZERO;
+        }
+        return OverseasBalanceSummaryDto.builder()
+                .deposit(deposit)
+                .totalAsset(totalAsset)
+                .totalProfitLoss(totalProfitLoss)
+                .totalProfitLossRate(totalProfitLossRate)
+                .currency("USD")
+                .build();
     }
 
     /**
@@ -867,6 +912,76 @@ public class KoreaInvestmentAccountClient {
     }
 
     /**
+     * 주식정정취소가능주문조회 (미체결 주문 목록). GET. TR_ID TTTC8002R/VTTC8002R.
+     */
+    public List<CancelableOrderDto> inquireCancelableOrders(String userId, String accountNo) {
+        log.debug("주식정정취소가능주문조회: userId={}, accountNo={}", LogMaskingUtil.maskUserId(userId),
+                LogMaskingUtil.maskAccountNo(accountNo));
+        try {
+            UserApiKey userApiKey = getUserApiKeyForAccount(userId, accountNo)
+                    .orElseThrow(() -> new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
+                            "한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
+            String serverType = userApiKey.getServerType();
+            String accessToken = tokenService.getAccessToken(userId, serverType);
+            String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
+            String appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
+            String baseUrl = getBaseUrl(serverType);
+            String trId = getCancelableOrderTrId(serverType);
+            HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
+                    accessToken, appKey, appSecret, trId);
+            Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createAccountRequestBody(accountNo, Map.of());
+            URI uri = buildUriWithQueryParams(baseUrl, PATH_INQUIRE_PSBL_RVSECNCL, queryParams);
+            logApiRequest("주식정정취소가능주문조회", uri, headers, queryParams);
+            RateLimiter rateLimiter = getApiRateLimiter(serverType);
+            rateLimiter.acquirePermission();
+            String responseJson = webClient.get()
+                    .uri(uri)
+                    .headers(h -> h.addAll(headers))
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .timeout(Duration.ofSeconds(10))
+                    .block();
+            if (responseJson == null) {
+                throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND, "한국투자증권 API 응답이 null입니다");
+            }
+            logApiResponse("주식정정취소가능주문조회", responseJson);
+            JsonNode rootNode = objectMapper.readTree(responseJson);
+            String rtCd = rootNode.path("rt_cd").asText();
+            if (!"0".equals(rtCd)) {
+                String msg1 = rootNode.path("msg1").asText();
+                throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
+                        "한국투자증권 API 오류: rt_cd=" + rtCd + ", msg1=" + msg1);
+            }
+            JsonNode output1 = rootNode.path("output1");
+            List<CancelableOrderDto> list = new ArrayList<>();
+            if (output1.isArray()) {
+                for (JsonNode item : output1) {
+                    CancelableOrderDto dto = CancelableOrderDto.builder()
+                            .accountNo(accountNo)
+                            .symbol(item.path("pdno").asText(""))
+                            .orderNo(item.path("odno").asText(""))
+                            .orderBranchNo(item.path("ord_gno_brno").asText(""))
+                            .orderType("01".equals(item.path("sll_buy_dvsn_cd").asText("")) ? "SELL" : "BUY")
+                            .orderQuantity(Integer.parseInt(item.path("ord_qty").asText("0")))
+                            .orderPrice(new BigDecimal(item.path("ord_unpr").asText("0")))
+                            .orderTime(parseDateTime(item.path("ord_tmd").asText(""), item.path("ord_dt").asText("")))
+                            .currency("KRW")
+                            .build();
+                    list.add(dto);
+                }
+            }
+            return list;
+        } catch (DomainException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("주식정정취소가능주문조회 실패: userId={}, accountNo={}", LogMaskingUtil.maskUserId(userId),
+                    LogMaskingUtil.maskAccountNo(accountNo), e);
+            throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
+                    "주식정정취소가능주문조회 실패: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * 투자계좌자산현황조회
      */
     public AccountAssetDto inquireAssets(String userId, String accountNo) {
@@ -976,6 +1091,111 @@ public class KoreaInvestmentAccountClient {
     }
 
     /**
+     * 주식잔고조회_실현손익 (TTTC8494R/VTTC8494R). GET + query parameter.
+     */
+    public BalanceRealizedProfitLossDto inquireBalanceRealizedProfitLoss(String userId, String accountNo) {
+        log.debug("주식잔고조회_실현손익: userId={}, accountNo={}", LogMaskingUtil.maskUserId(userId),
+                LogMaskingUtil.maskAccountNo(accountNo));
+        try {
+            UserApiKey userApiKey = getUserApiKeyForAccount(userId, accountNo)
+                    .orElseThrow(() -> new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
+                            "한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
+            String serverType = userApiKey.getServerType();
+            String accessToken = tokenService.getAccessToken(userId, serverType);
+            String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
+            String appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
+            String baseUrl = getBaseUrl(serverType);
+            String trId = getBalanceRlzPlTrId(serverType);
+            HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
+                    accessToken, appKey, appSecret, trId);
+            Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createAccountRequestBody(
+                    accountNo != null ? accountNo : "",
+                    Map.of(
+                            "AFHR_FLPR_YN", "N",
+                            "OFL_YN", "",
+                            "INQR_DVSN", "00",
+                            "UNPR_DVSN", "01",
+                            "FUND_STTL_ICLD_YN", "N",
+                            "FNCG_AMT_AUTO_RDPT_YN", "N",
+                            "PRCS_DVSN", "01",
+                            "COST_ICLD_YN", "",
+                            "CTX_AREA_FK100", "",
+                            "CTX_AREA_NK100", ""));
+            URI uri = buildUriWithQueryParams(baseUrl, PATH_INQUIRE_BALANCE_RLZ_PL, queryParams);
+            logApiRequest("주식잔고조회_실현손익", uri, headers, queryParams);
+            RateLimiter rateLimiter = getApiRateLimiter(serverType);
+            rateLimiter.acquirePermission();
+            String responseJson = webClient.get()
+                    .uri(uri)
+                    .headers(h -> h.addAll(headers))
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .timeout(Duration.ofSeconds(10))
+                    .block();
+            if (responseJson == null) {
+                throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND, "한국투자증권 API 응답이 null입니다");
+            }
+            logApiResponse("주식잔고조회_실현손익", responseJson);
+            JsonNode rootNode = objectMapper.readTree(responseJson);
+            String rtCd = rootNode.path("rt_cd").asText();
+            if (!"0".equals(rtCd)) {
+                String msg1 = rootNode.path("msg1").asText();
+                throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
+                        "한국투자증권 API 오류: rt_cd=" + rtCd + ", msg1=" + msg1);
+            }
+            JsonNode output2 = rootNode.path("output2");
+            BigDecimal totalRlzPl = BigDecimal.ZERO;
+            if (output2 != null && !output2.isNull()) {
+                JsonNode o2 = output2.isArray() && output2.size() > 0 ? output2.get(0) : output2;
+                if (o2.isObject()) {
+                    totalRlzPl = pathDecimal(o2, "tot_rlzt_pfls", "tot_rlz_pfls");
+                    if (totalRlzPl == null) {
+                        totalRlzPl = BigDecimal.ZERO;
+                    }
+                }
+            }
+            List<BalanceRealizedProfitLossDto.RealizedProfitLossItemDto> details = new ArrayList<>();
+            JsonNode output1 = rootNode.path("output1");
+            if (output1 != null && output1.isArray()) {
+                for (JsonNode item : output1) {
+                    String tradeDate = item.has("trad_dt") ? item.path("trad_dt").asText("") : "";
+                    BigDecimal rlzt = pathDecimal(item, "rlzt_pfls", "rlz_pfls");
+                    if (rlzt == null) {
+                        rlzt = BigDecimal.ZERO;
+                    }
+                    BigDecimal buyAmt = pathDecimal(item, "buy_amt");
+                    if (buyAmt == null) {
+                        buyAmt = BigDecimal.ZERO;
+                    }
+                    BigDecimal sllAmt = pathDecimal(item, "sll_amt");
+                    if (sllAmt == null) {
+                        sllAmt = BigDecimal.ZERO;
+                    }
+                    details.add(BalanceRealizedProfitLossDto.RealizedProfitLossItemDto.builder()
+                            .tradeDate(tradeDate)
+                            .realizedProfitLoss(rlzt)
+                            .buyAmount(buyAmt)
+                            .sellAmount(sllAmt)
+                            .build());
+                }
+            }
+            return BalanceRealizedProfitLossDto.builder()
+                    .accountNo(accountNo != null ? accountNo : "")
+                    .totalRealizedProfitLoss(totalRlzPl)
+                    .currency("KRW")
+                    .details(details)
+                    .build();
+        } catch (DomainException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("주식잔고조회_실현손익 실패: userId={}, accountNo={}", LogMaskingUtil.maskUserId(userId),
+                    LogMaskingUtil.maskAccountNo(accountNo), e);
+            throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
+                    "주식잔고조회_실현손익 실패: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * 기간별손익조회
      */
     public ProfitLossDto inquirePeriodProfitLoss(String userId, String accountNo, LocalDate startDate,
@@ -988,10 +1208,16 @@ public class KoreaInvestmentAccountClient {
                     .orElseThrow(() -> new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                             "한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
 
+            String serverType = userApiKey.getServerType();
+            // 명세 10-korea-investment-api-spec §6: 기간별손익일별합산조회는 모의투자 미지원. 호출 시 404 발생하므로 미호출.
+            if ("1".equals(serverType)) {
+                throw new DomainException(ErrorCode.API_NOT_SUPPORTED,
+                        "기간별손익조회는 모의투자 환경에서 미지원됩니다. 실계좌에서만 이용 가능합니다.");
+            }
+
             String accessToken = tokenService.getAccessToken(userId, userApiKey.getServerType());
             String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
             String appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
-            String serverType = userApiKey.getServerType();
 
             String baseUrl = getBaseUrl(serverType);
             String trId = getPeriodProfitLossTrId(serverType);
@@ -1000,14 +1226,16 @@ public class KoreaInvestmentAccountClient {
             HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
                     accessToken, appKey, appSecret, trId);
 
-            // 조회 파라미터 (GET query parameter로 전달)
+            // 조회 파라미터 (GET query parameter). 명세 10-korea-investment-api-spec §6: PDNO, SORT_DVSN, CBLC_DVSN 필수.
             Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createAccountRequestBody(
                     accountNo,
                     Map.of(
                             "INQR_STRT_DT", startDate.format(DateTimeFormatter.ofPattern("yyyyMMdd")),
                             "INQR_END_DT", endDate.format(DateTimeFormatter.ofPattern("yyyyMMdd")),
-                            "SLL_BUY_DVSN_CD", "00", // 00: 전체
-                            "INQR_DVSN", "00", // 00: 역순
+                            "PDNO", "", // 공란: 전체 종목
+                            "SORT_DVSN", "00", // 00: 최근순
+                            "INQR_DVSN", "00",
+                            "CBLC_DVSN", "00", // 00: 전체 잔고
                             "CTX_AREA_FK100", "",
                             "CTX_AREA_NK100", ""));
             URI uri = buildUriWithQueryParams(baseUrl, PATH_INQUIRE_PERIOD_PROFIT_LOSS, queryParams);
@@ -1076,6 +1304,113 @@ public class KoreaInvestmentAccountClient {
                     LogMaskingUtil.maskAccountNo(accountNo), e);
             throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                     "기간별손익조회 실패: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 기간별매매손익현황조회 (TTTC8709R/VTTC8709R). GET + query parameter.
+     */
+    public PeriodProfitLossStatusDto inquirePeriodProfitLossStatus(String userId, String accountNo,
+            LocalDate startDate, LocalDate endDate) {
+        log.debug("기간별매매손익현황조회: userId={}, accountNo={}, startDate={}, endDate={}",
+                LogMaskingUtil.maskUserId(userId), LogMaskingUtil.maskAccountNo(accountNo), startDate, endDate);
+        try {
+            UserApiKey userApiKey = getUserApiKeyForAccount(userId, accountNo)
+                    .orElseThrow(() -> new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
+                            "한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId));
+            String serverType = userApiKey.getServerType();
+            String accessToken = tokenService.getAccessToken(userId, serverType);
+            String appKey = encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted());
+            String appSecret = encryptionUtil.decrypt(userApiKey.getAppSecretEncrypted());
+            String baseUrl = getBaseUrl(serverType);
+            String trId = getPeriodProfitLossStatusTrId(serverType);
+            HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
+                    accessToken, appKey, appSecret, trId);
+            Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createAccountRequestBody(
+                    accountNo != null ? accountNo : "",
+                    Map.of(
+                            "SORT_DVSN", "00",
+                            "INQR_STRT_DT", startDate.format(DateTimeFormatter.ofPattern("yyyyMMdd")),
+                            "INQR_END_DT", endDate.format(DateTimeFormatter.ofPattern("yyyyMMdd")),
+                            "CBLC_DVSN", "00",
+                            "PDNO", "",
+                            "CTX_AREA_FK100", "",
+                            "CTX_AREA_NK100", ""));
+            URI uri = buildUriWithQueryParams(baseUrl, PATH_INQUIRE_PERIOD_PROFIT_LOSS_STATUS, queryParams);
+            logApiRequest("기간별매매손익현황조회", uri, headers, queryParams);
+            RateLimiter rateLimiter = getApiRateLimiter(serverType);
+            rateLimiter.acquirePermission();
+            String responseJson = webClient.get()
+                    .uri(uri)
+                    .headers(h -> h.addAll(headers))
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .timeout(Duration.ofSeconds(10))
+                    .block();
+            if (responseJson == null) {
+                throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND, "한국투자증권 API 응답이 null입니다");
+            }
+            logApiResponse("기간별매매손익현황조회", responseJson);
+            JsonNode rootNode = objectMapper.readTree(responseJson);
+            String rtCd = rootNode.path("rt_cd").asText();
+            if (!"0".equals(rtCd)) {
+                String msg1 = rootNode.path("msg1").asText();
+                throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
+                        "한국투자증권 API 오류: rt_cd=" + rtCd + ", msg1=" + msg1);
+            }
+            BigDecimal totalRlzPl = BigDecimal.ZERO;
+            JsonNode output2 = rootNode.path("output2");
+            if (output2 != null && !output2.isNull()) {
+                JsonNode o2 = output2.isArray() && output2.size() > 0 ? output2.get(0) : output2;
+                if (o2.isObject()) {
+                    totalRlzPl = pathDecimal(o2, "tot_rlzt_pfls", "tot_rlz_pfls", "rlz_pfls_amt");
+                    if (totalRlzPl == null) {
+                        totalRlzPl = BigDecimal.ZERO;
+                    }
+                }
+            }
+            List<PeriodProfitLossStatusDto.ProfitLossStatusItemDto> items = new ArrayList<>();
+            JsonNode output1 = rootNode.path("output1");
+            if (output1 != null && output1.isArray()) {
+                for (JsonNode item : output1) {
+                    String symbol = pathText(item, "pdno", "종목코드");
+                    String name = pathText(item, "prdt_name", "종목명");
+                    BigDecimal rlzt = pathDecimal(item, "rlzt_pfls", "rlz_pfls", "evlu_pfls_amt");
+                    if (rlzt == null) {
+                        rlzt = BigDecimal.ZERO;
+                    }
+                    BigDecimal buyAmt = pathDecimal(item, "buy_amt", "pchs_amt");
+                    if (buyAmt == null) {
+                        buyAmt = BigDecimal.ZERO;
+                    }
+                    BigDecimal sllAmt = pathDecimal(item, "sll_amt", "sll_amt_smtl");
+                    if (sllAmt == null) {
+                        sllAmt = BigDecimal.ZERO;
+                    }
+                    items.add(PeriodProfitLossStatusDto.ProfitLossStatusItemDto.builder()
+                            .symbol(symbol != null ? symbol : "")
+                            .symbolName(name != null ? name : "")
+                            .realizedProfitLoss(rlzt)
+                            .buyAmount(buyAmt)
+                            .sellAmount(sllAmt)
+                            .build());
+                }
+            }
+            return PeriodProfitLossStatusDto.builder()
+                    .accountNo(accountNo != null ? accountNo : "")
+                    .startDate(startDate)
+                    .endDate(endDate)
+                    .totalRealizedProfitLoss(totalRlzPl)
+                    .currency("KRW")
+                    .items(items)
+                    .build();
+        } catch (DomainException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("기간별매매손익현황조회 실패: userId={}, accountNo={}", LogMaskingUtil.maskUserId(userId),
+                    LogMaskingUtil.maskAccountNo(accountNo), e);
+            throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
+                    "기간별매매손익현황조회 실패: " + e.getMessage(), e);
         }
     }
 
@@ -1216,6 +1551,27 @@ public class KoreaInvestmentAccountClient {
 
         public List<AccountPositionDto> getPositions() {
             return positions;
+        }
+    }
+
+    /**
+     * 해외(미국) 잔고 조회 결과: 보유 종목 목록 + output2 요약(예수금·총자산)
+     */
+    public static class OverseasBalanceResult {
+        private final List<AccountPositionDto> positions;
+        private final OverseasBalanceSummaryDto summary;
+
+        public OverseasBalanceResult(List<AccountPositionDto> positions, OverseasBalanceSummaryDto summary) {
+            this.positions = positions != null ? positions : new ArrayList<>();
+            this.summary = summary;
+        }
+
+        public List<AccountPositionDto> getPositions() {
+            return positions;
+        }
+
+        public OverseasBalanceSummaryDto getSummary() {
+            return summary;
         }
     }
 }

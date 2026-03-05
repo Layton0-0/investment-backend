@@ -50,6 +50,8 @@ public class GlobalExceptionHandler {
                 ? HttpStatus.NOT_FOUND
                 : ErrorCode.SETTING_NOT_FOUND.equals(e.getErrorCode())
                 ? HttpStatus.NOT_FOUND
+                : ErrorCode.API_NOT_SUPPORTED.equals(e.getErrorCode())
+                ? HttpStatus.BAD_REQUEST
                 : ErrorCode.UNAUTHORIZED.equals(e.getErrorCode())
                 ? HttpStatus.UNAUTHORIZED
                 : ErrorCode.ORDER_REJECTED.equals(e.getErrorCode())

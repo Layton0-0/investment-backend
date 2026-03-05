@@ -333,6 +333,23 @@ EVERY 30 seconds:
 
 **재연결/갭 구간**: WS 끊김 구간에는 REST Fallback으로 조회한 현재가·당일 고가가 사용되므로, 끊김 동안의 고가가 REST 1회 조회 시점 기준으로만 반영될 수 있다. 실시간 틱 복구는 하지 않으며, “현재가·당일 고가 기준” Fallback으로 일관성은 유지된다.
 
+#### 3.4.6 WebSocket 수신 → 캐시 반영 및 구독 트리거
+
+**WebSocket 수신 시 캐시 반영 (WebSocketPriceCacheListener)**
+
+- `WebSocketDataEvent` 수신 시 이벤트의 `tr_id`가 설정의 `quote-tr-id`(실시간 호가) 또는 `execution-tr-id`(실시간 체결)와 일치하면 payload(JSON 또는 파이프 구분)에서 종목코드·현재가를 추출한다.
+- `CurrentPriceDto`를 생성한 뒤 `RealtimeMarketDataService.updateFromWebSocket(symbol, dto)`를 호출하여 `webSocketLivePrices` 및 Redis 캐시(`CACHE_CURRENT_PRICE`)를 갱신한다.
+- 단타/청산 로직에서 `getCurrentPriceBlocking`/`getCurrentPrices` 호출 시 WebSocket으로 수신된 값이 우선 사용된다.
+
+**구독 트리거 (보유·단타 종목)**
+
+- **연결 성공 시**: `KoreaInvestmentWebSocketClientImpl` 연결 성공 후 `restoreSubscriptions(sessionKey)`로 기존에 구독 중이던 종목을 자동 복원한다.
+- **스케줄러 실행 시**: `PipelineExitScheduler`·`IntradayBreakoutScheduler`에서 `KoreaInvestmentWebSocketClient`를 `@Autowired(required = false)`로 주입하고, 스케줄 실행 시 평가 대상 종목(보유 포지션·단타 돌파 후보)에 대해 `webSocketClient.isConnected(userId, serverType)`이면 `subscribeQuote(userId, serverType, symbols)`를 호출한다. 이로써 청산/단타 평가 직전에 해당 종목의 실시간 호가·체결 구독이 갱신된다.
+
+**현재가 캐시 TTL**
+
+- `investment.market-data.current-price-cache-ttl-seconds`(기본 300초)로 현재가 캐시 TTL을 제어한다. 단타/청산/WebSocket 활성화 환경에서는 5초 등 짧은 값 설정을 권장한다. (application.yml 및 CacheConfig 참조)
+
 ### 3.5 해외주식 실시간 시세 (선택)
 
 해외주식 실시간 시세는 유료 서비스이므로 선택적으로 구현합니다.

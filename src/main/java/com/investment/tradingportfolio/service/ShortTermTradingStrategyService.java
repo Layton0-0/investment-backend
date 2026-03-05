@@ -1,6 +1,5 @@
 package com.investment.tradingportfolio.service;
 
-import com.investment.marketdata.config.MarketDataProperties;
 import com.investment.domain.entity.TradingPortfolio;
 import com.investment.domain.entity.TradingPortfolioItem;
 import com.investment.factor.dto.PositionRecommendationDto;
@@ -20,13 +19,14 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
  * 단기 트레이딩 전략 서비스
  *
  * 1차: 자동투자 파이프라인(TB_SIGNAL_SCORE + TB_DAILY_STOCK) 기반 단기(SHORT_TERM) 권장 종목으로 일별 포트폴리오 생성.
- * 2차: 시그널이 없으면 StockScreeningService(실시간 API) fallback 후, 없으면 모의 데이터.
+ * 2차: 시그널이 없으면 StockScreeningService(실시간 API) fallback. (mock 데이터 없음, 테스트에서만 mock 사용)
  * 종목 수는 기준 통과한 만큼만 포함(항상 5개 고정 아님), 표시 상한은 max-items로 제한.
  */
 @Slf4j
@@ -38,7 +38,6 @@ public class ShortTermTradingStrategyService {
     private final FrictionCostService frictionCostService;
     private final StockScreeningService stockScreeningService;
     private final StockAnalysisService stockAnalysisService;
-    private final MarketDataProperties marketDataProperties;
     private final java.util.Random random = new java.util.Random();
 
     @Value("${investment.trading-portfolio.default-capital:100000000}")
@@ -201,12 +200,6 @@ public class ShortTermTradingStrategyService {
     private List<TradingPortfolioItem> filterAndAnalyzeStocks() {
         List<TradingPortfolioItem> items = new ArrayList<>();
         
-        // 모의 데이터 사용 옵션이 활성화된 경우
-        if (marketDataProperties.isUseMockData()) {
-            log.info("설정에 따라 모의 데이터를 사용합니다.");
-            return createMockStocks();
-        }
-        
         try {
             // 시장 데이터 API를 사용하여 종목 스크리닝 (상위 5개)
             // 주의: block() 사용은 비동기 처리 이점을 상실하나, 동기적으로 결과를 반환해야 하므로 불가피함
@@ -218,12 +211,12 @@ public class ShortTermTradingStrategyService {
                         .block();
             } catch (Exception e) {
                 log.error("종목 스크리닝 중 오류 발생", e);
-                return createMockStocks();
+                return Collections.emptyList();
             }
             
             if (screenedStocks == null || screenedStocks.isEmpty()) {
-                log.warn("스크리닝된 종목이 없습니다. 모의 데이터를 사용합니다.");
-                return createMockStocks();
+                log.warn("스크리닝된 종목이 없습니다.");
+                return Collections.emptyList();
             }
             
             // 각 종목에 대해 상세 분석 및 포트폴리오 아이템 생성
@@ -293,8 +286,7 @@ public class ShortTermTradingStrategyService {
             
         } catch (Exception e) {
             log.error("종목 필터링 및 분석 실패", e);
-            // 에러 발생 시 모의 데이터 사용
-            return createMockStocks();
+            return Collections.emptyList();
         }
         
         return items;
@@ -354,70 +346,6 @@ public class ShortTermTradingStrategyService {
             this.target2 = target2;
             this.riskRewardRatio = riskRewardRatio;
         }
-    }
-    
-    /**
-     * 모의 종목 데이터 생성 (API 실패 시 사용)
-     */
-    private List<TradingPortfolioItem> createMockStocks() {
-        List<TradingPortfolioItem> items = new ArrayList<>();
-        String[][] stockData = {
-            {"NVDA", "NVIDIA Corporation", "480.00", "490.00", "470.00", "510.00", "530.00", "5.2", "2.5"},
-            {"TSLA", "Tesla Inc.", "240.00", "245.00", "235.00", "255.00", "265.00", "6.3", "2.0"},
-            {"AMD", "Advanced Micro Devices", "145.00", "150.00", "140.00", "160.00", "170.00", "8.6", "2.3"},
-            {"AAPL", "Apple Inc.", "175.00", "178.00", "172.00", "182.00", "188.00", "4.5", "1.8"},
-            {"MSFT", "Microsoft Corporation", "380.00", "385.00", "375.00", "395.00", "405.00", "4.2", "2.1"}
-        };
-        
-        for (int i = 0; i < stockData.length; i++) {
-            String[] data = stockData[i];
-            BigDecimal entryMin = new BigDecimal(data[2]);
-            BigDecimal entryMax = new BigDecimal(data[3]);
-            BigDecimal stopLoss = new BigDecimal(data[4]);
-            BigDecimal target1 = new BigDecimal(data[5]);
-            BigDecimal target2 = new BigDecimal(data[6]);
-            BigDecimal riskReward = new BigDecimal(data[8]);
-            
-            BigDecimal avgEntry = entryMin.add(entryMax).divide(new BigDecimal("2"), 2, RoundingMode.HALF_UP);
-            BigDecimal profit1 = target1.subtract(avgEntry);
-            BigDecimal grossReturnRatePctMock = profit1.divide(avgEntry, 4, RoundingMode.HALF_UP)
-                    .multiply(new BigDecimal("100"));
-            BigDecimal roundTripRatePctMock = frictionCostService.getRoundTripCostRate("KR").multiply(new BigDecimal("100"));
-            BigDecimal expectedReturnRate = grossReturnRatePctMock.subtract(roundTripRatePctMock).max(BigDecimal.ZERO);
-
-            BigDecimal investmentAmount = new BigDecimal("10000");
-            BigDecimal expectedProfit = investmentAmount.multiply(expectedReturnRate)
-                    .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
-
-            // 매수 시간: 10:00, 10:30, 11:00, 11:30, 12:00 (분이 60을 초과하지 않도록 처리)
-            int hour = 10 + (i * 30) / 60;
-            int minute = (i * 30) % 60;
-            LocalTime buyTime = LocalTime.of(hour, minute);
-            LocalTime sellTime = buyTime.plusHours(2 + i);
-            
-            TradingPortfolioItem item = TradingPortfolioItem.builder()
-                    .symbol(data[0])
-                    .name(data[1])
-                    .entryPriceMin(entryMin)
-                    .entryPriceMax(entryMax)
-                    .stopLossPrice(stopLoss)
-                    .targetPrice1(target1)
-                    .targetPrice2(target2)
-                    .expectedReturnRate(expectedReturnRate)
-                    .riskRewardRatio(riskReward)
-                    .technicalBasis("API 데이터 조회 실패로 모의 데이터 사용")
-                    .supplyDemandBasis("API 데이터 조회 실패로 모의 데이터 사용")
-                    .catalystFactor("API 데이터 조회 실패로 모의 데이터 사용")
-                    .buyTime(buyTime)
-                    .sellTime(sellTime)
-                    .investmentAmount(investmentAmount)
-                    .expectedProfit(expectedProfit)
-                    .ranking(i + 1)
-                    .build();
-            
-            items.add(item);
-        }
-        return items;
     }
     
     /**

@@ -1,86 +1,141 @@
 package com.investment.marketdata.websocket;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.investment.marketdata.config.MarketDataProperties;
 import com.investment.marketdata.dto.CurrentPriceDto;
 import com.investment.marketdata.service.RealtimeMarketDataService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.regex.Pattern;
+import java.util.Optional;
 
 /**
- * WebSocket 실시간 데이터 수신 시 현재가 캐시를 갱신하여
- * 청산/단타 판단이 REST 5분 캐시 대신 최신가를 사용하도록 한다.
- *
- * @see RealtimeMarketDataService#updateFromWebSocket(String, CurrentPriceDto)
- * @see investment-backend/docs/02-architecture/14-multi-account-realtime-streaming.md
+ * WebSocket 실시간 호가·체결 데이터 수신 시 현재가 캐시를 갱신하는 리스너.
+ * tr_id가 설정의 quote-tr-id 또는 execution-tr-id와 일치하면 payload에서 종목코드·현재가를 추출하여
+ * RealtimeMarketDataService.updateFromWebSocket(symbol, dto)를 호출한다.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(
-        name = "investment.market-data.korea-investment.websocket.enabled",
-        havingValue = "true")
 public class WebSocketPriceCacheListener {
 
-    private static final Pattern NUMERIC = Pattern.compile("^-?[0-9]+(\\.[0-9]+)?$");
-
+    private final MarketDataProperties marketDataProperties;
     private final RealtimeMarketDataService realtimeMarketDataService;
+    private final ObjectMapper objectMapper;
 
     @EventListener
     public void onWebSocketData(WebSocketDataEvent event) {
-        if (event == null || event.getData() == null || event.getData().isBlank()) {
+        if (event == null || event.getTrId() == null) {
             return;
         }
-        if (!event.isQuoteData() && !event.isExecutionData()) {
+        String trId = event.getTrId();
+        var ws = marketDataProperties.getKoreaInvestment().getWebsocket();
+        if (!trId.equals(ws.getQuoteTrId()) && !trId.equals(ws.getExecutionTrId())) {
+            return;
+        }
+        String data = event.getData();
+        if (data == null || data.isBlank()) {
             return;
         }
         try {
-            CurrentPriceDto dto = parseToCurrentPrice(event.getData());
-            if (dto != null && dto.getSymbol() != null && dto.getCurrentPrice() != null) {
-                realtimeMarketDataService.updateFromWebSocket(dto.getSymbol(), dto);
+            Optional<SymbolPrice> parsed = parseSymbolAndPrice(data);
+            if (parsed.isEmpty()) {
+                return;
             }
+            SymbolPrice sp = parsed.get();
+            CurrentPriceDto dto = CurrentPriceDto.builder()
+                    .symbol(sp.symbol)
+                    .currentPrice(sp.currentPrice)
+                    .queriedAt(LocalDateTime.now())
+                    .build();
+            realtimeMarketDataService.updateFromWebSocket(sp.symbol, dto);
+            log.trace("WebSocket 현재가 캐시 갱신: trId={}, symbol={}, price={}", trId, sp.symbol, sp.currentPrice);
         } catch (Exception e) {
-            log.trace("WebSocket 가격 파싱 스킵: trId={}, dataLen={}, error={}",
-                    event.getTrId(), event.getData().length(), e.getMessage());
+            log.debug("WebSocket 현재가 파싱/갱신 스킵: trId={}, error={}", trId, e.getMessage());
         }
     }
 
-    /**
-     * 한투 실시간 파이프 형식 파싱. 데이터가 "종목코드|현재가|..." 형태일 때 symbol, currentPrice 추출.
-     * 고가/저가 등 추가 필드 위치는 API 스펙에 따라 확장 가능.
-     */
-    private CurrentPriceDto parseToCurrentPrice(String data) {
-        if (data == null || data.isBlank()) {
-            return null;
+    private Optional<SymbolPrice> parseSymbolAndPrice(String data) {
+        String trimmed = data.trim();
+        if (trimmed.startsWith("{")) {
+            return parseJsonSymbolPrice(trimmed);
         }
-        String[] parts = data.split("\\|");
+        if (trimmed.contains("|")) {
+            return parsePipedSymbolPrice(trimmed);
+        }
+        return Optional.empty();
+    }
+
+    private Optional<SymbolPrice> parseJsonSymbolPrice(String json) {
+        try {
+            JsonNode root = objectMapper.readTree(json);
+            JsonNode body = root.path("body");
+            if (body.isMissingNode()) {
+                body = root;
+            }
+            if (body.isArray() && body.size() > 0) {
+                body = body.get(0);
+            }
+            String symbol = pathText(body, "pdno", "stock_code", "종목코드", "stck_shrn_iscd");
+            String priceStr = pathText(body, "stck_prpr", "prpr", "현재가", "price");
+            if (symbol == null || symbol.isBlank() || priceStr == null || priceStr.isBlank()) {
+                return Optional.empty();
+            }
+            BigDecimal price = new BigDecimal(priceStr.replaceAll(",", ""));
+            return Optional.of(new SymbolPrice(symbol.trim(), price));
+        } catch (Exception e) {
+            return Optional.empty();
+        }
+    }
+
+    private Optional<SymbolPrice> parsePipedSymbolPrice(String data) {
+        String[] parts = data.split("\\|", -1);
         if (parts.length < 2) {
-            return null;
+            return Optional.empty();
         }
-        String symbol = parts[0].trim();
-        if (symbol.isEmpty()) {
-            return null;
+        String symbol = null;
+        BigDecimal price = null;
+        for (int i = 0; i < parts.length; i++) {
+            String p = parts[i].trim();
+            if (p.matches("\\d{6}")) {
+                symbol = p;
+            } else if (price == null && p.matches("[\\d,]+(\\.\\d+)?")) {
+                try {
+                    price = new BigDecimal(p.replaceAll(",", ""));
+                } catch (NumberFormatException ignored) {
+                }
+            }
         }
-        String priceStr = parts[1].trim();
-        if (!NUMERIC.matcher(priceStr).matches()) {
-            return null;
+        if (symbol != null && price != null && price.compareTo(BigDecimal.ZERO) > 0) {
+            return Optional.of(new SymbolPrice(symbol, price));
         }
-        BigDecimal currentPrice = new BigDecimal(priceStr);
-        BigDecimal highPrice = parts.length > 4 && NUMERIC.matcher(parts[4].trim()).matches()
-                ? new BigDecimal(parts[4].trim()) : null;
-        BigDecimal lowPrice = parts.length > 5 && NUMERIC.matcher(parts[5].trim()).matches()
-                ? new BigDecimal(parts[5].trim()) : null;
-        return CurrentPriceDto.builder()
-                .symbol(symbol)
-                .currentPrice(currentPrice)
-                .highPrice(highPrice)
-                .lowPrice(lowPrice)
-                .queriedAt(LocalDateTime.now())
-                .build();
+        return Optional.empty();
+    }
+
+    private static String pathText(JsonNode node, String... keys) {
+        for (String key : keys) {
+            if (node.has(key)) {
+                String v = node.path(key).asText(null);
+                if (v != null && !v.isEmpty()) {
+                    return v;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static final class SymbolPrice {
+        final String symbol;
+        final BigDecimal currentPrice;
+
+        SymbolPrice(String symbol, BigDecimal currentPrice) {
+            this.symbol = symbol;
+            this.currentPrice = currentPrice;
+        }
     }
 }

@@ -13,6 +13,8 @@ public final class ErrorCode {
     // 계좌 관련
     public static final String ACCOUNT_NOT_FOUND = "ACCOUNT_NOT_FOUND";
     public static final String ACCOUNT_ACCESS_DENIED = "ACCOUNT_ACCESS_DENIED";
+    /** 특정 API가 해당 환경(예: 모의투자)에서 미지원될 때 */
+    public static final String API_NOT_SUPPORTED = "API_NOT_SUPPORTED";
     public static final String INSUFFICIENT_BALANCE = "INSUFFICIENT_BALANCE";
     
     // 주문 관련

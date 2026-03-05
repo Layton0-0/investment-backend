@@ -29,7 +29,6 @@ MarketDataClient (인터페이스)
 investment:
   market-data:
     provider: korea-investment
-    use-mock-data: ${MARKET_DATA_USE_MOCK_DATA:false}
     korea-investment:
       app-key: ${KOREA_INVESTMENT_APP_KEY:}
       app-secret: ${KOREA_INVESTMENT_APP_SECRET:}
@@ -140,6 +139,8 @@ String symbol = "삼성전자"; // 자동으로 "005930"으로 변환
 | `appsecret` | String | Required='Y' | 발급받은 App Secret |
 | `tr_id` | String | Required | 거래 ID (API별로 고유한 값, 실거래/모의투자에 따라 다름) |
 | `Content-Type` | String | Required | `application/json` |
+| `custtype` | String | (명세) | 고객유형. 개인: `P`. 국내주식 현재가/시세 조회 등에서 사용. |
+| `hashkey` | String | (명세) | 요청 무결성 검증. GET 조회 시 쿼리 파라미터를 JSON으로 직렬화한 뒤 `KoreaInvestmentHashkeyUtil.generateHashkey(params, appSecret)`로 생성. |
 
 **참고**: 
 - `appkey`와 `appsecret`은 한국투자증권 API 문서에서 Required='Y'로 명시된 필수 파라미터입니다.
@@ -507,9 +508,9 @@ Java 17을 사용하는 경우 기본적으로 TLS 1.2 이상을 지원하므로
 - **엔드포인트**: `/uapi/overseas-stock/v1/trading/inquire-present-balance` (체결기준 현재잔고). 포털 메뉴명이 "해외주식 잔고"이고 URL에 `inquire-balance`가 노출될 수 있으나, 본 프로젝트는 **inquire-present-balance** 사용.
 - **요청 방식**: **GET** + query parameter
 - **기능**: 미국(840) 외화(02) 기준 체결 잔고·보유 종목 목록 조회
-- **사용 클래스**: `KoreaInvestmentAccountClient.inquireOverseasBalance(userId, accountNo)` — 국내 잔고와 별도 호출 후 `AccountService.getBalanceAndPositions`에서 국내·해외 보유를 병합하여 반환
+- **사용 클래스**: `KoreaInvestmentAccountClient.inquireOverseasBalance(userId, accountNo)` — 국내 잔고와 별도 호출 후 `AccountService.getBalanceAndPositions`·`getPositions(accountNo, "US")`·`getOverseasSummary(accountNo)`에서 사용
 - **필수 파라미터**: `CANO`, `ACNT_PRDT_CD`, `WCRC_FRCR_DVSN_CD`(02: 외화), `NATN_CD`(840: 미국), `TR_MKET_CD`(00: 전체), `INQR_DVSN_CD`(00: 전체)
-- **응답**: `output1` 배열에 보유 종목(필드명은 KIS 해외 API 스펙·ovrs_* 등). 파싱 후 `AccountPositionDto`에 `market=US`, `currency=USD` 설정
+- **응답**: `output1` 배열에 보유 종목(필드명은 KIS 해외 API 스펙·ovrs_* 등). 파싱 후 `AccountPositionDto`에 `market=US`, `currency=USD` 설정. **output2** 단일/배열: 한투 **해외주식 잔고조회** 명세 기준 **예수금** `pchs_amt`(매수가능금액/현금예수금), **총자산** `tot_ass_amt`. 없으면 frcr_dprs_amt·ovrs_tot_ast_amt·tot_dncl_amt·tot_asst_amt 순 fallback. `OverseasBalanceSummaryDto`로 파싱하여 대시보드 US 계좌 카드 및 `GET /api/v1/accounts/{accountNo}/overseas-summary`에서 사용
 
 #### 2. 매수가능조회
 - **TR ID**: `TTTC8908R` (실거래) / `VTTC8908R` (모의투자)
@@ -540,14 +541,15 @@ Java 17을 사용하는 경우 기본적으로 TLS 1.2 이상을 지원하므로
 - **엔드포인트**: `/uapi/domestic-stock/v1/trading/inquire-account-balance`
 - **요청 방식**: **GET** + query parameter
 - **기능**: 계좌 자산 현황 종합 조회 (output1·output2 반환, output2 기준 DTO 매핑). **모의계좌 미지원** — 모의계좌일 때는 `inquireAssets()` 내부에서 주식잔고조회(inquire-balance) 결과로 자산 요약을 구성해 반환(폴백).
+- **예수금 매핑**: 국내계좌 예수금은 주식잔고조회(inquire-balance)의 `output.dnca_tot_amt`, 투자계좌자산현황(output2)의 `tot_dncl_amt`(총예수금액)에 해당하며, 대시보드에는 `AccountAssetDto.deposit`으로 표시한다.
 - **사용 클래스**: `KoreaInvestmentAccountClient.inquireAssets()`
 - **필수 파라미터**: `CANO`, `ACNT_PRDT_CD` / 선택: `INQR_DVSN_1`, `BSPR_BF_DT_APLY_YN`
 
 #### 6. 기간별손익일별합산조회
-- **TR ID**: `TTTC8708R` (실거래) / `VTTC8708R` (모의투자)
+- **TR ID**: `TTTC8708R` (실거래). **모의투자**: 명세상 미지원(호출 시 404). 모의 계좌에서는 API 호출 없이 `API_NOT_SUPPORTED` 예외 반환.
 - **엔드포인트**: `/uapi/domestic-stock/v1/trading/inquire-period-profit-loss`
-- **요청 방식**: **GET** + query parameter
-- **기능**: 기간별 일별 손익 합산 조회
+- **요청 방식**: **GET** + query parameter. 필수: `CANO`, `ACNT_PRDT_CD`, `INQR_STRT_DT`, `INQR_END_DT`, `PDNO`(공란=전체), `SORT_DVSN`(00=최근순), `INQR_DVSN`, `CBLC_DVSN`(00=전체), `CTX_AREA_FK100`/`CTX_AREA_NK100`.
+- **기능**: 기간별 일별 손익 합산 조회 (실전만)
 - **사용 클래스**: `KoreaInvestmentAccountClient.inquirePeriodProfitLoss()`
 
 ### 계좌 API 사용 예시

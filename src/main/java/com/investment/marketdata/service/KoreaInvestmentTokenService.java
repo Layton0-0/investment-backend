@@ -405,6 +405,17 @@ public class KoreaInvestmentTokenService {
                         Long lastByKey = lastIssuanceTimeByKey.get(cooldownKey);
                         long now = System.currentTimeMillis();
                         if (lastByKey != null && (now - lastByKey) < TOKEN_ISSUANCE_COOLDOWN_MS) {
+                            // 1분 제한에 걸렸을 때 예외 대신 DB에 있는 기존 유효 토큰 반환 시도
+                            token = tokenRepository.findByUserIdAndServerType(userId, st).orElse(null);
+                            if (token != null && token.isValid()) {
+                                try {
+                                    String existing = encryptionUtil.decrypt(token.getAccessTokenEncrypted());
+                                    log.debug("토큰 발급 제한 구간에서 기존 유효 토큰 재사용: userId={}, serverType={}", userId, st);
+                                    return existing;
+                                } catch (RuntimeException decryptEx) {
+                                    log.warn("기존 토큰 복호화 실패: userId={}, serverType={}, error={}", userId, st, decryptEx.getMessage());
+                                }
+                            }
                             long waitSec = (TOKEN_ISSUANCE_COOLDOWN_MS - (now - lastByKey)) / 1000;
                             String msg = String.format(
                                     "접근토큰 발급은 1분당 1회만 가능합니다(앱키별). 약 %d초 후 다시 시도해 주세요.",
@@ -444,6 +455,17 @@ public class KoreaInvestmentTokenService {
                 Long lastByKey = lastIssuanceTimeByKey.get(cooldownKey);
                 long now = System.currentTimeMillis();
                 if (lastByKey != null && (now - lastByKey) < TOKEN_ISSUANCE_COOLDOWN_MS) {
+                    // 1분 제한 구간: 기존 유효 토큰이 있으면 재사용
+                    KoreaInvestmentToken existingInCooldown = tokenRepository.findByUserIdAndServerType(userId, st).orElse(null);
+                    if (existingInCooldown != null && existingInCooldown.isValid()) {
+                        try {
+                            String existing = encryptionUtil.decrypt(existingInCooldown.getAccessTokenEncrypted());
+                            log.debug("토큰 발급 제한 구간에서 기존 유효 토큰 재사용(복호화 실패 후): userId={}, serverType={}", userId, st);
+                            return existing;
+                        } catch (RuntimeException decryptEx) {
+                            log.warn("기존 토큰 복호화 실패: userId={}, serverType={}, error={}", userId, st, decryptEx.getMessage());
+                        }
+                    }
                     long waitSec = (TOKEN_ISSUANCE_COOLDOWN_MS - (now - lastByKey)) / 1000;
                     throw new RuntimeException(String.format(
                             "접근토큰 발급은 1분당 1회만 가능합니다(앱키별). 약 %d초 후 다시 시도해 주세요.", Math.max(1, waitSec)));

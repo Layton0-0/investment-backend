@@ -15,10 +15,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.constraints.NotBlank;
+
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
@@ -62,6 +64,9 @@ public class MarketDataController {
             @PathVariable @NotBlank String symbol) {
         CurrentPriceDto currentPrice = realtimeMarketDataService.getCurrentPrice(symbol)
                 .block(Duration.ofSeconds(10));
+        if (currentPrice == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
         return ResponseEntity.ok(currentPrice);
     }
     

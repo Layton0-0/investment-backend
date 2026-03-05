@@ -7,6 +7,7 @@ import com.investment.config.SecurityHeadersConfig;
 import com.investment.risk.dto.RiskAccountSummaryDto;
 import com.investment.risk.dto.RiskLimitsDto;
 import com.investment.risk.dto.RiskSummaryDto;
+import com.investment.risk.service.PerformanceAttributionService;
 import com.investment.risk.service.RiskReportService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -41,6 +42,8 @@ class RiskReportControllerTest {
 
     @MockBean
     private RiskReportService riskReportService;
+    @MockBean
+    private PerformanceAttributionService performanceAttributionService;
     @MockBean
     private AccountService accountService;
     @MockBean

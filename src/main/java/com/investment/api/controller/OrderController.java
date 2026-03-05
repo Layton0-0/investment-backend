@@ -1,5 +1,7 @@
 package com.investment.api.controller;
 
+import com.investment.common.exception.DomainException;
+import com.investment.common.exception.ErrorCode;
 import com.investment.order.dto.OrderRequestDto;
 import com.investment.order.dto.OrderResponseDto;
 import com.investment.order.service.OrderService;
@@ -41,11 +43,26 @@ public class OrderController {
             @ApiResponse(responseCode = "500", description = "서버 오류")
     })
     @PostMapping
-    public ResponseEntity<OrderResponseDto> createOrder(
+    public ResponseEntity<?> createOrder(
             @RequestBody @Valid OrderRequestDto request) {
-        OrderResponseDto response = orderService.executeOrder(request);
-        return ResponseEntity.ok(response);
+        try {
+            OrderResponseDto response = orderService.executeOrder(request);
+            return ResponseEntity.ok(response);
+        } catch (DomainException e) {
+            int status = ErrorCode.ORDER_REJECTED.equals(e.getErrorCode()) ? 403 : 400;
+            return ResponseEntity.status(status).body(
+                    new OrderErrorBody(e.getErrorCode(), e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(
+                    new OrderErrorBody(ErrorCode.ORDER_FAILED, "주문 처리 중 오류가 발생했습니다."));
+        } catch (Throwable t) {
+            return ResponseEntity.badRequest().body(
+                    new OrderErrorBody(ErrorCode.ORDER_FAILED, "주문 처리 중 오류가 발생했습니다."));
+        }
     }
+
+    /** 주문 실패 시 응답 본문 (4xx). */
+    public record OrderErrorBody(String code, String message) {}
     
     @GetMapping("/{orderId}")
     public ResponseEntity<OrderResponseDto> getOrder(

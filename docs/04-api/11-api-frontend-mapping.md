@@ -125,7 +125,9 @@
 | POST /api/v1/auth/logout | authApi.logout | AuthContext | |
 | GET /api/v1/accounts/{accountNo}/assets | accountApi.getAccountAssets | useDashboardData, Dashboard | |
 | GET /api/v1/accounts/{accountNo}/positions (optional market=KR or US) | accountApi.getPositions(accountNo, market?) | useDashboardData(국내/해외 별도 호출), Dashboard(국내·해외 잔고 블록) | |
-| GET balance, buyable-amount, sellable-quantity, order-history, profit-loss | accountApi.getBalance, getBuyableAmount, getSellableQuantity, getOrderHistory, getProfitLoss | (필요 시 상세 화면) | 연동 완료 |
+| GET balance, buyable-amount, sellable-quantity | accountApi.getBalance, getBuyableAmount, getSellableQuantity | (필요 시 상세 화면) | 연동 완료 |
+| GET /api/v1/accounts/{accountNo}/order-history | accountApi.getOrderHistory | Market(주문·체결) 한투 API 체결 내역 (최근 7일) | 연동 완료 |
+| GET /api/v1/accounts/{accountNo}/profit-loss | accountApi.getProfitLoss | useDashboardData, Dashboard 기간별 손익 (최근 30일) | 연동 완료 |
 | GET /api/v1/orders | ordersApi.getOrders | useDashboardData, Market(Orders), Dashboard. 응답 각 항목에 signalType·exitRuleType(거래 사유) 포함, 주문 목록·대시보드 주문 테이블에 시그널 유형·청산 규칙 컬럼 표시 | |
 | DELETE /api/v1/orders/{orderId} | ordersApi.cancelOrder | Market(Orders) | |
 | POST /api/v1/orders/cancel-all-pending | ordersApi.cancelAllPendingOrders | Market(Orders) 미체결 전체 취소 | |
@@ -146,7 +148,7 @@
 | GET /api/v1/user/accounts/{accountId} | userAccountsApi.getAccount | (필요 시 상세 조회) | 연동 완료 |
 | PUT /api/v1/user/accounts/{accountId}/main | userAccountsApi.setMainAccount | System(Settings) 메인으로 설정 버튼 | 연동 완료 |
 | GET /api/v1/dashboard/performance-summary | dashboardApi.getPerformanceSummary | useDashboardData, Dashboard 성과 요약 카드 | 연동 완료 |
-| GET /api/v1/pipeline/summary | pipelineApi.getPipelineSummary | useDashboardData, Investment(AutoInvest). 응답 openPositionList에 signalType·exitRuleType 포함, 자동투자 현황 보유 포지션 테이블에 시그널 유형·청산 규칙 컬럼 표시 | |
+| GET /api/v1/pipeline/summary | pipelineApi.getPipelineSummary | useDashboardData, Investment(AutoInvest). 시그널 기준은 전략 레지스트리(00-strategy-registry.md) §3.2 사용. 응답 signalListKr/Us에 factorType 포함, 시그널 테이블에 시그널 유형(factorType) 컬럼 표시. openPositionList에 signalType·exitRuleType 포함, 보유 포지션 테이블에 시그널 유형·청산 규칙 컬럼 표시 | |
 | POST /api/v1/trigger/* | triggerApi.trigger(path) | Admin(Batch) | path: dart-collect, sec-collect, factor-calculation, auto-buy, pipeline-execution 등. 버튼 라벨 "지금 실행" |
 | GET /api/v1/news | newsApi.getNews | Market(News) | |
 | POST /api/v1/news/collect | newsApi.collectNews | Market(News) | |

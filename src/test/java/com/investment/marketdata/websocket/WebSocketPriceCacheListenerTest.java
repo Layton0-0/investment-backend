@@ -1,5 +1,6 @@
 package com.investment.marketdata.websocket;
 
+import com.investment.marketdata.config.MarketDataProperties;
 import com.investment.marketdata.dto.CurrentPriceDto;
 import com.investment.marketdata.service.RealtimeMarketDataService;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,13 +14,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-/**
- * WebSocket 수신 시 RealtimeMarketDataService.updateFromWebSocket 호출 검증.
- */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("WebSocketPriceCacheListener")
 class WebSocketPriceCacheListenerTest {
@@ -27,46 +25,55 @@ class WebSocketPriceCacheListenerTest {
     @Mock
     private RealtimeMarketDataService realtimeMarketDataService;
 
+    private MarketDataProperties marketDataProperties;
     private WebSocketPriceCacheListener listener;
 
     @BeforeEach
     void setUp() {
-        listener = new WebSocketPriceCacheListener(realtimeMarketDataService);
+        marketDataProperties = new MarketDataProperties();
+        var korea = new MarketDataProperties.KoreaInvestmentProperties();
+        var ws = new MarketDataProperties.KoreaInvestmentProperties.WebSocketProperties();
+        ws.setQuoteTrId("H0STASP0");
+        ws.setExecutionTrId("H0STCNT0");
+        korea.setWebsocket(ws);
+        marketDataProperties.setKoreaInvestment(korea);
+        listener = new WebSocketPriceCacheListener(marketDataProperties, realtimeMarketDataService,
+                new com.fasterxml.jackson.databind.ObjectMapper());
     }
 
     @Test
-    @DisplayName("호가 데이터(H0STASP0) 수신 시 updateFromWebSocket 호출")
-    void onWebSocketData_quoteData_callsUpdateFromWebSocket() {
-        WebSocketDataEvent event = new WebSocketDataEvent(
-                this, "user1|1", "H0STASP0", "005930", "005930|75100|0|0|75200|75000");
+    @DisplayName("호가 tr_id + 파이프 데이터 시 updateFromWebSocket 호출")
+    void onWebSocketData_quoteTrId_pipedData_callsUpdateFromWebSocket() {
+        WebSocketDataEvent event = new WebSocketDataEvent(this, "u1|1", "H0STASP0", "",
+                "005930|70000|69900|70100");
         listener.onWebSocketData(event);
 
+        ArgumentCaptor<String> symbolCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<CurrentPriceDto> dtoCaptor = ArgumentCaptor.forClass(CurrentPriceDto.class);
-        verify(realtimeMarketDataService).updateFromWebSocket(eq("005930"), dtoCaptor.capture());
-        CurrentPriceDto captured = dtoCaptor.getValue();
-        assertThat(captured.getSymbol()).isEqualTo("005930");
-        assertThat(captured.getCurrentPrice()).isEqualByComparingTo(new BigDecimal("75100"));
+        verify(realtimeMarketDataService).updateFromWebSocket(symbolCaptor.capture(), dtoCaptor.capture());
+        assertThat(symbolCaptor.getValue()).isEqualTo("005930");
+        assertThat(dtoCaptor.getValue().getCurrentPrice()).isEqualByComparingTo(new BigDecimal("70000"));
     }
 
     @Test
-    @DisplayName("체결 데이터(H0STCNT0) 수신 시 updateFromWebSocket 호출")
-    void onWebSocketData_executionData_callsUpdateFromWebSocket() {
-        WebSocketDataEvent event = new WebSocketDataEvent(
-                this, "user1|1", "H0STCNT0", "005930", "005930|75200");
+    @DisplayName("체결 tr_id + JSON 데이터 시 updateFromWebSocket 호출")
+    void onWebSocketData_executionTrId_jsonData_callsUpdateFromWebSocket() {
+        String json = "{\"body\":{\"pdno\":\"005930\",\"stck_prpr\":\"71500\"}}";
+        WebSocketDataEvent event = new WebSocketDataEvent(this, "u1|1", "H0STCNT0", "", json);
         listener.onWebSocketData(event);
 
+        ArgumentCaptor<String> symbolCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<CurrentPriceDto> dtoCaptor = ArgumentCaptor.forClass(CurrentPriceDto.class);
-        verify(realtimeMarketDataService).updateFromWebSocket(eq("005930"), dtoCaptor.capture());
-        assertThat(dtoCaptor.getValue().getCurrentPrice()).isEqualByComparingTo(new BigDecimal("75200"));
+        verify(realtimeMarketDataService).updateFromWebSocket(symbolCaptor.capture(), dtoCaptor.capture());
+        assertThat(symbolCaptor.getValue()).isEqualTo("005930");
+        assertThat(dtoCaptor.getValue().getCurrentPrice()).isEqualByComparingTo(new BigDecimal("71500"));
     }
 
     @Test
-    @DisplayName("체결통보(H0STCNI0) 등 다른 trId는 updateFromWebSocket 미호출")
-    void onWebSocketData_ccnlNotice_doesNotCallUpdate() {
-        WebSocketDataEvent event = new WebSocketDataEvent(
-                this, "user1|1", "H0STCNI0", "", "005930|75100");
+    @DisplayName("다른 tr_id 시 updateFromWebSocket 미호출")
+    void onWebSocketData_otherTrId_doesNotCallUpdate() {
+        WebSocketDataEvent event = new WebSocketDataEvent(this, "u1|1", "H0STCNI0", "", "005930|70000");
         listener.onWebSocketData(event);
-        // isQuoteData(), isExecutionData() 둘 다 false → 파싱/update 스킵
-        verify(realtimeMarketDataService, never()).updateFromWebSocket(eq("005930"), org.mockito.ArgumentMatchers.any(CurrentPriceDto.class));
+        verify(realtimeMarketDataService, never()).updateFromWebSocket(any(String.class), any());
     }
 }

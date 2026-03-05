@@ -6,6 +6,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * 파이프라인 매매 허용 시간대 (퀀트 유리 구간만 실행).
@@ -33,6 +36,10 @@ public class PipelineTradingWindowProperties {
         private String start = "09:00";
         /** 허용 종료 (KST). 기본 10:00 */
         private String end = "10:00";
+        /** 두 번째 구간 시작 (KST, 선택). 예: 14:30 마감 1시간 */
+        private String start2 = "14:30";
+        /** 두 번째 구간 종료 (KST, 선택). 예: 15:30 */
+        private String end2 = "15:30";
     }
 
     @Getter
@@ -42,6 +49,29 @@ public class PipelineTradingWindowProperties {
         private String start = "23:30";
         /** 허용 종료 (KST). 자정 넘김 가능. 기본 01:00 (다음날) */
         private String end = "01:00";
+        /** 두 번째 구간 시작 (KST, 선택). 예: 05:00 마감 직전 */
+        private String start2 = "05:00";
+        /** 두 번째 구간 종료 (KST, 선택). 예: 06:00 */
+        private String end2 = "06:00";
+    }
+
+    /** 세그먼트(시작·종료) — 다중 구간 판단용 */
+    public static class Segment {
+        private final LocalTime start;
+        private final LocalTime end;
+
+        public Segment(LocalTime start, LocalTime end) {
+            this.start = start;
+            this.end = end;
+        }
+
+        public LocalTime getStart() {
+            return start;
+        }
+
+        public LocalTime getEnd() {
+            return end;
+        }
     }
 
     public LocalTime getKrStartTime() {
@@ -58,6 +88,37 @@ public class PipelineTradingWindowProperties {
 
     public LocalTime getUsEndTime() {
         return parseTime(us.getEnd(), LocalTime.of(1, 0));
+    }
+
+    /**
+     * 한국장 허용 구간 세그먼트 목록 (1구간 필수 + 2구간 있으면 추가).
+     * start2/end2가 비어 있으면 1구간만 반환.
+     */
+    public List<Segment> getKrSegments() {
+        List<Segment> list = new ArrayList<>();
+        list.add(new Segment(getKrStartTime(), getKrEndTime()));
+        if (isSegment2Configured(kr.getStart2(), kr.getEnd2())) {
+            list.add(new Segment(parseTime(kr.getStart2(), LocalTime.of(14, 30)),
+                    parseTime(kr.getEnd2(), LocalTime.of(15, 30))));
+        }
+        return Collections.unmodifiableList(list);
+    }
+
+    /**
+     * 미국장 허용 구간 세그먼트 목록 (1구간 필수 + 2구간 있으면 추가).
+     */
+    public List<Segment> getUsSegments() {
+        List<Segment> list = new ArrayList<>();
+        list.add(new Segment(getUsStartTime(), getUsEndTime()));
+        if (isSegment2Configured(us.getStart2(), us.getEnd2())) {
+            list.add(new Segment(parseTime(us.getStart2(), LocalTime.of(5, 0)),
+                    parseTime(us.getEnd2(), LocalTime.of(6, 0))));
+        }
+        return Collections.unmodifiableList(list);
+    }
+
+    private static boolean isSegment2Configured(String start2, String end2) {
+        return start2 != null && !start2.isBlank() && end2 != null && !end2.isBlank();
     }
 
     private static LocalTime parseTime(String s, LocalTime defaultVal) {

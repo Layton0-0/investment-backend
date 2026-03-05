@@ -15,7 +15,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -26,80 +28,78 @@ import static org.mockito.Mockito.when;
 class PerformanceAttributionServiceTest {
 
     @Mock
-    private StrategyPositionRepository strategyPositionRepository;
+    private TradingSettingRepository tradingSettingRepository;
 
     @Mock
-    private TradingSettingRepository tradingSettingRepository;
+    private StrategyPositionRepository strategyPositionRepository;
 
     @InjectMocks
     private PerformanceAttributionService service;
 
     @Test
-    @DisplayName("기여도 합계 100% (팩터·전략별)")
-    void getAttribution_contributionSumsTo100() {
-        TradingSetting setting = TradingSetting.builder()
-                .accountNo("1234567890")
-                .userId("user1")
-                .maxInvestmentAmount(new BigDecimal("100000000"))
-                .minInvestmentAmount(new BigDecimal("10000"))
-                .defaultCurrency("KRW")
+    @DisplayName("청산 포지션 없으면 totalPnl 0, 빈 기여 맵")
+    void getAttribution_noClosedPositions_returnsZeroAndEmptyMaps() {
+        TradingSetting s = TradingSetting.builder()
+                .accountNo("12345").userId("user1")
+                .maxInvestmentAmount(new BigDecimal("10000000")).minInvestmentAmount(BigDecimal.ZERO).defaultCurrency("KRW")
                 .build();
-        when(tradingSettingRepository.findByUserIdOrderByAccountNo(anyString()))
-                .thenReturn(List.of(setting));
-        StrategyPosition p1 = closedPosition("A", StrategyType.SHORT_TERM, new BigDecimal("10000"), new BigDecimal("11000"), 10); // pnl 10000
-        StrategyPosition p2 = closedPosition("B", StrategyType.SHORT_TERM, new BigDecimal("20000"), new BigDecimal("22000"), 5);  // pnl 10000
-        when(strategyPositionRepository.findByAccountNoAndExitDtIsNotNullOrderByExitDtDesc("1234567890"))
-                .thenReturn(List.of(p1, p2));
-
-        PerformanceAttributionDto dto = service.getAttribution("user1");
-
-        assertThat(dto.getTotalRealizedPnl()).isEqualByComparingTo("20000"); // 1000*10 + 2000*5
-        BigDecimal factorSum = dto.getByFactor().stream()
-                .map(PerformanceAttributionDto.FactorContribution::getContributionPct)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        assertThat(factorSum).isEqualByComparingTo("100");
-        BigDecimal strategySum = dto.getByStrategy().stream()
-                .map(PerformanceAttributionDto.StrategyContribution::getContributionPct)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        assertThat(strategySum).isEqualByComparingTo("100");
-    }
-
-    @Test
-    @DisplayName("청산 포지션 없으면 total 0·빈 기여")
-    void getAttribution_noClosed_returnsZero() {
-        TradingSetting setting = TradingSetting.builder()
-                .accountNo("1234567890")
-                .userId("user1")
-                .maxInvestmentAmount(new BigDecimal("100000000"))
-                .minInvestmentAmount(new BigDecimal("10000"))
-                .defaultCurrency("KRW")
-                .build();
-        when(tradingSettingRepository.findByUserIdOrderByAccountNo(anyString()))
-                .thenReturn(List.of(setting));
-        when(strategyPositionRepository.findByAccountNoAndExitDtIsNotNullOrderByExitDtDesc("1234567890"))
+        when(tradingSettingRepository.findByUserIdOrderByAccountNo("user1")).thenReturn(List.of(s));
+        when(strategyPositionRepository.findByAccountNoAndExitDtIsNotNullOrderByExitDtDesc("12345"))
                 .thenReturn(List.of());
 
         PerformanceAttributionDto dto = service.getAttribution("user1");
 
-        assertThat(dto.getTotalRealizedPnl()).isEqualByComparingTo("0");
+        assertThat(dto.getTotalRealizedPnl()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(dto.getBySignalType()).isEmpty();
+        assertThat(dto.getByStrategyType()).isEmpty();
     }
 
-    private static StrategyPosition closedPosition(String signalType, StrategyType strategyType,
-            BigDecimal entry, BigDecimal exit, int qty) {
-        StrategyPosition p = StrategyPosition.builder()
-                .accountNo("123")
-                .symbol("005930")
-                .market("KR")
-                .strategyType(strategyType)
-                .entryDt(LocalDate.now().minusDays(10))
-                .entryPrice(entry)
-                .quantity(qty)
-                .atrMultiplier(new BigDecimal("2"))
-                .timeCutDays(5)
-                .exitDt(LocalDate.now())
-                .exitPrice(exit)
-                .signalType(signalType)
+    @Test
+    @DisplayName("청산 포지션 있으면 signalType·strategyType별 기여율 합계 100%")
+    void getAttribution_withClosedPositions_contributionSumsTo100() {
+        TradingSetting s = TradingSetting.builder()
+                .accountNo("12345").userId("user1")
+                .maxInvestmentAmount(new BigDecimal("10000000")).minInvestmentAmount(BigDecimal.ZERO).defaultCurrency("KRW")
                 .build();
-        return p;
+        when(tradingSettingRepository.findByUserIdOrderByAccountNo("user1")).thenReturn(List.of(s));
+
+        StrategyPosition p1 = StrategyPosition.builder()
+                .accountNo("12345").symbol("005930").market("KR").strategyType(StrategyType.SHORT_TERM)
+                .entryDt(LocalDate.now().minusDays(10)).entryPrice(new BigDecimal("70000")).quantity(10)
+                .exitDt(LocalDate.now()).exitPrice(new BigDecimal("77000"))
+                .signalType("VOLATILITY_BREAKOUT").createdAt(LocalDateTime.now()).atrMultiplier(new BigDecimal("2")).timeCutDays(5)
+                .build();
+        StrategyPosition p2 = StrategyPosition.builder()
+                .accountNo("12345").symbol("000660").market("KR").strategyType(StrategyType.MEDIUM_TERM)
+                .entryDt(LocalDate.now().minusDays(20)).entryPrice(new BigDecimal("100000")).quantity(5)
+                .exitDt(LocalDate.now()).exitPrice(new BigDecimal("90000"))
+                .signalType("DUAL_MOMENTUM").createdAt(LocalDateTime.now()).atrMultiplier(new BigDecimal("2")).timeCutDays(10)
+                .build();
+        when(strategyPositionRepository.findByAccountNoAndExitDtIsNotNullOrderByExitDtDesc("12345"))
+                .thenReturn(List.of(p1, p2));
+
+        PerformanceAttributionDto dto = service.getAttribution("user1");
+
+        BigDecimal totalPnl = new BigDecimal("70000").add(new BigDecimal("-50000")); // 70*10 - 50*10 = 20000, second: (90-100)*5 = -50000 -> total 20000
+        assertThat(dto.getTotalRealizedPnl()).isEqualByComparingTo(totalPnl);
+
+        Map<String, BigDecimal> bySignal = dto.getBySignalType();
+        Map<String, BigDecimal> byStrategy = dto.getByStrategyType();
+        BigDecimal signalSum = bySignal.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal strategySum = byStrategy.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertThat(signalSum).isEqualByComparingTo(new BigDecimal("100"));
+        assertThat(strategySum).isEqualByComparingTo(new BigDecimal("100"));
+    }
+
+    @Test
+    @DisplayName("사용자 계좌 없으면 0·빈 맵 반환")
+    void getAttribution_noSettings_returnsZeroAndEmpty() {
+        when(tradingSettingRepository.findByUserIdOrderByAccountNo(anyString())).thenReturn(List.of());
+
+        PerformanceAttributionDto dto = service.getAttribution("user1");
+
+        assertThat(dto.getTotalRealizedPnl()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(dto.getBySignalType()).isEmpty();
+        assertThat(dto.getByStrategyType()).isEmpty();
     }
 }

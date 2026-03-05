@@ -2,13 +2,17 @@ package com.investment.factor.service;
 
 import com.investment.config.PipelineTradingWindowProperties;
 import com.investment.setting.service.SystemSettingService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.List;
+
+import com.investment.config.PipelineTradingWindowProperties.Segment;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * 퀀트 매매 유리 시간대 검사 (한국장 09:00~10:00, 미국장 23:30~01:00 KST 등).
@@ -18,10 +22,21 @@ import java.time.ZonedDateTime;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class TradingWindowService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+
+    private final PipelineTradingWindowProperties tradingWindowProperties;
+    private final SystemSettingService systemSettingService;
+    private final Clock clock;
+
+    public TradingWindowService(PipelineTradingWindowProperties tradingWindowProperties,
+            SystemSettingService systemSettingService,
+            @Autowired(required = false) Clock clock) {
+        this.tradingWindowProperties = tradingWindowProperties;
+        this.systemSettingService = systemSettingService;
+        this.clock = clock != null ? clock : Clock.system(KST);
+    }
 
     /** KR 변동성 구간: 장 시작 9:00-9:10, 장 마감 15:20-15:30 (KST) */
     private static final LocalTime KR_VOL_START_BEGIN = LocalTime.of(9, 0);
@@ -35,38 +50,52 @@ public class TradingWindowService {
     private static final LocalTime US_VOL_END_BEGIN = LocalTime.of(5, 50);
     private static final LocalTime US_VOL_END_END = LocalTime.of(6, 0);
 
-    private final PipelineTradingWindowProperties tradingWindowProperties;
-    private final SystemSettingService systemSettingService;
-
     private boolean isTradingWindowEnabled() {
         return Boolean.TRUE.equals(systemSettingService.getBoolean("pipeline.tradingWindowEnabled"));
     }
 
     /**
-     * 현재 시각(KST)이 한국장 허용 구간 안이면 true.
+     * 현재 시각(KST)이 한국장 허용 구간(1구간 09:00~10:00 또는 2구간 14:30~15:30 등) 안이면 true.
      */
     public boolean isInKrWindow() {
+        return isInKrWindow(ZonedDateTime.now(clock).withZoneSameInstant(KST).toLocalTime());
+    }
+
+    /** 테스트용: 현재 시각(KST)을 지정하여 KR 윈도우 여부 판단 */
+    public boolean isInKrWindow(LocalTime nowKst) {
         if (!isTradingWindowEnabled()) {
             return true;
         }
-        LocalTime now = ZonedDateTime.now(KST).toLocalTime();
-        LocalTime start = tradingWindowProperties.getKrStartTime();
-        LocalTime end = tradingWindowProperties.getKrEndTime();
-        return isInWindow(now, start, end);
+        LocalTime now = nowKst;
+        List<Segment> segments = tradingWindowProperties.getKrSegments();
+        for (Segment seg : segments) {
+            if (isInWindow(now, seg.getStart(), seg.getEnd())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
-     * 현재 시각(KST)이 미국장 허용 구간 안이면 true.
-     * (미 정규장 개장 23:30 KST ~ 01:00 등, 자정 넘김 구간 지원)
+     * 현재 시각(KST)이 미국장 허용 구간(1구간 23:30~01:00 또는 2구간 05:00~06:00 등) 안이면 true.
      */
     public boolean isInUsWindow() {
+        return isInUsWindow(ZonedDateTime.now(clock).withZoneSameInstant(KST).toLocalTime());
+    }
+
+    /** 테스트용: 현재 시각(KST)을 지정하여 US 윈도우 여부 판단 */
+    public boolean isInUsWindow(LocalTime nowKst) {
         if (!isTradingWindowEnabled()) {
             return true;
         }
-        LocalTime now = ZonedDateTime.now(KST).toLocalTime();
-        LocalTime start = tradingWindowProperties.getUsStartTime();
-        LocalTime end = tradingWindowProperties.getUsEndTime();
-        return isInWindow(now, start, end);
+        LocalTime now = nowKst;
+        List<Segment> segments = tradingWindowProperties.getUsSegments();
+        for (Segment seg : segments) {
+            if (isInWindow(now, seg.getStart(), seg.getEnd())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

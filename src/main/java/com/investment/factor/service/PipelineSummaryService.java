@@ -1,5 +1,6 @@
 package com.investment.factor.service;
 
+import com.investment.batch.service.BatchManagementService;
 import com.investment.domain.entity.StrategyPosition;
 import com.investment.domain.entity.TradingSetting;
 import com.investment.domain.repository.StrategyPositionRepository;
@@ -12,11 +13,13 @@ import com.investment.marketdata.dto.CurrentPriceDto;
 import com.investment.marketdata.service.RealtimeMarketDataService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -42,6 +45,8 @@ public class PipelineSummaryService {
     private final StrategyPositionRepository strategyPositionRepository;
     private final TradingSettingRepository tradingSettingRepository;
     private final RealtimeMarketDataService realtimeMarketDataService;
+    @Autowired(required = false)
+    private BatchManagementService batchManagementService;
 
     /**
      * 기준일·계좌에 대한 파이프라인 요약 조회.
@@ -94,6 +99,8 @@ public class PipelineSummaryService {
             allocationRatioSummary = buildAllocationRatioSummary(accountNo);
         }
 
+        LocalDateTime lastRunAt = resolveLastRunAt();
+
         return PipelineSummaryDto.builder()
                 .basDt(basDt)
                 .universeCountKr(universeCountKr)
@@ -106,8 +113,23 @@ public class PipelineSummaryService {
                 .signalListKr(signalListKr)
                 .signalListUs(signalListUs)
                 .openPositionList(openPositionList)
-                .lastRunAt(null)
+                .lastRunAt(lastRunAt)
                 .build();
+    }
+
+    /**
+     * auto-buy 또는 pipeline-execution Job의 마지막 성공 실행 시각 조회.
+     * 배치 메타데이터가 없거나 조회 실패 시 null.
+     */
+    private LocalDateTime resolveLastRunAt() {
+        if (batchManagementService == null) {
+            return null;
+        }
+        LocalDateTime t = batchManagementService.getLastExecutionTimeForJob("auto-buy");
+        if (t == null) {
+            t = batchManagementService.getLastExecutionTimeForJob("pipeline-execution");
+        }
+        return t;
     }
 
     /**

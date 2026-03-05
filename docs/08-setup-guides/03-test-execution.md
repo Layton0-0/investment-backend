@@ -47,6 +47,11 @@
 - **실계좌는 사용하지 않는다.** (실거래 호출·주문 방지)  
   상세: [한국투자증권 API 가이드 §테스트·수동 검증 시 계좌](../04-api/09-korea-investment-api-guide.md#테스트수동-검증-시-계좌).
 
+## 실패 시 확인
+
+- 테스트 실패 시: 콘솔 출력과 `build/reports/tests/test/index.html` 리포트에서 실패 케이스·스택 확인.
+- Agent 실행 시 타임아웃: `.cursor/rules/script-run-timeouts.mdc` 참고 (run-tests.ps1 권장 300000ms 이상).
+
 ## 참고
 
 - 빌드/테스트 리포트: `build/reports/tests/test/index.html`

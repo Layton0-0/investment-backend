@@ -163,6 +163,10 @@
   3. **계좌·설정**: 자동매매할 계좌의 TB_TRADING_SETTINGS에서 `AUTO_TRADING_ENABLED=true`, `MAX_INVESTMENT_AMOUNT>0`, 실제 주문 시 `PIPELINE_AUTO_EXECUTE=true`(또는 서버 기본). 실전 계좌면 `PIPELINE_ALLOW_REAL_EXECUTION` 허용. TB_USER_ACCOUNTS에 해당 계좌 등록·USER_ID 매칭 확인.
   4. **게이트**: 활성 **거버넌스 halt** 없음 확인(Ops → 전략 거버넌스, 활성 halt 해제 시 `PUT /api/v1/ops/governance/halts/{market}/{strategyType}/clear`). 해당 계좌·시장·전략이 중지/일시정지 아님 확인.
   5. **준비 상태 API**: `GET /api/v1/ops/auto-trading-readiness`(인증 필요)로 자동투자 ON 계좌 수, 전일 일봉·시그널 row 수, 활성 halt 수를 한 번에 확인. 09:10 전 점검용.
+- **시그널이 0건으로 보일 때 점검 순서** (자동투자 현황 화면에서 시그널 수가 0인 경우):
+  1. **파이프라인 요약 기준일**: `GET /api/v1/pipeline/summary`는 **basDt 미입력 시 전일(어제)**을 기준일로 사용함. 프론트에서 basDt 없이 호출하면 전일 기준 시그널이 조회됨. 전일 팩터 계산이 완료되었는지 확인.
+  2. **준비 상태 확인**: `GET /api/v1/ops/auto-trading-readiness`로 전일(basDt) TB_DAILY_STOCK·TB_SIGNAL_SCORE row 수 확인. `dailyStockRowCount`·`signalScoreRowCount`가 0이면 선행 데이터·팩터 미실행.
+  3. **수동 트리거**: 위에서 일봉·시그널이 비어 있으면 순서대로 `POST /api/v1/trigger/krx-daily`, `POST /api/v1/trigger/us-daily`, `POST /api/v1/trigger/factor-calculation` 실행 후 다시 readiness·pipeline/summary 확인. KRX 수집 실패 시 [01-local-setup-complete.md §US/KRX 수집](../08-setup-guides/01-local-setup-complete.md)의 KRX_AUTH_KEY·한투 폴백 env 확인.
 - **수동 검증**: `POST /api/v1/trigger/auto-buy?dryRun=true`로 1회 실행 후 Backend 로그에서 대상 계좌·스킵 사유 메시지 확인. 실제 주문 전에는 dryRun=true 권장.
 - **참조**: [12-auto-investment-strategy.md §6.2](../02-architecture/12-auto-investment-strategy.md), 자동매매 선행 조건 종합 계획(plans).
 

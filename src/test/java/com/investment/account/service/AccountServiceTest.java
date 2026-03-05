@@ -108,7 +108,8 @@ class AccountServiceTest {
         SecurityContextHolder.getContext().setAuthentication(auth);
 
         when(accountApiRunner.inquireBalanceInNewTx(eq(userId), eq(accountNo))).thenReturn(clientResult);
-        when(accountApiRunner.inquireOverseasBalanceInNewTx(eq(userId), eq(accountNo))).thenReturn(List.of());
+        when(accountApiRunner.inquireOverseasBalanceInNewTx(eq(userId), eq(accountNo)))
+                .thenReturn(new KoreaInvestmentAccountClient.OverseasBalanceResult(List.of(), null));
 
         BalanceAndPositionsDto result = accountService.getBalanceAndPositions(accountNo);
 

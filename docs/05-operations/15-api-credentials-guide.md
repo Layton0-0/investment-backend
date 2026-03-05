@@ -121,7 +121,7 @@ if (tokenExpiresAt.minusHours(1).isBefore(LocalDateTime.now())) {
 
 | API | 실거래 TR_ID | 모의투자 TR_ID |
 |-----|--------------|----------------|
-| 주식 현재가 | FHKST01010100 | FHKST01010100 |
+| 주식 현재가 | FHPST01010100 | FHKST01010100 |
 | 매수 주문 | TTTC0802U | VTTC0802U |
 | 매도 주문 | TTTC0801U | VTTC0801U |
 | 체결 조회 | TTTC8001R | VTTC8001R |

@@ -125,6 +125,16 @@ class AccountControllerTest {
     }
 
     @Test
+    @DisplayName("GET /api/v1/accounts/{accountNo}/cancelable-orders 정정취소가능주문 조회 성공")
+    void getCancelableOrders_returnsOk() throws Exception {
+        when(accountService.getCancelableOrders("12345678")).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/accounts/12345678/cancelable-orders"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+    }
+
+    @Test
     @DisplayName("GET /api/v1/accounts/{accountNo}/assets 자산현황 조회 성공")
     void getAccountAssets_returnsOk() throws Exception {
         AccountAssetDto dto = AccountAssetDto.builder()
@@ -176,5 +186,45 @@ class AccountControllerTest {
                         .param("endDate", "2026-01-31"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accountNo").value("12345678"));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/accounts/{accountNo}/balance-rlz-pl 실현손익 조회 성공")
+    void getBalanceRealizedProfitLoss_returnsOk() throws Exception {
+        BalanceRealizedProfitLossDto dto = BalanceRealizedProfitLossDto.builder()
+                .accountNo("12345678-01")
+                .totalRealizedProfitLoss(BigDecimal.valueOf(100_000))
+                .currency("KRW")
+                .details(List.of())
+                .build();
+        when(accountService.getBalanceRealizedProfitLoss("12345678-01")).thenReturn(dto);
+
+        mockMvc.perform(get("/api/v1/accounts/12345678-01/balance-rlz-pl"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountNo").value("12345678-01"))
+                .andExpect(jsonPath("$.totalRealizedProfitLoss").value(100_000))
+                .andExpect(jsonPath("$.currency").value("KRW"));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/accounts/{accountNo}/profit-loss-status 기간별매매손익현황 조회 성공")
+    void getPeriodProfitLossStatus_returnsOk() throws Exception {
+        PeriodProfitLossStatusDto dto = PeriodProfitLossStatusDto.builder()
+                .accountNo("12345678-01")
+                .startDate(LocalDate.of(2026, 1, 1))
+                .endDate(LocalDate.of(2026, 1, 31))
+                .totalRealizedProfitLoss(BigDecimal.valueOf(50_000))
+                .currency("KRW")
+                .items(List.of())
+                .build();
+        when(accountService.getPeriodProfitLossStatus(eq("12345678-01"), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(dto);
+
+        mockMvc.perform(get("/api/v1/accounts/12345678-01/profit-loss-status")
+                        .param("startDate", "2026-01-01")
+                        .param("endDate", "2026-01-31"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountNo").value("12345678-01"))
+                .andExpect(jsonPath("$.totalRealizedProfitLoss").value(50_000));
     }
 }

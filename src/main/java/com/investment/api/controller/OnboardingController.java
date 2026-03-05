@@ -8,6 +8,7 @@ import com.investment.setting.service.OnboardingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -27,6 +28,7 @@ import jakarta.validation.Valid;
 @Tag(name = "온보딩", description = "초보자 퀴즈·프로필 API")
 public class OnboardingController {
 
+    @Qualifier("settingOnboardingService")
     private final OnboardingService onboardingService;
 
     @PostMapping("/profile")
@@ -35,11 +37,10 @@ public class OnboardingController {
             Authentication authentication,
             @RequestBody @Valid OnboardingQuizRequestDto request) {
         Authentication auth = authentication != null ? authentication : SecurityContextHolder.getContext().getAuthentication();
-        String userId = auth != null ? auth.getName() : null;
-        if (userId == null || userId.isBlank()) {
+        if (auth == null || !auth.isAuthenticated() || auth.getName() == null || auth.getName().isBlank()) {
             throw new DomainException(ErrorCode.UNAUTHORIZED, "인증되지 않은 사용자입니다");
         }
-        OnboardingProfileResponseDto response = onboardingService.submitProfile(userId, request);
+        OnboardingProfileResponseDto response = onboardingService.submitProfile(auth.getName(), request);
         return ResponseEntity.ok(response);
     }
 }

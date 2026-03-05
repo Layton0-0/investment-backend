@@ -21,6 +21,7 @@ import com.investment.strategy.service.StrategyWeightResolver;
 import com.investment.factor.service.TradingWindowService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -188,6 +189,18 @@ public class PipelineExecutionScheduler {
             runIfNotHalted(basDt, "US", accountNo, StrategyType.LONG_TERM, longCapital, autoExecute);
         }
         log.debug("파이프라인 실행 완료: accountNo={}, basDt={}, autoExecute={}, marketFilter={}", accountNo, basDt, autoExecute, marketFilter);
+    }
+
+    /** 한국장 오후 유리 구간(14:30~15:30). 14:35 KST에 KR만 실행. */
+    @Scheduled(cron = "${investment.pipeline.execution-schedule-cron-kr-afternoon:0 35 14 * * MON-FRI}")
+    public void runKrAfternoon() {
+        runNow("KR");
+    }
+
+    /** 미국장 마감 직전 유리 구간(05:00~06:00 KST). 05:05 KST에 US만 실행. */
+    @Scheduled(cron = "${investment.pipeline.execution-schedule-cron-us-close:0 5 5 * * MON-FRI}")
+    public void runUsClose() {
+        runNow("US");
     }
 
     private void runIfNotHalted(LocalDate basDt, String market, String accountNo,
