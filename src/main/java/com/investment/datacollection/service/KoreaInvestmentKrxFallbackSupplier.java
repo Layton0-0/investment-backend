@@ -10,6 +10,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -31,6 +32,8 @@ import java.util.stream.Collectors;
 public class KoreaInvestmentKrxFallbackSupplier {
 
     private static final String MARKET_KR = "KR";
+    /** KRX 명세: 기준일자 yyyyMMdd (하이픈 없음) */
+    private static final DateTimeFormatter BAS_DT_LOG = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     private final DataCollectionProperties dataCollectionProperties;
     private final KoreaInvestmentDailyChartClient dailyChartClient;
@@ -52,7 +55,7 @@ public class KoreaInvestmentKrxFallbackSupplier {
 
         List<String> symbols = resolveSymbols(basDt);
         if (symbols.isEmpty()) {
-            log.warn("KRX 폴백: 조회할 종목 목록 없음, basDt={}", basDt);
+            log.warn("KRX 폴백: 조회할 종목 목록 없음, basDt={}", basDt.format(BAS_DT_LOG));
             return List.of();
         }
 
@@ -70,7 +73,7 @@ public class KoreaInvestmentKrxFallbackSupplier {
                 }
             }
         }
-        log.info("KRX 폴백 한투 API 수집 완료: basDt={}, symbolsRequested={}, collected={}", basDt, symbols.size(), result.size());
+        log.info("KRX 폴백 한투 API 수집 완료: basDt={}, symbolsRequested={}, collected={}", basDt.format(BAS_DT_LOG), symbols.size(), result.size());
         return result;
     }
 

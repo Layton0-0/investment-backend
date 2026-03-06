@@ -68,9 +68,9 @@ class SettingControllerTest {
                 .defaultCurrency("KRW")
                 .autoTradingEnabled(true)
                 .build();
-        when(tradingSettingService.getSettingOptional("12345678")).thenReturn(Optional.of(dto));
+        when(tradingSettingService.getSettingOptional("12345678-01")).thenReturn(Optional.of(dto));
 
-        mockMvc.perform(get("/api/v1/settings/12345678"))
+        mockMvc.perform(get("/api/v1/settings/12345678-01"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.defaultCurrency").value("KRW"));
     }
@@ -93,9 +93,9 @@ class SettingControllerTest {
                 .defaultCurrency("KRW")
                 .autoTradingEnabled(false)
                 .build();
-        when(tradingSettingService.saveSetting(eq("12345678"), any(TradingSettingDto.class))).thenReturn(request);
+        when(tradingSettingService.saveSetting(eq("12345678-01"), any(TradingSettingDto.class))).thenReturn(request);
 
-        mockMvc.perform(put("/api/v1/settings/12345678")
+        mockMvc.perform(put("/api/v1/settings/12345678-01")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())

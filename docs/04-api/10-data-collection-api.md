@@ -40,12 +40,13 @@ Yahoo 등 외부 수집기가 수집한 뉴스·이벤트를 일괄 등록한다
 ## 배치와의 관계 (스케줄 및 실행 주체)
 
 - **KRX/US 일봉 수집**의 **스케줄**은 Backend의 `BatchJobScheduler`(cron)에서만 관리된다. Backend가 정해진 시각에 해당 Job을 트리거한다.
-- **KRX 일봉**: **실행 주체는 Backend 내부**(`KrxCollectionService`)이다. 1차로 KRX Open API를 호출하고, 실패(빈 결과) 시 설정이 되어 있으면 2차로 한투 API 일봉(inquire-daily-itemchartprice, 수정주가)을 종목별 조회해 TB_DAILY_STOCK에 저장한다. 수집 결과는 로그에 source=KRX / KOREA_INVESTMENT_FALLBACK / NONE으로 기록된다.
+- **KRX 일봉**: **실행 주체는 Backend 내부**(`KrxCollectionService`)이다. 1차로 KRX Open API를 호출하고, 실패(빈 결과) 시 설정이 되어 있으면 2차로 한투 API 일봉(inquire-daily-itemchartprice, 수정주가)을 종목별 조회해 TB_DAILY_STOCK에 저장한다. 수집 결과는 로그에 source=KRX / KOREA_INVESTMENT_FALLBACK / NONE으로 기록된다. **기준일자(basDt/basDd)**: KRX API 명세에 따라 요청·로그에는 **yyyyMMdd**(하이픈 없음) 사용. 트리거 API 파라미터는 REST 관례상 yyyy-MM-dd 수용.
 - **US 일봉**: **실행 주체는 Backend → data-collector**이다. Backend가 `investment.data.us.collector-url`로 설정된 Python 수집기의 `POST /us-daily`를 호출하고, 수집 결과를 파싱해 DB에 저장한다.
 - 향후 KRX 일봉도 data-collector로 이전할 경우, US와 동일하게 Backend cron이 트리거하고 Backend가 data-collector URL을 호출하는 패턴을 적용할 수 있다. 자세한 역할 분배 원칙은 프로젝트 루트 `plans/infra/20260221-1730_batch-role-assignment.md` 참조.
 
 ## 참고
 
+- **KRX API 상세 명세**: [12-krx-api-spec.md](12-krx-api-spec.md), [12-krx-api-spec/](12-krx-api-spec/README.md) (유가증권 일별매매정보 등 Request/Response 필드)
 - [뉴스·공시 수집·연동 설계](../02-architecture/13-news-collection-design.md)
 - [보안 설정 참조](../07-security/02-security-configuration-reference.md) (investment.data, DART/KRX/내부 API 키)
 - 프로젝트 루트 `plans/infra/20260221-1730_batch-role-assignment.md` (4개 레이어, Job 매트릭스, 이전 후보)

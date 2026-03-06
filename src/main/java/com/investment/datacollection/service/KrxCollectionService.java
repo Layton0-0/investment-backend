@@ -49,24 +49,29 @@ public class KrxCollectionService {
     }
 
     /**
-     * 기준일 KRX 유가증권 일별매매정보 수집 후 저장.
-     * 1차: KRX API → 실패(빈 결과) 시 2차: 한투 API 폴백(설정 시). 수집 결과 로그에 성공/실패/폴백 상태 기록.
+     * 기준일 KRX 일별매매정보 수집 후 저장.
+     * 1차: 유가증권(stk_bydd_trd) + 코스닥(ksq_bydd_trd) KRX API 호출 → 실패(빈 결과) 시 2차: 한투 API 폴백(설정 시).
+     * 명세: docs/04-api/12-krx-api-spec/01-stk-bydd-trd.md, 06-ksq-bydd-trd.md.
      *
      * @param basDt 기준일
      * @return 저장 건수
      */
     @Transactional
     public int collectAndSave(LocalDate basDt) {
-        List<Map<String, Object>> rows = krxApiClient.fetchDailyStockKospi(basDt);
+        List<Map<String, Object>> kospiRows = krxApiClient.fetchDailyStockKospi(basDt);
+        List<Map<String, Object>> kosdaqRows = krxApiClient.fetchDailyStockKosdaq(basDt);
+        List<Map<String, Object>> rows = new ArrayList<>(kospiRows);
+        rows.addAll(kosdaqRows);
         if (!rows.isEmpty()) {
             int saved = parseAndSave(rows, basDt, "KRX");
             if (saved > 0) {
-                log.info("KRX 일별 수집 완료: basDt={}, source=KRX, saved={}", basDt, saved);
+                log.info("KRX 일별 수집 완료: basDt={}, source=KRX, saved={} (KOSPI {} + KOSDAQ {})",
+                        basDt.format(KRX_DATE), saved, kospiRows.size(), kosdaqRows.size());
                 return saved;
             }
         }
 
-        log.info("KRX 일별 수집 스킵 또는 결과 없음: basDt={}, rows=0 (AUTH_KEY 미설정 또는 API 빈 응답)", basDt);
+        log.info("KRX 일별 수집 스킵 또는 결과 없음: basDt={}, rows=0 (AUTH_KEY 미설정 또는 API 빈 응답)", basDt.format(KRX_DATE));
 
         if (dataCollectionProperties.getKrx().isKoreaInvestmentFallbackEnabled()
                 && koreaInvestmentKrxFallbackSupplier != null) {
@@ -74,12 +79,12 @@ public class KrxCollectionService {
             if (!fallbackEntities.isEmpty()) {
                 validateOutliersAndWarn(fallbackEntities, basDt);
                 dailyStockRepository.saveAll(fallbackEntities);
-                log.info("KRX 일별 수집 완료(폴백): basDt={}, source=KOREA_INVESTMENT_FALLBACK, saved={}", basDt, fallbackEntities.size());
+                log.info("KRX 일별 수집 완료(폴백): basDt={}, source=KOREA_INVESTMENT_FALLBACK, saved={}", basDt.format(KRX_DATE), fallbackEntities.size());
                 return fallbackEntities.size();
             }
         }
 
-        log.warn("KRX 일별 수집 실패: basDt={}, source=NONE (1차 KRX 빈 결과, 2차 한투 폴백 미사용 또는 수집 0건). 수동 확인 또는 트리거 권장.", basDt);
+        log.warn("KRX 일별 수집 실패: basDt={}, source=NONE (1차 KRX 빈 결과, 2차 한투 폴백 미사용 또는 수집 0건). 수동 확인 또는 트리거 권장.", basDt.format(KRX_DATE));
         return 0;
     }
 
@@ -92,7 +97,7 @@ public class KrxCollectionService {
                     entities.add(e);
                 }
             } catch (Exception ex) {
-                log.warn("KRX 행 파싱 스킵: basDt={}, source={}, row={}, error={}", basDt, source, row.keySet(), ex.getMessage());
+                log.warn("KRX 행 파싱 스킵: basDt={}, source={}, row={}, error={}", basDt.format(KRX_DATE), source, row.keySet(), ex.getMessage());
             }
         }
         if (entities.isEmpty()) {
@@ -121,7 +126,7 @@ public class KrxCollectionService {
                 BigDecimal changeRatio = range.divide(prevClose, 4, RoundingMode.HALF_UP).abs();
                 if (changeRatio.compareTo(BigDecimal.valueOf(OUTLIER_CHANGE_RATIO)) > 0) {
                     log.warn("KRX 일봉 이상치 경고: basDt={}, symbol={}, 전일종가={}, 고가={}, 저가={}, 변동비율={}",
-                            basDt, e.getSymbol(), prevClose, high, low, changeRatio);
+                            basDt.format(KRX_DATE), e.getSymbol(), prevClose, high, low, changeRatio);
                 }
             }
         }
@@ -138,33 +143,33 @@ public class KrxCollectionService {
     @Transactional
     public int collectAndSaveRange(LocalDate from, LocalDate to) {
         if (from.isAfter(to)) {
-            log.warn("KRX 기간 백필 스킵: from > to, from={}, to={}", from, to);
+            log.warn("KRX 기간 백필 스킵: from > to, from={}, to={}", from.format(KRX_DATE), to.format(KRX_DATE));
             return 0;
         }
         int total = 0;
         for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
             total += collectAndSave(d);
         }
-        log.info("KRX 기간 백필 완료: from={}, to={}, totalSaved={}", from, to, total);
+        log.info("KRX 기간 백필 완료: from={}, to={}, totalSaved={}", from.format(KRX_DATE), to.format(KRX_DATE), total);
         return total;
     }
 
     /**
      * Map 한 행을 DailyStock으로 변환.
-     * KRX API 필드명 변형(camelCase/snake_case/한글 등)에 대응하기 위해 여러 키를 시도한다.
+     * 명세(12-krx-api-spec): OutBlock_1 필드명 ISU_CD, TDD_OPNPRC, TDD_HGPRC, TDD_LWPRC, TDD_CLSPRC, ACC_TRDVOL, ACC_TRDVAL 우선 매핑.
      */
     private DailyStock mapToDailyStock(Map<String, Object> row, LocalDate basDt) {
-        String symbol = getString(row, "isinCd", "isin_cd", "stockCd", "stock_cd", "symbol", "종목코드");
+        String symbol = getString(row, "ISU_CD", "isinCd", "isin_cd", "stockCd", "stock_cd", "symbol", "종목코드");
         if (symbol == null || symbol.isBlank()) {
             return null;
         }
         symbol = symbol.trim();
-        BigDecimal openPrice = getDecimal(row, "open", "openPrice", "open_price", "시가");
-        BigDecimal highPrice = getDecimal(row, "high", "highPrice", "high_price", "고가");
-        BigDecimal lowPrice = getDecimal(row, "low", "lowPrice", "low_price", "저가");
-        BigDecimal closePrice = getDecimal(row, "close", "closePrice", "close_price", "종가");
-        Long volume = getLong(row, "volume", "accTrdv", "acc_trdv", "거래량");
-        Long trdVal = getLong(row, "accTrdval", "acc_trdval", "trdVal", "trd_val", "거래대금");
+        BigDecimal openPrice = getDecimal(row, "TDD_OPNPRC", "open", "openPrice", "open_price", "시가");
+        BigDecimal highPrice = getDecimal(row, "TDD_HGPRC", "high", "highPrice", "high_price", "고가");
+        BigDecimal lowPrice = getDecimal(row, "TDD_LWPRC", "low", "lowPrice", "low_price", "저가");
+        BigDecimal closePrice = getDecimal(row, "TDD_CLSPRC", "close", "closePrice", "close_price", "종가");
+        Long volume = getLong(row, "ACC_TRDVOL", "volume", "accTrdv", "acc_trdv", "거래량");
+        Long trdVal = getLong(row, "ACC_TRDVAL", "accTrdval", "acc_trdval", "trdVal", "trd_val", "거래대금");
 
         return DailyStock.builder()
                 .basDt(basDt)

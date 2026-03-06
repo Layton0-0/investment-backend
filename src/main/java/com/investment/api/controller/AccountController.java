@@ -12,6 +12,7 @@ import com.investment.account.dto.OverseasBalanceSummaryDto;
 import com.investment.account.dto.PeriodProfitLossStatusDto;
 import com.investment.account.dto.ProfitLossDto;
 import com.investment.account.service.AccountService;
+import com.investment.common.util.AccountNumberUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -54,8 +55,11 @@ public class AccountController {
     })
     @GetMapping("/{accountNo}/balance")
     public ResponseEntity<AccountBalanceDto> getBalance(
-            @Parameter(description = "계좌번호", required = true, example = "12345678")
+            @Parameter(description = "계좌번호 (형식: 8자리-2자리, 예: 12345678-01)", required = true, example = "12345678-01")
             @PathVariable @NotBlank String accountNo) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         AccountBalanceDto balance = accountService.getAccountBalance(accountNo);
         return ResponseEntity.ok(balance);
     }
@@ -72,10 +76,13 @@ public class AccountController {
     })
     @GetMapping("/{accountNo}/positions")
     public ResponseEntity<List<AccountPositionDto>> getPositions(
-            @Parameter(description = "계좌번호", required = true, example = "12345678")
+            @Parameter(description = "계좌번호 (형식: 8자리-2자리, 예: 12345678-01)", required = true, example = "12345678-01")
             @PathVariable @NotBlank String accountNo,
             @Parameter(description = "시장 구분 (KR: 국내만, US: 해외만, 미지정: 전체)")
             @RequestParam(required = false) String market) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         List<AccountPositionDto> positions = accountService.getPositions(accountNo, market);
         return ResponseEntity.ok(positions);
     }
@@ -92,12 +99,15 @@ public class AccountController {
     })
     @GetMapping("/{accountNo}/buyable-amount")
     public ResponseEntity<BuyableAmountDto> getBuyableAmount(
-            @Parameter(description = "계좌번호", required = true, example = "12345678")
+            @Parameter(description = "계좌번호 (형식: 8자리-2자리, 예: 12345678-01)", required = true, example = "12345678-01")
             @PathVariable @NotBlank String accountNo,
             @Parameter(description = "종목코드", required = true, example = "005930")
             @RequestParam @NotBlank String symbol,
             @Parameter(description = "주문가격", required = true, example = "75000")
             @RequestParam @NotNull @Positive BigDecimal price) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         BuyableAmountDto buyableAmount = accountService.getBuyableAmount(accountNo, symbol, price);
         return ResponseEntity.ok(buyableAmount);
     }
@@ -114,10 +124,13 @@ public class AccountController {
     })
     @GetMapping("/{accountNo}/sellable-quantity")
     public ResponseEntity<SellableQuantityDto> getSellableQuantity(
-            @Parameter(description = "계좌번호", required = true, example = "12345678")
+            @Parameter(description = "계좌번호 (형식: 8자리-2자리, 예: 12345678-01)", required = true, example = "12345678-01")
             @PathVariable @NotBlank String accountNo,
             @Parameter(description = "종목코드", required = true, example = "005930")
             @RequestParam @NotBlank String symbol) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         SellableQuantityDto sellableQuantity = accountService.getSellableQuantity(accountNo, symbol);
         return ResponseEntity.ok(sellableQuantity);
     }
@@ -134,12 +147,15 @@ public class AccountController {
     })
     @GetMapping("/{accountNo}/order-history")
     public ResponseEntity<List<OrderHistoryDto>> getOrderHistory(
-            @Parameter(description = "계좌번호", required = true, example = "12345678")
+            @Parameter(description = "계좌번호 (형식: 8자리-2자리, 예: 12345678-01)", required = true, example = "12345678-01")
             @PathVariable @NotBlank String accountNo,
             @Parameter(description = "시작일", required = true, example = "2026-01-01")
             @RequestParam @NotNull @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @Parameter(description = "종료일", required = true, example = "2026-01-31")
             @RequestParam @NotNull @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         List<OrderHistoryDto> orderHistory = accountService.getOrderHistory(accountNo, startDate, endDate);
         return ResponseEntity.ok(orderHistory);
     }
@@ -156,8 +172,11 @@ public class AccountController {
     })
     @GetMapping("/{accountNo}/cancelable-orders")
     public ResponseEntity<List<CancelableOrderDto>> getCancelableOrders(
-            @Parameter(description = "계좌번호", required = true, example = "12345678")
+            @Parameter(description = "계좌번호 (형식: 8자리-2자리, 예: 12345678-01)", required = true, example = "12345678-01")
             @PathVariable @NotBlank String accountNo) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         List<CancelableOrderDto> list = accountService.getCancelableOrders(accountNo);
         return ResponseEntity.ok(list);
     }
@@ -174,8 +193,11 @@ public class AccountController {
     })
     @GetMapping("/{accountNo}/assets")
     public ResponseEntity<AccountAssetDto> getAccountAssets(
-            @Parameter(description = "계좌번호", required = true, example = "12345678")
+            @Parameter(description = "계좌번호 (형식: 8자리-2자리, 예: 12345678-01)", required = true, example = "12345678-01")
             @PathVariable @NotBlank String accountNo) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         AccountAssetDto assets = accountService.getAccountAssets(accountNo);
         return ResponseEntity.ok(assets);
     }
@@ -192,8 +214,11 @@ public class AccountController {
     })
     @GetMapping("/{accountNo}/overseas-summary")
     public ResponseEntity<OverseasBalanceSummaryDto> getOverseasSummary(
-            @Parameter(description = "계좌번호", required = true, example = "12345678")
+            @Parameter(description = "계좌번호 (형식: 8자리-2자리, 예: 12345678-01)", required = true, example = "12345678-01")
             @PathVariable @NotBlank String accountNo) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         OverseasBalanceSummaryDto summary = accountService.getOverseasSummary(accountNo);
         if (summary == null) {
             return ResponseEntity.notFound().build();
@@ -214,12 +239,15 @@ public class AccountController {
     })
     @GetMapping("/{accountNo}/profit-loss")
     public ResponseEntity<ProfitLossDto> getPeriodProfitLoss(
-            @Parameter(description = "계좌번호", required = true, example = "12345678")
+            @Parameter(description = "계좌번호 (형식: 8자리-2자리, 예: 12345678-01)", required = true, example = "12345678-01")
             @PathVariable @NotBlank String accountNo,
             @Parameter(description = "시작일", required = true, example = "2026-01-01")
             @RequestParam @NotNull @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @Parameter(description = "종료일", required = true, example = "2026-01-31")
             @RequestParam @NotNull @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         ProfitLossDto profitLoss = accountService.getPeriodProfitLoss(accountNo, startDate, endDate);
         return ResponseEntity.ok(profitLoss);
     }
@@ -236,8 +264,11 @@ public class AccountController {
     })
     @GetMapping("/{accountNo}/balance-rlz-pl")
     public ResponseEntity<BalanceRealizedProfitLossDto> getBalanceRealizedProfitLoss(
-            @Parameter(description = "계좌번호", required = true, example = "12345678-01")
+            @Parameter(description = "계좌번호 (형식: 8자리-2자리, 예: 12345678-01)", required = true, example = "12345678-01")
             @PathVariable @NotBlank String accountNo) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         BalanceRealizedProfitLossDto dto = accountService.getBalanceRealizedProfitLoss(accountNo);
         return ResponseEntity.ok(dto);
     }
@@ -254,9 +285,12 @@ public class AccountController {
     })
     @GetMapping("/{accountNo}/profit-loss-status")
     public ResponseEntity<PeriodProfitLossStatusDto> getPeriodProfitLossStatus(
-            @Parameter(description = "계좌번호", required = true) @PathVariable @NotBlank String accountNo,
+            @Parameter(description = "계좌번호 (형식: 8자리-2자리, 예: 12345678-01)", required = true) @PathVariable @NotBlank String accountNo,
             @Parameter(description = "시작일", required = true) @RequestParam @NotNull @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @Parameter(description = "종료일", required = true) @RequestParam @NotNull @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         PeriodProfitLossStatusDto dto = accountService.getPeriodProfitLossStatus(accountNo, startDate, endDate);
         return ResponseEntity.ok(dto);
     }

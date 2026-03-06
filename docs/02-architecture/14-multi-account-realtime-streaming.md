@@ -272,6 +272,16 @@ public interface KoreaInvestmentWebSocketClient {
 - `tr_type`: "1" = 구독, "2" = 해제
 - `tr_key`: 종목코드 (6자리)
 
+#### 3.3.4 수신 메시지 파싱 (tr_id / tr_key)
+
+한국투자증권 WebSocket 푸시 메시지는 환경/메시지 종류에 따라 `tr_id`·`tr_key` 위치가 다를 수 있다. `KoreaInvestmentWebSocketClientImpl`에서는 다음 순서로 추출한다.
+
+1. **header.tr_id**, **header.tr_key**
+2. **body.input.tr_id**, **body.input.tr_key**
+3. **body.tr_id**, **body.tr_key**
+
+위 경로에서 찾은 첫 번째 비공백 값을 사용한다. 모두 없으면 빈 문자열로 이벤트를 발행하며, TRACE 로그에 수신 JSON 최상위 키를 남겨 실제 푸시 형식 확인이 가능하다.
+
 ### 3.4 확장 구현 계획
 
 #### 3.4.1 재연결 로직
@@ -349,6 +359,13 @@ EVERY 30 seconds:
 **현재가 캐시 TTL**
 
 - `investment.market-data.current-price-cache-ttl-seconds`(기본 300초)로 현재가 캐시 TTL을 제어한다. 단타/청산/WebSocket 활성화 환경에서는 5초 등 짧은 값 설정을 권장한다. (application.yml 및 CacheConfig 참조)
+
+**장 개장 전 연결 및 활성화 절차 (WebSocketConnectScheduler)**
+
+- **connectCron**: 기본 `0 50 8 * * MON-FRI` (08:50 KST 평일). 기동 후 5초 뒤 1회 `runConnect()`가 추가로 실행되어, 서버 재시작 시에도 당일 장 시작 전에 연결을 확립할 수 있다.
+- **disconnectCron**: 기본 `0 35 15 * * MON-FRI` (15:35 KST 평일). 장 종료 후 연결 해제.
+- **활성화 절차**: (1) `investment.market-data.korea-investment.websocket.enabled=true` 설정. (2) 필요 시 `approval-key` 또는 `approval-key-fetch-enabled=true` 설정. (3) 애플리케이션 기동 후 connectCron/disconnectCron이 적용되며, 08:50 KST 직전에 KOREA_INVESTMENT 사용자·serverType별로 `KoreaInvestmentWebSocketClient.connect`가 호출된다.
+- **실무 권장 타이밍**: 장 시작(09:00) 전 08:50 연결로 1초 간격·구독 등록 간격 제한을 준수하면서, 개장 전 보유·단타 대상 구독을 완료할 수 있다. 단타/청산 스케줄러(PipelineExitScheduler, IntradayBreakoutScheduler) 실행 시점에는 이미 WebSocket이 연결·구독된 상태를 유지하는 것을 권장한다.
 
 ### 3.5 해외주식 실시간 시세 (선택)
 

@@ -2,6 +2,7 @@ package com.investment.api.controller;
 
 import com.investment.analysis.dto.AnalysisRequestDto;
 import com.investment.analysis.dto.AnalysisResponseDto;
+import com.investment.common.util.AccountNumberUtil;
 import com.investment.analysis.dto.CorrelationAnalysisResponseDto;
 import com.investment.analysis.dto.SectorAnalysisResponseDto;
 import com.investment.analysis.service.AnalysisService;
@@ -75,6 +76,9 @@ public class AnalysisController {
             @RequestParam(required = false) String symbols,
             @RequestParam(required = false, defaultValue = "US") String market) {
         if (accountNo != null && !accountNo.isBlank()) {
+            if (!AccountNumberUtil.validateAccountNumberFormat(accountNo.trim())) {
+                return ResponseEntity.badRequest().build();
+            }
             String userId = userDetails != null ? userDetails.getUsername() : null;
             SectorAnalysisResponseDto response = sectorAnalysisService.getSectorAnalysisByAccount(userId, accountNo.trim());
             return ResponseEntity.ok(response);
@@ -108,6 +112,9 @@ public class AnalysisController {
             @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate to) {
         if (accountNo != null && !accountNo.isBlank()) {
+            if (!AccountNumberUtil.validateAccountNumberFormat(accountNo.trim())) {
+                return ResponseEntity.badRequest().build();
+            }
             String userId = userDetails != null ? userDetails.getUsername() : null;
             CorrelationAnalysisResponseDto response = correlationAnalysisService.getCorrelationByAccount(
                     userId, accountNo.trim(), from, to);

@@ -838,7 +838,7 @@ curl -X GET "http://localhost:8080/api/v1/accounts/12345678/profit-loss?startDat
 
 **응답 (200 OK)**: 갱신된 항목 1건(동일 DTO 구조).
 
-**허용 키**: `pipeline.autoExecute`, `pipeline.allowRealExecution`, `pipeline.scheduler.defaultCapital`, `pipeline.tradingWindowEnabled`, `governance.enabled`, `governance.alertOnly`, `governance.autoHaltOnDegradation`, `batch.failureAlertEnabled`, `risk.regimeGateEnabled`, `intraday.breakoutEnabled`. 활성/비활성 등 모든 항목은 Admin 화면(시스템 설정)에서 조회·저장.
+**허용 키**: `pipeline.autoExecute`, `pipeline.allowRealExecution`, `pipeline.scheduler.defaultCapital`, `pipeline.tradingWindowEnabled`, `governance.enabled`, `governance.alertOnly`, `governance.autoHaltOnDegradation`, `batch.failureAlertEnabled`, `risk.regimeGateEnabled`, `intraday.breakoutEnabled`, `marketData.websocketEnabled`. 활성/비활성 등 모든 항목은 Admin 화면(시스템 설정)에서 조회·저장.
 
 ---
 

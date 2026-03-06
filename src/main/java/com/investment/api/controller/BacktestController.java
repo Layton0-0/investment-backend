@@ -2,6 +2,7 @@ package com.investment.api.controller;
 
 import com.investment.backtest.BacktestService;
 import com.investment.backtest.WalkForwardBacktestService;
+import com.investment.common.util.AccountNumberUtil;
 import com.investment.backtest.dto.BacktestRunRequest;
 import com.investment.backtest.dto.BacktestRunResult;
 import com.investment.backtest.dto.WalkForwardBacktestRequest;
@@ -72,7 +73,10 @@ public class BacktestController {
     @Operation(summary = "실행 전 백테스트 최근 결과 조회", description = "로보 리밸런싱 스케줄러가 마지막으로 실행한 실행 전 백테스트 결과(통과/미통과·MDD·Sharpe)")
     @GetMapping("/robo/last-pre-execution")
     public ResponseEntity<LastPreExecutionResultDto> getLastPreExecution(
-            @Parameter(description = "계좌번호") @RequestParam String accountNo) {
+            @Parameter(description = "계좌번호 (형식: 8자리-2자리)") @RequestParam String accountNo) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         RoboPreExecutionResultStore.StoredResult stored = preExecutionResultStore.get(accountNo);
         if (stored == null) {
             return ResponseEntity.noContent().build();

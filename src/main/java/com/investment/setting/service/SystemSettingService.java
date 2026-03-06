@@ -53,6 +53,8 @@ public class SystemSettingService {
                 new KeyMeta("investment.risk.regime-gate-enabled", "false", "Boolean", "매크로 레짐 게이트(VIX 등) 신규 매수 차단"));
         WHITELIST.put("intraday.breakoutEnabled",
                 new KeyMeta("investment.intraday.breakout-enabled", "false", "Boolean", "장중 변동성 돌파 진입 활성화"));
+        WHITELIST.put("marketData.websocketEnabled",
+                new KeyMeta("investment.market-data.korea-investment.websocket.enabled", "true", "Boolean", "WebSocket 실시간 연결 사용 여부"));
     }
 
     private static final Set<String> ALLOWED_KEYS = WHITELIST.keySet();

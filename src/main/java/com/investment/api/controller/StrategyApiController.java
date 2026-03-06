@@ -1,5 +1,6 @@
 package com.investment.api.controller;
 
+import com.investment.common.util.AccountNumberUtil;
 import com.investment.strategy.domain.StrategyType;
 import com.investment.strategy.dto.StrategyComparisonItemDto;
 import com.investment.strategy.dto.StrategyDto;
@@ -38,6 +39,9 @@ public class StrategyApiController {
     public ResponseEntity<List<StrategyDto>> getStrategies(
             @PathVariable @NotBlank String accountNo,
             @RequestParam(required = false) String market) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         List<StrategyDto> strategies = strategyManagementService.getStrategies(accountNo, market);
         return ResponseEntity.ok(strategies);
     }
@@ -48,6 +52,9 @@ public class StrategyApiController {
             @PathVariable @NotBlank String accountNo,
             @PathVariable StrategyType strategyType,
             @Parameter(description = "시장 (KR, US). 선택") @RequestParam(required = false) String market) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         StrategyDto strategy = strategyManagementService.getStrategy(accountNo, market, strategyType);
         return ResponseEntity.ok(strategy);
     }
@@ -65,6 +72,9 @@ public class StrategyApiController {
             @PathVariable StrategyType strategyType,
             @RequestParam(required = false) String market,
             @RequestBody @Valid StrategyStatusUpdateDto dto) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         StrategyDto strategy = strategyManagementService.updateStrategyStatus(accountNo, market, strategyType, dto);
         return ResponseEntity.ok(strategy);
     }
@@ -74,6 +84,9 @@ public class StrategyApiController {
             @PathVariable @NotBlank String accountNo,
             @PathVariable StrategyType strategyType,
             @RequestParam(required = false) String market) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         StrategyDto strategy = strategyManagementService.activateStrategy(accountNo, market, strategyType);
         return ResponseEntity.ok(strategy);
     }
@@ -83,6 +96,9 @@ public class StrategyApiController {
             @PathVariable @NotBlank String accountNo,
             @PathVariable StrategyType strategyType,
             @RequestParam(required = false) String market) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         StrategyDto strategy = strategyManagementService.stopStrategy(accountNo, market, strategyType);
         return ResponseEntity.ok(strategy);
     }

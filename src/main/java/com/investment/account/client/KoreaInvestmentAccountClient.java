@@ -15,6 +15,7 @@ import com.investment.account.dto.PeriodProfitLossStatusDto;
 import com.investment.account.dto.ProfitLossDto;
 import com.investment.common.exception.DomainException;
 import com.investment.common.exception.ErrorCode;
+import com.investment.common.logging.KoreaInvestmentApiLogging;
 import com.investment.common.security.EncryptionUtil;
 import com.investment.common.security.LogMaskingUtil;
 import com.investment.domain.entity.BrokerType;
@@ -278,6 +279,7 @@ public class KoreaInvestmentAccountClient {
 
             // local 환경에서 요청 상세 로그 출력
             logApiRequest("주식잔고조회", uri, headers, queryParams);
+            KoreaInvestmentApiLogging.logRequest("주식잔고조회", PATH_INQUIRE_BALANCE, trId, queryParams);
 
             // Rate Limiter 적용
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
@@ -325,11 +327,14 @@ public class KoreaInvestmentAccountClient {
 
             // 응답 코드 확인
             String rtCd = rootNode.path("rt_cd").asText();
+            String msgCd = rootNode.has("msg_cd") ? rootNode.path("msg_cd").asText(null) : null;
+            String msg1 = rootNode.has("msg1") ? rootNode.path("msg1").asText(null) : null;
             if (!"0".equals(rtCd)) {
-                String msg1 = rootNode.path("msg1").asText();
+                KoreaInvestmentApiLogging.logResponseError("주식잔고조회", 200, rtCd, msgCd, msg1, responseJson);
                 throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                         "한국투자증권 API 오류: rt_cd=" + rtCd + ", msg1=" + msg1);
             }
+            KoreaInvestmentApiLogging.logResponseSuccessFromJson("주식잔고조회", 200, responseJson);
 
             // 계좌 잔고 정보: 한투 API는 output(단일) 또는 output2(배열/단일)로 반환. open-trading-api 샘플은 output1(보유종목)+output2(잔고요약).
             JsonNode output = rootNode.path("output");
@@ -400,6 +405,7 @@ public class KoreaInvestmentAccountClient {
             URI uri = buildUriWithQueryParams(baseUrl, PATH_OVERSAS_INQUIRE_PRESENT_BALANCE, queryParams);
 
             logApiRequest("해외주식현재잔고조회", uri, headers, queryParams);
+            KoreaInvestmentApiLogging.logRequest("해외주식현재잔고조회", PATH_OVERSAS_INQUIRE_PRESENT_BALANCE, trId, queryParams);
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
 
@@ -418,10 +424,13 @@ public class KoreaInvestmentAccountClient {
 
             JsonNode rootNode = objectMapper.readTree(responseJson);
             String rtCd = rootNode.path("rt_cd").asText();
+            String msgCd = rootNode.has("msg_cd") ? rootNode.path("msg_cd").asText(null) : null;
+            String msg1 = rootNode.has("msg1") ? rootNode.path("msg1").asText(null) : null;
             if (!"0".equals(rtCd)) {
-                log.warn("해외주식 잔고 조회 실패: rt_cd={}, msg1={}", rtCd, rootNode.path("msg1").asText(""));
+                KoreaInvestmentApiLogging.logResponseError("해외주식현재잔고조회", 200, rtCd, msgCd, msg1, responseJson);
                 return new OverseasBalanceResult(new ArrayList<>(), null);
             }
+            KoreaInvestmentApiLogging.logResponseSuccessFromJson("해외주식현재잔고조회", 200, responseJson);
 
             JsonNode output1 = rootNode.path("output1");
             List<AccountPositionDto> positions = parseOverseasPositionsOutput(output1);
@@ -674,6 +683,7 @@ public class KoreaInvestmentAccountClient {
 
             // local 환경에서 요청 상세 로그 출력
             logApiRequest("매수가능조회", uri, headers, queryParams);
+            KoreaInvestmentApiLogging.logRequest("매수가능조회", PATH_INQUIRE_PSBL_ORDER, trId, queryParams);
 
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
@@ -695,11 +705,14 @@ public class KoreaInvestmentAccountClient {
 
             JsonNode rootNode = objectMapper.readTree(responseJson);
             String rtCd = rootNode.path("rt_cd").asText();
+            String msgCd = rootNode.has("msg_cd") ? rootNode.path("msg_cd").asText(null) : null;
+            String msg1 = rootNode.has("msg1") ? rootNode.path("msg1").asText(null) : null;
             if (!"0".equals(rtCd)) {
-                String msg1 = rootNode.path("msg1").asText();
+                KoreaInvestmentApiLogging.logResponseError("매수가능조회", 200, rtCd, msgCd, msg1, responseJson);
                 throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                         "한국투자증권 API 오류: rt_cd=" + rtCd + ", msg1=" + msg1);
             }
+            KoreaInvestmentApiLogging.logResponseSuccessFromJson("매수가능조회", 200, responseJson);
 
             JsonNode output = rootNode.path("output");
             return BuyableAmountDto.builder()
@@ -755,6 +768,7 @@ public class KoreaInvestmentAccountClient {
 
             // local 환경에서 요청 상세 로그 출력
             logApiRequest("매도가능수량조회", uri, headers, queryParams);
+            KoreaInvestmentApiLogging.logRequest("매도가능수량조회", PATH_INQUIRE_PSBL_ORDER2, trId, queryParams);
 
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
@@ -776,11 +790,14 @@ public class KoreaInvestmentAccountClient {
 
             JsonNode rootNode = objectMapper.readTree(responseJson);
             String rtCd = rootNode.path("rt_cd").asText();
+            String msgCd = rootNode.has("msg_cd") ? rootNode.path("msg_cd").asText(null) : null;
+            String msg1 = rootNode.has("msg1") ? rootNode.path("msg1").asText(null) : null;
             if (!"0".equals(rtCd)) {
-                String msg1 = rootNode.path("msg1").asText();
+                KoreaInvestmentApiLogging.logResponseError("매도가능수량조회", 200, rtCd, msgCd, msg1, responseJson);
                 throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                         "한국투자증권 API 오류: rt_cd=" + rtCd + ", msg1=" + msg1);
             }
+            KoreaInvestmentApiLogging.logResponseSuccessFromJson("매도가능수량조회", 200, responseJson);
 
             JsonNode output = rootNode.path("output");
             return SellableQuantityDto.builder()
@@ -849,6 +866,7 @@ public class KoreaInvestmentAccountClient {
 
             // local 환경에서 요청 상세 로그 출력
             logApiRequest("주문체결조회", uri, headers, queryParams);
+            KoreaInvestmentApiLogging.logRequest("주문체결조회", PATH_INQUIRE_DAILY_CCLD, trId, queryParams);
 
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
@@ -870,11 +888,14 @@ public class KoreaInvestmentAccountClient {
 
             JsonNode rootNode = objectMapper.readTree(responseJson);
             String rtCd = rootNode.path("rt_cd").asText();
+            String msgCd = rootNode.has("msg_cd") ? rootNode.path("msg_cd").asText(null) : null;
+            String msg1 = rootNode.has("msg1") ? rootNode.path("msg1").asText(null) : null;
             if (!"0".equals(rtCd)) {
-                String msg1 = rootNode.path("msg1").asText();
+                KoreaInvestmentApiLogging.logResponseError("주문체결조회", 200, rtCd, msgCd, msg1, responseJson);
                 throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                         "한국투자증권 API 오류: rt_cd=" + rtCd + ", msg1=" + msg1);
             }
+            KoreaInvestmentApiLogging.logResponseSuccessFromJson("주문체결조회", 200, responseJson);
 
             JsonNode output1 = rootNode.path("output1");
             List<OrderHistoryDto> orderHistoryList = new ArrayList<>();
@@ -932,6 +953,7 @@ public class KoreaInvestmentAccountClient {
             Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createAccountRequestBody(accountNo, Map.of());
             URI uri = buildUriWithQueryParams(baseUrl, PATH_INQUIRE_PSBL_RVSECNCL, queryParams);
             logApiRequest("주식정정취소가능주문조회", uri, headers, queryParams);
+            KoreaInvestmentApiLogging.logRequest("주식정정취소가능주문조회", PATH_INQUIRE_PSBL_RVSECNCL, trId, queryParams);
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
             String responseJson = webClient.get()
@@ -947,11 +969,14 @@ public class KoreaInvestmentAccountClient {
             logApiResponse("주식정정취소가능주문조회", responseJson);
             JsonNode rootNode = objectMapper.readTree(responseJson);
             String rtCd = rootNode.path("rt_cd").asText();
+            String msgCd = rootNode.has("msg_cd") ? rootNode.path("msg_cd").asText(null) : null;
+            String msg1 = rootNode.has("msg1") ? rootNode.path("msg1").asText(null) : null;
             if (!"0".equals(rtCd)) {
-                String msg1 = rootNode.path("msg1").asText();
+                KoreaInvestmentApiLogging.logResponseError("주식정정취소가능주문조회", 200, rtCd, msgCd, msg1, responseJson);
                 throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                         "한국투자증권 API 오류: rt_cd=" + rtCd + ", msg1=" + msg1);
             }
+            KoreaInvestmentApiLogging.logResponseSuccessFromJson("주식정정취소가능주문조회", 200, responseJson);
             JsonNode output1 = rootNode.path("output1");
             List<CancelableOrderDto> list = new ArrayList<>();
             if (output1.isArray()) {
@@ -1018,6 +1043,7 @@ public class KoreaInvestmentAccountClient {
 
             // local 환경에서 요청 상세 로그 출력
             logApiRequest("투자계좌자산현황조회", uri, headers, queryParams);
+            KoreaInvestmentApiLogging.logRequest("투자계좌자산현황조회", PATH_INQUIRE_ACCOUNT_BALANCE, trId, queryParams);
 
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
@@ -1039,11 +1065,14 @@ public class KoreaInvestmentAccountClient {
 
             JsonNode rootNode = objectMapper.readTree(responseJson);
             String rtCd = rootNode.path("rt_cd").asText();
+            String msgCd = rootNode.has("msg_cd") ? rootNode.path("msg_cd").asText(null) : null;
+            String msg1 = rootNode.has("msg1") ? rootNode.path("msg1").asText(null) : null;
             if (!"0".equals(rtCd)) {
-                String msg1 = rootNode.path("msg1").asText();
+                KoreaInvestmentApiLogging.logResponseError("투자계좌자산현황조회", 200, rtCd, msgCd, msg1, responseJson);
                 throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                         "한국투자증권 API 오류: rt_cd=" + rtCd + ", msg1=" + msg1);
             }
+            KoreaInvestmentApiLogging.logResponseSuccessFromJson("투자계좌자산현황조회", 200, responseJson);
 
             // 투자계좌자산현황조회(inquire-account-balance) 응답: output2 단일 객체 (공식 예제 output2 필드명)
             JsonNode output2 = rootNode.path("output2");
@@ -1123,6 +1152,7 @@ public class KoreaInvestmentAccountClient {
                             "CTX_AREA_NK100", ""));
             URI uri = buildUriWithQueryParams(baseUrl, PATH_INQUIRE_BALANCE_RLZ_PL, queryParams);
             logApiRequest("주식잔고조회_실현손익", uri, headers, queryParams);
+            KoreaInvestmentApiLogging.logRequest("주식잔고조회_실현손익", PATH_INQUIRE_BALANCE_RLZ_PL, trId, queryParams);
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
             String responseJson = webClient.get()
@@ -1138,11 +1168,14 @@ public class KoreaInvestmentAccountClient {
             logApiResponse("주식잔고조회_실현손익", responseJson);
             JsonNode rootNode = objectMapper.readTree(responseJson);
             String rtCd = rootNode.path("rt_cd").asText();
+            String msgCd = rootNode.has("msg_cd") ? rootNode.path("msg_cd").asText(null) : null;
+            String msg1 = rootNode.has("msg1") ? rootNode.path("msg1").asText(null) : null;
             if (!"0".equals(rtCd)) {
-                String msg1 = rootNode.path("msg1").asText();
+                KoreaInvestmentApiLogging.logResponseError("주식잔고조회_실현손익", 200, rtCd, msgCd, msg1, responseJson);
                 throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                         "한국투자증권 API 오류: rt_cd=" + rtCd + ", msg1=" + msg1);
             }
+            KoreaInvestmentApiLogging.logResponseSuccessFromJson("주식잔고조회_실현손익", 200, responseJson);
             JsonNode output2 = rootNode.path("output2");
             BigDecimal totalRlzPl = BigDecimal.ZERO;
             if (output2 != null && !output2.isNull()) {
@@ -1242,6 +1275,7 @@ public class KoreaInvestmentAccountClient {
 
             // local 환경에서 요청 상세 로그 출력
             logApiRequest("기간별손익조회", uri, headers, queryParams);
+            KoreaInvestmentApiLogging.logRequest("기간별손익조회", PATH_INQUIRE_PERIOD_PROFIT_LOSS, trId, queryParams);
 
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
@@ -1263,11 +1297,14 @@ public class KoreaInvestmentAccountClient {
 
             JsonNode rootNode = objectMapper.readTree(responseJson);
             String rtCd = rootNode.path("rt_cd").asText();
+            String msgCd = rootNode.has("msg_cd") ? rootNode.path("msg_cd").asText(null) : null;
+            String msg1 = rootNode.has("msg1") ? rootNode.path("msg1").asText(null) : null;
             if (!"0".equals(rtCd)) {
-                String msg1 = rootNode.path("msg1").asText();
+                KoreaInvestmentApiLogging.logResponseError("기간별손익조회", 200, rtCd, msgCd, msg1, responseJson);
                 throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                         "한국투자증권 API 오류: rt_cd=" + rtCd + ", msg1=" + msg1);
             }
+            KoreaInvestmentApiLogging.logResponseSuccessFromJson("기간별손익조회", 200, responseJson);
 
             JsonNode output = rootNode.path("output");
             JsonNode output1 = rootNode.path("output1");
@@ -1299,6 +1336,11 @@ public class KoreaInvestmentAccountClient {
 
         } catch (DomainException e) {
             throw e;
+        } catch (WebClientResponseException.NotFound e) {
+            log.warn("기간별손익조회 404(실계좌에서 미지원 또는 경로 변경): userId={}, accountNo={}",
+                    LogMaskingUtil.maskUserId(userId), LogMaskingUtil.maskAccountNo(accountNo));
+            throw new DomainException(ErrorCode.API_NOT_SUPPORTED,
+                    "기간별손익조회는 해당 계좌/환경에서 지원되지 않습니다. 실계좌에서도 미제공될 수 있습니다.");
         } catch (Exception e) {
             log.error("기간별손익조회 실패: userId={}, accountNo={}", LogMaskingUtil.maskUserId(userId),
                     LogMaskingUtil.maskAccountNo(accountNo), e);
@@ -1338,6 +1380,7 @@ public class KoreaInvestmentAccountClient {
                             "CTX_AREA_NK100", ""));
             URI uri = buildUriWithQueryParams(baseUrl, PATH_INQUIRE_PERIOD_PROFIT_LOSS_STATUS, queryParams);
             logApiRequest("기간별매매손익현황조회", uri, headers, queryParams);
+            KoreaInvestmentApiLogging.logRequest("기간별매매손익현황조회", PATH_INQUIRE_PERIOD_PROFIT_LOSS_STATUS, trId, queryParams);
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
             String responseJson = webClient.get()
@@ -1353,11 +1396,14 @@ public class KoreaInvestmentAccountClient {
             logApiResponse("기간별매매손익현황조회", responseJson);
             JsonNode rootNode = objectMapper.readTree(responseJson);
             String rtCd = rootNode.path("rt_cd").asText();
+            String msgCd = rootNode.has("msg_cd") ? rootNode.path("msg_cd").asText(null) : null;
+            String msg1 = rootNode.has("msg1") ? rootNode.path("msg1").asText(null) : null;
             if (!"0".equals(rtCd)) {
-                String msg1 = rootNode.path("msg1").asText();
+                KoreaInvestmentApiLogging.logResponseError("기간별매매손익현황조회", 200, rtCd, msgCd, msg1, responseJson);
                 throw new DomainException(ErrorCode.ACCOUNT_NOT_FOUND,
                         "한국투자증권 API 오류: rt_cd=" + rtCd + ", msg1=" + msg1);
             }
+            KoreaInvestmentApiLogging.logResponseSuccessFromJson("기간별매매손익현황조회", 200, responseJson);
             BigDecimal totalRlzPl = BigDecimal.ZERO;
             JsonNode output2 = rootNode.path("output2");
             if (output2 != null && !output2.isNull()) {

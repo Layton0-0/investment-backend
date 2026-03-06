@@ -54,13 +54,20 @@ public class RealtimeMarketDataService {
     @Cacheable(value = CacheConfig.CACHE_CURRENT_PRICE, key = "#symbol", unless = "#result == null")
     @CircuitBreaker(name = "marketDataService", fallbackMethod = "getCurrentPriceBlockingFallback")
     public CurrentPriceDto getCurrentPriceBlocking(String symbol) {
+        log.info("[현재가] getCurrentPriceBlocking 진입 symbol={}", symbol);
         CurrentPriceDto fromWs = webSocketLivePrices.get(symbol);
         if (fromWs != null) {
-            log.trace("실시간 현재가 WebSocket 반환: symbol={}", symbol);
+            log.info("[현재가] WebSocket 캐시 반환 symbol={} price={}", symbol, fromWs.getCurrentPrice());
             return fromWs;
         }
-        log.debug("실시간 현재가 조회: symbol={}", symbol);
-        return marketDataClient.getCurrentPrice(symbol).blockOptional().orElse(null);
+        log.info("[현재가] 캐시 미스, 한투 클라이언트 호출 symbol={}", symbol);
+        CurrentPriceDto result = marketDataClient.getCurrentPrice(symbol).blockOptional().orElse(null);
+        if (result == null) {
+            log.warn("[현재가] 한투 클라이언트 null 반환 symbol={} (토큰/API오류·폴백 가능)", symbol);
+        } else {
+            log.info("[현재가] 한투 클라이언트 성공 symbol={} currentPrice={}", symbol, result.getCurrentPrice());
+        }
+        return result;
     }
 
     /**
@@ -89,7 +96,10 @@ public class RealtimeMarketDataService {
 
     @SuppressWarnings("unused")
     public CurrentPriceDto getCurrentPriceBlockingFallback(String symbol, Exception e) {
-        log.warn("시장 데이터 API fallback: symbol={}, error={}", symbol, e.getMessage());
+        log.warn("[현재가] Circuit Breaker 폴백→404 symbol={} exception={} message={}", symbol, e.getClass().getSimpleName(), e.getMessage());
+        if (log.isDebugEnabled()) {
+            log.debug("[현재가] 폴백 예외 상세 symbol=" + symbol, e);
+        }
         return null;
     }
 
@@ -122,7 +132,8 @@ public class RealtimeMarketDataService {
                 .map(symbol -> CompletableFuture.supplyAsync(() -> getCurrentPriceBlocking(symbol)))
                 .collect(Collectors.toList());
 
-        CompletableFuture<List<CurrentPriceDto>> all = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+        CompletableFuture<List<CurrentPriceDto>> all = CompletableFuture
+                .allOf(futures.toArray(new CompletableFuture[0]))
                 .thenApply(v -> futures.stream()
                         .map(CompletableFuture::join)
                         .filter(Objects::nonNull)

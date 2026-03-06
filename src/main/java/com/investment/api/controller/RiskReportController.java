@@ -2,6 +2,7 @@ package com.investment.api.controller;
 
 import com.investment.common.exception.DomainException;
 import com.investment.common.exception.ErrorCode;
+import com.investment.common.util.AccountNumberUtil;
 import com.investment.risk.dto.PortfolioRiskMetricsDto;
 import com.investment.risk.dto.RiskHistoryItemDto;
 import com.investment.risk.dto.PerformanceAttributionDto;
@@ -67,7 +68,10 @@ public class RiskReportController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<PortfolioRiskMetricsDto> getPortfolioRiskMetrics(
             Principal principal,
-            @Parameter(description = "계좌번호") @RequestParam String accountNo) {
+            @Parameter(description = "계좌번호 (형식: 8자리-2자리)") @RequestParam String accountNo) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         String userId = getUserId(principal);
         PortfolioRiskMetricsDto dto = riskReportService.getPortfolioRiskMetrics(userId, accountNo);
         if (dto == null) {

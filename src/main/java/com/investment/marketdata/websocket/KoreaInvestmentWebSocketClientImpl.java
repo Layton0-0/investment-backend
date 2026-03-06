@@ -6,7 +6,6 @@ import com.investment.common.security.LogMaskingUtil;
 import com.investment.marketdata.config.MarketDataProperties;
 import com.investment.marketdata.service.KoreaInvestmentTokenService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.socket.WebSocketMessage;
@@ -33,10 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 재연결 로직(Exponential Backoff), PINGPONG 하트비트, 메시지 파싱 및 이벤트 발행 지원.
  */
 @Slf4j
-@Component
-@ConditionalOnProperty(
-        name = "investment.market-data.korea-investment.websocket.enabled",
-        havingValue = "true")
+@Component("koreaInvestmentWebSocketClientImpl")
 public class KoreaInvestmentWebSocketClientImpl implements KoreaInvestmentWebSocketClient {
 
     private static final long MIN_CONNECTION_INTERVAL_MS = 1000L;
@@ -207,9 +203,8 @@ public class KoreaInvestmentWebSocketClientImpl implements KoreaInvestmentWebSoc
             }
             
             JsonNode root = objectMapper.readTree(payload);
-            JsonNode header = root.path("header");
-            String trId = header.path("tr_id").asText("");
-            String trKey = header.path("tr_key").asText("");
+            String trId = extractTrId(root);
+            String trKey = extractTrKey(root);
             
             if (trId.isEmpty() && payload.contains("|")) {
                 parseAndPublishPipedData(sessionKey, payload);
@@ -225,10 +220,51 @@ public class KoreaInvestmentWebSocketClientImpl implements KoreaInvestmentWebSoc
         }
     }
 
+    /** 수신 JSON에서 tr_id 추출. header → body.input → body → 루트 순으로 탐색 (한국투자증권 푸시 형식 다양 대응). */
+    private String extractTrId(JsonNode root) {
+        String v = root.path("header").path("tr_id").asText(null);
+        if (v != null && !v.isEmpty()) return v;
+        v = root.path("body").path("input").path("tr_id").asText(null);
+        if (v != null && !v.isEmpty()) return v;
+        v = root.path("body").path("tr_id").asText(null);
+        if (v != null && !v.isEmpty()) return v;
+        v = root.path("tr_id").asText(null);
+        if (v != null && !v.isEmpty()) return v;
+        JsonNode output = root.path("body").path("output");
+        if (output.isArray() && output.size() > 0) {
+            v = output.get(0).path("tr_id").asText(null);
+            if (v != null && !v.isEmpty()) return v;
+        }
+        return "";
+    }
+
+    /** 수신 JSON에서 tr_key 추출. header → body.input → body → 루트 순으로 탐색. */
+    private String extractTrKey(JsonNode root) {
+        String v = root.path("header").path("tr_key").asText(null);
+        if (v != null && !v.isEmpty()) return v;
+        v = root.path("body").path("input").path("tr_key").asText(null);
+        if (v != null && !v.isEmpty()) return v;
+        v = root.path("body").path("tr_key").asText(null);
+        if (v != null && !v.isEmpty()) return v;
+        v = root.path("tr_key").asText(null);
+        if (v != null && !v.isEmpty()) return v;
+        JsonNode output = root.path("body").path("output");
+        if (output.isArray() && output.size() > 0) {
+            v = output.get(0).path("tr_key").asText(null);
+            if (v != null && !v.isEmpty()) return v;
+        }
+        return "";
+    }
+
     private void parseAndPublishJsonData(String sessionKey, String trId, String trKey, JsonNode root) {
-        log.debug("WebSocket JSON 수신: trId={}, trKey={}", trId, trKey);
+        if (log.isDebugEnabled()) {
+            log.debug("WebSocket JSON 수신: trId={}, trKey={}", trId.isEmpty() ? "(null)" : trId, trKey != null ? trKey : "");
+        }
+        if (trId.isEmpty() && log.isDebugEnabled()) {
+            log.debug("WebSocket 수신 JSON 구조(tr_id 없음) 최상위 키: {}", root.isObject() ? root.fieldNames().toString() : "non-object");
+        }
         
-        WebSocketDataEvent event = new WebSocketDataEvent(this, sessionKey, trId, trKey, root.toString());
+        WebSocketDataEvent event = new WebSocketDataEvent(this, sessionKey, trId, trKey != null ? trKey : "", root.toString());
         eventPublisher.publishEvent(event);
     }
 

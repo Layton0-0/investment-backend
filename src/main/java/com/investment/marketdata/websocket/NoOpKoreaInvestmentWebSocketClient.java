@@ -10,12 +10,12 @@ import org.springframework.stereotype.Component;
  * WebSocket 실시간 호가·체결통보 미구현 시 사용하는 No-Op 클라이언트.
  * MCP로 asking_price_total, ccnl_notice URL·구독 포맷 확인 후 실제 구현체로 교체.
  */
+/** DB 기반 웹소켓 설정 사용 시 미사용. yml 전용 모드(use-yml-only=true)일 때만 활성화. */
 @Slf4j
 @Component
 @ConditionalOnProperty(
-        name = "investment.market-data.korea-investment.websocket.enabled",
-        havingValue = "false",
-        matchIfMissing = true)
+        name = "investment.market-data.korea-investment.websocket.use-yml-only",
+        havingValue = "true")
 public class NoOpKoreaInvestmentWebSocketClient implements KoreaInvestmentWebSocketClient {
 
     @Override

@@ -88,9 +88,9 @@ public class MarketDataProperties {
         public static class WebSocketProperties {
             /** WebSocket 사용 여부. true 시 실제 구현체 사용, false 시 NoOp */
             private boolean enabled = false;
-            /** 실전/모의 Base URL (MCP asking_price_total, ccnl_notice 확인) */
-            private String baseUrlReal = "wss://openapi.koreainvestment.com:9443";
-            private String baseUrlVirtual = "wss://openapivts.koreainvestment.com:29443";
+            /** 실전/모의 WebSocket Base URL. 실시간 스트리밍은 ops 호스트 사용(14-multi-account-realtime-streaming.md). openapi/openapivts는 REST 전용이라 /tryitout 시 핸드셰이크 실패 */
+            private String baseUrlReal = "ws://ops.koreainvestment.com:21000";
+            private String baseUrlVirtual = "ws://ops.koreainvestment.com:31000";
             /** WebSocket 경로 (예: /tryitout). 공식 문서·MCP 확인 */
             private String path = "/tryitout";
             /** 실시간 호가(통합) TR_ID. MCP asking_price_total (예: H0STASP0) */
@@ -123,6 +123,8 @@ public class MarketDataProperties {
             private int maxSubscriptionsPerSession = 41;
             /** 장 시작 전 WebSocket 연결·구독 크론 (비우면 기동 후 1회만 연결). 예: 0 0 8 * * MON-FRI (08:00 KST 평일) */
             private String connectCron = "";
+            /** 장 종료 후 WebSocket 연결 해제 크론. 예: 0 35 15 * * MON-FRI (15:35 KST 평일) */
+            private String disconnectCron = "";
         }
 
         @Getter

@@ -68,6 +68,7 @@ API 파라미터(종목코드·거래소코드 등)는 아래 파일 또는 한�
 | API     | path           | TR_ID (실전/모의) | HTTP | 용도                                    |
 | ------- | -------------- | ------------- | ---- | ------------------------------------- |
 | 접근토큰 발급 | /oauth2/tokenP | (동일)          | POST | OAuth 2.0 client_credentials, 24시간 유효 |
+| 실시간(웹소켓) 접속키 발급 | /oauth2/Approval | (해당 없음) | POST | approval_key 발급. WebSocket 연결 시 헤더에 사용. 상세는 [09 가이드 § WebSocket approval_key 발급](09-korea-investment-api-guide.md) 참조. |
 
 
 ### 4.2 계좌·잔고
@@ -100,9 +101,20 @@ API 파라미터(종목코드·거래소코드 등)는 아래 파일 또는 한�
 
 | API             | path                                                                | TR_ID (실전)    | TR_ID (모의)    | HTTP | 용도         |
 | --------------- | ------------------------------------------------------------------- | ------------- | ------------- | ---- | ---------- |
+| 주식현재가 시세        | /uapi/domestic-stock/v1/quotations/inquire-price                    | FHKST01010100 | FHKST01010100 | GET  | 단일 종목 현재가 (공식 샘플 기준 실/모 동일 TR_ID) |
 | 주식현재가 일봉차트      | /uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice     | FHKST03010100 | (동일)          | GET  | 일/주/월봉 차트  |
 | 거래량순위           | /uapi/domestic-stock/v1/quotations/volume-rank                      | FHPST01710000 | FHKST01710000 | GET  | 거래대금 상위 종목 |
 | 시장별 투자자매매동향(일별) | /uapi/domestic-stock/v1/quotations/inquire-investor-daily-by-market | FHPST03010100 | FHKST03010100 | GET  | 시장 수급·분위   |
+
+
+### 4.5 실시간(WebSocket)
+
+실시간 호가·체결·체결통보 수신용 WebSocket. **접속키(approval_key)** 발급은 §4.1의 실시간(웹소켓) 접속키 발급 API(`POST /oauth2/Approval`) 참조. 상세 Request/Response는 [09 가이드 § WebSocket approval_key 발급](09-korea-investment-api-guide.md) 참조.
+
+- **연결 URL**: 실시간 스트리밍은 **ops** 호스트 사용. 실전 `ws://ops.koreainvestment.com:21000`, 모의 `ws://ops.koreainvestment.com:31000`, path `/tryitout`. (openapi/openapivts는 REST 전용이라 WebSocket 핸드셰이크 실패함. 14-multi-account-realtime-streaming.md 참조.)
+- **이용 순서**: 연결 시도 → 접속 확인 → 구독 정보 등록 → 정보 수신 → PINGPONG 처리 → (필요 시) 구독 해제 → 접속 해제. 순서 미준수 시 자동 차단될 수 있음.
+- **국내 TR_ID 요약**: 호가(통합)·체결·체결통보 등은 09 가이드 및 `investment.market-data.korea-investment.websocket` 설정(quote-tr-id, execution-tr-id, ccnl-notice-tr-id) 참조.
+- **제한**: 1세션당 실시간 구독 합산 41건, 연결/종료 간격 최소 1초, 구독 등록 간격 0.2초 이내 권장. 상세는 [09 가이드 § WebSocket 유량 제한·사용 정책](09-korea-investment-api-guide.md) 참조.
 
 
 ---
@@ -119,6 +131,7 @@ API 파라미터(종목코드·거래소코드 등)는 아래 파일 또는 한�
 ## 6. 참조 링크
 
 - **세부 명세 폴더(Header/Parameter/Body/Response 전 항목)**: [10-korea-investment-api-spec/](10-korea-investment-api-spec/README.md)
+- **한국투자증권 API 로깅 체계**(요청/응답/에러 포맷, 공통 유틸): [10-korea-investment-api-spec/05-logging.md](10-korea-investment-api-spec/05-logging.md)
 - **원본 명세 폴더**: [investment-backend/docs/korea-investment-api/](../korea-investment-api/)
 - **구현 가이드**: [09-korea-investment-api-guide.md](09-korea-investment-api-guide.md)
 - **MCP 규칙**: [.cursor/rules/MCP.mdc](../../../.cursor/rules/MCP.mdc), [decisions.md §14](../decisions.md#14-한국투자증권-api-요청-방식-및-mcp-사용)

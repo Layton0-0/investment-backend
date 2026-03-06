@@ -70,6 +70,14 @@ public class StockCodeConverter {
         
         String trimmed = input.trim();
         
+        // 프론트/검색에서 오는 "005380-KR", "005380-US" 형식 → 6자리만 추출 (한국투자증권 API는 6자리만 사용)
+        if (trimmed.contains("-")) {
+            String codePart = trimmed.split("-")[0].trim();
+            if (codePart.matches("^\\d{6}$")) {
+                return codePart;
+            }
+        }
+        
         // 이미 6자리 숫자 코드인 경우
         if (trimmed.matches("^\\d{6}$")) {
             return trimmed;

@@ -399,13 +399,46 @@ MCP `volume_rank`, `inquire_investor_daily_by_market` 검색으로 확인한 스
 
 ### WebSocket approval_key 발급 (REST)
 
-실시간 WebSocket 구독 시 **approval_key**가 필요한 경우, REST API로 발급 후 `investment.market-data.korea-investment.websocket.approval-key`에 설정한다.
+실시간(웹소켓) 접속키 발급 API로 **approval_key**를 발급받을 수 있으며, 웹소켓 이용 시 해당 키를 appkey·appsecret 대신 헤더에 넣어 API를 호출합니다. 접속키의 유효기간은 24시간이지만, 접속키는 세션 연결 시 **초기 1회만** 사용하기 때문에 접속키 인증 후에는 세션이 종료되지 않는 한 **접속키를 신규 발급받지 않아도 365일 내내** 웹소켓 데이터를 수신할 수 있습니다.
+
+**명세 출처**: `docs/korea-investment-api/실시간 (웹소켓) 접속키 발급[실시간-000].xlsx` (한국투자증권 API 명세).
+
+#### 실시간(웹소켓) 접속키 발급 API 스펙
+
+| 항목 | 값 |
+|------|-----|
+| API ID | 실시간-000 |
+| API 통신방식 | WEBSOCKET (발급은 REST) |
+| HTTP Method | **POST** |
+| 실전 Domain | `https://openapi.koreainvestment.com:9443` |
+| 모의 Domain | `https://openapivts.koreainvestment.com:29443` |
+| URL | `/oauth2/Approval` |
+
+#### Request
+
+| 구분 | Element | 한글명 | Type | Required | Length | Description |
+|------|---------|--------|------|----------|--------|-------------|
+| Header | content-type | 컨텐츠타입 | string | N | 20 | `application/json; utf-8` |
+| Body | grant_type | 권한부여타입 | string | Y | 18 | `"client_credentials"` |
+| Body | appkey | 앱키 | string | Y | 36 | 한국투자증권 홈페이지에서 발급받은 appkey |
+| Body | secretkey | 시크릿키 | string | Y | 180 | 한국투자증권 홈페이지에서 발급받은 appsecret (※ appsecret와 secretkey는 동일) |
+
+#### Response
+
+| 구분 | Element | 한글명 | Type | Required | Length | Description |
+|------|---------|--------|------|----------|--------|-------------|
+| Body | approval_key | 웹소켓 접속키 | string | Y | 286 | 웹소켓 이용 시 appkey·appsecret 대신 헤더에 넣어 API 호출 |
+
+#### 요청/응답 예시
+
+- **Request**: `POST /oauth2/Approval`, Body: `{ "grant_type": "client_credentials", "appkey": "YOUR_APP_KEY", "secretkey": "YOUR_APP_SECRET" }`
+- **Response**: `{ "approval_key": "a2585daf-8c09-4587-9fce-8ab893XXXXX" }` → WebSocket 구독 메시지의 `header.approval_key`에 사용.
+
+#### 적용
 
 - **엔드포인트**: `POST /oauth2/Approval`
-- **Base URL**: 실전 `https://openapi.koreainvestment.com:9443`, 모의 `https://openapivts.koreainvestment.com:29443`
-- **요청**: Content-Type `application/json`. (접근토큰 또는 appkey/appsecret 등 포털 OAuth 문서 명세 확인.)
-- **응답**: 발급된 `approval_key` 값을 WebSocket 구독 메시지의 `header.approval_key`에 넣어 사용.
-- **구현**: `KoreaInvestmentWebSocketClientImpl`은 설정에 `approval-key`가 있으면 구독 시 `header.approval_key`로 전달. 미설정 시 해당 필드 생략(일부 환경에서는 접근토큰만으로 구독 가능).
+- **구현**: `KoreaInvestmentTokenClient.getApprovalKey(accessToken, serverType)`, `KoreaInvestmentTokenService.getApprovalKey(userId, serverType)`. `KoreaInvestmentWebSocketClientImpl`에서 `approval-key-fetch-enabled=true` 시 연결 시 REST로 발급 후 구독 메시지에 사용.
+- **설정**: 발급받은 값을 `investment.market-data.korea-investment.websocket.approval-key`에 넣거나, 위 구현으로 자동 발급 사용. 미설정 시 해당 필드 생략(일부 환경에서는 접근토큰만으로 구독 가능).
 - **상세**: [한국투자증권 API 포털](https://apiportal.koreainvestment.com/) OAuth·WebSocket 문서 참조.
 
 ### WebSocket 설정 예시 (실제 구현체 사용 시)
@@ -427,6 +460,22 @@ investment:
 ```
 
 연결 순서: `connect(userId, serverType)` → (1초 대기) → `subscribeQuote` / `subscribeCcnlNotice`. 구독 간격 0.2초 이내 권장.
+
+**환경 변수 예시 (WebSocket·스케줄·캐시)**
+
+```bash
+# WebSocket 활성화 (기본 false)
+export KOREA_INVESTMENT_WEBSOCKET_ENABLED=true
+
+# 장 시작 전 연결 크론 (기본: 08:50 KST 평일)
+export KOREA_INVESTMENT_WEBSOCKET_CONNECT_CRON="0 50 8 * * MON-FRI"
+
+# 장 종료 후 연결 해제 크론 (기본: 15:35 KST 평일)
+export KOREA_INVESTMENT_WEBSOCKET_DISCONNECT_CRON="0 35 15 * * MON-FRI"
+
+# 단타/청산용 현재가 캐시 TTL(초). WebSocket 사용 시 짧게(예: 60) 설정 권장
+export MARKET_DATA_CURRENT_PRICE_CACHE_TTL_SECONDS=60
+```
 
 ### Rate Limiter 적용
 
@@ -465,12 +514,47 @@ Java 17을 사용하는 경우 기본적으로 TLS 1.2 이상을 지원하므로
 -Djdk.tls.client.protocols=TLSv1.2,TLSv1.3
 ```
 
-## Hashkey 생성 (향후 확장)
+## Hashkey API (요청 무결성 검증)
 
-일부 API(주문 등)는 요청 바디의 무결성을 검증하기 위해 Hashkey가 필요할 수 있습니다.
+해쉬키(Hashkey)는 보안을 위한 요소로, 사용자가 보낸 요청 값을 중간에 탈취하여 변조하지 못하도록 하는 데 사용됩니다. POST로 보내는 요청(주로 주문/정정/취소 API)의 body 값을 사전에 암호화할 수 있으며, **비필수값**으로 사용하지 않아도 POST API 호출은 가능합니다.
+
+**명세 출처**: `docs/korea-investment-api/Hashkey.xlsx` (한국투자증권 API 명세).
+
+### Hashkey API 스펙
+
+| 항목 | 값 |
+|------|-----|
+| API ID | Hashkey |
+| HTTP Method | **POST** |
+| 실전 Domain | `https://openapi.koreainvestment.com:9443` |
+| 모의 Domain | `https://openapivts.koreainvestment.com:29443` |
+| URL | `/uapi/hashkey` |
+
+### Request
+
+| 구분 | Element | 한글명 | Type | Required | Length | Description |
+|------|---------|--------|------|----------|--------|-------------|
+| Header | content-type | 컨텐츠타입 | string | N | 40 | `application/json; charset=utf-8` |
+| Header | appkey | 앱키 | string | Y | 36 | 한국투자증권 홈페이지에서 발급받은 appkey |
+| Header | appsecret | 앱시크릿키 | string | Y | 180 | 한국투자증권 홈페이지에서 발급받은 appsecret |
+| Body | JsonBody | 요청값 | object | Y | - | POST로 보낼 body 값(주문 등 요청 JSON 그대로 전달) |
+
+### Response
+
+| 구분 | Element | 한글명 | Type | Required | Description |
+|------|---------|--------|------|----------|-------------|
+| Body | BODY | 요청값 | object | Y | 요청한 JsonBody 그대로 반환 |
+| Body | HASH | 해쉬키 | string | Y | 256 | Request Body를 hashkey API로 생성한 Hash 값. POST API 호출 시 헤더 `hashkey`에 이 값 사용 |
+
+### 요청/응답 예시
+
+- **Request**: POST `/uapi/hashkey`, Body = 주문 API에서 보낼 JSON(예: `ORD_PRCS_DVSN_CD`, `CANO`, `ACNT_PRDT_CD`, `SLL_BUY_DVSN_CD`, `SHTN_PDNO`, `ORD_QTY`, `UNIT_PRICE`, `ORD_DVSN_CD` 등).
+- **Response**: `{ "BODY": { ...요청값 그대로... }, "HASH": "8b84068222a49302f7ef58226d90403f62e216828f8103465f900de0e7be2f0f" }` → 이후 주문 API 호출 시 `header.hashkey`에 `HASH` 값 설정.
+
+### 구현
 
 - **유틸리티 클래스**: `KoreaInvestmentHashkeyUtil`
-- **생성 방법**: 요청 바디를 JSON 문자열로 변환한 후, appsecret을 키로 사용하여 HMAC SHA256으로 생성
+- **생성 방법**: 요청 바디를 JSON 문자열로 변환한 후, appsecret을 키로 사용하여 HMAC SHA256으로 생성. 또는 Hashkey API(`POST /uapi/hashkey`)를 호출해 `HASH` 값을 받아 사용 가능.
 - **사용 예시**:
   ```java
   @Autowired
@@ -480,7 +564,7 @@ Java 17을 사용하는 경우 기본적으로 TLS 1.2 이상을 지원하므로
   headers.set("hashkey", hashkey);
   ```
 
-**참고**: 현재 사용하는 차트 조회 API에는 Hashkey가 필요하지 않지만, 향후 주문 API 등에서 사용할 수 있도록 유틸리티가 제공됩니다.
+**참고**: 차트 조회 API에는 Hashkey가 필요하지 않으며, 주문/정정/취소 등 POST API에서 필요 시 사용합니다.
 
 ## 계좌 관련 API
 
@@ -756,3 +840,6 @@ MCP 통합에 대한 자세한 내용은 [MCP 통합 가이드](../08-setup-guid
 - API 개발가이드
 - REST API 명세서
 - [MCP 통합 가이드](../08-setup-guides/06-mcp-integration-guide.md)
+- **원본 명세(엑셀)** — 본 가이드의 Hashkey·실시간(웹소켓) 접속키 발급 스펙은 아래 엑셀을 기반으로 정리함.
+  - `docs/korea-investment-api/Hashkey.xlsx` — Hashkey API (POST /uapi/hashkey)
+  - `docs/korea-investment-api/실시간 (웹소켓) 접속키 발급[실시간-000].xlsx` — 실시간(웹소켓) 접속키 발급 (POST /oauth2/Approval)

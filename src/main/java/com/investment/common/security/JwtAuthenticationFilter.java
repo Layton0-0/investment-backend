@@ -50,9 +50,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     log.warn("JWT는 유효하나 DB에 사용자가 없음: userId={}, username={}",
                             LogMaskingUtil.maskUserId(userId),
                             LogMaskingUtil.maskUsername(username));
-                    if (log.isDebugEnabled()) {
-                        log.debug("  [DEBUG] userId(actual)={}, username(actual)={}", userId, username);
-                    }
                     if (tokenSource.fromCookie) {
                         clearTokenCookie(response);
                     }
@@ -71,9 +68,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                             LogMaskingUtil.maskUserId(userId),
                             LogMaskingUtil.maskUsername(username),
                             user.getRole());
-                    if (log.isDebugEnabled()) {
-                        log.debug("  [DEBUG] userId(actual)={}, username(actual)={}", userId, username);
-                    }
                 }
             }
         } catch (Exception e) {

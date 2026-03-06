@@ -38,6 +38,16 @@
 | LIST_SHRS | string | 상장주식수 |  
 - **참고**: [데이터 수집 API](../04-api/10-data-collection-api.md), [로컬 설정](../08-setup-guides/01-local-setup-complete.md).
 
+#### 테스트·명세서 확인용 KRX 사이트
+
+| 구분 | URL | 비고 |
+|------|-----|------|
+| **주식 서비스 목록** (이용신청·API 목록) | [KRX Data Marketplace - 주식](https://openapi.krx.co.kr/contents/OPP/USES/service/OPPUSES002_S1.cmd) | 서비스별 이용신청, API ID 확인 |
+| **API 인증키 발급** | KRX 사이트 → 마이페이지 → API 인증키 신청/발급내역 | 위 서비스 이용신청 후 동일 키로 호출 |
+
+- 위 주식 목록에서 **유가증권 일별매매정보**(또는 동일 API ID) 서비스를 이용신청한 뒤, 발급된 인증키를 `KRX_AUTH_KEY`에 설정하면 `KrxApiClient`에서 호출 가능.  
+- **상세 요청/응답 명세**: [12-krx-api-spec.md](../04-api/12-krx-api-spec.md) 및 [12-krx-api-spec/](../04-api/12-krx-api-spec/README.md) (원본 docx 기반 문서화).
+
 ---
 
 ## 2. 추후 확장 시 검토할 API

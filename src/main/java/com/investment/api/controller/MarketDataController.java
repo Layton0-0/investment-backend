@@ -55,18 +55,21 @@ public class MarketDataController {
             @ApiResponse(responseCode = "200", description = "조회 성공",
                     content = @Content(schema = @Schema(implementation = CurrentPriceDto.class))),
             @ApiResponse(responseCode = "400", description = "잘못된 요청"),
-            @ApiResponse(responseCode = "404", description = "종목을 찾을 수 없음"),
+            @ApiResponse(responseCode = "404", description = "종목을 찾을 수 없음(시세 API는 CANO 미사용; 토큰/한투 API 오류·폴백 시에도 404 반환)"),
             @ApiResponse(responseCode = "500", description = "서버 오류")
     })
     @GetMapping("/current-price/{symbol}")
     public ResponseEntity<CurrentPriceDto> getCurrentPrice(
             @Parameter(description = "종목 코드 (6자리 또는 종목명)", required = true, example = "005930")
             @PathVariable @NotBlank String symbol) {
+        log.info("[현재가] API 요청 수신 symbol={}", symbol);
         CurrentPriceDto currentPrice = realtimeMarketDataService.getCurrentPrice(symbol)
                 .block(Duration.ofSeconds(10));
         if (currentPrice == null) {
+            log.warn("[현재가] 404 반환: 서비스가 null 반환 symbol={} (한투 토큰/API 실패 또는 Circuit Breaker 폴백)", symbol);
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
+        log.info("[현재가] 200 반환 symbol={} price={} name={}", symbol, currentPrice.getCurrentPrice(), currentPrice.getName());
         return ResponseEntity.ok(currentPrice);
     }
     

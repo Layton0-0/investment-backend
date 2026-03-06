@@ -1,92 +1,144 @@
 package com.investment.marketdata.scheduler;
 
-import com.investment.common.security.LogMaskingUtil;
 import com.investment.domain.entity.BrokerType;
 import com.investment.domain.entity.UserApiKey;
 import com.investment.domain.repository.UserApiKeyRepository;
 import com.investment.marketdata.config.MarketDataProperties;
 import com.investment.marketdata.websocket.KoreaInvestmentWebSocketClient;
-import lombok.RequiredArgsConstructor;
+import com.investment.setting.service.SystemSettingService;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Component;
 
-import jakarta.annotation.PostConstruct;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
- * WebSocket 활성화 시 한국투자증권 실시간 연결·구독을 수행합니다.
- * 기동 후 일정 시간 뒤 1회 연결하고, 설정된 경우 장 시작 전 크론으로 재연결·구독을 실행합니다.
+ * DB 설정(marketData.websocketEnabled=true)일 때 장 시작 전(기본 08:50 KST) WebSocket 연결, 장 종료 후(15:35 KST) 연결 해제를 스케줄합니다.
+ * UserApiKeyRepository에서 KOREA_INVESTMENT 건마다 KoreaInvestmentWebSocketClient.connect/disconnect를 호출합니다.
  *
- * @see KoreaInvestmentWebSocketClient#connect(String, String)
- * @see KoreaInvestmentWebSocketClient#subscribeCcnlNotice(String, String)
+ * @see KoreaInvestmentWebSocketClient
  * @see MarketDataProperties.KoreaInvestmentProperties.WebSocketProperties
+ * @see SystemSettingService#getBoolean(String) marketData.websocketEnabled
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
-@ConditionalOnProperty(
-        name = "investment.market-data.korea-investment.websocket.enabled",
-        havingValue = "true")
 public class WebSocketConnectScheduler {
 
     private static final ZoneId ZONE_KST = ZoneId.of("Asia/Seoul");
-    /** 기동 후 연결 지연(초). 토큰 갱신 등 선행 작업 여유 */
-    private static final int CONNECT_DELAY_SECONDS = 5;
+    private static final long INITIAL_CONNECT_DELAY_SECONDS = 5L;
+    private static final String WEBSOCKET_ENABLED_KEY = "marketData.websocketEnabled";
 
-    private final UserApiKeyRepository userApiKeyRepository;
-    private final KoreaInvestmentWebSocketClient webSocketClient;
-    private final MarketDataProperties marketDataProperties;
     private final TaskScheduler taskScheduler;
+    private final UserApiKeyRepository userApiKeyRepository;
+    private final MarketDataProperties marketDataProperties;
+    private final ObjectProvider<KoreaInvestmentWebSocketClient> webSocketClientProvider;
+    private final SystemSettingService systemSettingService;
+
+    public WebSocketConnectScheduler(TaskScheduler taskScheduler,
+                                     UserApiKeyRepository userApiKeyRepository,
+                                     MarketDataProperties marketDataProperties,
+                                     ObjectProvider<KoreaInvestmentWebSocketClient> webSocketClientProvider,
+                                     SystemSettingService systemSettingService) {
+        this.taskScheduler = taskScheduler;
+        this.userApiKeyRepository = userApiKeyRepository;
+        this.marketDataProperties = marketDataProperties;
+        this.webSocketClientProvider = webSocketClientProvider;
+        this.systemSettingService = systemSettingService;
+    }
 
     @PostConstruct
-    public void init() {
-        taskScheduler.schedule(
-                this::runConnectForAllUsers,
-                java.time.Instant.now().plusSeconds(CONNECT_DELAY_SECONDS));
-        log.info("WebSocket 연결 스케줄: 기동 {}초 후 1회 실행 예약", CONNECT_DELAY_SECONDS);
+    public void schedule() {
+        try {
+            if (!Boolean.TRUE.equals(systemSettingService.getBoolean(WEBSOCKET_ENABLED_KEY))) {
+                log.debug("WebSocket 비활성(marketData.websocketEnabled=false), 스케줄 미등록");
+                return;
+            }
+        } catch (Exception e) {
+            log.warn("WebSocket 설정 조회 실패, 스케줄 미등록: {}", e.getMessage());
+            return;
+        }
+        var ws = marketDataProperties.getKoreaInvestment().getWebsocket();
+        String connectCron = ws.getConnectCron();
+        String disconnectCron = ws.getDisconnectCron();
 
-        String connectCron = marketDataProperties.getKoreaInvestment().getWebsocket().getConnectCron();
         if (connectCron != null && !connectCron.isBlank()) {
             try {
-                CronTrigger trigger = new CronTrigger(connectCron.trim(), ZONE_KST);
-                taskScheduler.schedule(this::runConnectForAllUsers, trigger);
-                log.info("WebSocket 장 시작 전 연결 스케줄: cron={}, zone=Asia/Seoul", connectCron.trim());
+                taskScheduler.schedule(this::runConnect, new CronTrigger(connectCron, ZONE_KST));
+                log.info("Scheduled WebSocket connect: cron={}, zone=Asia/Seoul", connectCron);
+                taskScheduler.schedule(this::runConnect, Instant.now().plusSeconds(INITIAL_CONNECT_DELAY_SECONDS));
+                log.info("Scheduled one-time WebSocket connect in {} seconds", INITIAL_CONNECT_DELAY_SECONDS);
             } catch (Exception e) {
-                log.warn("WebSocket connect cron 등록 실패: cron={}", connectCron, e);
+                log.warn("Failed to schedule WebSocket connect: cron={}", connectCron, e);
+            }
+        }
+
+        if (disconnectCron != null && !disconnectCron.isBlank()) {
+            try {
+                taskScheduler.schedule(this::runDisconnect, new CronTrigger(disconnectCron, ZONE_KST));
+                log.info("Scheduled WebSocket disconnect: cron={}, zone=Asia/Seoul", disconnectCron);
+            } catch (Exception e) {
+                log.warn("Failed to schedule WebSocket disconnect: cron={}", disconnectCron, e);
             }
         }
     }
 
     /**
-     * 한국투자증권 API 키가 있는 모든 (userId, serverType)에 대해 WebSocket 연결 및 체결통보 구독.
+     * KOREA_INVESTMENT 사용자·serverType별로 WebSocket 연결.
      */
-    public void runConnectForAllUsers() {
-        List<UserApiKey> all = userApiKeyRepository.findAll();
-        int connected = 0;
-        for (UserApiKey key : all) {
-            if (key.getBrokerType() != BrokerType.KOREA_INVESTMENT) {
-                continue;
-            }
-            String userId = key.getUserId();
-            String serverType = key.getServerType() != null ? key.getServerType() : "1";
+    public void runConnect() {
+        KoreaInvestmentWebSocketClient client = webSocketClientProvider.getIfAvailable();
+        if (client == null) {
+            log.debug("KoreaInvestmentWebSocketClient not available, skip WebSocket connect");
+            return;
+        }
+        List<UserApiKey> keys = koreaInvestmentKeys();
+        if (keys.isEmpty()) {
+            log.debug("No KOREA_INVESTMENT API keys, skip WebSocket connect");
+            return;
+        }
+        for (UserApiKey key : keys) {
             try {
-                webSocketClient.connect(userId, serverType);
-                webSocketClient.subscribeCcnlNotice(userId, serverType);
-                connected++;
-                log.debug("WebSocket 연결·체결통보 구독: userId={}, serverType={}",
-                        LogMaskingUtil.maskUserId(userId), serverType);
+                client.connect(key.getUserId(), key.getServerType());
             } catch (Exception e) {
-                log.warn("WebSocket 연결 실패: userId={}, serverType={}, error={}",
-                        LogMaskingUtil.maskUserId(userId), serverType, e.getMessage());
+                log.error("WebSocket connect failed: userId={}, serverType={}", key.getUserId(), key.getServerType(), e);
             }
         }
-        if (connected > 0) {
-            log.info("WebSocket 연결·구독 완료: {}건", connected);
+        log.info("WebSocket connect run finished: {} sessions", keys.size());
+    }
+
+    /**
+     * KOREA_INVESTMENT 사용자·serverType별로 WebSocket 연결 해제.
+     */
+    public void runDisconnect() {
+        KoreaInvestmentWebSocketClient client = webSocketClientProvider.getIfAvailable();
+        if (client == null) {
+            log.debug("KoreaInvestmentWebSocketClient not available, skip WebSocket disconnect");
+            return;
         }
+        List<UserApiKey> keys = koreaInvestmentKeys();
+        if (keys.isEmpty()) {
+            log.debug("No KOREA_INVESTMENT API keys, skip WebSocket disconnect");
+            return;
+        }
+        for (UserApiKey key : keys) {
+            try {
+                client.disconnect(key.getUserId(), key.getServerType());
+            } catch (Exception e) {
+                log.error("WebSocket disconnect failed: userId={}, serverType={}", key.getUserId(), key.getServerType(), e);
+            }
+        }
+        log.info("WebSocket disconnect run finished: {} sessions", keys.size());
+    }
+
+    private List<UserApiKey> koreaInvestmentKeys() {
+        return userApiKeyRepository.findAll().stream()
+                .filter(k -> k.getBrokerType() == BrokerType.KOREA_INVESTMENT)
+                .collect(Collectors.toList());
     }
 }

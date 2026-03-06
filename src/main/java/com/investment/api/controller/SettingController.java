@@ -3,6 +3,7 @@ package com.investment.api.controller;
 import com.investment.auth.service.AuthService;
 import com.investment.common.exception.DomainException;
 import com.investment.common.exception.ErrorCode;
+import com.investment.common.util.AccountNumberUtil;
 import com.investment.ops.service.AuditLogService;
 import com.investment.setting.dto.QuickStartRequestDto;
 import com.investment.setting.dto.QuickStartResponseDto;
@@ -73,6 +74,9 @@ public class SettingController {
     @Operation(summary = "거래 설정 조회", description = "계좌별 거래 설정. 없으면 204 No Content")
     public ResponseEntity<TradingSettingDto> getSetting(
             @PathVariable("accountNo") @NotBlank String accountNo) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         return tradingSettingService.getSettingOptional(accountNo)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.noContent().build());
@@ -107,6 +111,9 @@ public class SettingController {
             Authentication authentication,
             @PathVariable("accountNo") @NotBlank String accountNo,
             @RequestBody @Valid TradingSettingDto dto) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         TradingSettingDto setting = tradingSettingService.saveSetting(accountNo, dto);
         String userId = authentication != null ? authentication.getName() : null;
         if (userId != null) {

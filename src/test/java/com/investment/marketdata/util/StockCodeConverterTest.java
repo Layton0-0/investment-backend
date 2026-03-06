@@ -27,6 +27,14 @@ class StockCodeConverterTest {
     }
 
     @Test
+    @DisplayName("CODE-KR/CODE-US 형식은 6자리 코드만 추출 (프론트·검색 연동)")
+    void toStockCode_코드_시장_접미사() {
+        assertEquals("005380", StockCodeConverter.toStockCode("005380-KR"));
+        assertEquals("005930", StockCodeConverter.toStockCode("005930-US"));
+        assertEquals("000660", StockCodeConverter.toStockCode("000660-KR"));
+    }
+
+    @Test
     @DisplayName("종목명을 6자리 코드로 변환")
     void toStockCode_종목명_변환() {
         // given

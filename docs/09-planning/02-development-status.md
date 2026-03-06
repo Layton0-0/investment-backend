@@ -10,6 +10,28 @@
 
 ## 1. 완료 (Completed)
 
+### 자동투자 실계좌 준비 — E2E 검증 체크리스트 (2026-03-06)
+- [x] **자동투자 화면~백엔드 E2E 검증 설계·체크리스트**  
+  [plans/qa/자동투자_E2E_검증_체크리스트.md](../../plans/qa/자동투자_E2E_검증_체크리스트.md) 신규 작성. QA_시나리오_마스터·11-api-frontend-mapping 기준 로그인→설정→대시보드→자동투자 현황→파이프라인 요약→Ops 준비상태·시스템설정 흐름·API 매핑·데이터 부재 시 점검순서 반영. Shrimp Phase A-1 산출물.
+- [x] **Phase A-2: E2E 검증 실행·실패 항목 수정**  
+  백엔드 `gradlew test` 통과. API QA(run-api-qa.ps1) 62건 전부 PASS. 체크리스트 §4 검증 기록 갱신. API QA에 GET /api/v1/ops/auto-trading-readiness, GET /api/v1/system/settings 시나리오 추가. profit-loss 400(미지원) 허용 반영.
+- [x] **Phase B-1: 데이터 부재 원인 분석·생성 설계**  
+  [plans/qa/데이터_부재_점검_가이드.md](../../plans/qa/데이터_부재_점검_가이드.md) 신규. 시그널 0건 시 점검순서·원인(KRX_AUTH_KEY·한투 폴백·US env)·수동 트리거 순서(krx-daily→us-daily→factor-calculation)·13-manual §1.11 연계.
+- [x] **Phase B-2: 데이터 파이프라인 검증**  
+  [plans/qa/scripts/verify-data-pipeline.ps1](../../plans/qa/scripts/verify-data-pipeline.ps1) 검증 스크립트 추가. readiness → 트리거 3종 → readiness 재확인. 데이터_부재_점검_가이드 §4 B-2 검증 절차 반영.
+- [x] **Phase C-1/C-2: Docker local 재배포·로그 검증**  
+  [plans/qa/로컬_Docker_재배포_로그_검증_체크리스트.md](../../plans/qa/로컬_Docker_재배포_로그_검증_체크리스트.md) 신규. C-1: local-up.ps1·backend/nginx 로그·health. C-2: 로그인·API 호출·로그 에러 없음 확인.
+- [x] **Phase D-1/D-2: 배포 Docker 동일 세팅·SSH .env 기동**  
+  [plans/qa/배포_Docker_동일_세팅_가이드.md](../../plans/qa/배포_Docker_동일_세팅_가이드.md) 신규. D-1: 배포용 compose·env 템플릿 위치·노드별 필수 변수. D-2: SSH .env 세팅·deploy 스크립트·헬스 확인·13-manual 연계.
+
+### 한국투자증권 API 명세 문서화 추가 — Hashkey·실시간(웹소켓) 접속키 (2026-03-06)
+- [x] **docs/korea-investment-api 엑셀 2종 반영**  
+  `Hashkey.xlsx`, `실시간 (웹소켓) 접속키 발급[실시간-000].xlsx`를 Excel Reader MCP로 읽어 [09-korea-investment-api-guide.md](../04-api/09-korea-investment-api-guide.md)에 명세 보강. Hashkey API: POST /uapi/hashkey, Request/Response 스펙·예시·구현(KoreaInvestmentHashkeyUtil) 정리. 실시간(웹소켓) 접속키 발급: POST /oauth2/Approval, grant_type·appkey·secretkey 요청, approval_key 응답, 유효기간·사용처 설명. docs/korea-investment-api/README.md 추가(원본 엑셀 목록·문서화 위치). 가이드 참고 자료에 원본 명세(엑셀) 경로 명시.
+
+### KRX 기준일자(basDt) 로그 형식 명세 통일 (2026-03-06)
+- [x] **KRX 관련 로그에서 basDt를 yyyyMMdd(하이픈 없음)로 통일**  
+  명세(12-krx-api-spec: basDd=yyyyMMdd)에 맞춰 KrxCollectionService·KoreaInvestmentKrxFallbackSupplier·KrxApiClient의 로그 메시지에서 basDt 표기를 yyyyMMdd로 변경. 트리거 API 파라미터는 REST 관례상 yyyy-MM-dd 유지. 10-data-collection-api.md에 기준일자 형식 설명 추가.
+
 ### 한국투자증권 전체 API 명세서 문서화 (2026-03-05)
 - [x] **한국투자증권 전체 API 명세서(10) 작성**  
   [10-korea-investment-api-spec.md](../04-api/10-korea-investment-api-spec.md) 신규 작성. 원본 xlsx 목록(13개)·code 폴더(9개)·구현된 API 요약 표(path·TR_ID·HTTP)·신규 API 추가 절차·참조 링크. Excel Reader MCP로 xlsx 시트 확인. MCP 규칙(MCP.mdc)에 명세서 참조 문구 추가. 01-api-overview §9.2에 09 가이드·10 명세서 링크 반영.
@@ -39,6 +61,8 @@
   전체 QA 파이프라인 점검(1ed426fe)에 6개 시나리오 점검 태스크 의존성 추가. QA-Backend/API/Python/PythonTests/E2E/Security 시나리오 점검 완료(03-test-execution 실패 시 안내, QA_시나리오_점검_요약 §3~§7 반영). 전체 QA 파이프라인 점검: qa-automation-flow.mdc에 Python 서비스 QA·Python 단위 테스트 단계 명시. QA-Security run(npm audit --audit-level=high)·QA-Report(리포트 경로·실패 루프) 완료. Pending 0.
 - [x] **한국투자증권 토큰 1분 1회 제한 대응 (재사용/캐시)**  
   KoreaInvestmentTokenService.getAccessToken: 1분 쿨다운에 걸렸을 때 예외를 던지기 전에 DB에서 기존 유효 토큰을 조회해 반환하도록 수정(동시 발급 블록 내·복호화 실패 후 재발급 블록 내 두 곳). 기존 토큰이 유효하면 재사용, 없거나 복호화 실패 시에만 "접근토큰 발급은 1분당 1회만 가능합니다" 예외 발생. Shrimp task 16961bf7.
+- [x] **토큰 발급 1분 제한 재발 방지 (락 해제 전 커밋)**  
+  동시 요청(exec-4/exec-5) 시 선행 스레드가 발급·저장한 내용이 getAccessToken과 같은 트랜잭션이라 락 해제 후에 커밋되어, 후행 스레드가 "기존 유효 토큰" 조회 시 방금 저장한 행을 못 보는 문제 수정. getAccessToken 내 재발급 경로를 `issueTokenForUser` 직접 호출에서 `self.issueTokenForUserInNewTransaction(userApiKey)` 호출로 변경(REQUIRES_NEW로 발급·커밋 후 락 해제). self 주입은 setter + @Lazy. (2026-03-06)
 - [x] **토큰 발급 실패 시 Transaction rollback 방지**  
   AccountApiRunner에 inquireAssetsInNewTx, inquirePeriodProfitLossInNewTx, inquireBuyableAmountInNewTx, inquireSellableQuantityInNewTx, inquireOrderHistoryInNewTx 추가(REQUIRES_NEW). AccountService의 getAccountAssets, getPeriodProfitLoss, getBuyableAmount, getSellableQuantity, getOrderHistory를 accountClient 직접 호출에서 accountApiRunner 호출로 변경. 토큰/API 실패 시 새 트랜잭션만 rollback되어 UnexpectedRollbackException 방지. Shrimp task dbc97044.
 - [x] **한국투자증권 API 요청 로그 민감정보 마스킹**  
@@ -582,3 +606,7 @@
 | 1.60 | 2026-03-05 | 완료: 한국투자증권 전체 API 명세서(10) 작성 — 10-korea-investment-api-spec.md 신규(xlsx 13개·code 9개·구현 API 표·신규 API 절차). MCP.mdc 명세서 참조 문구. 01-api-overview §9.2 한투 09·10 링크. |
 | 1.61 | 2026-03-05 | 완료: 한국투자증권 API 명세 검증 — Constants·AccountClient·OrderClient·MarketDataClient·rank-api path·TR_ID 10-korea-investment-api-spec·09 가이드와 대조, 불일치 없음. 09-domestic-stock-order-account.md 기간 Path inquire-period-profit-loss 수정. Shrimp 한국투자증권 API 검증·WebSocket 연동 계획 Task 1·2 완료. |
 | 1.62 | 2026-03-05 | 완료: 계좌 실현손익·기간별매매손익 API·WebSocket 캐시 연동 — 주식잔고조회_실현손익/기간별매매손익현황조회 API·DTO·Controller·테스트. WebSocketPriceCacheListener·스케줄러 subscribeQuote 연동·current-price-cache-ttl 주석. 테스트 수정(AccountServiceTest·IntradayBreakoutSchedulerTest·TradingWindowServiceTest). §1 완료·§5 이력 추가. Shrimp 20117cf7·8f862189·a63b9466·bd72d1b7·0c97164c·2cd6766d. |
+| 1.64 | 2026-03-06 | 자동투자 실계좌 준비: plans/qa/자동투자_E2E_검증_체크리스트.md 신규(E2E 흐름·API 매핑·데이터 부재 점검). Shrimp Phase A-1 완료, A-2~D-2 pending. |
+| 1.65 | 2026-03-06 | 완료: Phase A-2 E2E 검증 실행 — gradlew test·run-api-qa.ps1 62건 전부 PASS. API QA에 ops/auto-trading-readiness·system/settings 시나리오 추가, profit-loss 400(미지원) 허용. 체크리스트 §4 검증 기록 갱신. |
+| 1.66 | 2026-03-06 | 완료: Shrimp B-1~D-2 의존성 순 진행 — B-1 데이터_부재_점검_가이드, B-2 verify-data-pipeline.ps1, C-1/C-2 로컬_Docker_재배포_로그_검증_체크리스트, D-1/D-2 배포_Docker_동일_세팅_가이드. 자동투자_E2E_검증_체크리스트 §3·§5 링크 보강. |
+| 1.63 | 2026-03-06 | 완료: KRX Open API 명세서 문서화 — krx-api-docs 내 Spec.docx·Spec (1)~(4).docx 5건을 12-krx-api-spec.md·12-krx-api-spec/(01~05) 상세 md로 정리. 유가증권/ETF 일별매매, KOSDAQ/KRX/KOSPI 시리즈 일별시세 Request/Response·샘플 수록. 01-api-overview §9.2·04-krx-api-required·10-data-collection-api에 12-krx-api-spec 링크 반영. |

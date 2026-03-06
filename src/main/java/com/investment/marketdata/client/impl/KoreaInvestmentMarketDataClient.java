@@ -1,6 +1,9 @@
 package com.investment.marketdata.client.impl;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.investment.common.security.EncryptionUtil;
+import com.investment.common.security.LogMaskingUtil;
 import com.investment.domain.entity.UserApiKey;
 import com.investment.domain.repository.UserApiKeyRepository;
 import com.investment.marketdata.client.IndicatorResponse;
@@ -8,6 +11,7 @@ import com.investment.marketdata.client.MarketDataClient;
 import com.investment.marketdata.config.MarketDataProperties;
 import com.investment.marketdata.service.KoreaInvestmentTokenService;
 import com.investment.marketdata.util.KoreaInvestmentHashkeyUtil;
+import com.investment.common.logging.KoreaInvestmentApiLogging;
 import com.investment.marketdata.util.KoreaInvestmentRequestBuilder;
 import com.investment.marketdata.util.StockCodeConverter;
 import io.github.resilience4j.ratelimiter.RateLimiter;
@@ -19,6 +23,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
@@ -52,6 +57,7 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
 
     private final MarketDataProperties properties;
     private final WebClient webClient;
+    private final ObjectMapper objectMapper;
     private final RateLimiterRegistry rateLimiterRegistry;
     private final KoreaInvestmentTokenService tokenService;
     private final UserApiKeyRepository userApiKeyRepository;
@@ -197,19 +203,22 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
      * @return 현재가 정보
      */
     public Mono<com.investment.marketdata.dto.CurrentPriceDto> getCurrentPrice(String symbol) {
-        log.debug("한국투자증권 현재가 조회: symbol={}", symbol);
-
-        // 현재 사용자 ID 가져오기
-        String userId = getCurrentUserId();
-
-        // 종목 코드 변환 (6자리 종목코드)
+        String userId;
+        try {
+            userId = getCurrentUserId();
+        } catch (Exception e) {
+            log.warn("[주식현재가] 사용자 인증 없음: symbol={}, error={}", symbol, e.getMessage());
+            return Mono.error(e);
+        }
         String stockCode = StockCodeConverter.toStockCode(symbol);
+        log.info("[주식현재가] 요청 시작 symbol={} stockCode={} userId={}", symbol, stockCode, userId != null ? LogMaskingUtil.maskUserId(userId) : "null");
 
         // Access Token 확인 및 갱신 (동일 요청 내 캐시로 N+1 제거)
         return ensureAccessToken(userId)
                 .flatMap(tokenInfo -> getCurrentPriceFromApi(stockCode, tokenInfo)
                         .onErrorResume(error -> {
-                            log.error("한국투자증권 현재가 조회 실패: symbol={}", symbol, error);
+                            log.warn("[주식현재가] 조회 실패 symbol={} stockCode={} error={}", symbol, stockCode, error.getMessage());
+                            log.debug("[주식현재가] 조회 실패 상세", error);
                             return Mono.error(new RuntimeException("현재가 조회 실패: " + error.getMessage(), error));
                         }))
                 .timeout(Duration.ofMillis(properties.getTimeout()))
@@ -229,24 +238,26 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
         String userId = tokenInfo.get("userId");
 
         String baseUrl = getBaseUrl(serverType);
-        String trId = getDomesticQuotationTrId("01010100", serverType); // 주식현재가 조회
+        // 주식현재가 시세(v1_국내주식-008): 공식 샘플(open-trading-api inquire_price)은 실전/모의 모두 FHKST01010100 사용. FHPST 사용 시 404 발생 가능.
+        String trId = getCurrentPriceTrId(serverType);
 
-        // 조회 파라미터 (GET query parameter로 전달) — 명세: FID_COND_MRKT_DIV_CODE(J), FID_INPUT_ISCD(종목코드 6자리)
+        // 조회 파라미터 (GET query). 시세 전용 API이므로 CANO 불필요(한투 명세: FID_COND_MRKT_DIV_CODE, FID_INPUT_ISCD 만 사용).
         Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createMarketDataRequestBody(
                 Map.of(
                         "FID_COND_MRKT_DIV_CODE", "J", // J: 주식, ETF, ETN
-                        "FID_INPUT_ISCD", stockCode // 종목코드
+                        "FID_INPUT_ISCD", stockCode    // 종목코드 6자리 (예: 005930)
                 ));
         URI uri = buildUriWithQueryParams(baseUrl, "/uapi/domestic-stock/v1/quotations/inquire-price", queryParams);
+        log.info("[주식현재가] 한투 API 요청 fullUrl={} queryParams={} trId={} serverType={}", uri.toString(), queryParams, trId, serverType);
 
-        // 요청 헤더: authorization, appkey, appsecret, tr_id, content-type, custtype, hashkey (명세 준수)
+        // 요청 헤더: authorization, appkey, appsecret, tr_id, content-type, custtype (GET 시세는 hashkey 미필요·문서·직접호출 검증)
         HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
                 accessToken, appKey, appSecret, trId);
         headers.set("custtype", "P"); // 고객유형: P(개인)
-        Map<String, Object> paramsForHash = new HashMap<>(queryParams);
-        headers.set("hashkey", hashkeyUtil.generateHashkey(paramsForHash, appSecret));
+        // 주식현재가(inquire-price)는 GET 시세 전용. 한투 문서·직접호출 시 hashkey 없이 정상 응답. hashkey 부여 시 400 등으로 실패할 수 있어 제외.
 
-        log.debug("한국투자증권 현재가 조회 API 호출: stockCode={}, serverType={}, trId={}", stockCode, serverType, trId);
+        String path = "/uapi/domestic-stock/v1/quotations/inquire-price";
+        KoreaInvestmentApiLogging.logRequest("주식현재가", path, trId, queryParams);
 
         // Rate Limiter 적용
         RateLimiter rateLimiter = getApiRateLimiter(serverType);
@@ -258,15 +269,37 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
                 .flatMap(ignored -> webClient.get()
                         .uri(uri)
                         .headers(h -> h.addAll(headers))
-                        .retrieve()
-                        .bodyToMono(Map.class)
+                        .exchangeToMono((ClientResponse response) -> {
+                            int status = response.statusCode().value();
+                            return response.bodyToMono(String.class)
+                                    .defaultIfEmpty("")
+                                    .doOnNext(body -> log.warn("[주식현재가] 한투 API 원시응답 status={} bodyPreview={}", status,
+                                            (body != null && !body.isEmpty()) ? body.substring(0, Math.min(1000, body.length())) : "(empty)"))
+                                    .flatMap(body -> {
+                                        if (status >= 400) {
+                                            log.warn("[주식현재가] 한투 API 실패 status={} body={}", status, body != null ? body : "(null)");
+                                            return Mono.error(new RuntimeException("한투 API " + status + ": " + (body != null ? body : "")));
+                                        }
+                                        if (body == null || body.trim().isEmpty()) {
+                                            return Mono.error(new RuntimeException("한투 API 200 but empty body"));
+                                        }
+                                        try {
+                                            @SuppressWarnings("unchecked")
+                                            Map<String, Object> map = objectMapper.readValue(body, new TypeReference<Map<String, Object>>() {});
+                                            return Mono.just(map);
+                                        } catch (Exception e) {
+                                            log.warn("[주식현재가] 한투 API 본문 파싱 실패 bodyPreview={}", body.length() > 200 ? body.substring(0, 200) : body, e);
+                                            return Mono.error(new RuntimeException("한투 API 본문 파싱 실패: " + e.getMessage(), e));
+                                        }
+                                    });
+                        })
                         .timeout(Duration.ofMillis(properties.getTimeout()))
                         .retryWhen(Retry.backoff(2, Duration.ofSeconds(1))
                                 .filter(throwable -> {
                                     if (throwable instanceof org.springframework.web.reactive.function.client.WebClientResponseException) {
                                         org.springframework.web.reactive.function.client.WebClientResponseException ex = (org.springframework.web.reactive.function.client.WebClientResponseException) throwable;
                                         if (ex.getStatusCode().value() == 401) {
-                                            log.warn("한국투자증권 현재가 401, 토큰 캐시 무효화 후 재시도: userId={}", userId);
+                                            log.warn("한국투자증권 현재가 401, 토큰 캐시 무효화 후 재시도: userId={}", LogMaskingUtil.maskUserId(userId));
                                             invalidateTokenCache(userId);
                                             return true;
                                         }
@@ -283,28 +316,35 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
                             if (rtCd == null || !"0".equals(rtCd)) {
                                 String msg1 = (String) responseMap.get("msg1");
                                 String msgCd = (String) responseMap.get("msg_cd");
-                                log.warn("한국투자증권 현재가 API 오류: stockCode={}, rt_cd={}, msg_cd={}, msg1={}",
-                                        stockCode, rtCd, msgCd, msg1);
+                                log.warn("[주식현재가] 한투 API 비정상 rt_cd={} msg_cd={} msg1={} stockCode={}", rtCd, msgCd, msg1, stockCode);
+                                KoreaInvestmentApiLogging.logResponseError("주식현재가", 200, rtCd, msgCd, msg1, null);
                                 throw new RuntimeException(
                                         "한국투자증권 API 오류: rt_cd=" + rtCd + ", msg_cd=" + msgCd + ", msg1=" + msg1);
                             }
+
+                            KoreaInvestmentApiLogging.logResponseSuccessFromMap("주식현재가", 200, responseMap);
 
                             // output 파싱
                             @SuppressWarnings("unchecked")
                             Map<String, Object> output = (Map<String, Object>) responseMap.get("output");
                             if (output == null) {
-                                log.warn("한국투자증권 현재가 API 응답에 output 없음: stockCode={}", stockCode);
+                                log.warn("[주식현재가] 응답 output 없음 stockCode={} responseKeys={}", stockCode, responseMap.keySet());
+                                KoreaInvestmentApiLogging.logResponseError("주식현재가", 200, rtCd, null, "output 없음", null);
                                 throw new RuntimeException("한국투자증권 API 응답에 output이 없습니다");
                             }
+                            String stckPrpr = (String) output.getOrDefault("stck_prpr", "");
+                            String htsKorIsnm = (String) output.getOrDefault("hts_kor_isnm", "");
+                            log.info("[주식현재가] 한투 API 응답 성공 stockCode={} stck_prpr={} hts_kor_isnm={}", stockCode, stckPrpr, htsKorIsnm);
 
                             return parseCurrentPriceResponse(output, stockCode);
                         })
+                        .doOnSuccess(v -> log.info("[주식현재가] Mono 완료 stockCode={} hasValue={} (false면 빈 완료→null 반환)", stockCode, v != null))
                         .doOnError(e -> {
-                            if (e instanceof org.springframework.web.reactive.function.client.WebClientResponseException ex) {
-                                log.warn("한국투자증권 현재가 HTTP 오류: stockCode={}, status={}, body={}",
-                                        stockCode, ex.getStatusCode(), ex.getResponseBodyAsString());
+                            log.warn("[주식현재가] Mono 에러 stockCode={} exception={} message={}", stockCode, e.getClass().getSimpleName(), e.getMessage());
+                            if (!(e instanceof org.springframework.web.reactive.function.client.WebClientResponseException ex)) {
+                                KoreaInvestmentApiLogging.logFailure("주식현재가", e);
                             } else {
-                                log.warn("한국투자증권 현재가 조회 실패: stockCode={}, error={}", stockCode, e.getMessage());
+                                KoreaInvestmentApiLogging.logResponseError("주식현재가", ex.getStatusCode().value(), ex.getResponseBodyAsString());
                             }
                         }));
     }
@@ -396,10 +436,12 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
         return Mono.fromCallable(() -> {
             List<UserApiKey> userApiKeys = userApiKeyRepository.findByUserId(userId);
             if (userApiKeys.isEmpty()) {
+                log.warn("[주식현재가] 사용자 API 키 없음 userId={} (DB TB_USER_API_KEYS에 해당 사용자 키 등록 필요)", LogMaskingUtil.maskUserId(userId));
                 throw new IllegalStateException("사용자 API 키를 찾을 수 없습니다: userId=" + userId);
             }
             UserApiKey userApiKey = userApiKeys.get(0);
             String serverType = userApiKey.getServerType() != null ? userApiKey.getServerType() : "1";
+            log.info("[주식현재가] 토큰 조회/캐시 사용 userId={} serverType={}", LogMaskingUtil.maskUserId(userId), serverType);
 
             // DB에서 토큰 조회(없거나 만료 시 토큰 서비스 내부에서만 1회 발급). 직접 발급 호출 없음.
             String accessToken = tokenService.getAccessToken(userId, serverType);
@@ -470,13 +512,13 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
         Map<String, Object> chartParamsForHash = new HashMap<>(queryParams);
         headers.set("hashkey", hashkeyUtil.generateHashkey(chartParamsForHash, appSecret));
 
-        log.debug("한국투자증권 차트 데이터 조회: stockCode={}, interval={}", stockCode, interval);
+        String path = "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice";
+        KoreaInvestmentApiLogging.logRequest("주식일봉차트", path, trId, queryParams);
 
         // Rate Limiter 적용 (실전투자: 1초당 20건, 모의투자: 1초당 2건)
         RateLimiter rateLimiter = getApiRateLimiter(serverType);
 
         return Mono.fromCallable(() -> {
-            // Rate Limiter가 허용할 때까지 대기
             rateLimiter.acquirePermission();
             return null;
         })
@@ -490,9 +532,8 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
                                 .filter(throwable -> {
                                     if (throwable instanceof org.springframework.web.reactive.function.client.WebClientResponseException) {
                                         org.springframework.web.reactive.function.client.WebClientResponseException ex = (org.springframework.web.reactive.function.client.WebClientResponseException) throwable;
-                                        // 401 에러는 토큰 갱신 후 재시도
                                         if (ex.getStatusCode().value() == 401) {
-                                            log.warn("401 에러 발생, 토큰 캐시 무효화 후 재시도: userId={}", userId);
+                                            log.warn("401 에러 발생, 토큰 캐시 무효화 후 재시도: userId={}", LogMaskingUtil.maskUserId(userId));
                                             invalidateTokenCache(userId);
                                             return true;
                                         }
@@ -504,29 +545,27 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
                             @SuppressWarnings("unchecked")
                             Map<String, Object> responseMap = (Map<String, Object>) response;
 
-                            // rt_cd 체크 (한국투자증권 API 응답 코드)
                             String rtCd = (String) responseMap.get("rt_cd");
                             if (rtCd == null || !"0".equals(rtCd)) {
                                 String msg1 = (String) responseMap.get("msg1");
                                 String msgCd = (String) responseMap.get("msg_cd");
-                                String errorMsg = String.format("API 호출 실패: rt_cd=%s, msg_cd=%s, msg1=%s",
-                                        rtCd, msgCd, msg1);
-                                log.error("한국투자증권 API 에러 응답: {}", errorMsg);
-                                throw new IllegalStateException(errorMsg);
+                                KoreaInvestmentApiLogging.logResponseError("주식일봉차트", 200, rtCd, msgCd, msg1, null);
+                                throw new IllegalStateException(
+                                        String.format("API 호출 실패: rt_cd=%s, msg_cd=%s, msg1=%s", rtCd, msgCd, msg1));
                             }
 
-                            // output2 직접 접근 (배열로 반환됨)
+                            KoreaInvestmentApiLogging.logResponseSuccessFromMap("주식일봉차트", 200, responseMap);
+
                             @SuppressWarnings("unchecked")
-                            List<Map<String, Object>> chartData = (List<Map<String, Object>>) responseMap
-                                    .get("output2");
+                            List<Map<String, Object>> chartData = (List<Map<String, Object>>) responseMap.get("output2");
                             if (chartData == null) {
-                                log.warn("차트 데이터가 null입니다. 응답: {}", responseMap);
+                                KoreaInvestmentApiLogging.logResponseError("주식일봉차트", 200, rtCd, null, "output2 없음", null);
                                 return List.<Map<String, Object>>of();
                             }
                             return chartData;
                         }))
                 .onErrorMap(error -> {
-                    log.error("한국투자증권 차트 데이터 조회 실패: stockCode={}", stockCode, error);
+                    KoreaInvestmentApiLogging.logFailure("주식일봉차트", error);
                     return new IllegalStateException("차트 데이터 조회 실패", error);
                 });
     }
@@ -801,6 +840,15 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
             return BASE_URL_VIRTUAL; // 모의투자
         }
         return BASE_URL_REAL; // 실거래
+    }
+
+    /**
+     * 주식현재가 시세 API TR_ID (inquire-price).
+     * 공식 샘플(open-trading-api domestic_stock_functions.py inquire_price)은 실전/모의 모두 FHKST01010100 사용.
+     * 실전에 FHPST01010100을 쓰면 한투 API가 404를 반환할 수 있으므로 여기서는 FHKST01010100 통일.
+     */
+    private String getCurrentPriceTrId(String serverType) {
+        return "FHKST01010100";
     }
 
     /**

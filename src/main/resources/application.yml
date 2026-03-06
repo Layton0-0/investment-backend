@@ -112,7 +112,7 @@ investment:
       max-allocation-pct: ${INVESTMENT_PORTFOLIO_INV_VOL_MAX_PCT:0.2}  # 종목당 최대 할당 비율 (20%)
   # 배치 Job 실패 시 Discord 알림 (webhook 설정 시에만 동작)
   batch:
-    failure-alert-enabled: ${BATCH_FAILURE_ALERT_ENABLED:false}
+    failure-alert-enabled: ${BATCH_FAILURE_ALERT_ENABLED:true}
   # 마찰 비용 (한국투자증권 KIS 실전 수수료·세금·슬리피지). 백테스트 PnL 반영용.
   fees:
     korea:
@@ -139,8 +139,8 @@ investment:
       base-url: ${KRX_BASE_URL:https://data-dbg.krx.co.kr}
       schedule-cron: ${KRX_SCHEDULE_CRON:0 0 16 * * *}
       # KRX 실패 시 한투 API 일봉 보조 소스 (기본 false)
-      korea-investment-fallback-enabled: ${KRX_KOREA_INVESTMENT_FALLBACK_ENABLED:false}
-      korea-investment-fallback-user-id: ${KRX_KOREA_INVESTMENT_FALLBACK_USER_ID:}
+      korea-investment-fallback-enabled: ${KRX_KOREA_INVESTMENT_FALLBACK_ENABLED:true}
+      korea-investment-fallback-user-id: ${KRX_KOREA_INVESTMENT_FALLBACK_USER_ID:yoon}
       fallback-symbols-source: ${KRX_FALLBACK_SYMBOLS_SOURCE:PREVIOUS_DAY}
       fallback-symbols: ${KRX_FALLBACK_SYMBOLS:}
     us:
@@ -156,7 +156,7 @@ investment:
       retry-max: ${US_COLLECTOR_RETRY_MAX:2}
       retry-initial-ms: ${US_COLLECTOR_RETRY_INITIAL_MS:1000}
       # US 일별 수집 실패·0건 시 Discord 알림 (webhook 설정 시에만 동작)
-      failure-alert-enabled: ${US_COLLECTOR_FAILURE_ALERT_ENABLED:false}
+      failure-alert-enabled: ${US_COLLECTOR_FAILURE_ALERT_ENABLED:true}
     # 내부 수집 API (Yahoo·DART·SEC 등 Python 수집기 → Spring 전달 시 사용). 키 미설정 시 내부 API 비활성화.
     internal-api-key: ${DATA_COLLECTION_INTERNAL_KEY:}
   # 뉴스·공시 시그널 연동 (DART 키워드·8-K). 포지션 사이징 시 시그널 공시 종목 우선 정렬
@@ -196,7 +196,7 @@ investment:
     pb-value-max: ${FACTOR_PB_VALUE_MAX:0.9}
     position-risk-pct: ${FACTOR_POSITION_RISK_PCT:0.01}  # 1회 매매당 총자산 1% 리스크
     # 초기 운용: 켈리 비활성화 시 고정 비율만 사용 (기본 true=Half-Kelly 사용, false=고정 비율만)
-    kelly-enabled: ${FACTOR_KELLY_ENABLED:false}
+    kelly-enabled: ${FACTOR_KELLY_ENABLED:true}
     # 켈리 비활성 시 1종목당 자산 대비 최대 비율 (%)
     kelly-fixed-allocation-pct: ${FACTOR_KELLY_FIXED_ALLOCATION_PCT:2}
     kelly-p: ${FACTOR_KELLY_P:0.6}  # Half-Kelly 승률 (기본값 60%). 백테스트 winRate 연동 시 전략별로 덮어씀
@@ -213,10 +213,10 @@ investment:
     # 일일 최대 신규 매수 종목 수 (0이면 미적용). 파이프라인에서 권장 목록 자르기
     max-new-positions-per-day: ${FACTOR_MAX_NEW_POSITIONS_PER_DAY:10}
     # 리스크 기반 포지션 사이징: 종목당 비중 상한 (기본 비활성). true 시 risk-based-cap-max-pct 적용
-    risk-based-cap-enabled: ${FACTOR_RISK_BASED_CAP_ENABLED:false}
+    risk-based-cap-enabled: ${FACTOR_RISK_BASED_CAP_ENABLED:true}
     risk-based-cap-max-pct: ${FACTOR_RISK_BASED_CAP_MAX_PCT:0.05}  # 종목당 최대 비중 (5%). 0.05 = 5%
     # 포트폴리오 상관관계 패널티: 고상관 종목 쌍 시 비중 스케일 다운 (기본 비활성)
-    correlation-penalty-enabled: ${FACTOR_CORRELATION_PENALTY_ENABLED:false}
+    correlation-penalty-enabled: ${FACTOR_CORRELATION_PENALTY_ENABLED:true}
     correlation-threshold: ${FACTOR_CORRELATION_THRESHOLD:0.7}      # 상관계수 이 값 이상이면 패널티
     correlation-penalty-scale: ${FACTOR_CORRELATION_PENALTY_SCALE:0.8}  # 적용 시 비중 배율 (0~1)
     # 단일 섹터 비중 상한 (P2-3). 0.30 = 30%, 초과 시 해당 섹터 비중 비례 축소. TB_SYMBOL_SECTOR 활용
@@ -226,7 +226,7 @@ investment:
     correlation-lookback-days: ${INVESTMENT_ANALYSIS_CORRELATION_LOOKBACK_DAYS:60}
   # 리스크 게이트·일일 손실 한도 (전문 투자자 흐름 P0)
   risk:
-    regime-gate-enabled: ${INVESTMENT_RISK_REGIME_GATE_ENABLED:false}
+    regime-gate-enabled: ${INVESTMENT_RISK_REGIME_GATE_ENABLED:true}
     regime-detection-enabled: ${INVESTMENT_RISK_REGIME_DETECTION_ENABLED:true}
     vix-threshold: ${INVESTMENT_RISK_VIX_THRESHOLD:30}
     reduce-size-on-high-vol-pct: ${INVESTMENT_RISK_REDUCE_SIZE_ON_HIGH_VOL_PCT:50}
@@ -251,7 +251,7 @@ investment:
     # 회복 모드 시 신규 매수 권장 금액 스케일 (0~1). 0.5 = 50%
     drawdown-recovery-scale: ${INVESTMENT_RISK_DRAWDOWN_RECOVERY_SCALE:0.5}
     # 단기(5일) 열화 시 자본 절반 제한. 데이터 연동 전에는 비활성(1.0 배율)
-    capital-drawdown-constraint-enabled: ${INVESTMENT_RISK_CAPITAL_DRAWDOWN_CONSTRAINT_ENABLED:false}
+    capital-drawdown-constraint-enabled: ${INVESTMENT_RISK_CAPITAL_DRAWDOWN_CONSTRAINT_ENABLED:true}
     # Monte Carlo 시뮬레이션 설정 (P0: 헤지펀드급 리스크 분석)
     montecarlo:
       scenarios: ${INVESTMENT_RISK_MC_SCENARIOS:10000}              # 시뮬레이션 시나리오 수
@@ -270,15 +270,15 @@ investment:
     default-capital: ${INVESTMENT_GOVERNANCE_DEFAULT_CAPITAL:100000000}
     alert-only: ${INVESTMENT_GOVERNANCE_ALERT_ONLY:true}
     # 2차: 열화 시 (market, strategyType)별 halt 등록. true이고 alert-only=false일 때만 halt 등록 (기본 false)
-    auto-halt-on-degradation: ${INVESTMENT_GOVERNANCE_AUTO_HALT_ON_DEGRADATION:false}
+    auto-halt-on-degradation: ${INVESTMENT_GOVERNANCE_AUTO_HALT_ON_DEGRADATION:true}
     # 팩터 열화 모니터: 최근 N개월 5일 수익률 Sharpe 미달 시 Discord 알림 (factor-decay-check Job)
     factor-decay-lookback-months: ${INVESTMENT_GOVERNANCE_FACTOR_DECAY_LOOKBACK_MONTHS:3}
     factor-decay-sharpe-min: ${INVESTMENT_GOVERNANCE_FACTOR_DECAY_SHARPE_MIN:0.5}
   # 4단계 파이프라인 실행. auto-execute=false 시 주문 생성 없이 dry-run만. 기본 false(문서 §6.2).
   pipeline:
-    auto-execute: ${PIPELINE_AUTO_EXECUTE:false}
+    auto-execute: ${PIPELINE_AUTO_EXECUTE:true}
     # true 시 PipelineOrderExecutor(알고리즘 실행) 사용. 기본은 단일 주문(OrderService)
-    use-algo-execution: ${PIPELINE_USE_ALGO_EXECUTION:false}
+    use-algo-execution: ${PIPELINE_USE_ALGO_EXECUTION:true}
     # 실전 계좌(serverType=0) 자동 실행 허용. false면 모의계좌만 실제 주문 실행.
     allow-real-execution: ${PIPELINE_ALLOW_REAL_EXECUTION:false}
     execution-schedule-cron: ${PIPELINE_EXECUTION_SCHEDULE_CRON:0 10 9 * * *}  # 한국장 유리 구간 (09:10 KST)
@@ -309,7 +309,7 @@ investment:
     prior-low-stop-kr-enabled: ${PIPELINE_PRIOR_LOW_STOP_KR_ENABLED:true}  # 한국(KR) 전저점 이탈 손절 사용 여부
     rsi-exit-threshold: ${PIPELINE_RSI_EXIT_THRESHOLD:70}  # 한국(KR) RSI≥N 익절 임계값 (0~100)
     medium-term-stop-loss-pct: ${PIPELINE_MEDIUM_TERM_STOP_LOSS_PCT:10}  # 중기 개별 손절 하락률 (%)
-    register-position-on-execution: ${PIPELINE_REGISTER_POSITION_ON_EXECUTION:false}  # true면 체결 확인 후 포지션 등록, false면 주문 성공 시 즉시 등록
+    register-position-on-execution: ${PIPELINE_REGISTER_POSITION_ON_EXECUTION:true}  # true면 체결 확인 후 포지션 등록, false면 주문 성공 시 즉시 등록
     # 미체결 N분 경과 시 Discord 긴급 알림 (Webhook URL, env PIPELINE_ALERT_DISCORD_WEBHOOK_URL 권장). 채널 미설정 시 이 URL로 폴백.
     alert-discord-webhook-url: ${PIPELINE_ALERT_DISCORD_WEBHOOK_URL:}
     # 긴급 알림 시 앱 내 주문/계좌 화면 base URL (env 권장)
@@ -331,7 +331,7 @@ investment:
       system-webhook: ${INVESTMENT_ALERT_DISCORD_SYSTEM_WEBHOOK:}
   # 장중 변동성 돌파 (P2). 09:00~10:00 구간에서 돌파 종목 1회 매수
   intraday:
-    breakout-enabled: ${INVESTMENT_INTRADAY_BREAKOUT_ENABLED:false}
+    breakout-enabled: ${INVESTMENT_INTRADAY_BREAKOUT_ENABLED:true}
     breakout-schedule-cron: ${INVESTMENT_INTRADAY_BREAKOUT_CRON:0 10,40 9 * * MON-FRI}
     breakout-max-positions: ${INVESTMENT_INTRADAY_BREAKOUT_MAX_POSITIONS:3}
     breakout-position-pct: ${INVESTMENT_INTRADAY_BREAKOUT_POSITION_PCT:0.005}
@@ -370,7 +370,7 @@ investment:
       risk-free-symbol: ${ROBO_RISK_FREE_SYMBOL:BIL}
       rebalance-execution-price: ${ROBO_REBALANCE_EXECUTION_PRICE:CLOSE}
       # 실제 ETF 주문 실행 여부. false면 목표 비중 로깅만
-      execute-orders: ${ROBO_EXECUTE_ORDERS:false}
+      execute-orders: ${ROBO_EXECUTE_ORDERS:true}
       min-order-amount-usd: ${ROBO_MIN_ORDER_AMOUNT_USD:50}
   # 트레이딩 포트폴리오 (일별 추천 목록). 파이프라인 시그널 기반 생성 시 사용하는 기본 자본(원).
   trading-portfolio:
@@ -430,9 +430,11 @@ investment:
         volume-rank-tr-id: ${KOREA_INVESTMENT_VOLUME_RANK_TR_ID:FHKST01710000}
         investor-daily-path: ${KOREA_INVESTMENT_INVESTOR_DAILY_PATH:/uapi/domestic-stock/v1/quotations/inquire-investor-daily-by-market}
         investor-daily-tr-id: ${KOREA_INVESTMENT_INVESTOR_DAILY_TR_ID:FHKST03010100}
-      # WebSocket 실시간 호가·체결통보 (enabled=true 시 실제 구현체 사용)
+      # WebSocket 실시간 호가·체결통보 (enabled=true 시 실제 구현체 사용). base URL은 ops 호스트 사용(openapi/openapivts는 REST 전용)
       websocket:
-        enabled: ${KOREA_INVESTMENT_WEBSOCKET_ENABLED:false}
+        enabled: ${KOREA_INVESTMENT_WEBSOCKET_ENABLED:true}
+        base-url-real: ${KOREA_INVESTMENT_WEBSOCKET_BASE_URL_REAL:ws://ops.koreainvestment.com:21000}
+        base-url-virtual: ${KOREA_INVESTMENT_WEBSOCKET_BASE_URL_VIRTUAL:ws://ops.koreainvestment.com:31000}
         path: ${KOREA_INVESTMENT_WEBSOCKET_PATH:/tryitout}
         quote-tr-id: ${KOREA_INVESTMENT_WEBSOCKET_QUOTE_TR_ID:H0GASP0}
         ccnl-notice-tr-id: ${KOREA_INVESTMENT_WEBSOCKET_CCNL_NOTICE_TR_ID:H0GAMT0}
@@ -440,8 +442,10 @@ investment:
         subscription-interval-ms: ${KOREA_INVESTMENT_WEBSOCKET_SUBSCRIPTION_INTERVAL_MS:200}
         approval-key: ${KOREA_INVESTMENT_WEBSOCKET_APPROVAL_KEY:}
         approval-key-fetch-enabled: ${KOREA_INVESTMENT_WEBSOCKET_APPROVAL_KEY_FETCH_ENABLED:false}
-        # 장 시작 전 연결·구독 크론 (비우면 기동 후 1회만 연결). 예: 0 0 8 * * MON-FRI (08:00 KST 평일)
-        connect-cron: ${KOREA_INVESTMENT_WEBSOCKET_CONNECT_CRON:}
+        # 장 시작 전 연결·구독 크론 (비우면 기동 후 1회만 연결). 기본 08:50 KST 평일
+        connect-cron: ${KOREA_INVESTMENT_WEBSOCKET_CONNECT_CRON:0 50 8 * * MON-FRI}
+        # 장 종료 후 연결 해제 크론. 기본 15:35 KST 평일
+        disconnect-cron: ${KOREA_INVESTMENT_WEBSOCKET_DISCONNECT_CRON:0 35 15 * * MON-FRI}
   trading:
     max-investment-amount: ${MAX_INVESTMENT_AMOUNT:1000000}
     min-investment-amount: ${MIN_INVESTMENT_AMOUNT:10000}

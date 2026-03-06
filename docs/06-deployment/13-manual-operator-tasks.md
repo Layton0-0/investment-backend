@@ -168,6 +168,7 @@
   2. **준비 상태 확인**: `GET /api/v1/ops/auto-trading-readiness`로 전일(basDt) TB_DAILY_STOCK·TB_SIGNAL_SCORE row 수 확인. `dailyStockRowCount`·`signalScoreRowCount`가 0이면 선행 데이터·팩터 미실행.
   3. **수동 트리거**: 위에서 일봉·시그널이 비어 있으면 순서대로 `POST /api/v1/trigger/krx-daily`, `POST /api/v1/trigger/us-daily`, `POST /api/v1/trigger/factor-calculation` 실행 후 다시 readiness·pipeline/summary 확인. KRX 수집 실패 시 [01-local-setup-complete.md §US/KRX 수집](../08-setup-guides/01-local-setup-complete.md)의 KRX_AUTH_KEY·한투 폴백 env 확인.
 - **수동 검증**: `POST /api/v1/trigger/auto-buy?dryRun=true`로 1회 실행 후 Backend 로그에서 대상 계좌·스킵 사유 메시지 확인. 실제 주문 전에는 dryRun=true 권장.
+- **WebSocket(실시간 단타) 사용 시**: `websocket.enabled=true`이면 **장 개장 전(08:50 KST)** WebSocketConnectScheduler가 KOREA_INVESTMENT 계정별로 연결·구독을 수행한다. 자동매매 가동 전에 Backend 로그에서 "WebSocket connect run finished", "subscribeQuote" 등 연결·구독 완료 로그가 있는지 확인. 실시간 시세 미수신 시 [14-multi-account-realtime-streaming.md §3.4.6](../02-architecture/14-multi-account-realtime-streaming.md) 활성화 절차·env(connect-cron, approval-key 등) 점검.
 - **참조**: [12-auto-investment-strategy.md §6.2](../02-architecture/12-auto-investment-strategy.md), 자동매매 선행 조건 종합 계획(plans).
 
 ---

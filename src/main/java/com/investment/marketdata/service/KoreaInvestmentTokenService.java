@@ -9,6 +9,8 @@ import com.investment.domain.repository.KoreaInvestmentTokenRepository;
 import com.investment.domain.repository.UserApiKeyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +51,14 @@ public class KoreaInvestmentTokenService {
 
     /** 사용자 단위 발급 락. 동시에 모의/실 두 타입 발급이 겹치지 않도록 직렬화 */
     private final ConcurrentHashMap<String, Object> issuanceLockByUserId = new ConcurrentHashMap<>();
+
+    /** getAccessToken 내부에서 REQUIRES_NEW 발급 호출용 (락 해제 전 커밋 보장) */
+    private KoreaInvestmentTokenService self;
+
+    @Autowired
+    public void setSelf(@Lazy KoreaInvestmentTokenService self) {
+        this.self = self;
+    }
 
     private static String issuanceKey(String userId, String serverType) {
         return userId + "|" + (serverType != null ? serverType : "1");
@@ -430,10 +440,8 @@ public class KoreaInvestmentTokenService {
                                 .findByUserIdAndBrokerTypeAndServerType(userId, BrokerType.KOREA_INVESTMENT, st)
                                 .orElseThrow(() -> new RuntimeException("한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId + ", serverType=" + st));
 
-                        issueTokenForUser(userApiKey);
-
-                        token = tokenRepository.findByUserIdAndServerType(userId, st)
-                                .orElseThrow(() -> new RuntimeException("토큰 발급 후 조회 실패: userId=" + userId + ", serverType=" + st));
+                        // REQUIRES_NEW로 발급·커밋 후 락 해제 → 동시 요청이 "기존 유효 토큰" 조회 시 방금 저장한 행을 볼 수 있음
+                        return self.issueTokenForUserInNewTransaction(userApiKey);
                     }
                 }
             }
@@ -470,13 +478,8 @@ public class KoreaInvestmentTokenService {
                     throw new RuntimeException(String.format(
                             "접근토큰 발급은 1분당 1회만 가능합니다(앱키별). 약 %d초 후 다시 시도해 주세요.", Math.max(1, waitSec)));
                 }
-                issueTokenForUser(userApiKey);
+                return self.issueTokenForUserInNewTransaction(userApiKey);
             }
-
-            token = tokenRepository.findByUserIdAndServerType(userId, st)
-                    .orElseThrow(() -> new RuntimeException("토큰 발급 후 조회 실패: userId=" + userId));
-
-            return encryptionUtil.decrypt(token.getAccessTokenEncrypted());
         }
     }
 

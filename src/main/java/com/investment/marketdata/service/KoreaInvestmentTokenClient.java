@@ -1,5 +1,6 @@
 package com.investment.marketdata.service;
 
+import com.investment.common.logging.KoreaInvestmentApiLogging;
 import com.investment.common.security.LogMaskingUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -60,6 +61,7 @@ public class KoreaInvestmentTokenClient {
                 .build()
                 .toUri();
 
+        KoreaInvestmentApiLogging.logRequest("접근토큰발급", "/oauth2/tokenP", null, java.util.List.of("grant_type", "appkey", "appsecret"));
         LogMaskingUtil.logWithDebugActualAtDebug(log,
                 "한국투자증권 Access Token 발급 요청: baseUrl={}, appKey={}",
                 new Object[] { baseUrl, LogMaskingUtil.maskApiKey(appKey) },
@@ -96,10 +98,7 @@ public class KoreaInvestmentTokenClient {
                                     // JSON 응답인 경우 파싱 시도
                                     String errorMessage = parseErrorMessage(errorBody);
 
-                                    log.error(
-                                            "한국투자증권 Access Token 발급 실패: status={}, body={}, message={}, baseUrl={}, appKey={}",
-                                            response.statusCode(), errorBody, errorMessage, baseUrl,
-                                            LogMaskingUtil.maskApiKey(appKey));
+                                    KoreaInvestmentApiLogging.logResponseError("접근토큰발급", response.statusCode().value(), errorBody);
                                     if (log.isDebugEnabled()) {
                                         log.debug("  [DEBUG] appKey(actual)={}", appKey);
                                     }

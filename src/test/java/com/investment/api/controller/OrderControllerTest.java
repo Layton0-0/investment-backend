@@ -56,7 +56,7 @@ class OrderControllerTest {
         void 주문_생성_성공() throws Exception {
                 // given
                 OrderRequestDto request = OrderRequestDto.builder()
-                                .accountNo("1234567890")
+                                .accountNo("12345678-01")
                                 .symbol("005930") // 삼성전자
                                 .orderType(OrderRequestDto.OrderType.BUY)
                                 .quantity(10)
@@ -66,7 +66,7 @@ class OrderControllerTest {
                 String orderId = java.util.UUID.randomUUID().toString();
                 OrderResponseDto response = OrderResponseDto.builder()
                                 .orderId(orderId)
-                                .accountNo("1234567890")
+                                .accountNo("12345678-01")
                                 .symbol("005930")
                                 .orderType(OrderRequestDto.OrderType.BUY)
                                 .quantity(10)
@@ -113,7 +113,7 @@ class OrderControllerTest {
                 String orderId = java.util.UUID.randomUUID().toString();
                 OrderResponseDto response = OrderResponseDto.builder()
                                 .orderId(orderId)
-                                .accountNo("1234567890")
+                                .accountNo("12345678-01")
                                 .symbol("005930") // 삼성전자
                                 .orderType(OrderRequestDto.OrderType.BUY)
                                 .quantity(10)
@@ -122,11 +122,11 @@ class OrderControllerTest {
                                 .orderTime(LocalDateTime.now())
                                 .build();
 
-                when(orderService.getOrder(orderId, "1234567890")).thenReturn(response);
+                when(orderService.getOrder(orderId, "12345678-01")).thenReturn(response);
 
                 // when & then
                 mockMvc.perform(get("/api/v1/orders/" + orderId)
-                                .param("accountNo", "1234567890"))
+                                .param("accountNo", "12345678-01"))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.orderId").value(orderId))
                                 .andExpect(jsonPath("$.status").value("EXECUTED"));
@@ -134,21 +134,21 @@ class OrderControllerTest {
 
         @Test
         void 미체결_전체_취소_성공() throws Exception {
-                when(orderService.cancelAllPendingOrders("1234567890")).thenReturn(2);
+                when(orderService.cancelAllPendingOrders("12345678-01")).thenReturn(2);
 
                 mockMvc.perform(post("/api/v1/orders/cancel-all-pending")
-                                .param("accountNo", "1234567890"))
+                                .param("accountNo", "12345678-01"))
                                 .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.accountNo").value("1234567890"))
+                                .andExpect(jsonPath("$.accountNo").value("12345678-01"))
                                 .andExpect(jsonPath("$.cancelledCount").value(2));
         }
 
         @Test
         void 미체결_전체_취소_건수_0() throws Exception {
-                when(orderService.cancelAllPendingOrders("1234567890")).thenReturn(0);
+                when(orderService.cancelAllPendingOrders("12345678-01")).thenReturn(0);
 
                 mockMvc.perform(post("/api/v1/orders/cancel-all-pending")
-                                .param("accountNo", "1234567890"))
+                                .param("accountNo", "12345678-01"))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.cancelledCount").value(0));
         }

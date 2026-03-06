@@ -1,5 +1,6 @@
 package com.investment.order.client;
 
+import com.investment.common.logging.KoreaInvestmentApiLogging;
 import com.investment.common.security.EncryptionUtil;
 import com.investment.common.security.LogMaskingUtil;
 import com.investment.domain.entity.BrokerType;
@@ -227,6 +228,7 @@ public class KoreaInvestmentOrderClient {
         headers.set("hashkey", hashkey);
 
         logApiRequest("주식 매수 주문", uri, headers, requestBody);
+        KoreaInvestmentApiLogging.logRequest("국내주식매수", "/uapi/domestic-stock/v1/trading/order-cash", trId, requestBody.keySet());
 
         // Rate Limiter 적용
         RateLimiter rateLimiter = getApiRateLimiter(serverType);
@@ -254,19 +256,21 @@ public class KoreaInvestmentOrderClient {
                             @SuppressWarnings("unchecked")
                             Map<String, Object> responseMap = (Map<String, Object>) response;
 
-                            // rt_cd 체크
                             String rtCd = (String) responseMap.get("rt_cd");
+                            String msgCd = (String) responseMap.get("msg_cd");
+                            String msg1 = (String) responseMap.get("msg1");
                             if (rtCd == null || !"0".equals(rtCd)) {
-                                String msg1 = (String) responseMap.get("msg1");
-                                String msgCd = (String) responseMap.get("msg_cd");
+                                KoreaInvestmentApiLogging.logResponseError("국내주식매수", 200, rtCd, msgCd, msg1, null);
                                 throw new RuntimeException(
                                         "한국투자증권 주문 API 오류: rt_cd=" + rtCd + ", msg_cd=" + msgCd + ", msg1=" + msg1);
                             }
 
-                            // output 파싱
+                            KoreaInvestmentApiLogging.logResponseSuccessFromMap("국내주식매수", 200, responseMap);
+
                             @SuppressWarnings("unchecked")
                             Map<String, Object> output = (Map<String, Object>) responseMap.get("output");
                             if (output == null) {
+                                KoreaInvestmentApiLogging.logResponseError("국내주식매수", 200, rtCd, msgCd, "output 없음", null);
                                 throw new RuntimeException("한국투자증권 API 응답에 output이 없습니다");
                             }
 
@@ -282,8 +286,7 @@ public class KoreaInvestmentOrderClient {
                                     .build();
                         })
                         .onErrorMap(throwable -> {
-                            log.error("주식 매수 주문 실패: userId={}, accountNo={}, symbol={}",
-                                    userId, accountNo, symbol, throwable);
+                            KoreaInvestmentApiLogging.logFailure("국내주식매수", throwable);
                             return new RuntimeException("주문 실행 실패: " + throwable.getMessage(), throwable);
                         }));
     }
@@ -353,6 +356,7 @@ public class KoreaInvestmentOrderClient {
         headers.set("hashkey", hashkey);
 
         logApiRequest("주식 매도 주문", uri, headers, requestBody);
+        KoreaInvestmentApiLogging.logRequest("국내주식매도", "/uapi/domestic-stock/v1/trading/order-cash", trId, requestBody.keySet());
 
         // Rate Limiter 적용
         RateLimiter rateLimiter = getApiRateLimiter(serverType);
@@ -380,19 +384,21 @@ public class KoreaInvestmentOrderClient {
                             @SuppressWarnings("unchecked")
                             Map<String, Object> responseMap = (Map<String, Object>) response;
 
-                            // rt_cd 체크
                             String rtCd = (String) responseMap.get("rt_cd");
+                            String msgCd = (String) responseMap.get("msg_cd");
+                            String msg1 = (String) responseMap.get("msg1");
                             if (rtCd == null || !"0".equals(rtCd)) {
-                                String msg1 = (String) responseMap.get("msg1");
-                                String msgCd = (String) responseMap.get("msg_cd");
+                                KoreaInvestmentApiLogging.logResponseError("국내주식매도", 200, rtCd, msgCd, msg1, null);
                                 throw new RuntimeException(
                                         "한국투자증권 주문 API 오류: rt_cd=" + rtCd + ", msg_cd=" + msgCd + ", msg1=" + msg1);
                             }
 
-                            // output 파싱
+                            KoreaInvestmentApiLogging.logResponseSuccessFromMap("국내주식매도", 200, responseMap);
+
                             @SuppressWarnings("unchecked")
                             Map<String, Object> output = (Map<String, Object>) responseMap.get("output");
                             if (output == null) {
+                                KoreaInvestmentApiLogging.logResponseError("국내주식매도", 200, rtCd, msgCd, "output 없음", null);
                                 throw new RuntimeException("한국투자증권 API 응답에 output이 없습니다");
                             }
 
@@ -408,9 +414,7 @@ public class KoreaInvestmentOrderClient {
                                     .build();
                         })
                         .onErrorMap(throwable -> {
-                            log.error("주식 매도 주문 실패: userId={}, accountNo={}, symbol={}",
-                                    LogMaskingUtil.maskUserId(userId), LogMaskingUtil.maskAccountNo(accountNo), symbol,
-                                    throwable);
+                            KoreaInvestmentApiLogging.logFailure("국내주식매도", throwable);
                             return new RuntimeException("주문 실행 실패: " + throwable.getMessage(), throwable);
                         }));
     }
@@ -480,6 +484,7 @@ public class KoreaInvestmentOrderClient {
         headers.set("hashkey", hashkey);
 
         logApiRequest("해외주식 매수 주문", uri, headers, requestBody);
+        KoreaInvestmentApiLogging.logRequest("해외주식매수", "/uapi/overseas-stock/v1/trading/order", trId, requestBody.keySet());
         RateLimiter rateLimiter = getApiRateLimiter(serverType);
 
         return Mono.fromCallable(() -> {
@@ -502,11 +507,9 @@ public class KoreaInvestmentOrderClient {
                                     return false;
                                 }))
                         .map(response -> parseOverseasOrderResponse((Map<String, Object>) response, symbol, quantity,
-                                price, "BUY"))
+                                price, "BUY", "해외주식매수"))
                         .onErrorMap(throwable -> {
-                            log.error("해외주식 매수 주문 실패: userId={}, accountNo={}, symbol={}",
-                                    LogMaskingUtil.maskUserId(userId), LogMaskingUtil.maskAccountNo(accountNo), symbol,
-                                    throwable);
+                            KoreaInvestmentApiLogging.logFailure("해외주식매수", throwable);
                             return new RuntimeException("주문 실행 실패: " + throwable.getMessage(), throwable);
                         }));
     }
@@ -561,6 +564,7 @@ public class KoreaInvestmentOrderClient {
         headers.set("hashkey", hashkey);
 
         logApiRequest("해외주식 매도 주문", uri, headers, requestBody);
+        KoreaInvestmentApiLogging.logRequest("해외주식매도", "/uapi/overseas-stock/v1/trading/order", trId, requestBody.keySet());
         RateLimiter rateLimiter = getApiRateLimiter(serverType);
 
         return Mono.fromCallable(() -> {
@@ -583,27 +587,28 @@ public class KoreaInvestmentOrderClient {
                                     return false;
                                 }))
                         .map(response -> parseOverseasOrderResponse((Map<String, Object>) response, symbol, quantity,
-                                price, "SELL"))
+                                price, "SELL", "해외주식매도"))
                         .onErrorMap(throwable -> {
-                            log.error("해외주식 매도 주문 실패: userId={}, accountNo={}, symbol={}",
-                                    LogMaskingUtil.maskUserId(userId), LogMaskingUtil.maskAccountNo(accountNo), symbol,
-                                    throwable);
+                            KoreaInvestmentApiLogging.logFailure("해외주식매도", throwable);
                             return new RuntimeException("주문 실행 실패: " + throwable.getMessage(), throwable);
                         }));
     }
 
     @SuppressWarnings("unchecked")
     private OrderResponse parseOverseasOrderResponse(Map<String, Object> responseMap, String symbol,
-            Integer quantity, BigDecimal price, String orderType) {
+            Integer quantity, BigDecimal price, String orderType, String apiName) {
         String rtCd = (String) responseMap.get("rt_cd");
+        String msgCd = (String) responseMap.get("msg_cd");
+        String msg1 = (String) responseMap.get("msg1");
         if (rtCd == null || !"0".equals(rtCd)) {
-            String msg1 = (String) responseMap.get("msg1");
-            String msgCd = (String) responseMap.get("msg_cd");
+            KoreaInvestmentApiLogging.logResponseError(apiName, 200, rtCd, msgCd, msg1, null);
             throw new RuntimeException(
                     "한국투자증권 해외주문 API 오류: rt_cd=" + rtCd + ", msg_cd=" + msgCd + ", msg1=" + msg1);
         }
+        KoreaInvestmentApiLogging.logResponseSuccessFromMap(apiName, 200, responseMap);
         Map<String, Object> output = (Map<String, Object>) responseMap.get("output");
         if (output == null) {
+            KoreaInvestmentApiLogging.logResponseError(apiName, 200, rtCd, msgCd, "output 없음", null);
             throw new RuntimeException("한국투자증권 해외주문 API 응답에 output이 없습니다");
         }
         String orderNo = (String) output.get("ODNO");

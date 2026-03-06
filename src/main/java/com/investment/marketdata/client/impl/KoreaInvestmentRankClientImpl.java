@@ -1,5 +1,6 @@
 package com.investment.marketdata.client.impl;
 
+import com.investment.common.logging.KoreaInvestmentApiLogging;
 import com.investment.common.security.EncryptionUtil;
 import com.investment.domain.entity.BrokerType;
 import com.investment.domain.entity.UserApiKey;
@@ -68,7 +69,7 @@ public class KoreaInvestmentRankClientImpl implements KoreaInvestmentRankClient 
                 KoreaInvestmentRequestBuilder.createMarketDataRequestBody(Map.of(
                         "FID_COND_MRKT_DIV_CODE", marketDiv != null ? marketDiv : "J",
                         "FID_DATA_CNT", String.valueOf(Math.min(limit, 100))
-                )))
+                )), "거래량순위")
                 .map(this::parseVolumeRankOutput)
                 .blockOptional(Duration.ofMillis(properties.getTimeout() + 5000))
                 .orElse(List.of());
@@ -91,14 +92,14 @@ public class KoreaInvestmentRankClientImpl implements KoreaInvestmentRankClient 
         ));
 
         return getTokenAndCall(userId, serverType, rank.getInvestorDailyPath(), rank.getInvestorDailyTrId(),
-                KoreaInvestmentRequestBuilder.createMarketDataRequestBody(params))
+                KoreaInvestmentRequestBuilder.createMarketDataRequestBody(params), "투자자매매동향")
                 .map(this::parseInvestorDailyOutput)
                 .blockOptional(Duration.ofMillis(properties.getTimeout() + 5000))
                 .orElse(List.of());
     }
 
     private Mono<Map<String, Object>> getTokenAndCall(String userId, String serverType, String path, String trId,
-                                                      Map<String, String> queryParams) {
+                                                      Map<String, String> queryParams, String apiName) {
         String st = serverType != null ? serverType : "1";
         Optional<UserApiKey> keyOpt = userApiKeyRepository.findByUserIdAndBrokerTypeAndServerType(
                 userId, BrokerType.KOREA_INVESTMENT, st);
@@ -116,6 +117,8 @@ public class KoreaInvestmentRankClientImpl implements KoreaInvestmentRankClient 
             queryParams.forEach(builder::queryParam);
         }
         URI uri = builder.build().toUri();
+
+        KoreaInvestmentApiLogging.logRequest(apiName, path, trId, queryParams != null ? queryParams.keySet() : null);
 
         HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(accessToken, appKey, appSecret, trId);
         RateLimiter rateLimiter = "0".equals(st)
@@ -137,11 +140,16 @@ public class KoreaInvestmentRankClientImpl implements KoreaInvestmentRankClient 
                     @SuppressWarnings("unchecked")
                     Map<String, Object> map = (Map<String, Object>) m;
                     String rtCd = (String) map.get("rt_cd");
+                    String msgCd = (String) map.get("msg_cd");
+                    String msg1 = (String) map.get("msg1");
                     if (rtCd == null || !"0".equals(rtCd)) {
-                        throw new RuntimeException("한국투자증권 API 오류: rt_cd=" + rtCd + ", msg1=" + map.get("msg1"));
+                        KoreaInvestmentApiLogging.logResponseError(apiName, 200, rtCd, msgCd, msg1, null);
+                        throw new RuntimeException("한국투자증권 API 오류: rt_cd=" + rtCd + ", msg1=" + msg1);
                     }
+                    KoreaInvestmentApiLogging.logResponseSuccessFromMap(apiName, 200, map);
                     return map;
-                }));
+                })
+                .doOnError(e -> KoreaInvestmentApiLogging.logFailure(apiName, e)));
     }
 
     @SuppressWarnings("unchecked")

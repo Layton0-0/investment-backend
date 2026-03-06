@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
 
@@ -20,6 +21,7 @@ import java.math.BigDecimal;
 public class OrderRequestDto {
 
     @NotBlank(message = "계좌번호는 필수입니다")
+    @Pattern(regexp = "^\\d{8}-\\d{2}$", message = "계좌번호 형식은 8자리-2자리(예: 12345678-01)여야 합니다")
     private String accountNo;
 
     @NotBlank(message = "종목코드는 필수입니다")

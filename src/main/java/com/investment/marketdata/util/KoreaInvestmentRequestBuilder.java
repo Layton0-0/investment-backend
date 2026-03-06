@@ -29,13 +29,13 @@ public final class KoreaInvestmentRequestBuilder {
     }
 
     /**
-     * 공통 헤더 생성
-     * 
-     * 모든 한국투자증권 API 호출 시 필수 헤더를 생성합니다.
-     * 
-     * @param accessToken OAuth 2.0 Access Token
+     * 공통 헤더 생성 (한국투자증권 REST API 공식 명세 준수).
+     * <p>헤더명: authorization(Bearer 토큰), appkey, appsecret, tr_id.
+     * 토큰 발급 API Body의 secretkey와 구분 — REST 호출 시 헤더는 {@code appsecret} 사용.</p>
+     *
+     * @param accessToken OAuth 2.0 Access Token (Bearer 뒤에 붙일 값)
      * @param appKey      App Key (Required='Y')
-     * @param appSecret   App Secret (Required='Y')
+     * @param appSecret   App Secret (Required='Y', 헤더명 appsecret)
      * @param trId        거래 ID (API별로 고유한 값)
      * @return 공통 헤더가 설정된 HttpHeaders
      */
@@ -74,16 +74,13 @@ public final class KoreaInvestmentRequestBuilder {
             Map<String, String> additionalParams) {
         Map<String, String> requestBody = new HashMap<>();
 
-        // 계좌번호 파싱 (CANO와 ACNT_PRDT_CD로 분리)
-        if (accountNo != null && !accountNo.trim().isEmpty()) {
-            AccountNumberUtil.AccountNumberParts parts = AccountNumberUtil.parseAccountNumber(accountNo);
-            requestBody.put("CANO", parts.getCano());
-            requestBody.put("ACNT_PRDT_CD", parts.getAcntPrdtCd());
-        } else {
-            // 빈 계좌번호인 경우 (호환성을 위해 빈 문자열로 설정)
-            requestBody.put("CANO", "");
-            requestBody.put("ACNT_PRDT_CD", "01"); // 기본값: 주식
+        // 계좌번호 파싱 (CANO와 ACNT_PRDT_CD로 분리). 빈 값이면 한투 API가 OPSQ2001(INPUT_FIELD_NAME CANO) 반환하므로 반드시 유효한 값 필요.
+        if (accountNo == null || accountNo.trim().isEmpty()) {
+            throw new IllegalArgumentException("계좌번호가 비어있습니다. CANO/ACNT_PRDT_CD 필수입니다.");
         }
+        AccountNumberUtil.AccountNumberParts parts = AccountNumberUtil.parseAccountNumber(accountNo);
+        requestBody.put("CANO", parts.getCano());
+        requestBody.put("ACNT_PRDT_CD", parts.getAcntPrdtCd());
 
         // 추가/수정 파라미터 병합 (additionalParams가 null이 아닌 경우)
         if (additionalParams != null) {

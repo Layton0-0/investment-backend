@@ -2,6 +2,7 @@ package com.investment.api.controller;
 
 import com.investment.common.exception.DomainException;
 import com.investment.common.exception.ErrorCode;
+import com.investment.common.util.AccountNumberUtil;
 import com.investment.order.dto.OrderRequestDto;
 import com.investment.order.dto.OrderResponseDto;
 import com.investment.order.service.OrderService;
@@ -68,21 +69,30 @@ public class OrderController {
     public ResponseEntity<OrderResponseDto> getOrder(
             @PathVariable String orderId,
             @RequestParam @NotBlank String accountNo) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         OrderResponseDto response = orderService.getOrder(orderId, accountNo);
         return ResponseEntity.ok(response);
     }
-    
+
     @GetMapping
     public ResponseEntity<List<OrderResponseDto>> getOrders(
             @RequestParam @NotBlank String accountNo) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         List<OrderResponseDto> orders = orderService.getOrders(accountNo);
         return ResponseEntity.ok(orders);
     }
-    
+
     @DeleteMapping("/{orderId}")
     public ResponseEntity<Void> cancelOrder(
             @PathVariable String orderId,
             @RequestParam @NotBlank String accountNo) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         orderService.cancelOrder(orderId, accountNo);
         return ResponseEntity.noContent().build();
     }
@@ -91,6 +101,9 @@ public class OrderController {
     @PostMapping("/cancel-all-pending")
     public ResponseEntity<CancelAllPendingResult> cancelAllPending(
             @RequestParam @NotBlank String accountNo) {
+        if (!AccountNumberUtil.validateAccountNumberFormat(accountNo)) {
+            return ResponseEntity.badRequest().build();
+        }
         int count = orderService.cancelAllPendingOrders(accountNo);
         return ResponseEntity.ok(new CancelAllPendingResult(accountNo, count));
     }
