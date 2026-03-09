@@ -105,9 +105,7 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         String userId = authentication.getName();
-        LogMaskingUtil.logWithDebugActual(log, "마이페이지 조회: userId={}",
-                new Object[] { LogMaskingUtil.maskUserId(userId) },
-                "userId(actual)={}", userId);
+        log.info("마이페이지 조회: userId={}", LogMaskingUtil.maskUserId(userId));
         MyPageResponseDto response = authService.getMyPage(userId);
         return ResponseEntity.ok(response);
     }
@@ -125,9 +123,7 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         String userId = authentication.getName();
-        LogMaskingUtil.logWithDebugActual(log, "마이페이지 수정 요청: userId={}",
-                new Object[] { LogMaskingUtil.maskUserId(userId) },
-                "userId(actual)={}", userId);
+        log.info("마이페이지 수정 요청: userId={}", LogMaskingUtil.maskUserId(userId));
         MyPageResponseDto response = authService.updateMyPage(userId, request);
         return ResponseEntity.ok(response);
     }

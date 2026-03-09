@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.investment.common.security.EncryptionUtil;
 import com.investment.common.security.LogMaskingUtil;
+import com.investment.domain.entity.BrokerType;
 import com.investment.domain.entity.UserApiKey;
 import com.investment.domain.repository.UserApiKeyRepository;
 import com.investment.marketdata.client.IndicatorResponse;
@@ -37,6 +38,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -241,20 +243,22 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
         // 주식현재가 시세(v1_국내주식-008): 공식 샘플(open-trading-api inquire_price)은 실전/모의 모두 FHKST01010100 사용. FHPST 사용 시 404 발생 가능.
         String trId = getCurrentPriceTrId(serverType);
 
-        // 조회 파라미터 (GET query). 시세 전용 API이므로 CANO 불필요(한투 명세: FID_COND_MRKT_DIV_CODE, FID_INPUT_ISCD 만 사용).
+        // 조회 파라미터 (GET query). Postman과 동일 순서: FID_COND_MRKT_DIV_CODE → FID_INPUT_ISCD
         Map<String, String> queryParams = KoreaInvestmentRequestBuilder.createMarketDataRequestBody(
-                Map.of(
+                new java.util.LinkedHashMap<>(java.util.Map.of(
                         "FID_COND_MRKT_DIV_CODE", "J", // J: 주식, ETF, ETN
                         "FID_INPUT_ISCD", stockCode    // 종목코드 6자리 (예: 005930)
-                ));
+                )));
         URI uri = buildUriWithQueryParams(baseUrl, "/uapi/domestic-stock/v1/quotations/inquire-price", queryParams);
         log.info("[주식현재가] 한투 API 요청 fullUrl={} queryParams={} trId={} serverType={}", uri.toString(), queryParams, trId, serverType);
 
-        // 요청 헤더: authorization, appkey, appsecret, tr_id, content-type, custtype (GET 시세는 hashkey 미필요·문서·직접호출 검증)
+        // 요청 헤더: Postman과 동일하게 Authorization, appkey, appsecret, tr_id, Content-Type, custtype
         HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
                 accessToken, appKey, appSecret, trId);
         headers.set("custtype", "P"); // 고객유형: P(개인)
-        // 주식현재가(inquire-price)는 GET 시세 전용. 한투 문서·직접호출 시 hashkey 없이 정상 응답. hashkey 부여 시 400 등으로 실패할 수 있어 제외.
+        if (log.isDebugEnabled()) {
+            log.debug("[주식현재가] 전송 헤더: Authorization(Bearer), appkey, appsecret, tr_id={}, Content-Type=application/json, custtype=P", trId);
+        }
 
         String path = "/uapi/domestic-stock/v1/quotations/inquire-price";
         KoreaInvestmentApiLogging.logRequest("주식현재가", path, trId, queryParams);
@@ -434,12 +438,17 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
         }
 
         return Mono.fromCallable(() -> {
-            List<UserApiKey> userApiKeys = userApiKeyRepository.findByUserId(userId);
-            if (userApiKeys.isEmpty()) {
-                log.warn("[주식현재가] 사용자 API 키 없음 userId={} (DB TB_USER_API_KEYS에 해당 사용자 키 등록 필요)", LogMaskingUtil.maskUserId(userId));
-                throw new IllegalStateException("사용자 API 키를 찾을 수 없습니다: userId=" + userId);
+            // 모의/실 혼용 방지: 한국투자증권 키만 사용. 모의(1) 우선, 없으면 실거래(0).
+            Optional<UserApiKey> keyOpt = userApiKeyRepository
+                    .findByUserIdAndBrokerTypeAndServerType(userId, BrokerType.KOREA_INVESTMENT, "1");
+            if (keyOpt.isEmpty()) {
+                keyOpt = userApiKeyRepository
+                        .findByUserIdAndBrokerTypeAndServerType(userId, BrokerType.KOREA_INVESTMENT, "0");
             }
-            UserApiKey userApiKey = userApiKeys.get(0);
+            UserApiKey userApiKey = keyOpt.orElseThrow(() -> {
+                log.warn("[주식현재가] 한국투자증권 API 키 없음 userId={} (TB_USER_API_KEYS에 brokerType=KOREA_INVESTMENT, serverType=1 또는 0 등록 필요)", LogMaskingUtil.maskUserId(userId));
+                return new IllegalStateException("한국투자증권 API 키를 찾을 수 없습니다: userId=" + userId);
+            });
             String serverType = userApiKey.getServerType() != null ? userApiKey.getServerType() : "1";
             log.info("[주식현재가] 토큰 조회/캐시 사용 userId={} serverType={}", LogMaskingUtil.maskUserId(userId), serverType);
 

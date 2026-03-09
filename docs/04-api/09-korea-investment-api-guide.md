@@ -59,6 +59,20 @@ export MARKET_DATA_USE_MOCK_DATA=true
 - **실계좌(serverType=0)는 테스트에 사용하지 않는다.** (실거래 API 호출·주문 실행 방지)
 - 모의계좌 App Key/Secret·계좌번호는 env 또는 설정 파일에 두고, 테스트·로컬 실행 시 해당 계좌만 사용하면 된다.
 
+## 모의/실계좌·키·URL 일치 원칙 (재발 방지)
+
+한국투자증권 API 호출 시 **같은 serverType**으로 Base URL·API 키·토큰·TR_ID를 선택해야 한다. 혼용 시 인증 실패·잘못된 서버 호출이 발생한다.
+
+| serverType | 의미     | Base URL (REST)                    | 사용 키/토큰           |
+|------------|----------|------------------------------------|------------------------|
+| `"0"`      | 실거래   | openapi.koreainvestment.com:9443   | TB_USER_API_KEYS.serverType=0 |
+| `"1"`      | 모의투자 | openapivts.koreainvestment.com:29443 | TB_USER_API_KEYS.serverType=1 |
+
+- **계좌 기반 호출**(잔고/주문/체결 등): `UserAccount`의 계좌번호로 `serverType`을 정한 뒤, `findByUserIdAndBrokerTypeAndServerType(userId, KOREA_INVESTMENT, serverType)`으로 키 조회. **다른 serverType 키로 fallback 금지.**
+- **계좌 없이 호출**(현재가 등): 한국투자증권 키만 사용. 모의(1) 우선, 없으면 실거래(0). `findByUserId()`만 쓰지 말고 반드시 `BrokerType.KOREA_INVESTMENT`로 한정.
+
+상수·TR_ID: `KoreaInvestmentAccountApiConstants` (account 패키지).
+
 ## 한국투자증권 API 특징
 
 - **인증 방식**: OAuth 2.0 (App Key, App Secret)

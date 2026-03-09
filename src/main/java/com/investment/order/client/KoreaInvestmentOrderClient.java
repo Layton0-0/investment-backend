@@ -1,5 +1,7 @@
 package com.investment.order.client;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.investment.common.logging.KoreaInvestmentApiLogging;
 import com.investment.common.security.EncryptionUtil;
 import com.investment.common.security.LogMaskingUtil;
@@ -19,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
@@ -52,6 +55,7 @@ import java.util.Optional;
 public class KoreaInvestmentOrderClient {
 
     private final WebClient webClient;
+    private final ObjectMapper objectMapper;
     private final RateLimiterRegistry rateLimiterRegistry;
     private final KoreaInvestmentTokenService tokenService;
     private final UserApiKeyRepository userApiKeyRepository;
@@ -82,13 +86,22 @@ public class KoreaInvestmentOrderClient {
     }
 
     /**
-     * local 환경에서 API 요청 상세 로그 출력
+     * local 환경에서 API 요청 상세 로그 출력 (토큰·appsecret 마스킹)
      */
     private void logApiRequest(String apiName, URI uri, HttpHeaders headers, Map<String, String> requestBody) {
         if (isLocalProfile()) {
             log.debug("=== {} API 요청 ===", apiName);
             log.debug("URL: {}", uri);
-            log.debug("Headers: {}", headers);
+            if (headers != null) {
+                String auth = headers.getFirst("Authorization");
+                String appkey = headers.getFirst("appkey");
+                String appsecret = headers.getFirst("appsecret");
+                log.debug("Headers: Authorization={}, appkey={}, appsecret={}, tr_id={}, hashkey=(masked)",
+                        auth != null ? "Bearer ***" : "null",
+                        appkey != null ? LogMaskingUtil.maskApiKey(appkey) : "null",
+                        appsecret != null ? LogMaskingUtil.maskSecret(appsecret) : "null",
+                        headers.getFirst("tr_id"));
+            }
             log.debug("RequestBody: {}", requestBody);
         }
     }
@@ -149,18 +162,21 @@ public class KoreaInvestmentOrderClient {
     }
 
     /**
-     * 계좌번호에 해당하는 API 키 조회 (모의/실거래 구분하여 올바른 키 반환)
+     * 계좌번호에 해당하는 API 키 조회 (모의/실거래 구분하여 올바른 키 반환).
+     * 모의/실 혼용 방지: 계좌의 serverType과 일치하는 API 키만 사용. fallback으로 타 서버 키 사용 금지.
      */
     private Optional<UserApiKey> getUserApiKeyForAccount(String userId, String accountNo) {
         String serverType = resolveServerTypeForAccount(userId, accountNo);
-        if (serverType != null) {
-            Optional<UserApiKey> byServer = userApiKeyRepository.findByUserIdAndBrokerTypeAndServerType(userId,
-                    BrokerType.KOREA_INVESTMENT, serverType);
-            if (byServer.isPresent()) {
-                return byServer;
-            }
+        if (serverType == null) {
+            log.warn("[주문] 계좌에 대한 serverType 미확인: accountNo={} (UserAccount에 동일 계좌 등록 및 serverType 설정 필요)", LogMaskingUtil.maskAccountNo(accountNo));
+            return Optional.empty();
         }
-        return userApiKeyRepository.findByUserIdAndBrokerType(userId, BrokerType.KOREA_INVESTMENT);
+        Optional<UserApiKey> byServer = userApiKeyRepository.findByUserIdAndBrokerTypeAndServerType(userId,
+                BrokerType.KOREA_INVESTMENT, serverType);
+        if (byServer.isEmpty()) {
+            log.warn("[주문] 계좌 serverType({})과 일치하는 API 키 없음: accountNo={} (TB_USER_API_KEYS에 serverType={} 등록 필요)", serverType, LogMaskingUtil.maskAccountNo(accountNo), serverType);
+        }
+        return byServer;
     }
 
     /**
@@ -241,8 +257,30 @@ public class KoreaInvestmentOrderClient {
                         .uri(uri)
                         .headers(h -> h.addAll(headers))
                         .bodyValue(requestBody)
-                        .retrieve()
-                        .bodyToMono(Map.class)
+                        .exchangeToMono((ClientResponse response) -> {
+                            int status = response.statusCode().value();
+                            return response.bodyToMono(String.class)
+                                    .defaultIfEmpty("")
+                                    .doOnNext(body -> log.warn("[국내주식매수] 한투 API 원시응답 status={} bodyPreview={}", status,
+                                            (body != null && !body.isEmpty()) ? body.substring(0, Math.min(800, body.length())) : "(empty)"))
+                                    .flatMap(body -> {
+                                        if (status >= 400) {
+                                            log.warn("[국내주식매수] 한투 API 실패 status={} body={}", status, body != null ? body : "(null)");
+                                            return Mono.error(new RuntimeException("한투 주문 API " + status + ": " + (body != null ? body : "")));
+                                        }
+                                        if (body == null || body.trim().isEmpty()) {
+                                            return Mono.error(new RuntimeException("한투 주문 API 200 but empty body"));
+                                        }
+                                        try {
+                                            @SuppressWarnings("unchecked")
+                                            Map<String, Object> map = objectMapper.readValue(body, new TypeReference<Map<String, Object>>() {});
+                                            return Mono.just(map);
+                                        } catch (Exception e) {
+                                            log.warn("[국내주식매수] 한투 API 본문 파싱 실패 bodyPreview={}", body.length() > 200 ? body.substring(0, 200) : body, e);
+                                            return Mono.error(new RuntimeException("한투 주문 API 본문 파싱 실패: " + e.getMessage(), e));
+                                        }
+                                    });
+                        })
                         .timeout(Duration.ofSeconds(10))
                         .retryWhen(Retry.backoff(2, Duration.ofSeconds(1))
                                 .filter(throwable -> {
@@ -252,23 +290,23 @@ public class KoreaInvestmentOrderClient {
                                     }
                                     return false;
                                 }))
-                        .map(response -> {
+                        .map(responseMap -> {
                             @SuppressWarnings("unchecked")
-                            Map<String, Object> responseMap = (Map<String, Object>) response;
+                            Map<String, Object> responseMapTyped = (Map<String, Object>) responseMap;
 
-                            String rtCd = (String) responseMap.get("rt_cd");
-                            String msgCd = (String) responseMap.get("msg_cd");
-                            String msg1 = (String) responseMap.get("msg1");
+                            String rtCd = (String) responseMapTyped.get("rt_cd");
+                            String msgCd = (String) responseMapTyped.get("msg_cd");
+                            String msg1 = (String) responseMapTyped.get("msg1");
                             if (rtCd == null || !"0".equals(rtCd)) {
                                 KoreaInvestmentApiLogging.logResponseError("국내주식매수", 200, rtCd, msgCd, msg1, null);
                                 throw new RuntimeException(
                                         "한국투자증권 주문 API 오류: rt_cd=" + rtCd + ", msg_cd=" + msgCd + ", msg1=" + msg1);
                             }
 
-                            KoreaInvestmentApiLogging.logResponseSuccessFromMap("국내주식매수", 200, responseMap);
+                            KoreaInvestmentApiLogging.logResponseSuccessFromMap("국내주식매수", 200, responseMapTyped);
 
                             @SuppressWarnings("unchecked")
-                            Map<String, Object> output = (Map<String, Object>) responseMap.get("output");
+                            Map<String, Object> output = (Map<String, Object>) responseMapTyped.get("output");
                             if (output == null) {
                                 KoreaInvestmentApiLogging.logResponseError("국내주식매수", 200, rtCd, msgCd, "output 없음", null);
                                 throw new RuntimeException("한국투자증권 API 응답에 output이 없습니다");

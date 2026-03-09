@@ -1,5 +1,6 @@
 package com.investment.order.client;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.investment.common.security.EncryptionUtil;
 import com.investment.domain.repository.UserAccountRepository;
 import com.investment.domain.repository.UserApiKeyRepository;
@@ -25,6 +26,9 @@ class KoreaInvestmentOrderClientTest {
 
     @Mock
     private WebClient webClient;
+
+    @Mock
+    private ObjectMapper objectMapper;
 
     @Mock
     private RateLimiterRegistry rateLimiterRegistry;
@@ -53,6 +57,7 @@ class KoreaInvestmentOrderClientTest {
     void setUp() {
         orderClient = new KoreaInvestmentOrderClient(
                 webClient,
+                objectMapper,
                 rateLimiterRegistry,
                 tokenService,
                 userApiKeyRepository,

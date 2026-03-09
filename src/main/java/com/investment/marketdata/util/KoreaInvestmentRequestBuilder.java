@@ -5,6 +5,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -30,12 +31,14 @@ public final class KoreaInvestmentRequestBuilder {
 
     /**
      * 공통 헤더 생성 (한국투자증권 REST API 공식 명세 준수).
-     * <p>헤더명: authorization(Bearer 토큰), appkey, appsecret, tr_id.
-     * 토큰 발급 API Body의 secretkey와 구분 — REST 호출 시 헤더는 {@code appsecret} 사용.</p>
+     * <p>헤더명: Authorization(Bearer 토큰), appkey, appsecret, tr_id.
+     * <strong>호출 전 반드시 복호화:</strong> accessToken, appKey, appSecret는 DB 암호화 값이 아닌
+     * 평문(복호화된 값)으로 전달해야 하며, 각 클라이언트(Account/MarketData/Order)에서
+     * {@code encryptionUtil.decrypt(userApiKey.getAppKeyEncrypted())} 등으로 복호화 후 이 메서드에 넘긴다.</p>
      *
-     * @param accessToken OAuth 2.0 Access Token (Bearer 뒤에 붙일 값)
-     * @param appKey      App Key (Required='Y')
-     * @param appSecret   App Secret (Required='Y', 헤더명 appsecret)
+     * @param accessToken OAuth 2.0 Access Token (Bearer 뒤에 붙일 값, 평문)
+     * @param appKey      App Key 평문 (Required='Y')
+     * @param appSecret   App Secret 평문 (Required='Y', 헤더명 appsecret)
      * @param trId        거래 ID (API별로 고유한 값)
      * @return 공통 헤더가 설정된 HttpHeaders
      */
@@ -43,7 +46,8 @@ public final class KoreaInvestmentRequestBuilder {
             String appSecret, String trId) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("authorization", "Bearer " + accessToken);
+        // 한투 API·Postman과 동일: Authorization(대문자 A), appkey, appsecret, tr_id
+        headers.set("Authorization", "Bearer " + accessToken);
         headers.set("appkey", appKey);
         headers.set("appsecret", appSecret);
         headers.set("tr_id", trId);
@@ -110,13 +114,12 @@ public final class KoreaInvestmentRequestBuilder {
      * @param params API별 파라미터 맵
      * @return 파라미터가 포함된 Map (조회 API는 query parameter로 사용)
      */
+    /** Postman/한투 URL 순서 유지: FID_COND_MRKT_DIV_CODE → FID_INPUT_ISCD 등 */
     public static Map<String, String> createMarketDataRequestBody(Map<String, String> params) {
-        Map<String, String> requestBody = new HashMap<>();
-
+        Map<String, String> requestBody = new LinkedHashMap<>();
         if (params != null) {
             requestBody.putAll(params);
         }
-
         return requestBody;
     }
 }

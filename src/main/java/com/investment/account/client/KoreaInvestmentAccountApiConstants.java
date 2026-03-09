@@ -2,9 +2,16 @@ package com.investment.account.client;
 
 /**
  * 한국투자증권 계좌 API 상수 정의
- * 
+ *
  * TR ID 및 엔드포인트 경로를 정의합니다.
  * 실거래와 모의투자 서버의 TR ID가 다릅니다.
+ *
+ * <h3>모의/실계좌·키·URL 일치 원칙 (재발 방지)</h3>
+ * <ul>
+ *   <li>serverType "0" = 실거래 → BASE_URL_REAL(9443) + 해당 serverType의 API 키/토큰만 사용</li>
+ *   <li>serverType "1" = 모의투자 → BASE_URL_VIRTUAL(29443) + 해당 serverType의 API 키/토큰만 사용</li>
+ *   <li>실계좌 URL에 모의 키를 쓰거나, 모의 URL에 실계좌 키를 쓰면 안 됨. 항상 같은 serverType으로 키·URL·TR_ID를 선택.</li>
+ * </ul>
  */
 public final class KoreaInvestmentAccountApiConstants {
     
