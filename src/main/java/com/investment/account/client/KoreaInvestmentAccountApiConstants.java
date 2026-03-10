@@ -1,5 +1,7 @@
 package com.investment.account.client;
 
+import java.time.LocalDate;
+
 /**
  * 한국투자증권 계좌 API 상수 정의
  *
@@ -150,16 +152,40 @@ public final class KoreaInvestmentAccountApiConstants {
     }
     
     /**
-     * 서버 타입에 따른 TR ID 반환 (주문체결조회)
-     * 
+     * 서버 타입에 따른 TR ID 반환 (주문체결조회, 3개월 이내 구간용).
+     *
      * @param serverType "0": 실거래, "1": 모의투자
-     * @return TR ID
+     * @return TR ID (TTTC0081R / VTTC0081R)
      */
     public static String getOrderHistoryTrId(String serverType) {
         if ("0".equals(serverType)) {
             return TR_ID_ORDER_HISTORY_REAL;
         }
         return TR_ID_ORDER_HISTORY_VIRTUAL;
+    }
+
+    /**
+     * 주문체결조회 TR ID를 조회 기간에 따라 반환.
+     * 한투 API: 3개월 이내 → TTTC0081R/VTTC0081R, 3개월 이전 → CTSC9215R/VTSC9215R.
+     *
+     * @param serverType "0": 실거래, "1": 모의투자
+     * @param startDate  조회 시작일
+     * @param endDate    조회 종료일
+     * @return TR ID
+     */
+    public static String getOrderHistoryTrId(String serverType, LocalDate startDate, LocalDate endDate) {
+        if (serverType == null || startDate == null || endDate == null) {
+            return getOrderHistoryTrId(serverType != null ? serverType : "1");
+        }
+        LocalDate threeMonthsAgo = LocalDate.now().minusMonths(3);
+        // 종료일이 오늘 기준 3개월 이내면 최근용 TR_ID, 그렇지 않으면 3개월 이전용 TR_ID
+        if (!endDate.isBefore(threeMonthsAgo)) {
+            return getOrderHistoryTrId(serverType);
+        }
+        if ("0".equals(serverType)) {
+            return TR_ID_ORDER_HISTORY_BEFORE_REAL;
+        }
+        return TR_ID_ORDER_HISTORY_BEFORE_VIRTUAL;
     }
     
     /**

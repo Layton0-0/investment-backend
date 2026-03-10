@@ -10,6 +10,14 @@
 
 ## 1. 완료 (Completed)
 
+### 한국투자증권 계좌 API 연동 전면 수정 (2026-03-10)
+- [x] **주문체결조회 3개월 이전/이후 TR_ID 분기**  
+  KoreaInvestmentAccountApiConstants에 `getOrderHistoryTrId(serverType, startDate, endDate)` 추가. 조회 종료일이 오늘 기준 3개월 이내면 TTTC0081R/VTTC0081R, 그 이전이면 CTSC9215R/VTSC9215R 사용. KoreaInvestmentAccountClient.inquireOrderHistory에서 기간별 TR_ID 적용.
+- [x] **응답 파싱 null/배열/객체 안전 처리**  
+  `resolveSingleOutputNode(JsonNode)` 도입: output/output2가 배열이면 첫 요소, 객체면 그대로, null/빈배열/미존재면 null 반환. 주문체결·정정취소가능주문·투자계좌자산현황·매수가능·매도가능·기간별손익·실현손익·기간별매매손익현황에서 output/output1/output2 null·배열·객체 구분 처리 및 item 루프 시 null/isObject 체크.
+- [x] **AccountControllerTest 수정**  
+  getAccountAssets_accountNotFound_returns404: 계좌번호를 형식 검증 통과용 `99999999-01`로 변경하고 path variable로 전달하도록 수정(기대 404 검증 유지).
+
 ### 자동투자 실계좌 준비 — E2E 검증 체크리스트 (2026-03-06)
 - [x] **자동투자 화면~백엔드 E2E 검증 설계·체크리스트**  
   [plans/qa/자동투자_E2E_검증_체크리스트.md](../../plans/qa/자동투자_E2E_검증_체크리스트.md) 신규 작성. QA_시나리오_마스터·11-api-frontend-mapping 기준 로그인→설정→대시보드→자동투자 현황→파이프라인 요약→Ops 준비상태·시스템설정 흐름·API 매핑·데이터 부재 시 점검순서 반영. Shrimp Phase A-1 산출물.

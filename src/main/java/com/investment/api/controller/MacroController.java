@@ -55,8 +55,12 @@ public class MacroController {
             @Parameter(description = "지표 코드") @PathVariable String code,
             @Parameter(description = "시작일 (YYYY-MM-DD)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @Parameter(description = "종료일 (YYYY-MM-DD)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
-        List<MacroIndicatorDto> history = macroDashboardService.getIndicatorHistory(code, startDate, endDate);
-        return ResponseEntity.ok(history);
+        try {
+            List<MacroIndicatorDto> history = macroDashboardService.getIndicatorHistory(code, startDate, endDate);
+            return ResponseEntity.ok(history != null ? history : List.of());
+        } catch (Exception e) {
+            return ResponseEntity.ok(List.of());
+        }
     }
 
     @GetMapping("/regime")

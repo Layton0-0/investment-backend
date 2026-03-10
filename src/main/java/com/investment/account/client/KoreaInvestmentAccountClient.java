@@ -588,6 +588,19 @@ public class KoreaInvestmentAccountClient {
     }
 
     /**
+     * 한투 API output/output2 필드 해석: 배열이면 첫 요소, 객체면 그대로, null/빈배열/미존재면 null.
+     */
+    private static JsonNode resolveSingleOutputNode(JsonNode node) {
+        if (node == null || node.isNull() || node.isMissingNode()) {
+            return null;
+        }
+        if (node.isArray()) {
+            return node.size() > 0 ? node.get(0) : null;
+        }
+        return node.isObject() ? node : null;
+    }
+
+    /**
      * 회원가입 전 계좌인증용: API Key/Secret·서버타입·계좌번호로 주식잔고조회를 호출하여 계좌 유효 여부 확인.
      * (키·계좌번호는 로그에 남기지 않음)
      *
@@ -714,7 +727,17 @@ public class KoreaInvestmentAccountClient {
             }
             KoreaInvestmentApiLogging.logResponseSuccessFromJson("매수가능조회", 200, responseJson);
 
-            JsonNode output = rootNode.path("output");
+            JsonNode output = resolveSingleOutputNode(rootNode.path("output"));
+            if (output == null || !output.isObject()) {
+                return BuyableAmountDto.builder()
+                        .accountNo(accountNo)
+                        .symbol(symbol)
+                        .price(price)
+                        .buyableAmount(BigDecimal.ZERO)
+                        .buyableQuantity(0)
+                        .currency("KRW")
+                        .build();
+            }
             return BuyableAmountDto.builder()
                     .accountNo(accountNo)
                     .symbol(symbol)
@@ -799,7 +822,17 @@ public class KoreaInvestmentAccountClient {
             }
             KoreaInvestmentApiLogging.logResponseSuccessFromJson("매도가능수량조회", 200, responseJson);
 
-            JsonNode output = rootNode.path("output");
+            JsonNode output = resolveSingleOutputNode(rootNode.path("output"));
+            if (output == null || !output.isObject()) {
+                return SellableQuantityDto.builder()
+                        .accountNo(accountNo)
+                        .symbol(symbol)
+                        .sellableQuantity(0)
+                        .holdingQuantity(0)
+                        .averagePrice(BigDecimal.ZERO)
+                        .currency("KRW")
+                        .build();
+            }
             return SellableQuantityDto.builder()
                     .accountNo(accountNo)
                     .symbol(symbol)
@@ -838,7 +871,7 @@ public class KoreaInvestmentAccountClient {
             String serverType = userApiKey.getServerType();
 
             String baseUrl = getBaseUrl(serverType);
-            String trId = getOrderHistoryTrId(serverType);
+            String trId = getOrderHistoryTrId(serverType, startDate, endDate);
 
             // 요청 헤더 생성 (공통 유틸리티 사용)
             HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
@@ -899,27 +932,28 @@ public class KoreaInvestmentAccountClient {
 
             JsonNode output1 = rootNode.path("output1");
             List<OrderHistoryDto> orderHistoryList = new ArrayList<>();
-
-            if (output1.isArray()) {
+            if (output1 != null && output1.isArray()) {
                 for (JsonNode item : output1) {
+                    if (item == null || !item.isObject()) {
+                        continue;
+                    }
                     OrderHistoryDto dto = OrderHistoryDto.builder()
                             .accountNo(accountNo)
-                            .symbol(item.path("pdno").asText())
-                            .orderNo(item.path("odno").asText())
+                            .symbol(item.path("pdno").asText(""))
+                            .orderNo(item.path("odno").asText(""))
                             .orderType(item.path("sll_buy_dvsn_cd").asText("02").equals("01") ? "SELL" : "BUY")
                             .orderQuantity(Integer.parseInt(item.path("ord_qty").asText("0")))
                             .orderPrice(new BigDecimal(item.path("ord_unpr").asText("0")))
                             .executedQuantity(Integer.parseInt(item.path("tot_ccld_qty").asText("0")))
                             .executedPrice(new BigDecimal(item.path("avg_prvs").asText("0")))
-                            .orderStatus(item.path("ord_stat_cd").asText())
-                            .orderTime(parseDateTime(item.path("ord_tmd").asText(), item.path("ord_dt").asText()))
-                            .executedTime(parseDateTime(item.path("exec_tmd").asText(), item.path("exec_dt").asText()))
+                            .orderStatus(item.path("ord_stat_cd").asText(""))
+                            .orderTime(parseDateTime(item.path("ord_tmd").asText(""), item.path("ord_dt").asText("")))
+                            .executedTime(parseDateTime(item.path("exec_tmd").asText(""), item.path("exec_dt").asText("")))
                             .currency("KRW")
                             .build();
                     orderHistoryList.add(dto);
                 }
             }
-
             return orderHistoryList;
 
         } catch (DomainException e) {
@@ -979,8 +1013,11 @@ public class KoreaInvestmentAccountClient {
             KoreaInvestmentApiLogging.logResponseSuccessFromJson("주식정정취소가능주문조회", 200, responseJson);
             JsonNode output1 = rootNode.path("output1");
             List<CancelableOrderDto> list = new ArrayList<>();
-            if (output1.isArray()) {
+            if (output1 != null && output1.isArray()) {
                 for (JsonNode item : output1) {
+                    if (item == null || !item.isObject()) {
+                        continue;
+                    }
                     CancelableOrderDto dto = CancelableOrderDto.builder()
                             .accountNo(accountNo)
                             .symbol(item.path("pdno").asText(""))
@@ -1074,8 +1111,21 @@ public class KoreaInvestmentAccountClient {
             }
             KoreaInvestmentApiLogging.logResponseSuccessFromJson("투자계좌자산현황조회", 200, responseJson);
 
-            // 투자계좌자산현황조회(inquire-account-balance) 응답: output2 단일 객체 (공식 예제 output2 필드명)
-            JsonNode output2 = rootNode.path("output2");
+            // 투자계좌자산현황조회 응답: output2 단일 객체 또는 배열(첫 요소)
+            JsonNode output2Raw = rootNode.path("output2");
+            JsonNode output2 = resolveSingleOutputNode(output2Raw);
+            if (output2 == null || !output2.isObject()) {
+                return AccountAssetDto.builder()
+                        .accountNo(accountNo)
+                        .totalAssetValue(BigDecimal.ZERO)
+                        .deposit(BigDecimal.ZERO)
+                        .stockValue(BigDecimal.ZERO)
+                        .totalProfitLoss(BigDecimal.ZERO)
+                        .totalProfitLossRate(BigDecimal.ZERO)
+                        .orderableCash(BigDecimal.ZERO)
+                        .currency("KRW")
+                        .build();
+            }
             return AccountAssetDto.builder()
                     .accountNo(accountNo)
                     .totalAssetValue(new BigDecimal(output2.path("tot_asst_amt").asText("0")))
@@ -1191,6 +1241,9 @@ public class KoreaInvestmentAccountClient {
             JsonNode output1 = rootNode.path("output1");
             if (output1 != null && output1.isArray()) {
                 for (JsonNode item : output1) {
+                    if (item == null || !item.isObject()) {
+                        continue;
+                    }
                     String tradeDate = item.has("trad_dt") ? item.path("trad_dt").asText("") : "";
                     BigDecimal rlzt = pathDecimal(item, "rlzt_pfls", "rlz_pfls");
                     if (rlzt == null) {
@@ -1306,30 +1359,50 @@ public class KoreaInvestmentAccountClient {
             }
             KoreaInvestmentApiLogging.logResponseSuccessFromJson("기간별손익조회", 200, responseJson);
 
-            JsonNode output = rootNode.path("output");
+            JsonNode output = resolveSingleOutputNode(rootNode.path("output"));
             JsonNode output1 = rootNode.path("output1");
 
             List<ProfitLossDto.DailyProfitLossDto> dailyList = new ArrayList<>();
-            if (output1.isArray()) {
+            if (output1 != null && output1.isArray()) {
                 for (JsonNode item : output1) {
-                    ProfitLossDto.DailyProfitLossDto daily = ProfitLossDto.DailyProfitLossDto.builder()
-                            .date(LocalDate.parse(item.path("trd_dd").asText(),
-                                    DateTimeFormatter.ofPattern("yyyyMMdd")))
-                            .profitLoss(new BigDecimal(item.path("evlu_pfls_amt").asText("0")))
-                            .profitLossRate(new BigDecimal(item.path("evlu_pfls_rt").asText("0")))
-                            .build();
-                    dailyList.add(daily);
+                    if (item == null || !item.isObject()) {
+                        continue;
+                    }
+                    String trdDd = item.path("trd_dd").asText("");
+                    if (trdDd.isEmpty()) {
+                        continue;
+                    }
+                    try {
+                        ProfitLossDto.DailyProfitLossDto daily = ProfitLossDto.DailyProfitLossDto.builder()
+                                .date(LocalDate.parse(trdDd, DateTimeFormatter.ofPattern("yyyyMMdd")))
+                                .profitLoss(new BigDecimal(item.path("evlu_pfls_amt").asText("0")))
+                                .profitLossRate(new BigDecimal(item.path("evlu_pfls_rt").asText("0")))
+                                .build();
+                        dailyList.add(daily);
+                    } catch (Exception e) {
+                        log.debug("기간별손익 일별 항목 파싱 스킵: trd_dd={}, error={}", trdDd, e.getMessage());
+                    }
                 }
             }
 
+            BigDecimal totalPl = BigDecimal.ZERO;
+            BigDecimal totalPlRate = BigDecimal.ZERO;
+            BigDecimal rlzPl = BigDecimal.ZERO;
+            BigDecimal unrPl = BigDecimal.ZERO;
+            if (output != null && output.isObject()) {
+                totalPl = new BigDecimal(output.path("evlu_pfls_smtl_amt").asText("0"));
+                totalPlRate = new BigDecimal(output.path("evlu_pfls_rt").asText("0"));
+                rlzPl = new BigDecimal(output.path("rlz_pfls_amt").asText("0"));
+                unrPl = new BigDecimal(output.path("evlu_pfls_amt").asText("0"));
+            }
             return ProfitLossDto.builder()
                     .accountNo(accountNo)
                     .startDate(startDate)
                     .endDate(endDate)
-                    .totalProfitLoss(new BigDecimal(output.path("evlu_pfls_smtl_amt").asText("0")))
-                    .totalProfitLossRate(new BigDecimal(output.path("evlu_pfls_rt").asText("0")))
-                    .realizedProfitLoss(new BigDecimal(output.path("rlz_pfls_amt").asText("0")))
-                    .unrealizedProfitLoss(new BigDecimal(output.path("evlu_pfls_amt").asText("0")))
+                    .totalProfitLoss(totalPl)
+                    .totalProfitLossRate(totalPlRate)
+                    .realizedProfitLoss(rlzPl)
+                    .unrealizedProfitLoss(unrPl)
                     .dailyProfitLossList(dailyList)
                     .currency("KRW")
                     .build();
@@ -1419,6 +1492,9 @@ public class KoreaInvestmentAccountClient {
             JsonNode output1 = rootNode.path("output1");
             if (output1 != null && output1.isArray()) {
                 for (JsonNode item : output1) {
+                    if (item == null || !item.isObject()) {
+                        continue;
+                    }
                     String symbol = pathText(item, "pdno", "종목코드");
                     String name = pathText(item, "prdt_name", "종목명");
                     BigDecimal rlzt = pathDecimal(item, "rlzt_pfls", "rlz_pfls", "evlu_pfls_amt");

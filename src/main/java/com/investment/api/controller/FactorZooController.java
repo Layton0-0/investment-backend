@@ -36,8 +36,12 @@ public class FactorZooController {
             @Parameter(description = "시작일") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @Parameter(description = "종료일") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
 
-        FactorTestResult result = factorZooService.testFactor(factorCode, market, startDate, endDate);
-        return ResponseEntity.ok(result);
+        try {
+            FactorTestResult result = factorZooService.testFactor(factorCode, market, startDate, endDate);
+            return ResponseEntity.ok(result != null ? result : FactorTestResult.error(factorCode, "No result"));
+        } catch (Exception e) {
+            return ResponseEntity.ok(FactorTestResult.error(factorCode, e.getMessage() != null ? e.getMessage() : "Error"));
+        }
     }
 
     @GetMapping("/rank")

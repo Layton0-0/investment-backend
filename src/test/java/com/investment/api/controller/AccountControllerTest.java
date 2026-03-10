@@ -157,10 +157,11 @@ class AccountControllerTest {
     @Test
     @DisplayName("GET /api/v1/accounts/{accountNo}/assets 계좌 없을 때 404")
     void getAccountAssets_accountNotFound_returns404() throws Exception {
-        when(accountService.getAccountAssets("99999999"))
+        String accountNo = "99999999-01"; // 형식 검증 통과용 8-2
+        when(accountService.getAccountAssets(accountNo))
                 .thenThrow(new DomainException(ErrorCode.ACCOUNT_NOT_FOUND, "한국투자증권 API 키를 찾을 수 없습니다"));
 
-        mockMvc.perform(get("/api/v1/accounts/99999999/assets"))
+        mockMvc.perform(get("/api/v1/accounts/{accountNo}/assets", accountNo))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
     }
