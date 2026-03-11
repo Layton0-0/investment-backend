@@ -3,6 +3,7 @@ package com.investment.datacollection.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.investment.alert.EmergencyAlertService;
+import com.investment.common.logging.KoreaInvestmentApiLogging;
 import com.investment.config.DataCollectionProperties;
 import com.investment.domain.entity.DailyStock;
 import com.investment.domain.repository.DailyStockRepository;
@@ -22,6 +23,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -87,7 +89,9 @@ public class UsMarketCollectionService {
             List<DailyStock> entities = fetchViaCollectorUrl(basDt, symbolsOverride);
             if (entities.isEmpty()) {
                 log.warn("US 시장 일별 수집(HTTP) 결과 없음: basDt={}, symbols={} — 수집기 응답 빈 배열 또는 오류", basDt, symbolsList);
-                if (dataCollectionProperties.getUs().isFailureAlertEnabled() && emergencyAlertService != null) {
+                boolean skipAlert = dataCollectionProperties.getUs().isSkipFailureAlertOnWeekend()
+                        && (basDt.getDayOfWeek() == DayOfWeek.SATURDAY || basDt.getDayOfWeek() == DayOfWeek.SUNDAY);
+                if (dataCollectionProperties.getUs().isFailureAlertEnabled() && emergencyAlertService != null && !skipAlert) {
                     emergencyAlertService.sendRiskEventAlert("WARNING", "UsDailyCollector",
                             "US 시장 일별 수집 결과 없음: basDt=" + basDt + ", symbols count=" + symbolsList.size());
                 }
@@ -169,6 +173,7 @@ public class UsMarketCollectionService {
     private List<DailyStock> doFetchViaCollectorUrlOnce(String url, LocalDate basDt,
             List<String> symbolsList, List<String> symbolsOverride) {
         log.debug("US 일별 수집(HTTP) 요청: url={}, basDt={}, symbols={}", url, basDt, symbolsList);
+        KoreaInvestmentApiLogging.logApiCallInfo("US일별수집기", "US 일별 시세", url, "POST");
         java.util.Map<String, Object> body = new java.util.HashMap<>();
         body.put("bas_dt", basDt.toString());
         body.put("symbols", symbolsList);
@@ -188,10 +193,14 @@ public class UsMarketCollectionService {
             return List.of();
         }
         List<DailyStock> parsed = parseJsonToDailyStocks(response.getBody(), basDt);
-        if (parsed.isEmpty() && !response.getBody().trim().startsWith("[]")) {
-            log.warn("US 일별 수집(HTTP) 파싱 후 0건: url={}, basDt={}, bodyPreview={}",
-                    url, basDt, response.getBody().length() > 200 ? response.getBody().substring(0, 200) + "..."
-                            : response.getBody());
+        int bodyLen = response.getBody() != null ? response.getBody().length() : 0;
+        if (parsed.isEmpty()) {
+            log.info("US 일별 수집(HTTP) 응답 빈 배열: basDt={}, responseBodyLength={} (휴장일이면 2에 가까움)", basDt, bodyLen);
+            if (!response.getBody().trim().startsWith("[]")) {
+                log.warn("US 일별 수집(HTTP) 파싱 후 0건: url={}, basDt={}, bodyPreview={}",
+                        url, basDt, response.getBody().length() > 200 ? response.getBody().substring(0, 200) + "..."
+                                : response.getBody());
+            }
         }
         return parsed;
     }

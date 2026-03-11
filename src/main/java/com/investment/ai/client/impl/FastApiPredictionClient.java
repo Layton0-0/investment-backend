@@ -3,6 +3,7 @@ package com.investment.ai.client.impl;
 import com.investment.ai.client.AiPredictionClient;
 import com.investment.ai.dto.PredictionRequestDto;
 import com.investment.ai.dto.PredictionResponseDto;
+import com.investment.common.logging.KoreaInvestmentApiLogging;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,6 +53,7 @@ public class FastApiPredictionClient implements AiPredictionClient {
         public Mono<PredictionResponseDto> predictPrice(PredictionRequestDto request) {
                 log.debug("AI 예측 요청: symbol={}, predictionMinutes={}, modelType={}",
                                 request.getSymbol(), request.getPredictionMinutes(), request.getModelType());
+                KoreaInvestmentApiLogging.logApiCallInfo("AI예측서비스", "단건 예측", predictionServiceUrl + "/api/v1/predict", "POST");
 
                 return getWebClient()
                                 .post()
@@ -86,6 +88,7 @@ public class FastApiPredictionClient implements AiPredictionClient {
         @CircuitBreaker(name = "aiPredictionService", fallbackMethod = "predictBatchFallback")
         public Mono<List<PredictionResponseDto>> predictBatch(List<PredictionRequestDto> requests) {
                 log.debug("AI 배치 예측 요청: count={}", requests.size());
+                KoreaInvestmentApiLogging.logApiCallInfo("AI예측서비스", "배치 예측", predictionServiceUrl + "/api/v1/predict/batch", "POST");
 
                 return getWebClient()
                                 .post()

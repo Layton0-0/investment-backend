@@ -55,6 +55,7 @@
 - `POST /api/v1/auth/verify-account` - 계좌인증 (회원가입 전: API Key·서버타입·계좌번호가 모의/실전 도메인에서 유효한지 확인)
 - `GET /api/v1/auth/mypage` - 마이페이지 조회
 - `PUT /api/v1/auth/mypage` - 마이페이지 수정
+- `GET /api/v1/auth/tokens` - 마이페이지 설정용 토큰 조회 (Access Token, WebSocket Token). 쿼리: serverType(선택, "1"=모의/"0"=실거래)
 - `POST /api/v1/auth/logout` - 로그아웃
 
 ### 3.0.1 관리자 API (ADMIN 전용)
@@ -98,7 +99,7 @@
 - 배치 작업 목록: **실제 구현**은 `GET /batch/api/jobs` (BatchManagementController). SPA 프론트는 이 경로로 연동. 상세 매핑은 [API–프론트엔드 매핑](./11-api-frontend-mapping.md) 참조.
 
 ### 3.8 뉴스·공시 API
-- `GET /api/v1/news` - 뉴스·공시 목록 조회 (쿼리: `market`, `source`, `itemType`, `symbol`, `title`, `from`, `to`, `page`, `size`). `market`·`source`·`itemType`·`symbol` 빈값이면 전체, `title`은 부분 일치.
+- `GET /api/v1/news` - 뉴스·공시 목록 조회 (쿼리: `market`, `source`, `itemType`, `symbol`, `title`, `from`, `to`, `page`, `size`). `market`·`source`·`itemType`·`symbol` 빈값이면 전체, `title`은 부분 일치. 응답: `content`(목록), `page`(메타: `number`, `size`, `totalElements`, `totalPages`). 각 항목에 `sentimentScore`(-3~+3, null이면 조회 시 키워드 기반 계산값 반영) 포함.
 - `POST /api/v1/news/collect` - 뉴스·공시 수집 실행 (DART·SEC EDGAR 즉시 수집, 인증 필요)
 
 ### 3.9 시그널/팩터 API
@@ -116,6 +117,7 @@
 - `GET /api/v1/ops/audit` - 감사 로그 조회 (페이징·이벤트유형·기간 필터). 설정 변경·수동 트리거·실계좌 가드 차단 이벤트. userId/accountNo 마스킹 저장. 인가: `hasRole('ADMIN')`.
 - `GET /api/v1/ops/model/status` - 모델/예측 상태 조회. 예측 서비스(AI) 헬스·설정 URL 표시(마스킹)·마지막 체크 시각. 인가: `hasRole('ADMIN')`.
 - `GET /api/v1/ops/health` - 시스템 헬스 요약. DB·Redis·예측 서비스 상태(UP/DOWN/UNKNOWN). 인가: `hasRole('ADMIN')`.
+- `GET /api/v1/ops/governance/status` - 전략 거버넌스 검사 활성 여부(governance.enabled). 인가: `hasRole('ADMIN')`.
 - `GET /api/v1/ops/governance/results` - 전략 거버넌스 검사 결과 이력(RUN_AT 내림차순, limit). 인가: `hasRole('ADMIN')`.
 - `GET /api/v1/ops/governance/halts` - 전략 거버넌스 활성 halt 목록. 인가: `hasRole('ADMIN')`.
 - `PUT /api/v1/ops/governance/halts/{market}/{strategyType}/clear` - 해당 (market, strategyType) halt 해제. Body 선택: `{ "clearedBy": "userId" }`. 인가: `hasRole('ADMIN')`.

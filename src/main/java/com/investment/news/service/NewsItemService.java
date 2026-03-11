@@ -2,6 +2,7 @@ package com.investment.news.service;
 
 import com.investment.domain.entity.NewsItem;
 import com.investment.domain.repository.NewsItemRepository;
+import com.investment.news.NewsSentimentScorer;
 import com.investment.news.dto.NewsItemDto;
 import com.investment.news.dto.NewsItemPageResponseDto;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -28,6 +30,7 @@ import java.util.stream.Collectors;
 public class NewsItemService {
 
         private final NewsItemRepository newsItemRepository;
+        private final NewsSentimentScorer newsSentimentScorer;
 
         /**
          * 필터·페이징으로 뉴스 목록 조회
@@ -87,20 +90,24 @@ public class NewsItemService {
                 String url = item.getUrl();
                 if (url.length() > 1000) {
                         url = url.substring(0, 1000);
-                        item = NewsItem.builder()
-                                        .source(item.getSource())
-                                        .market(item.getMarket())
-                                        .itemType(item.getItemType())
-                                        .title(item.getTitle())
-                                        .summary(item.getSummary())
-                                        .url(url)
-                                        .collectedAt(item.getCollectedAt())
-                                        .symbol(item.getSymbol())
-                                        .sentimentScore(item.getSentimentScore())
-                                        .importanceScore(item.getImportanceScore())
-                                        .eventType(item.getEventType())
-                                        .build();
                 }
+                BigDecimal sentimentScore = item.getSentimentScore();
+                if (sentimentScore == null) {
+                        sentimentScore = newsSentimentScorer.scoreText(item.getTitle(), item.getSummary());
+                }
+                item = NewsItem.builder()
+                                .source(item.getSource())
+                                .market(item.getMarket())
+                                .itemType(item.getItemType())
+                                .title(item.getTitle())
+                                .summary(item.getSummary())
+                                .url(url)
+                                .collectedAt(item.getCollectedAt())
+                                .symbol(item.getSymbol())
+                                .sentimentScore(sentimentScore)
+                                .importanceScore(item.getImportanceScore())
+                                .eventType(item.getEventType())
+                                .build();
                 if (newsItemRepository.existsBySourceAndUrl(item.getSource(), item.getUrl())) {
                         log.debug("수집 항목 중복 스킵: source={}, urlLength={}", item.getSource(), item.getUrl().length());
                         return false;
@@ -124,6 +131,10 @@ public class NewsItemService {
         }
 
         private NewsItemDto toDto(NewsItem n) {
+                BigDecimal sentimentScore = n.getSentimentScore();
+                if (sentimentScore == null) {
+                        sentimentScore = newsSentimentScorer.scoreText(n.getTitle(), n.getSummary());
+                }
                 return NewsItemDto.builder()
                                 .id(n.getId())
                                 .source(n.getSource())
@@ -134,7 +145,7 @@ public class NewsItemService {
                                 .url(fixDisplayUrl(n.getUrl()))
                                 .collectedAt(n.getCollectedAt())
                                 .symbol(n.getSymbol())
-                                .sentimentScore(n.getSentimentScore())
+                                .sentimentScore(sentimentScore)
                                 .importanceScore(n.getImportanceScore())
                                 .eventType(n.getEventType())
                                 .createdAt(n.getCreatedAt())

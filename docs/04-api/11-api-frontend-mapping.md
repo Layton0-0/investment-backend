@@ -16,6 +16,7 @@
 | POST | `/api/v1/auth/verify-account` | 계좌인증 |
 | GET | `/api/v1/auth/mypage` | 마이페이지 조회 |
 | PUT | `/api/v1/auth/mypage` | 마이페이지 수정 |
+| GET | `/api/v1/auth/tokens` | 마이페이지 설정·토큰 조회 (Access Token, WebSocket Token) |
 | POST | `/api/v1/auth/logout` | 로그아웃 |
 | **계좌 (AccountController)** | | |
 | GET | `/api/v1/accounts/{accountNo}/balance` | 계좌 잔고 조회 |
@@ -102,6 +103,7 @@
 | **Ops 시스템 헬스 (OpsHealthController)** | | |
 | GET | `/api/v1/ops/health` | 시스템 헬스 요약 (ADMIN 전용) |
 | **Ops 전략 거버넌스 (OpsGovernanceController)** | | |
+| GET | `/api/v1/ops/governance/status` | 전략 거버넌스 검사 활성 여부 (ADMIN 전용, governanceEnabled) |
 | GET | `/api/v1/ops/governance/results` | 전략 거버넌스 검사 결과 이력 (ADMIN 전용, limit) |
 | GET | `/api/v1/ops/governance/halts` | 전략 거버넌스 활성 halt 목록 (ADMIN 전용) |
 | PUT | `/api/v1/ops/governance/halts/{market}/{strategyType}/clear` | halt 해제 (ADMIN 전용, body 선택 clearedBy) |
@@ -122,6 +124,7 @@
 | POST /api/v1/auth/verify-account | authApi.verifyAccount | RegisterPage | |
 | GET /api/v1/auth/mypage | authApi.getMyPage | MyPage | |
 | PUT /api/v1/auth/mypage | authApi.updateMyPage | MyPage | |
+| GET /api/v1/auth/tokens | authApi.getAuthTokens | MyPage (설정 카드) | serverType 선택 시 해당 계정 토큰 조회 |
 | POST /api/v1/auth/logout | authApi.logout | AuthContext | |
 | GET /api/v1/accounts/{accountNo}/assets | accountApi.getAccountAssets | useDashboardData, Dashboard | |
 | GET /api/v1/accounts/{accountNo}/positions (optional market=KR or US) | accountApi.getPositions(accountNo, market?) | useDashboardData(국내/해외 별도 호출), Dashboard(국내·해외 잔고 블록) | |
@@ -171,9 +174,10 @@
 | GET /api/v1/ops/audit | opsApi.getAuditLogs | Admin(Ops 감사 로그 /ops/audit) | 연동 완료 |
 | GET /api/v1/ops/model/status | opsApi.getModelStatus | Admin(Ops 모델/예측 /ops/model) | 연동 완료 |
 | GET /api/v1/ops/health | opsApi.getHealth | Admin(Ops 시스템 헬스 /ops/health) | 연동 완료 |
-| GET /api/v1/ops/governance/results | opsApi.getGovernanceResults | Admin(Ops 전략 거버넌스 /ops/governance) | 백엔드 준비 완료, 프론트 화면 선택 |
-| GET /api/v1/ops/governance/halts | opsApi.getGovernanceHalts | Admin(Ops 전략 거버넌스 /ops/governance) | 동일 |
-| PUT /api/v1/ops/governance/halts/{market}/{strategyType}/clear | opsApi.clearGovernanceHalt | Admin(Ops 전략 거버넌스 /ops/governance) | 동일 |
+| GET /api/v1/ops/governance/status | opsApi.getGovernanceStatus | Admin(Ops 전략 거버넌스 /ops/governance) | 검사 활성 여부, 이력 없음 시 안내용 |
+| GET /api/v1/ops/governance/results | opsApi.getGovernanceResults | Admin(Ops 전략 거버넌스 /ops/governance) | 검사 결과 이력·검사 지금 실행 버튼 |
+| GET /api/v1/ops/governance/halts | opsApi.getGovernanceHalts | Admin(Ops 전략 거버넌스 /ops/governance) | 활성 halt 목록·요약(0건/N건) |
+| PUT /api/v1/ops/governance/halts/{market}/{strategyType}/clear | opsApi.clearGovernanceHalt | Admin(Ops 전략 거버넌스 /ops/governance) | halt 해제 |
 | GET /api/v1/ops/auto-trading-readiness | opsApi.getAutoTradingReadiness | Admin(자동매매 가동 전 점검) | 연동 가능 |
 | GET /api/v1/report/tax/summary | reportApi.getTaxSummary | TaxReportPage | 연말 세금·리포트 화면 |
 | GET /api/v1/report/tax/summary/export | reportApi.downloadTaxSummaryExport (window.open) | TaxReportPage | CSV/PDF 다운로드 |
@@ -225,7 +229,7 @@
 | 연말 세금·리포트 `/report/tax` | 연도별 세금 요약(실현손익·배당·면책)·CSV/PDF 내보내기 | getTaxSummary, downloadTaxSummaryExport (reportApi) | 연동 완료 |
 | 모델/예측 `/ops/model` | 예측 모델 상태·결과 | getModelStatus (opsApi) | 연동 완료 |
 | 시스템 헬스 `/ops/health` | 서비스·DB·캐시 헬스 | getHealth (opsApi) | 연동 완료 |
-| 전략 거버넌스 `/ops/governance` | 검사 결과·활성 halt·halt 해제 | getGovernanceResults, getGovernanceHalts, clearGovernanceHalt (opsApi) | - |
+| 전략 거버넌스 `/ops/governance` | 검사 결과·활성 halt·halt 해제·검사 지금 실행 | getGovernanceStatus, getGovernanceResults, getGovernanceHalts, clearGovernanceHalt, trigger(strategy-governance-check) (opsApi, triggerApi) | - |
 
 **순차 개발**: §4.2 우선순위(P0~P3)와 위 표의 미연동 항목을 메뉴 단위로 묶어, 02-development-status.md "진행예정"에 순차 개발 계획으로 반영한다.
 

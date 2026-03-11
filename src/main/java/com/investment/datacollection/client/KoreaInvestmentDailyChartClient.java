@@ -1,5 +1,6 @@
 package com.investment.datacollection.client;
 
+import com.investment.common.logging.KoreaInvestmentApiLogging;
 import com.investment.common.security.EncryptionUtil;
 import com.investment.domain.entity.BrokerType;
 import com.investment.domain.entity.DailyStock;
@@ -90,6 +91,8 @@ public class KoreaInvestmentDailyChartClient {
 
         HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(
                 accessToken, appKey, appSecret, TR_ID_DAILY_CHART);
+
+        KoreaInvestmentApiLogging.logApiCallInfo("한국투자증권", "주식일봉차트(KRX폴백)", uri.toString(), "GET");
 
         try {
             @SuppressWarnings("unchecked")

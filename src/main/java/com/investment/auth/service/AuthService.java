@@ -324,6 +324,25 @@ public class AuthService {
     }
 
     /**
+     * 마이페이지 설정용 토큰 조회.
+     * 현재 사용자의 한국투자증권 Access Token 및 WebSocket(Approval Key) 토큰을 반환한다.
+     *
+     * @param userId     사용자 ID
+     * @param serverType "1": 모의투자, "0": 실거래 (null이면 "1")
+     * @return accessToken, websocketToken
+     */
+    @Transactional(readOnly = true)
+    public AuthTokensResponseDto getTokens(String userId, String serverType) {
+        String st = serverType != null && !serverType.isBlank() ? serverType : "1";
+        String accessToken = tokenService.getAccessToken(userId, st);
+        String websocketToken = tokenService.getApprovalKey(userId, st);
+        return AuthTokensResponseDto.builder()
+                .accessToken(accessToken != null ? accessToken : "")
+                .websocketToken(websocketToken != null ? websocketToken : "")
+                .build();
+    }
+
+    /**
      * 마이페이지 수정
      */
     @Transactional

@@ -41,7 +41,8 @@ public class KoreaInvestmentKrxFallbackSupplier {
 
     /**
      * 해당 기준일 일봉을 한투 API로 종목별 조회하여 수집.
-     * 종목 목록은 설정( fallbackSymbolsSource / fallbackSymbols ) 또는 전일 TB_DAILY_STOCK 기준.
+     * 종목 목록: CONFIG면 fallbackSymbols 사용; PREVIOUS_DAY면 전일 TB_DAILY_STOCK.
+     * PREVIOUS_DAY인데 전일 데이터가 없으면(콜드스타트) fallbackSymbols가 있으면 시드로 사용.
      *
      * @param basDt 기준일
      * @return 수집된 DailyStock 목록 (빈 목록 가능)
@@ -80,15 +81,28 @@ public class KoreaInvestmentKrxFallbackSupplier {
     private List<String> resolveSymbols(LocalDate basDt) {
         String source = dataCollectionProperties.getKrx().getFallbackSymbolsSource();
         if (source != null && source.equalsIgnoreCase("CONFIG")) {
-            String configSymbols = dataCollectionProperties.getKrx().getFallbackSymbols();
-            if (configSymbols == null || configSymbols.isBlank()) return List.of();
-            return Arrays.stream(configSymbols.split(","))
-                    .map(String::trim)
-                    .filter(s -> !s.isEmpty())
-                    .collect(Collectors.toList());
+            return parseConfigSymbols();
         }
-        // PREVIOUS_DAY: 전일 TB_DAILY_STOCK KR 종목
+        // PREVIOUS_DAY: 전일 TB_DAILY_STOCK KR 종목. 없으면(콜드스타트) fallbackSymbols 시드 사용
         LocalDate prev = basDt.minusDays(1);
-        return dailyStockRepository.findDistinctSymbolsByBasDtAndMarket(prev, MARKET_KR);
+        List<String> fromPrev = dailyStockRepository.findDistinctSymbolsByBasDtAndMarket(prev, MARKET_KR);
+        if (!fromPrev.isEmpty()) {
+            return fromPrev;
+        }
+        List<String> seed = parseConfigSymbols();
+        if (!seed.isEmpty()) {
+            log.info("KRX 폴백: 전일 종목 없음(콜드스타트), fallback-symbols 시드 사용, basDt={}, count={}", basDt.format(BAS_DT_LOG), seed.size());
+            return seed;
+        }
+        return List.of();
+    }
+
+    private List<String> parseConfigSymbols() {
+        String configSymbols = dataCollectionProperties.getKrx().getFallbackSymbols();
+        if (configSymbols == null || configSymbols.isBlank()) return List.of();
+        return Arrays.stream(configSymbols.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList());
     }
 }

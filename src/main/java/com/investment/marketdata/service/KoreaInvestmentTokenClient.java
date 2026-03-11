@@ -61,6 +61,7 @@ public class KoreaInvestmentTokenClient {
                 .build()
                 .toUri();
 
+        KoreaInvestmentApiLogging.logApiCallInfo("한국투자증권", "접근토큰발급", uri.toString(), "POST");
         KoreaInvestmentApiLogging.logRequest("접근토큰발급", "/oauth2/tokenP", null, java.util.List.of("grant_type", "appkey", "appsecret"));
         LogMaskingUtil.logWithDebugActualAtDebug(log,
                 "한국투자증권 Access Token 발급 요청: baseUrl={}, appKey={}",
@@ -150,6 +151,7 @@ public class KoreaInvestmentTokenClient {
                 .path("/oauth2/Approval")
                 .build()
                 .toUri();
+        KoreaInvestmentApiLogging.logApiCallInfo("한국투자증권", "approval_key발급", uri.toString(), "POST");
         return webClient.post()
                 .uri(uri)
                 .contentType(MediaType.APPLICATION_JSON)

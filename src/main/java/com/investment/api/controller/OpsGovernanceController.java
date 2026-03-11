@@ -4,6 +4,8 @@ import com.investment.governance.GovernanceHaltService;
 import com.investment.ops.dto.GovernanceCheckResultDto;
 import com.investment.ops.dto.GovernanceHaltClearRequestDto;
 import com.investment.ops.dto.GovernanceHaltDto;
+import com.investment.ops.dto.GovernanceStatusDto;
+import com.investment.setting.service.SystemSettingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,7 +31,20 @@ import java.util.List;
 @RequiredArgsConstructor
 public class OpsGovernanceController {
 
+    private static final String GOVERNANCE_ENABLED_KEY = "governance.enabled";
+
     private final GovernanceHaltService governanceHaltService;
+    private final SystemSettingService systemSettingService;
+
+    @Operation(summary = "거버넌스 검사 활성 여부", description = "시스템 설정 governance.enabled 값을 조회합니다. false면 검사 Job 실행 시 결과가 저장되지 않습니다.")
+    @GetMapping("/status")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<GovernanceStatusDto> getStatus() {
+        Boolean enabled = systemSettingService.getBoolean(GOVERNANCE_ENABLED_KEY);
+        return ResponseEntity.ok(GovernanceStatusDto.builder()
+                .governanceEnabled(Boolean.TRUE.equals(enabled))
+                .build());
+    }
 
     @Operation(summary = "최근 검사 결과", description = "전략 거버넌스 검사 결과 이력을 RUN_AT 내림차순으로 조회합니다.")
     @GetMapping("/results")

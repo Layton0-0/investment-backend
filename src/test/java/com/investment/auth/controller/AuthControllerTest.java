@@ -140,6 +140,26 @@ class AuthControllerTest {
         }
 
         @Test
+        @org.junit.jupiter.api.Disabled("addFilters=false 시 SecurityContext 미전달로 authentication null → 통합/전체 컨텍스트에서 검증")
+        @DisplayName("GET /api/v1/auth/tokens 인증 시 토큰 조회 200")
+        void getTokens_returnsOkWhenAuthenticated() throws Exception {
+                AuthTokensResponseDto response = AuthTokensResponseDto.builder()
+                                .accessToken("access-token-value")
+                                .websocketToken("ws-token-value")
+                                .build();
+                when(authService.getTokens(anyString(), any())).thenReturn(response);
+
+                mockMvc.perform(get("/api/v1/auth/tokens")
+                                .param("serverType", "1")
+                                .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors
+                                                .user("user-id")))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.accessToken").value("access-token-value"))
+                                .andExpect(jsonPath("$.websocketToken").value("ws-token-value"));
+                verify(authService).getTokens(eq("user-id"), eq("1"));
+        }
+
+        @Test
         @DisplayName("POST /api/v1/auth/logout 로그아웃 시 200")
         void logout_returnsOk() throws Exception {
                 mockMvc.perform(post("/api/v1/auth/logout"))

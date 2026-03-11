@@ -28,6 +28,20 @@ public final class KoreaInvestmentApiLogging {
     }
 
     /**
+     * 외부 API 호출 시 어떤 API를 호출하는지 INFO 레벨로 기록.
+     * 운영·디버깅 시 호출 추적용. 모든 외부 HTTP 클라이언트에서 호출 직전에 사용 권장.
+     *
+     * @param system   외부 시스템명 (예: KRX, 한국투자증권, 데이터수집기)
+     * @param apiName  API/기능 이름 (예: 유가증권 일별매매정보, 접근토큰발급)
+     * @param fullUrl  호출 대상 전체 URL (예: https://openapi.krx.co.kr/svc/apis/sto/stk_bydd_trd?basDd=20260311)
+     * @param method   HTTP 메서드 (GET, POST 등). null이면 GET
+     */
+    public static void logApiCallInfo(String system, String apiName, String fullUrl, String method) {
+        log.info("외부 API 호출: system={}, api={}, url={}, method={}",
+                system, apiName, fullUrl != null ? fullUrl : "", method != null ? method : "GET");
+    }
+
+    /**
      * API 요청 로그 (DEBUG). path, trId, query 파라미터 키 목록만 기록.
      */
     public static void logRequest(String apiName, String path, String trId, Collection<String> queryParamKeys) {

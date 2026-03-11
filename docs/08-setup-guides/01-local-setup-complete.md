@@ -251,8 +251,9 @@ DATA_COLLECTION_INTERNAL_KEY=<내부 API 키>
 
 **US/KRX 수집이 0건일 때 확인할 env**
 
-- **US 일별 수집**: Docker 사용 시 `.env`에 `US_COLLECTOR_URL=http://data-collector:8001`(Compose 내부) 또는 `http://localhost:8001`(호스트에서 Backend 실행 시). 미설정이면 로그에 `US 시장 일별 수집 스킵: collector-url·yfinance-script-path 미설정` WARN 출력. `US_SYMBOLS`가 비어 있으면 수집 대상 없음으로 스킵.
-- **KRX 일별 수집**: `KRX_AUTH_KEY`(또는 `investment.data.krx.auth-key`) 미설정 시 로그에 `KRX AUTH_KEY 미설정: 조회 스킵` WARN 출력. **KRX 실패 원인**: (1) AUTH_KEY 미설정·만료, (2) 한투 폴백 사용 시 해당 API 키·연결 상태 확인. 시그널 0건일 때 전체 점검 순서는 [13-manual-operator-tasks.md §1.11 시그널이 0건으로 보일 때 점검 순서](../06-deployment/13-manual-operator-tasks.md) 참고.
+- **US 일별 수집**: Docker 사용 시 `.env`에 `US_COLLECTOR_URL=http://data-collector:8001`(Compose 내부) 또는 `http://localhost:8001`(호스트에서 Backend 실행 시). 미설정이면 로그에 `US 시장 일별 수집 스킵: collector-url·yfinance-script-path 미설정` WARN 출력. `US_SYMBOLS`가 비어 있으면 수집 대상 없음으로 스킵.  
+  **US 수집이 계속 0건일 때**: (1) **주말·미국 휴장일**이면 거래 없어 0건은 정상. (2) **평일인데도 0건**이면 data-collector 기동 여부(`GET <collector-url>/health`), Backend에서 수집기 접근 가능 여부(같은 Docker 네트워크에서 서비스명 사용 시 `http://data-collector:8001` 등), 수집기 컨테이너 로그·stderr(스크립트 경로·yfinance 설치·타임아웃) 확인. 상세 점검 순서는 [데이터_부재_점검_가이드.md §4 US 일별 수집 0건](../../../plans/qa/데이터_부재_점검_가이드.md) 참고.
+- **KRX 일별 수집**: `KRX_AUTH_KEY`(또는 `investment.data.krx.auth-key`) 미설정 시 로그에 `KRX AUTH_KEY 미설정: 조회 스킵` WARN 출력. **KRX 실패 원인**: (1) AUTH_KEY 미설정·만료, (2) 한투 폴백 사용 시 해당 API 키·연결 상태 확인. **한 번도 수집한 적 없을 때(콜드스타트)**: 전일 TB_DAILY_STOCK이 비어 있으면 한투 폴백도 "조회할 종목 목록 없음"으로 동작하지 않음. 이때는 `fallback-symbols`에 시드 종목(예: `005930,000660`)을 넣어 두면, 전일 조회가 비었을 때 자동으로 시드를 사용함. [10-data-collection-api.md §최초 구동](../04-api/10-data-collection-api.md), [13-manual-operator-tasks.md §1.11 최초 구동](../06-deployment/13-manual-operator-tasks.md) 참고. 시그널 0건일 때 전체 점검 순서는 [13-manual-operator-tasks.md §1.11 시그널이 0건으로 보일 때 점검 순서](../06-deployment/13-manual-operator-tasks.md) 참고.
 - **헬스로 한눈에 확인**: `GET /actuator/health` 응답의 `dataCollectionHealthIndicator` detail에서 `usCollectorConfigured`, `krxAuthConfigured` 여부 확인 (값 자체는 노출하지 않음).
 
 **보안 키 생성 방법:**

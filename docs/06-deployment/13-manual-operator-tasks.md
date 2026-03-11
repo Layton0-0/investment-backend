@@ -148,9 +148,9 @@
 ### 1.10 전략 거버넌스 검사 결과 이력 (이력 없음 시)
 
 - **증상**: Ops → 전략 거버넌스 화면에서 **검사 결과 이력**이 "이력 없음"으로만 표시됨.
-- **원인**: `strategy-governance-check` Job이 아직 한 번도 실행되지 않아 TB_GOVERNANCE_CHECK_RESULT에 데이터가 없음.
-- **작업**: (1) **수동 실행**: Ops → 스케줄 현황에서 "전략 거버넌스 검사" **지금 실행** 버튼 클릭, 또는 `POST /api/v1/trigger/strategy-governance-check` 호출. (2) **스케줄 대기**: 매월 1일 02:00 KST에 자동 실행되므로 그 후에는 이력이 쌓임.
-- **참고**: API `GET /api/v1/ops/governance/results` 및 프론트 연동은 완료되어 있으며, 이력이 없으면 빈 배열이 반환되는 것이 정상임.
+- **원인**: (1) `strategy-governance-check` Job이 아직 한 번도 실행되지 않아 TB_GOVERNANCE_CHECK_RESULT에 데이터가 없음. (2) **시스템 설정** `governance.enabled`가 false이면 Job 실행 시에도 검사 로직이 스킵되어 이력이 저장되지 않음.
+- **작업**: (1) **검사 활성 확인**: Ops → 시스템 설정(ops/settings)에서 **governance.enabled**가 true인지 확인. (2) **수동 실행**: Ops → **전략 거버넌스** 화면에서 **검사 지금 실행** 버튼 클릭, 또는 Ops → 데이터 파이프라인 → 스케줄 현황에서 "전략 거버넌스 검사" **지금 실행** 클릭, 또는 `POST /api/v1/trigger/strategy-governance-check` 호출. (3) **스케줄 대기**: 매월 1일 02:00 KST에 자동 실행되므로 그 후에는 이력이 쌓임.
+- **참고**: API `GET /api/v1/ops/governance/results`, `GET /api/v1/ops/governance/status`(검사 활성 여부) 및 프론트 연동 완료. 이력이 없으면 빈 배열이 반환되는 것이 정상임.
 
 ---
 
@@ -167,6 +167,9 @@
   1. **파이프라인 요약 기준일**: `GET /api/v1/pipeline/summary`는 **basDt 미입력 시 전일(어제)**을 기준일로 사용함. 프론트에서 basDt 없이 호출하면 전일 기준 시그널이 조회됨. 전일 팩터 계산이 완료되었는지 확인.
   2. **준비 상태 확인**: `GET /api/v1/ops/auto-trading-readiness`로 전일(basDt) TB_DAILY_STOCK·TB_SIGNAL_SCORE row 수 확인. `dailyStockRowCount`·`signalScoreRowCount`가 0이면 선행 데이터·팩터 미실행.
   3. **수동 트리거**: 위에서 일봉·시그널이 비어 있으면 순서대로 `POST /api/v1/trigger/krx-daily`, `POST /api/v1/trigger/us-daily`, `POST /api/v1/trigger/factor-calculation` 실행 후 다시 readiness·pipeline/summary 확인. KRX 수집 실패 시 [01-local-setup-complete.md §US/KRX 수집](../08-setup-guides/01-local-setup-complete.md)의 KRX_AUTH_KEY·한투 폴백 env 확인.
+- **최초 구동(콜드스타트)** — TB_DAILY_STOCK에 **한 번도 수집한 적이 없는** 환경:
+  - KRX·한투 폴백 모두 "전일 TB_DAILY_STOCK에서 종목 목록"을 쓰면, 전일 데이터가 없어 **종목 목록 0건** → "조회할 종목 목록 없음"으로 폴백이 동작하지 않음. 유니버스·팩터도 당일/전일 일봉이 없으면 0건.
+  - **절차**: (1) **한투 폴백으로 시드 수집** — `investment.data.krx.korea-investment-fallback-enabled=true`, `korea-investment-fallback-user-id` 설정 후, **`fallback-symbols`에 시드 종목**(예: `005930,000660,035720`)을 넣어 둠. `fallback-symbols-source=PREVIOUS_DAY`여도 전일 조회가 비었을 때 시드가 있으면 시드를 사용함. (2) `POST /api/v1/trigger/krx-daily`(또는 스케줄 16:00)로 1회 수집 후, 다음날부터는 전일 데이터가 생겨 PREVIOUS_DAY가 정상 동작. (3) KRX API 키가 있으면 동일 트리거로 KRX 1차 수집만으로도 TB_DAILY_STOCK이 채워짐. 상세: [10-data-collection-api.md §최초 구동](../04-api/10-data-collection-api.md).
 - **수동 검증**: `POST /api/v1/trigger/auto-buy?dryRun=true`로 1회 실행 후 Backend 로그에서 대상 계좌·스킵 사유 메시지 확인. 실제 주문 전에는 dryRun=true 권장.
 - **WebSocket(실시간 단타) 사용 시**: `websocket.enabled=true`이면 **장 개장 전(08:50 KST)** WebSocketConnectScheduler가 KOREA_INVESTMENT 계정별로 연결·구독을 수행한다. 자동매매 가동 전에 Backend 로그에서 "WebSocket connect run finished", "subscribeQuote" 등 연결·구독 완료 로그가 있는지 확인. 실시간 시세 미수신 시 [14-multi-account-realtime-streaming.md §3.4.6](../02-architecture/14-multi-account-realtime-streaming.md) 활성화 절차·env(connect-cron, approval-key 등) 점검.
 - **참조**: [12-auto-investment-strategy.md §6.2](../02-architecture/12-auto-investment-strategy.md), 자동매매 선행 조건 종합 계획(plans).

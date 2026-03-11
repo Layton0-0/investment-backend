@@ -1,5 +1,6 @@
 package com.investment.datacollection.client;
 
+import com.investment.common.logging.KoreaInvestmentApiLogging;
 import com.investment.config.DataCollectionProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -57,6 +58,7 @@ public class DataCollectorApiClient {
             return 0;
         }
         String url = base + PATH_DART;
+        KoreaInvestmentApiLogging.logApiCallInfo("데이터수집기", "DART 공시 수집", url, "POST");
         try {
             @SuppressWarnings("unchecked")
             ResponseEntity<Map> response = restTemplate.postForEntity(url, null, Map.class);
@@ -83,6 +85,7 @@ public class DataCollectorApiClient {
             return 0;
         }
         String url = base + PATH_SEC;
+        KoreaInvestmentApiLogging.logApiCallInfo("데이터수집기", "SEC EDGAR 공시 수집", url, "POST");
         try {
             @SuppressWarnings("unchecked")
             ResponseEntity<Map> response = restTemplate.postForEntity(url, null, Map.class);

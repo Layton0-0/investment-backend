@@ -245,6 +245,7 @@ public class KoreaInvestmentOrderClient {
 
         logApiRequest("주식 매수 주문", uri, headers, requestBody);
         KoreaInvestmentApiLogging.logRequest("국내주식매수", "/uapi/domestic-stock/v1/trading/order-cash", trId, requestBody.keySet());
+        KoreaInvestmentApiLogging.logApiCallInfo("한국투자증권", "국내주식매수", uri.toString(), "POST");
 
         // Rate Limiter 적용
         RateLimiter rateLimiter = getApiRateLimiter(serverType);
@@ -395,6 +396,7 @@ public class KoreaInvestmentOrderClient {
 
         logApiRequest("주식 매도 주문", uri, headers, requestBody);
         KoreaInvestmentApiLogging.logRequest("국내주식매도", "/uapi/domestic-stock/v1/trading/order-cash", trId, requestBody.keySet());
+        KoreaInvestmentApiLogging.logApiCallInfo("한국투자증권", "국내주식매도", uri.toString(), "POST");
 
         // Rate Limiter 적용
         RateLimiter rateLimiter = getApiRateLimiter(serverType);
@@ -523,6 +525,7 @@ public class KoreaInvestmentOrderClient {
 
         logApiRequest("해외주식 매수 주문", uri, headers, requestBody);
         KoreaInvestmentApiLogging.logRequest("해외주식매수", "/uapi/overseas-stock/v1/trading/order", trId, requestBody.keySet());
+        KoreaInvestmentApiLogging.logApiCallInfo("한국투자증권", "해외주식매수", uri.toString(), "POST");
         RateLimiter rateLimiter = getApiRateLimiter(serverType);
 
         return Mono.fromCallable(() -> {
@@ -603,6 +606,7 @@ public class KoreaInvestmentOrderClient {
 
         logApiRequest("해외주식 매도 주문", uri, headers, requestBody);
         KoreaInvestmentApiLogging.logRequest("해외주식매도", "/uapi/overseas-stock/v1/trading/order", trId, requestBody.keySet());
+        KoreaInvestmentApiLogging.logApiCallInfo("한국투자증권", "해외주식매도", uri.toString(), "POST");
         RateLimiter rateLimiter = getApiRateLimiter(serverType);
 
         return Mono.fromCallable(() -> {

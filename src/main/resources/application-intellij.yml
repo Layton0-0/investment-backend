@@ -1,4 +1,21 @@
-# IntelliJ 전용: 별도 서버 구동 시 포트 8083 사용 (Docker/로컬 8080과 충돌 방지)
-# Run Configuration에서 Active profiles: intellij 로 지정
+# IntelliJ/직접 구동 전용: local 설정 상속 + 포트 8084 + Docker Compose와 동일한 DB/Redis 접속
+# 전제: Docker에서 timescaledb, redis 먼저 기동 (예: docker compose -f docker-compose.local-full.yml up -d timescaledb redis)
+# Run Configuration: Active profiles = local,intellij
 server:
-  port: 8083
+  port: 8084
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/investment_portfolio?currentSchema=public}
+    username: ${SPRING_DATASOURCE_USERNAME:local_pg}
+    password: ${SPRING_DATASOURCE_PASSWORD:local_pg_pass}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+# Docker local-db-only에 띄운 Python 서비스 접근 (호스트에서 백엔드 구동 시)
+investment:
+  data:
+    us:
+      collector-url: ${US_COLLECTOR_URL:http://localhost:8001}

@@ -6,6 +6,7 @@ import com.investment.config.SecurityHeadersConfig;
 import com.investment.governance.GovernanceHaltService;
 import com.investment.ops.dto.GovernanceCheckResultDto;
 import com.investment.ops.dto.GovernanceHaltDto;
+import com.investment.setting.service.SystemSettingService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,8 +20,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 import java.util.List;
 
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -38,6 +37,8 @@ class OpsGovernanceControllerTest {
     @MockBean
     private GovernanceHaltService governanceHaltService;
     @MockBean
+    private SystemSettingService systemSettingService;
+    @MockBean
     private com.investment.account.service.AccountService accountService;
     @MockBean
     private JwtAuthenticationFilter jwtAuthenticationFilter;
@@ -48,6 +49,19 @@ class OpsGovernanceControllerTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Test
+    @DisplayName("GET /api/v1/ops/governance/status ADMIN 시 200 및 governanceEnabled 반환")
+    @WithMockUser(username = "admin1", roles = "ADMIN")
+    void getStatus_withAdmin_returnsOk() throws Exception {
+        when(systemSettingService.getBoolean("governance.enabled")).thenReturn(true);
+
+        mockMvc.perform(get("/api/v1/ops/governance/status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.governanceEnabled").value(true));
+
+        verify(systemSettingService).getBoolean("governance.enabled");
+    }
 
     @Test
     @DisplayName("GET /api/v1/ops/governance/results ADMIN 시 200 및 목록 반환")

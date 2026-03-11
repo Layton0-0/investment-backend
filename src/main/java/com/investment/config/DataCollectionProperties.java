@@ -60,5 +60,7 @@ public class DataCollectionProperties {
         private long retryInitialMs = 1000L;
         /** 수집 실패·0건 시 Discord 알림 발송 여부. 기본 false */
         private boolean failureAlertEnabled = false;
+        /** 휴장일(미국 주말 토·일)에 0건일 때 실패 알림 생략. true면 주말에는 알림 미발송. 기본 true */
+        private boolean skipFailureAlertOnWeekend = true;
     }
 }

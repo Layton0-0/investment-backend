@@ -1,5 +1,6 @@
 package com.investment.datacollection.client;
 
+import com.investment.common.logging.KoreaInvestmentApiLogging;
 import com.investment.config.DataCollectionProperties;
 import com.investment.datacollection.dto.KrxDailyStockResponseDto;
 import lombok.RequiredArgsConstructor;
@@ -81,6 +82,8 @@ public class KrxApiClient {
         HttpHeaders headers = new HttpHeaders();
         headers.set("AUTH_KEY", authKey);
         headers.set(HttpHeaders.ACCEPT, "application/json");
+
+        KoreaInvestmentApiLogging.logApiCallInfo("KRX", apiName, url, "GET");
 
         try {
             ResponseEntity<KrxDailyStockResponseDto> response = restTemplate.exchange(

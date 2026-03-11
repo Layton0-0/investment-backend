@@ -20,18 +20,19 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 
 /**
- * Ops 트레이드 저널: 매매 결정(매수/매도/스킵) 내역 조회 (ADMIN 전용). P6-3.
+ * Ops 트레이드 저널: 매매 결정(매수/매도/스킵/DRY_RUN) 이력 조회 API (ADMIN 전용).
+ * P6-3: PipelineExecutor 등에서 기록한 TRADE_DECISION 이벤트만 조회.
  */
-@Tag(name = "Ops 트레이드 저널", description = "매매 결정 사유 조회 (ADMIN 전용)")
+@Tag(name = "Ops 트레이드 저널", description = "매매 결정 저널 조회 (ADMIN 전용)")
 @RestController
-@RequestMapping("/api/v1/ops")
+@RequestMapping("/api/v1/ops/trade-journal")
 @RequiredArgsConstructor
 public class OpsTradeJournalController {
 
     private final AuditLogService auditLogService;
 
-    @Operation(summary = "트레이드 저널 목록", description = "최근 매매 결정(BUY/SELL/SKIP/DRY_RUN) 내역을 페이징 조회합니다.")
-    @GetMapping("/trade-journal")
+    @Operation(summary = "트레이드 저널 목록", description = "페이징·기간 필터로 매매 결정(BUY/SELL/SKIP/DRY_RUN) 이력을 조회합니다.")
+    @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<AuditLogListResponseDto> getTradeJournal(
             @Parameter(description = "페이지 (0부터)") @RequestParam(defaultValue = "0") int page,
@@ -40,8 +41,7 @@ public class OpsTradeJournalController {
             @Parameter(description = "기간 종료 (yyyy-MM-dd)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         Instant fromInstant = from != null ? from.atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant() : null;
         Instant toInstant = to != null ? ZonedDateTime.of(to.atTime(23, 59, 59, 999_999_999), ZoneId.of("Asia/Seoul")).toInstant() : null;
-        AuditLogListResponseDto dto = auditLogService.findPage(page, size,
-                AuditLogService.EVENT_TRADE_DECISION, fromInstant, toInstant);
+        AuditLogListResponseDto dto = auditLogService.findPage(page, size, AuditLogService.EVENT_TRADE_DECISION, fromInstant, toInstant);
         return ResponseEntity.ok(dto);
     }
 }

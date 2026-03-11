@@ -1,6 +1,6 @@
-# Cursor/Agent 전용 서버 실행 (포트 8084)
+# Cursor/Agent 전용 서버 실행 (포트 8084, local 설정 상속)
 # 사용: .\scripts\bootRun-agent.ps1
-# 기존 local(8083)과 동시에 별도 서버 실행 가능
+# 프로필 local,local-agent → local(8080)과 동일 설정 + application-local-agent.yml로 포트만 8084
 # .env가 있으면 로드하여 SUPER_ADMIN_* 등 환경변수 전달 (E2E·로그인 검증 시 동일 계정 사용).
 # Agent 실행 시 터미널 타임아웃 300000ms(5분) 이상 권장 — .cursor/rules/script-run-timeouts.mdc
 
@@ -22,4 +22,4 @@ if (Test-Path $envFile) {
 
 $env:GRADLE_UNIQUE_BUILD_DIR = "1"
 Write-Host "Starting investment-choi on port 8084 (profile: local,local-agent, build: 임시 디렉터리)..." -ForegroundColor Cyan
-.\gradlew.bat bootRun --args="--spring.profiles.active=local,local-agent --server.port=8084"
+.\gradlew.bat bootRun --args="--spring.profiles.active=local,local-agent"

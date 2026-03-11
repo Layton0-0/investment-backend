@@ -78,9 +78,9 @@ class SettingControllerTest {
     @Test
     @DisplayName("GET /api/v1/settings/{accountNo} 설정 없으면 204 No Content (기본값 폼 표시용)")
     void getSetting_returns204WhenNotFound() throws Exception {
-        when(tradingSettingService.getSettingOptional("99999999")).thenReturn(Optional.empty());
+        when(tradingSettingService.getSettingOptional("99999999-01")).thenReturn(Optional.empty());
 
-        mockMvc.perform(get("/api/v1/settings/99999999"))
+        mockMvc.perform(get("/api/v1/settings/99999999-01"))
                 .andExpect(status().isNoContent());
     }
 

@@ -111,6 +111,25 @@ public class AuthController {
     }
 
     /**
+     * 마이페이지 설정용 토큰 조회 (Access Token, WebSocket Token).
+     * serverType 미지정 시 모의투자("1") 기준으로 반환한다.
+     */
+    @GetMapping("/tokens")
+    @Operation(summary = "토큰 조회", description = "현재 사용자의 한국투자증권 Access Token 및 WebSocket Token을 조회합니다")
+    public ResponseEntity<AuthTokensResponseDto> getTokens(
+            Authentication authentication,
+            @RequestParam(required = false) String serverType) {
+        if (authentication == null || !authentication.isAuthenticated()
+                || "anonymousUser".equals(authentication.getPrincipal())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        String userId = authentication.getName();
+        log.info("토큰 조회 요청: userId={}", LogMaskingUtil.maskUserId(userId));
+        AuthTokensResponseDto response = authService.getTokens(userId, serverType);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
      * 마이페이지 수정
      */
     @PutMapping("/mypage")

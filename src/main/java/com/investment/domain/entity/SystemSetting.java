@@ -18,19 +18,19 @@ import java.time.LocalDateTime;
 public class SystemSetting {
 
     @Id
-    @Column(name = "KEY", length = 100, nullable = false, unique = true)
+    @Column(name = "key", length = 100, nullable = false, unique = true)
     private String key;
 
-    @Column(name = "VALUE", columnDefinition = "TEXT")
+    @Column(name = "value", columnDefinition = "TEXT")
     private String value;
 
-    @Column(name = "DESCRIPTION", length = 500)
+    @Column(name = "description", length = 500)
     private String description;
 
-    @Column(name = "UPDATED_AT")
+    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    @Column(name = "UPDATED_BY", length = 36)
+    @Column(name = "updated_by", length = 36)
     private String updatedBy;
 
     public void updateValue(String value, String updatedBy) {

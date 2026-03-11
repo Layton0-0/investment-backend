@@ -31,6 +31,7 @@ public class DefaultMacroIndicatorProvider implements MacroIndicatorProvider {
             return Optional.empty();
         }
         try {
+            log.info("외부 API 호출: system=거시지표, api=VIX등, url={}, method=GET", url);
             String json = restTemplate.getForObject(url, String.class);
             if (json == null || json.isBlank()) {
                 return Optional.empty();

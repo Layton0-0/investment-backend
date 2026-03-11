@@ -280,6 +280,7 @@ public class KoreaInvestmentAccountClient {
             // local 환경에서 요청 상세 로그 출력
             logApiRequest("주식잔고조회", uri, headers, queryParams);
             KoreaInvestmentApiLogging.logRequest("주식잔고조회", PATH_INQUIRE_BALANCE, trId, queryParams);
+            KoreaInvestmentApiLogging.logApiCallInfo("한국투자증권", "주식잔고조회", uri.toString(), "GET");
 
             // Rate Limiter 적용
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
@@ -406,6 +407,7 @@ public class KoreaInvestmentAccountClient {
 
             logApiRequest("해외주식현재잔고조회", uri, headers, queryParams);
             KoreaInvestmentApiLogging.logRequest("해외주식현재잔고조회", PATH_OVERSAS_INQUIRE_PRESENT_BALANCE, trId, queryParams);
+            KoreaInvestmentApiLogging.logApiCallInfo("한국투자증권", "해외주식현재잔고조회", uri.toString(), "GET");
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
 
@@ -697,6 +699,7 @@ public class KoreaInvestmentAccountClient {
             // local 환경에서 요청 상세 로그 출력
             logApiRequest("매수가능조회", uri, headers, queryParams);
             KoreaInvestmentApiLogging.logRequest("매수가능조회", PATH_INQUIRE_PSBL_ORDER, trId, queryParams);
+            KoreaInvestmentApiLogging.logApiCallInfo("한국투자증권", "매수가능조회", uri.toString(), "GET");
 
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
@@ -792,6 +795,7 @@ public class KoreaInvestmentAccountClient {
             // local 환경에서 요청 상세 로그 출력
             logApiRequest("매도가능수량조회", uri, headers, queryParams);
             KoreaInvestmentApiLogging.logRequest("매도가능수량조회", PATH_INQUIRE_PSBL_ORDER2, trId, queryParams);
+            KoreaInvestmentApiLogging.logApiCallInfo("한국투자증권", "매도가능수량조회", uri.toString(), "GET");
 
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
@@ -900,6 +904,7 @@ public class KoreaInvestmentAccountClient {
             // local 환경에서 요청 상세 로그 출력
             logApiRequest("주문체결조회", uri, headers, queryParams);
             KoreaInvestmentApiLogging.logRequest("주문체결조회", PATH_INQUIRE_DAILY_CCLD, trId, queryParams);
+            KoreaInvestmentApiLogging.logApiCallInfo("한국투자증권", "주문체결조회", uri.toString(), "GET");
 
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
@@ -988,6 +993,7 @@ public class KoreaInvestmentAccountClient {
             URI uri = buildUriWithQueryParams(baseUrl, PATH_INQUIRE_PSBL_RVSECNCL, queryParams);
             logApiRequest("주식정정취소가능주문조회", uri, headers, queryParams);
             KoreaInvestmentApiLogging.logRequest("주식정정취소가능주문조회", PATH_INQUIRE_PSBL_RVSECNCL, trId, queryParams);
+            KoreaInvestmentApiLogging.logApiCallInfo("한국투자증권", "주식정정취소가능주문조회", uri.toString(), "GET");
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
             String responseJson = webClient.get()
@@ -1081,6 +1087,7 @@ public class KoreaInvestmentAccountClient {
             // local 환경에서 요청 상세 로그 출력
             logApiRequest("투자계좌자산현황조회", uri, headers, queryParams);
             KoreaInvestmentApiLogging.logRequest("투자계좌자산현황조회", PATH_INQUIRE_ACCOUNT_BALANCE, trId, queryParams);
+            KoreaInvestmentApiLogging.logApiCallInfo("한국투자증권", "투자계좌자산현황조회", uri.toString(), "GET");
 
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
@@ -1203,6 +1210,7 @@ public class KoreaInvestmentAccountClient {
             URI uri = buildUriWithQueryParams(baseUrl, PATH_INQUIRE_BALANCE_RLZ_PL, queryParams);
             logApiRequest("주식잔고조회_실현손익", uri, headers, queryParams);
             KoreaInvestmentApiLogging.logRequest("주식잔고조회_실현손익", PATH_INQUIRE_BALANCE_RLZ_PL, trId, queryParams);
+            KoreaInvestmentApiLogging.logApiCallInfo("한국투자증권", "주식잔고조회_실현손익", uri.toString(), "GET");
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
             String responseJson = webClient.get()
@@ -1329,6 +1337,7 @@ public class KoreaInvestmentAccountClient {
             // local 환경에서 요청 상세 로그 출력
             logApiRequest("기간별손익조회", uri, headers, queryParams);
             KoreaInvestmentApiLogging.logRequest("기간별손익조회", PATH_INQUIRE_PERIOD_PROFIT_LOSS, trId, queryParams);
+            KoreaInvestmentApiLogging.logApiCallInfo("한국투자증권", "기간별손익조회", uri.toString(), "GET");
 
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
@@ -1454,6 +1463,7 @@ public class KoreaInvestmentAccountClient {
             URI uri = buildUriWithQueryParams(baseUrl, PATH_INQUIRE_PERIOD_PROFIT_LOSS_STATUS, queryParams);
             logApiRequest("기간별매매손익현황조회", uri, headers, queryParams);
             KoreaInvestmentApiLogging.logRequest("기간별매매손익현황조회", PATH_INQUIRE_PERIOD_PROFIT_LOSS_STATUS, trId, queryParams);
+            KoreaInvestmentApiLogging.logApiCallInfo("한국투자증권", "기간별매매손익현황조회", uri.toString(), "GET");
             RateLimiter rateLimiter = getApiRateLimiter(serverType);
             rateLimiter.acquirePermission();
             String responseJson = webClient.get()

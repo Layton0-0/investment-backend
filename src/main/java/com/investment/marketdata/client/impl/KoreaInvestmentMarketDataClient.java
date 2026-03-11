@@ -262,6 +262,7 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
 
         String path = "/uapi/domestic-stock/v1/quotations/inquire-price";
         KoreaInvestmentApiLogging.logRequest("주식현재가", path, trId, queryParams);
+        KoreaInvestmentApiLogging.logApiCallInfo("한국투자증권", "주식현재가", uri.toString(), "GET");
 
         // Rate Limiter 적용
         RateLimiter rateLimiter = getApiRateLimiter(serverType);
@@ -523,6 +524,7 @@ public class KoreaInvestmentMarketDataClient implements MarketDataClient {
 
         String path = "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice";
         KoreaInvestmentApiLogging.logRequest("주식일봉차트", path, trId, queryParams);
+        KoreaInvestmentApiLogging.logApiCallInfo("한국투자증권", "주식일봉차트", uri.toString(), "GET");
 
         // Rate Limiter 적용 (실전투자: 1초당 20건, 모의투자: 1초당 2건)
         RateLimiter rateLimiter = getApiRateLimiter(serverType);

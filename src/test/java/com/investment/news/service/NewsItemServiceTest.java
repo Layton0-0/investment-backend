@@ -2,6 +2,7 @@ package com.investment.news.service;
 
 import com.investment.domain.entity.NewsItem;
 import com.investment.domain.repository.NewsItemRepository;
+import com.investment.news.NewsSentimentScorer;
 import com.investment.news.dto.NewsItemPageResponseDto;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,9 +15,12 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+
+import com.investment.news.dto.NewsItemDto;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -30,6 +34,8 @@ class NewsItemServiceTest {
 
         @Mock
         private NewsItemRepository newsItemRepository;
+        @Mock
+        private NewsSentimentScorer newsSentimentScorer;
 
         @InjectMocks
         private NewsItemService newsItemService;
@@ -82,6 +88,31 @@ class NewsItemServiceTest {
         }
 
         @Test
+        @DisplayName("getNewsItems 항목의 sentimentScore가 null이면 조회 시 스코어를 채워 DTO에 반영한다")
+        void getNewsItems_nullSentimentScore_fillsFromScorer() {
+                NewsItem item = NewsItem.builder()
+                                .source("DART")
+                                .market("KR")
+                                .itemType("FACT")
+                                .title("실적호조")
+                                .url("https://example.com/1")
+                                .collectedAt(LocalDateTime.now())
+                                .build();
+                Page<NewsItem> page = new PageImpl<>(List.of(item),
+                                PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "collectedAt")), 1);
+                when(newsItemRepository.findByFilters(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(page);
+                when(newsSentimentScorer.scoreText(eq("실적호조"), any())).thenReturn(BigDecimal.valueOf(2));
+
+                NewsItemPageResponseDto result = newsItemService.getNewsItems(null, null, null, null, null, null, null, 0, 20);
+
+                assertNotNull(result.getContent());
+                assertEquals(1, result.getContent().size());
+                NewsItemDto dto = result.getContent().get(0);
+                assertNotNull(dto.getSentimentScore());
+                assertEquals(0, dto.getSentimentScore().compareTo(BigDecimal.valueOf(2)));
+        }
+
+        @Test
         @DisplayName("getNewsItems size가 100 초과 시 100으로 제한한다")
         void getNewsItems_sizeOver100_capsAt100() {
                 Page<NewsItem> page = new PageImpl<>(Collections.emptyList(),
@@ -105,6 +136,7 @@ class NewsItemServiceTest {
                                 .url("https://dart.fss.or.kr/dsbh001/main.do?rcpNo=123")
                                 .collectedAt(LocalDateTime.now())
                                 .build();
+                when(newsSentimentScorer.scoreText(any(), any())).thenReturn(BigDecimal.ZERO);
                 when(newsItemRepository.existsBySourceAndUrl("DART", item.getUrl())).thenReturn(true);
 
                 boolean result = newsItemService.saveCollectedItem(item);
@@ -114,7 +146,7 @@ class NewsItemServiceTest {
         }
 
         @Test
-        @DisplayName("saveCollectedItem 중복 아닐 때 저장하고 true 반환")
+        @DisplayName("saveCollectedItem 중복 아닐 때 감정 점수 채워 저장하고 true 반환")
         void saveCollectedItem_notDuplicate_savesAndReturnsTrue() {
                 NewsItem item = NewsItem.builder()
                                 .source("DART")
@@ -124,12 +156,15 @@ class NewsItemServiceTest {
                                 .url("https://dart.fss.or.kr/dsbh001/main.do?rcpNo=456")
                                 .collectedAt(LocalDateTime.now())
                                 .build();
+                when(newsSentimentScorer.scoreText(any(), any())).thenReturn(BigDecimal.ONE);
                 when(newsItemRepository.existsBySourceAndUrl("DART", item.getUrl())).thenReturn(false);
 
                 boolean result = newsItemService.saveCollectedItem(item);
 
                 assertTrue(result);
-                verify(newsItemRepository).save(item);
+                verify(newsItemRepository).save(argThat(saved ->
+                                saved.getSource().equals("DART") && saved.getSentimentScore() != null
+                                                && saved.getSentimentScore().compareTo(BigDecimal.ONE) == 0));
         }
 
         @Test

@@ -119,6 +119,7 @@ public class KoreaInvestmentRankClientImpl implements KoreaInvestmentRankClient 
         URI uri = builder.build().toUri();
 
         KoreaInvestmentApiLogging.logRequest(apiName, path, trId, queryParams != null ? queryParams.keySet() : null);
+        KoreaInvestmentApiLogging.logApiCallInfo("한국투자증권", apiName, uri.toString(), "GET");
 
         HttpHeaders headers = KoreaInvestmentRequestBuilder.createCommonHeaders(accessToken, appKey, appSecret, trId);
         RateLimiter rateLimiter = "0".equals(st)

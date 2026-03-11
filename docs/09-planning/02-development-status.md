@@ -10,6 +10,46 @@
 
 ## 1. 완료 (Completed)
 
+### 단기/중기/장기 파이프라인 로그 가시화 (2026-03-11)
+- [x] **runIfNotHalted 전략별 실행/완료 로그**  
+  PipelineExecutionScheduler.runIfNotHalted에서 pipelineExecutor.run() 호출 직전·직후 log.debug로 market, strategyType, accountNo(마스킹) 출력. 단기/중기/장기 각각 실행·스킵 여부를 로그로 추적 가능.
+- [x] **runPipelineForAccount 완료 로그 정리**  
+  계정당 1번만 찍히던 DEBUG "파이프라인 실행 완료" 제거. 전략별 완료는 runIfNotHalted 직후 로그로 대체.
+- [x] **PipelineExecutor.run 진입 로그**  
+  PipelineExecutor.run() 메서드 진입 시 log.debug("파이프라인 실행 시작: market=..., strategyType=..., accountNo=...") 추가. LogMaskingUtil.maskAccountNo 사용.
+
+### 트레이드 저널 정상화 (2026-03-11)
+- [x] **백엔드 GET /api/v1/ops/trade-journal**  
+  OpsTradeJournalController 추가. ADMIN 전용, 페이징·기간(from/to) 필터. AuditLogService.findPage(..., EVENT_TRADE_DECISION) 호출로 매매 결정(BUY/SELL/SKIP/DRY_RUN) 이력만 조회. 응답은 AuditLogListResponseDto(감사 로그와 동일).
+- [x] **DB 마이그레이션 V34**  
+  TB_AUDIT_LOG에 DETAIL_JSON(TEXT) 컬럼 추가. TRADE_DECISION 이벤트 시 action·symbol·market 등 JSON 저장용.
+- [x] **테스트·API QA·문서**  
+  OpsTradeJournalControllerTest 슬라이스 테스트 추가. run-api-qa.ps1·QA_시나리오_마스터·API_매핑_문서·02-api-endpoints §12.1.1 트레이드 저널 반영.
+
+### 뉴스·공시 목록 감정·페이징 수정 (2026-03-11)
+- [x] **프론트: 뉴스 API 응답 page 중첩 구조 반영 및 페이징 연동**  
+  newsApi.ts `NewsItemPageResponseDto`를 백엔드와 동일하게 `content` + `page: { number, size, totalElements, totalPages }` 구조로 변경. Market.tsx에서 `res.page`에서 totalElements/totalPages 읽어 "총 N건", 이전/다음 버튼 정상 표시.
+- [x] **프론트: 감정 컬럼 표시**  
+  NewsItemDto에 `sentimentScore` 추가. 목록 테이블 감정 셀: null이면 "미분석", 있으면 "부정/중립/긍정 (점수)" 및 툴팁으로 수치 표시.
+- [x] **백엔드: 수집 저장 시·목록 조회 시 감정 점수 채우기**  
+  NewsItemService에 NewsSentimentScorer 주입. saveCollectedItem: sentimentScore가 null이면 scoreText(title, summary)로 계산해 엔티티에 세팅 후 저장. toDto: null이면 조회 시점에 스코어 계산해 DTO에만 반영(기존 DB 행도 목록에서 감정 표시).
+- [x] **QA·문서**  
+  NewsItemServiceTest에 NewsSentimentScorer 모킹 및 saveCollectedItem/getNewsItems 감정 채우기 검증 추가. 01-api-overview §3.8 뉴스 응답 구조·sentimentScore 설명 보강.
+
+### US 일별 수집 0건 대응·Ops 페이징 UI (2026-03-11)
+- [x] **시스템 알림 내역·감사 로그 페이징 UI**  
+  Ops.tsx AlertsView·AuditView에 이전/다음 버튼 추가. totalPages > 1일 때 TradeJournalView와 동일한 패턴으로 페이지 이동 가능.
+- [x] **US 일별 수집 0건 문서·로그·알림**  
+  데이터_부재_점검_가이드 §4 "US 일별 수집 0건 시 점검" 추가(휴장일 0건 정상·평일 0건 시 수집기/URL 점검). 01-local-setup-complete.md US 수집 0건 시 확인 절차 보강. UsMarketCollectionService: HTTP 응답 빈 배열 시 responseBodyLength INFO 로그(휴장일 추정용). 휴장일(미국 주말) 0건 시 실패 알림 생략 옵션: DataCollectionProperties.us.skipFailureAlertOnWeekend(true), application.yml skip-failure-alert-on-weekend.
+- [x] **수집기 검증 절차 문서**  
+  investment-data-collector README에 "US 일별 수집 검증 절차 (0건 시 점검)" 절 추가. 데이터_부재_점검_가이드 §4 링크.
+
+### 마이페이지 설정 — Access Token / WebSocket Token 조회 (2026-03-11)
+- [x] **백엔드 GET /api/v1/auth/tokens**  
+  AuthTokensResponseDto(accessToken, websocketToken) 추가. AuthService.getTokens(userId, serverType)에서 KoreaInvestmentTokenService.getAccessToken·getApprovalKey 호출 후 반환. serverType 미지정 시 "1"(모의투자) 기준.
+- [x] **프론트 마이페이지 설정 카드**  
+  authApi.getAuthTokens(serverType), MyPage에 "설정" 카드 추가. 토큰 조회 버튼·Access Token/WebSocket Token 표시(기본 마스킹)·표시/숨기기·복사 버튼. 01-api-overview·11-api-frontend-mapping 반영.
+
 ### 한국투자증권 계좌 API 연동 전면 수정 (2026-03-10)
 - [x] **주문체결조회 3개월 이전/이후 TR_ID 분기**  
   KoreaInvestmentAccountApiConstants에 `getOrderHistoryTrId(serverType, startDate, endDate)` 추가. 조회 종료일이 오늘 기준 3개월 이내면 TTTC0081R/VTTC0081R, 그 이전이면 CTSC9215R/VTSC9215R 사용. KoreaInvestmentAccountClient.inquireOrderHistory에서 기간별 TR_ID 적용.
@@ -165,6 +205,8 @@
   Batch Job `strategy-governance-check`(매월 1일 02:00 KST), 수동 트리거 `POST /api/v1/trigger/strategy-governance-check`. StrategyGovernanceCheckService·StrategyGovernanceCheckTasklet: 최근 N개월 KR/US × SHORT_TERM/MEDIUM_TERM 백테스트 실행 후 MDD·Sharpe 열화 시 EmergencyAlertService로 Discord 알림. 설정 `investment.governance.*`(enabled, lookback-months, mdd-threshold-pct, sharpe-min, default-capital, alert-only). [00-strategy-registry.md](../02-architecture/00-strategy-registry.md) §1.1, [12-auto-investment-strategy.md](../02-architecture/12-auto-investment-strategy.md) §6.2, [02-api-endpoints.md](../04-api/02-api-endpoints.md) 반영.
 - [x] **전략 거버넌스 자동화(2차)**  
   검사 결과 TB_GOVERNANCE_CHECK_RESULT 저장, 열화 시(alert-only=false·auto-halt-on-degradation=true) (market, strategyType)별 TB_GOVERNANCE_HALT 등록. GovernanceHaltService(isHalted, setHalt, clearHalt, getActiveHalts, getRecentResults). PipelineExecutionScheduler에서 halt 조합 run 스킵. Admin API: GET /api/v1/ops/governance/results, GET /api/v1/ops/governance/halts, PUT …/halts/{market}/{strategyType}/clear. Flyway V31, 00-strategy-registry·12-auto-investment-strategy·02-api-endpoints·01-api-overview·11-api-frontend-mapping 반영.
+- [x] **전략 거버넌스 UX·이력 개선**  
+  이력 없음·활성 Halt 제목 오해 해소: (1) Backend: GET /api/v1/ops/governance/status(GovernanceStatusDto.governanceEnabled), OpsGovernanceController에 SystemSettingService 주입. (2) Frontend: GovernanceView에 검사 지금 실행(trigger strategy-governance-check)·이력 없을 때 안내 문구·governance.enabled false 시 별도 경고, 활성 Halt 카드 제목을 "활성 Halt 목록"으로 변경·요약 한 줄(0건/N건). opsApi.getGovernanceStatus, 13-manual-operator-tasks §1.10·02-api-endpoints·01-api-overview·11-api-frontend-mapping 반영.
 - [x] **리스크 이벤트 알림 (일일 MDD 한도 임박·VaR 95% 초과)**  
   RiskEventAlertService·RiskEventAlertTasklet·Batch Job risk-event-alert(장중 10분마다). EmergencyAlertService.sendRiskEventAlert 확장, Discord+TB_ALERT_LOG. 설정 investment.risk.alert-mdd-threshold-pct(0.8), alert-var-exceed-enabled(true). POST /api/v1/trigger/risk-event-alert. 00-strategy-registry·02-api-endpoints·02-development-status 반영.
 - [x] **단일 VPS·배치·배포 절차 문서화**  
@@ -618,3 +660,4 @@
 | 1.65 | 2026-03-06 | 완료: Phase A-2 E2E 검증 실행 — gradlew test·run-api-qa.ps1 62건 전부 PASS. API QA에 ops/auto-trading-readiness·system/settings 시나리오 추가, profit-loss 400(미지원) 허용. 체크리스트 §4 검증 기록 갱신. |
 | 1.66 | 2026-03-06 | 완료: Shrimp B-1~D-2 의존성 순 진행 — B-1 데이터_부재_점검_가이드, B-2 verify-data-pipeline.ps1, C-1/C-2 로컬_Docker_재배포_로그_검증_체크리스트, D-1/D-2 배포_Docker_동일_세팅_가이드. 자동투자_E2E_검증_체크리스트 §3·§5 링크 보강. |
 | 1.63 | 2026-03-06 | 완료: KRX Open API 명세서 문서화 — krx-api-docs 내 Spec.docx·Spec (1)~(4).docx 5건을 12-krx-api-spec.md·12-krx-api-spec/(01~05) 상세 md로 정리. 유가증권/ETF 일별매매, KOSDAQ/KRX/KOSPI 시리즈 일별시세 Request/Response·샘플 수록. 01-api-overview §9.2·04-krx-api-required·10-data-collection-api에 12-krx-api-spec 링크 반영. |
+| 1.67 | 2026-03-11 | 완료: 단기/중기/장기 파이프라인 로그 가시화 — PipelineExecutionScheduler.runIfNotHalted 전략별 실행/완료 log.debug 추가, runPipelineForAccount 계정 단일 완료 로그 제거, PipelineExecutor.run 진입 시 실행 시작 log.debug 추가. Shrimp 태스크 3건(dc090e1f·8f943dee·97ee01be) 반영. |

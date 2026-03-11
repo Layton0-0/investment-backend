@@ -14,6 +14,7 @@ import org.springframework.batch.core.JobExecution;
 import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.context.ApplicationContext;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -113,36 +114,40 @@ public class TriggerController {
         return result;
     }
 
-    @Operation(summary = "KRX 일별 시세 백필", description = "과거 기간 KRX 일별 시세 수집(스트레스 구간 등). from·to 필수.")
+    @Operation(summary = "KRX 일별 시세 백필", description = "과거 기간 KRX 일별 시세 수집(스트레스 구간 등). from·to 미입력 시 오늘만 수집.")
     @PostMapping("/krx-daily-backfill")
     public ResponseEntity<Map<String, Object>> triggerKrxDailyBackfill(
             Principal principal,
-            @Parameter(description = "시작일 (yyyy-MM-dd)", required = true) @RequestParam LocalDate from,
-            @Parameter(description = "종료일 (yyyy-MM-dd)", required = true) @RequestParam LocalDate to) {
+            @Parameter(description = "시작일 (yyyy-MM-dd), 미입력 시 오늘") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "종료일 (yyyy-MM-dd), 미입력 시 오늘") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        LocalDate fromDate = from != null ? from : LocalDate.now();
+        LocalDate toDate = to != null ? to : LocalDate.now();
         JobParametersBuilder params = new JobParametersBuilder();
-        params.addString("fromDate", from.toString());
-        params.addString("toDate", to.toString());
+        params.addString("fromDate", fromDate.toString());
+        params.addString("toDate", toDate.toString());
         ResponseEntity<Map<String, Object>> result = runTrigger("/krx-daily-backfill", "KRX 백필 완료", "KRX 백필 실패", params);
         recordManualTrigger(principal, "/krx-daily-backfill", result);
         if (result.getBody() != null && result.getBody().get("success") == Boolean.TRUE) {
-            return ResponseEntity.ok(Map.of("success", true, "message", "KRX 백필 완료", "from", from.toString(), "to", to.toString()));
+            return ResponseEntity.ok(Map.of("success", true, "message", "KRX 백필 완료", "from", fromDate.toString(), "to", toDate.toString()));
         }
         return result;
     }
 
-    @Operation(summary = "US 일별 시세 백필", description = "과거 기간 US 일별 시세 수집(스트레스 구간 등). from·to 필수.")
+    @Operation(summary = "US 일별 시세 백필", description = "과거 기간 US 일별 시세 수집(스트레스 구간 등). from·to 미입력 시 오늘만 수집.")
     @PostMapping("/us-daily-backfill")
     public ResponseEntity<Map<String, Object>> triggerUsDailyBackfill(
             Principal principal,
-            @Parameter(description = "시작일 (yyyy-MM-dd)", required = true) @RequestParam LocalDate from,
-            @Parameter(description = "종료일 (yyyy-MM-dd)", required = true) @RequestParam LocalDate to) {
+            @Parameter(description = "시작일 (yyyy-MM-dd), 미입력 시 오늘") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "종료일 (yyyy-MM-dd), 미입력 시 오늘") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        LocalDate fromDate = from != null ? from : LocalDate.now();
+        LocalDate toDate = to != null ? to : LocalDate.now();
         JobParametersBuilder params = new JobParametersBuilder();
-        params.addString("fromDate", from.toString());
-        params.addString("toDate", to.toString());
+        params.addString("fromDate", fromDate.toString());
+        params.addString("toDate", toDate.toString());
         ResponseEntity<Map<String, Object>> result = runTrigger("/us-daily-backfill", "US 백필 완료", "US 백필 실패", params);
         recordManualTrigger(principal, "/us-daily-backfill", result);
         if (result.getBody() != null && result.getBody().get("success") == Boolean.TRUE) {
-            return ResponseEntity.ok(Map.of("success", true, "message", "US 백필 완료", "from", from.toString(), "to", to.toString()));
+            return ResponseEntity.ok(Map.of("success", true, "message", "US 백필 완료", "from", fromDate.toString(), "to", toDate.toString()));
         }
         return result;
     }

@@ -188,7 +188,6 @@ public class PipelineExecutionScheduler {
             runIfNotHalted(basDt, "US", accountNo, StrategyType.MEDIUM_TERM, midCapital, autoExecute);
             runIfNotHalted(basDt, "US", accountNo, StrategyType.LONG_TERM, longCapital, autoExecute);
         }
-        log.debug("파이프라인 실행 완료: accountNo={}, basDt={}, autoExecute={}, marketFilter={}", accountNo, basDt, autoExecute, marketFilter);
     }
 
     /** 한국장 오후 유리 구간(14:30~15:30). 14:35 KST에 KR만 실행. */
@@ -224,6 +223,8 @@ public class PipelineExecutionScheduler {
         }
         BigDecimal multiplier = capitalDrawdownConstraintService.getCapitalMultiplier(market, strategyType.name());
         BigDecimal effectiveCapital = capital.multiply(multiplier != null ? multiplier : BigDecimal.ONE).setScale(0, RoundingMode.DOWN);
+        log.debug("파이프라인 실행: market={}, strategyType={}, accountNo={}", market, strategyType, LogMaskingUtil.maskAccountNo(accountNo));
         pipelineExecutor.run(basDt, market, accountNo, strategyType, effectiveCapital, autoExecute);
+        log.debug("파이프라인 실행 완료: market={}, strategyType={}, accountNo={}", market, strategyType, LogMaskingUtil.maskAccountNo(accountNo));
     }
 }

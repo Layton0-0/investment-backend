@@ -41,7 +41,6 @@ docs/tomcat_logs/
 
 # Application (로컬/예민 설정 - Git 제외)
 application-local.yml
-application-local-agent.yml
 application-no-redis.yml
 application-secret.yml
 application-*-local.yml

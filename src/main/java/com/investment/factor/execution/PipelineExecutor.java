@@ -3,6 +3,7 @@ package com.investment.factor.execution;
 import com.investment.common.exception.DomainException;
 import com.investment.common.exception.ErrorCode;
 import com.investment.common.security.EncryptionUtil;
+import com.investment.common.security.LogMaskingUtil;
 import com.investment.domain.entity.BrokerType;
 import com.investment.domain.entity.Order;
 import com.investment.domain.entity.StrategyPosition;
@@ -121,6 +122,7 @@ public class PipelineExecutor {
     @Transactional
     public PipelineRunResult run(LocalDate basDt, String market, String accountNo, StrategyType strategyType,
             BigDecimal allocatedCapital, boolean autoExecute) {
+        log.debug("파이프라인 실행 시작: market={}, strategyType={}, accountNo={}", market, strategyType, LogMaskingUtil.maskAccountNo(accountNo));
         boolean serverAllowRealExecution = systemSettingService.getBoolean("pipeline.allowRealExecution");
         List<PositionRecommendationDto> recommendations = positionSizingService.getRecommendations(
                 basDt, market, strategyType, allocatedCapital, accountNo);

@@ -157,6 +157,8 @@ investment:
       retry-initial-ms: ${US_COLLECTOR_RETRY_INITIAL_MS:1000}
       # US 일별 수집 실패·0건 시 Discord 알림 (webhook 설정 시에만 동작)
       failure-alert-enabled: ${US_COLLECTOR_FAILURE_ALERT_ENABLED:true}
+      # 휴장일(미국 주말) 0건 시 알림 생략. true면 토·일에는 실패 알림 미발송
+      skip-failure-alert-on-weekend: ${US_COLLECTOR_SKIP_ALERT_ON_WEEKEND:true}
     # 내부 수집 API (Yahoo·DART·SEC 등 Python 수집기 → Spring 전달 시 사용). 키 미설정 시 내부 API 비활성화.
     internal-api-key: ${DATA_COLLECTION_INTERNAL_KEY:}
   # 뉴스·공시 시그널 연동 (DART 키워드·8-K). 포지션 사이징 시 시그널 공시 종목 우선 정렬

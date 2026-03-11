@@ -1345,7 +1345,21 @@ Admin 전용 메뉴 `/ops/audit`에서 설정 변경·수동 트리거·실계�
 }
 ```
 
-**DTO**: `AuditLogListResponseDto` — `items` (AuditLogItemDto 배열), `page`, `size`, `totalElements`, `totalPages`. `AuditLogItemDto`: `id`, `occurredAt` (ISO-8601), `eventType`, `userIdMasked`, `accountNoMasked`, `summary`, `result`, `ipAddress`.
+**DTO**: `AuditLogListResponseDto` — `items` (AuditLogItemDto 배열), `page`, `size`, `totalElements`, `totalPages`. `AuditLogItemDto`: `id`, `occurredAt` (ISO-8601), `eventType`, `userIdMasked`, `accountNoMasked`, `summary`, `result`, `ipAddress`, `detailJson` (TRADE_DECISION 시 JSON 문자열).
+
+### 12.1.1 Ops 트레이드 저널 (매매 결정 저널)
+
+Admin 전용 메뉴 `/ops/trade-journal`에서 파이프라인 매수/매도/스킵/DRY_RUN 결정 이력(P6-3)을 조회합니다. **인가**: `hasRole('ADMIN')`. TB_AUDIT_LOG 중 `eventType=TRADE_DECISION`만 조회하며, `detailJson`에 action·symbol·market·strategyType 등이 저장됩니다.
+
+**엔드포인트**: `GET /api/v1/ops/trade-journal`
+
+**쿼리 파라미터**:
+- `page` (int, optional): 페이지 번호 (0부터). 기본값 0
+- `size` (int, optional): 페이지 크기 (1~100). 기본값 20
+- `from` (LocalDate, optional): 기간 시작 (yyyy-MM-dd)
+- `to` (LocalDate, optional): 기간 종료 (yyyy-MM-dd)
+
+**성공 응답 (200 OK)**: 감사 로그와 동일한 `AuditLogListResponseDto` 구조. `items[].eventType`은 항상 `TRADE_DECISION`, `items[].detailJson`에 `action`(BUY/SELL/SKIP/DRY_RUN), `symbol`, `market`, `strategyType` 등이 포함됨.
 
 ### 12.2 Ops 모델/예측 상태
 
@@ -1393,6 +1407,7 @@ Admin 전용 메뉴 `/ops/health`에서 DB·Redis·예측 서비스 상태 요�
 Admin 전용: 전략 거버넌스 검사 결과 이력·(market, strategyType)별 자동 매매 중단(halt) 조회 및 halt 해제. **인가**: `hasRole('ADMIN')`. 알림 이력은 기존 `GET /api/v1/ops/alerts`에서 `component=StrategyGovernance` 필터로 조회.
 
 **엔드포인트**:
+- `GET /api/v1/ops/governance/status` — 거버넌스 검사 활성 여부(시스템 설정 governance.enabled). 응답: `GovernanceStatusDto` (governanceEnabled). false면 검사 Job 실행 시 결과가 저장되지 않음.
 - `GET /api/v1/ops/governance/results?limit=20` — 최근 검사 결과(RUN_AT 내림차순). `limit`(1~500, 기본 20). 응답: `GovernanceCheckResultDto[]` (id, runAt, market, strategyType, mddPct, sharpeRatio, degraded, startDate, endDate, createdAt).
 - `GET /api/v1/ops/governance/halts` — 현재 활성 halt 목록(CLEARED_AT IS NULL). 응답: `GovernanceHaltDto[]` (market, strategyType, haltedAt, reason).
 - `PUT /api/v1/ops/governance/halts/{market}/{strategyType}/clear` — 해당 (market, strategyType) halt 해제. Body(선택): `{ "clearedBy": "userId" }`. 204 No Content.
@@ -1450,8 +1465,8 @@ Admin 전용: 전략 거버넌스 검사 결과 이력·(market, strategyType)�
 | `POST /api/v1/trigger/sec-collect` | SEC EDGAR 공시 수집 즉시 실행 | - |
 | `POST /api/v1/trigger/krx-daily` | KRX 일별 시세 수집 즉시 실행 | `basDt` (optional, yyyy-MM-dd). 미입력 시 오늘 |
 | `POST /api/v1/trigger/us-daily` | US 시장 일별 시세 수집 즉시 실행 | `basDt` (optional). 미입력 시 오늘. 응답에 `saved` 포함 |
-| `POST /api/v1/trigger/krx-daily-backfill` | KRX 일별 시세 기간 백필 (스트레스 구간 등) | `from`, `to` (required, yyyy-MM-dd) |
-| `POST /api/v1/trigger/us-daily-backfill` | US 일별 시세 기간 백필 (스트레스 구간 등) | `from`, `to` (required, yyyy-MM-dd) |
+| `POST /api/v1/trigger/krx-daily-backfill` | KRX 일별 시세 기간 백필 (스트레스 구간 등) | `from`, `to` (optional, yyyy-MM-dd. 미입력 시 오늘만 수집) |
+| `POST /api/v1/trigger/us-daily-backfill` | US 일별 시세 기간 백필 (스트레스 구간 등) | `from`, `to` (optional, yyyy-MM-dd. 미입력 시 오늘만 수집) |
 | `POST /api/v1/trigger/factor-calculation` | 유니버스 필터 및 팩터(시그널) 계산 즉시 실행 | - |
 | `POST /api/v1/trigger/auto-buy` | 자동매수(통합): 공통 전처리 → 로보(ETF) → 파이프라인(개별종목) 순 실행 | (없음). 실제 주문 여부는 DB 시스템 설정·계정별 pipelineAutoExecute에 따름 |
 | `POST /api/v1/trigger/pipeline-execution` | 4단계 파이프라인만 수동 실행 (스케줄은 자동매수 통합 사용) | (없음). 실제 주문 여부는 DB 시스템 설정·계정별 pipelineAutoExecute에 따름 |

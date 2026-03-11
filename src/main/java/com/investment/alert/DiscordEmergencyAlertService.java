@@ -170,6 +170,7 @@ public class DiscordEmergencyAlertService implements EmergencyAlertService {
             return;
         }
         try {
+            log.info("외부 API 호출: system=Discord, api=긴급알림, url={}, method=POST, channel={}", url, channelType);
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("content", content);
             webClientBuilder.build()

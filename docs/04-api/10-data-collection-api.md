@@ -16,6 +16,10 @@ DART/SEC는 Spring에 설정 없음. Python 수집기 환경변수(DART_API_KEY,
 | investment.data.krx.korea-investment-fallback-user-id | KRX_KOREA_INVESTMENT_FALLBACK_USER_ID | 폴백 시 한투 API 호출에 쓸 사용자 ID (해당 사용자 API 키로 토큰 발급) |
 | investment.data.krx.fallback-symbols-source | KRX_FALLBACK_SYMBOLS_SOURCE | PREVIOUS_DAY(전일 TB_DAILY_STOCK) 또는 CONFIG |
 | investment.data.krx.fallback-symbols | KRX_FALLBACK_SYMBOLS | fallback-symbols-source=CONFIG일 때 종목 코드(쉼표 구분) |
+
+**최초 구동(콜드스타트)** — TB_DAILY_STOCK에 한 번도 데이터가 없는 경우:
+- **PREVIOUS_DAY**(기본값)는 전일 일봉이 이미 있어야 종목 목록을 가져오므로, **최초 1회는 전일 데이터가 없어 폴백이 동작하지 않습니다.** (로그: "KRX 폴백: 조회할 종목 목록 없음")
+- **대응**: (1) **CONFIG 사용** — `fallback-symbols-source=CONFIG`, `fallback-symbols=005930,000660,...` 로 시드 종목을 넣고 KRX 또는 한투 폴백으로 최초 1회 수집 후, 이후에는 PREVIOUS_DAY로 전환 가능. (2) **PREVIOUS_DAY + 시드** — `fallback-symbols`에 시드 종목을 넣어 두면, 전일 조회 결과가 비었을 때 자동으로 해당 시드를 사용합니다(코드 동작). (3) KRX API 키가 있으면 `POST /api/v1/trigger/krx-daily`로 당일·전일 수집 1회 실행해 TB_DAILY_STOCK을 채운 뒤, 다음날부터 폴백/유니버스가 정상 동작합니다.
 | investment.data.us.collector-url | US_COLLECTOR_URL | Python 수집기 URL. 수동 DART/SEC 수집 및 US 일봉 호출에 사용 |
 | investment.data.us.symbols | US_SYMBOLS | US 일봉 수집 대상. 기본: 지수·섹터 ETF(SPY,QQQ,XLK,XLF 등) + 대표 주식(퀀트 유니버스) |
 | investment.data.internal-api-key | DATA_COLLECTION_INTERNAL_KEY | 내부 수집 API 키. 미설정 시 내부 API 비활성화 |
