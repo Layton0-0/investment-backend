@@ -348,7 +348,7 @@ curl -X GET "http://localhost:8080/api/v1/accounts/12345678/profit-loss?startDat
 **에러 코드**:
 - `INVALID_INPUT`: 잘못된 입력값
 - `EXCEEDS_MAX_INVESTMENT`: 최대 투자금액 초과
-- `INVALID_ORDER_AMOUNT`: 최소 투자금액 미만
+- `INVALID_ORDER_AMOUNT`: 잘못된 주문 금액(주문 실행 시 최소 투자금액은 검증하지 않음)
 - `INSUFFICIENT_BALANCE`: 잔고 부족
 - `ORDER_FAILED`: 주문 실행 실패
 
@@ -414,17 +414,26 @@ curl -X GET "http://localhost:8080/api/v1/accounts/12345678/profit-loss?startDat
     "orderId": "550e8400-e29b-41d4-a716-446655440000",
     "accountNo": "12345678",
     "symbol": "005930",
+    "symbolName": "삼성전자",
+    "market": "KR",
     "orderType": "BUY",
     "quantity": 10,
     "price": 75000.00,
+    "totalAmount": 750000.00,
     "status": "EXECUTED",
     "orderTime": "2026-01-27T10:00:00",
+    "message": null,
     "signalType": "VOLATILITY_BREAKOUT",
-    "exitRuleType": null
+    "exitRuleType": null,
+    "explanation": "삼성전자 10주 매수 - 이유: 변동성 돌파 시그널"
   }
 ]
 ```
-- 각 항목에 `signalType`, `exitRuleType` (optional) 포함. 파이프라인 주문이 아닌 경우 null.
+- `symbolName` (optional): 국내(KR) 6자리 코드일 때 종목명, 해외는 null.
+- `market`: KR(원화) / US(달러). 가격 통화 표시용.
+- `totalAmount`: 주당 가격 × 수량 (총 금액).
+- `message`: 실패 시 실패 사유.
+- `explanation`: 매매 사유 한글 설명. 수동 주문은 "이유: 수동 주문", 파이프라인은 시그널/청산 유형.
 
 ---
 

@@ -26,6 +26,12 @@ public class OrderResponseDto {
     
     @NotNull
     private String symbol;
+
+    /** 국내(KR) 6자리 코드일 때 종목명, 해외는 null. 표시용. */
+    private String symbolName;
+
+    /** 시장 구분 (KR: 원화, US: 달러). 가격 통화 표시용. */
+    private String market;
     
     @NotNull
     private OrderRequestDto.OrderType orderType;
@@ -35,6 +41,9 @@ public class OrderResponseDto {
     
     @NotNull
     private BigDecimal price;
+
+    /** 주당 가격 × 수량 (총 금액). 표시용. */
+    private BigDecimal totalAmount;
     
     @NotNull
     private OrderStatus status;

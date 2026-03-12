@@ -65,6 +65,7 @@ public class TradeExplanationService {
         if (orderType == OrderRequestDto.OrderType.SELL && exitRuleType != null && !exitRuleType.isBlank()) {
             return EXIT_RULE_LABELS.getOrDefault(exitRuleType, exitRuleType);
         }
-        return "시그널 기반";
+        /* 수동 주문(시그널/청산 규칙 없음)은 "수동 주문"으로 표시. 파이프라인 자동 주문만 "시그널 기반" 등으로 구분. */
+        return "수동 주문";
     }
 }

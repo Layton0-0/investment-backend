@@ -32,13 +32,13 @@ class TradeExplanationServiceTest {
     }
 
     @Test
-    void buildExplanation_buyNoSignal_usesDefaultReason() {
+    void buildExplanation_buyNoSignal_usesManualOrderReason() {
         String result = service.buildExplanation(
                 "AAPL", 3, OrderRequestDto.OrderType.BUY,
                 null, null);
         assertTrue(result.contains("매수"));
         assertTrue(result.contains("이유"));
-        assertTrue(result.contains("시그널 기반"));
+        assertTrue(result.contains("수동 주문"));
     }
 
     @Test

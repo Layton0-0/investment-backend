@@ -148,28 +148,6 @@ class OrderServiceTest {
         }
 
         @Test
-        void 주문_실행_최소투자금액_미만() {
-                // given: 금액 5,000원 미만
-                OrderRequestDto underRequest = OrderRequestDto.builder()
-                                .accountNo("1234567890")
-                                .symbol("005930")
-                                .orderType(OrderRequestDto.OrderType.BUY)
-                                .quantity(1)
-                                .price(new BigDecimal("500.00"))
-                                .build();
-                when(complianceEngine.preTradeCheck(any(), eq(TEST_USER_ID))).thenReturn(ComplianceResult.approve());
-                when(tradingSettingRepository.findByAccountNo("1234567890"))
-                                .thenReturn(Optional.of(tradingSetting));
-
-                // when & then
-                DomainException exception = assertThrows(DomainException.class,
-                                () -> orderService.executeOrder(underRequest));
-
-                assertEquals(ErrorCode.INVALID_ORDER_AMOUNT, exception.getErrorCode());
-                verify(orderRepository, never()).save(any(Order.class));
-        }
-
-        @Test
         void 주문_조회_성공() {
                 // given
                 Order order = Order.builder()

@@ -13,6 +13,7 @@ import com.investment.domain.repository.OrderRepository;
 import com.investment.domain.repository.TradingSettingRepository;
 import com.investment.order.TradeExplanationService;
 import com.investment.order.client.KoreaInvestmentOrderClient;
+import com.investment.marketdata.util.StockCodeConverter;
 import com.investment.order.dto.OrderRequestDto;
 import com.investment.order.dto.OrderResponseDto;
 import lombok.RequiredArgsConstructor;
@@ -154,11 +155,7 @@ public class OrderService implements OrderExecutor {
                     String.format("최대 투자금액(%s)을 초과합니다: %s",
                             setting.getMaxInvestmentAmount(), orderAmount));
         }
-        if (orderAmount.compareTo(setting.getMinInvestmentAmount()) < 0) {
-            throw new DomainException(ErrorCode.INVALID_ORDER_AMOUNT,
-                    String.format("최소 투자금액(%s) 미만입니다: %s",
-                            setting.getMinInvestmentAmount(), orderAmount));
-        }
+        // 최소 투자금액은 주문 실행 단계에서 검증하지 않음 (만원 단위 종목 등 소액 주문 허용)
 
         Order order = Order.builder()
                 .accountNo(request.getAccountNo())
@@ -359,13 +356,27 @@ public class OrderService implements OrderExecutor {
      * @return 주문 응답 DTO
      */
     private OrderResponseDto convertToResponseDto(Order order) {
+        String symbol = order.getSymbol();
+        boolean isKr = symbol != null && symbol.trim().matches("^\\d{6}$");
+        String symbolName = isKr ? StockCodeConverter.toStockName(symbol) : null;
+        if (symbolName != null && symbolName.equals(symbol)) {
+            symbolName = null; // 매핑 없으면 toStockName이 코드 그대로 반환 → 중복 표시 방지
+        }
+        String market = isKr ? "KR" : "US";
+        BigDecimal totalAmount = order.getPrice() != null && order.getQuantity() != null
+                ? order.getPrice().multiply(BigDecimal.valueOf(order.getQuantity()))
+                : null;
+
         return OrderResponseDto.builder()
                 .orderId(order.getId())
                 .accountNo(order.getAccountNo())
-                .symbol(order.getSymbol())
+                .symbol(symbol)
+                .symbolName(symbolName)
+                .market(market)
                 .orderType(convertToDtoOrderType(order.getOrderType()))
                 .quantity(order.getQuantity())
                 .price(order.getPrice())
+                .totalAmount(totalAmount)
                 .status(convertToDtoStatus(order.getStatus()))
                 .orderTime(order.getOrderTime())
                 .message(order.getMessage())
