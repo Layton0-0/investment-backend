@@ -20,9 +20,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import org.springframework.util.StringUtils;
 
 /**
  * 1단계 유니버스 필터링.
@@ -48,9 +51,13 @@ public class UniverseFilterService {
     @Value("${investment.factor.liquidity-min-trd-val:1000000000}")
     private long liquidityMinTrdVal = 1_000_000_000L;
 
-    /** KR 유동성 필터 시 최근 5일 평균 거래대금 사용 여부 (true 시 PIT: basDt 포함 5일) */
+    /** 유동성 필터 시 최근 5일 평균 거래대금 사용 여부 (true 시 PIT: basDt 포함 5일). 공통 기본값. */
     @Value("${investment.factor.use-5d-avg-liquidity:true}")
     private boolean use5DayAvgLiquidity = true;
+
+    /** KR 전용: 5일 평균 사용 여부. 미설정 시 use-5d-avg-liquidity 따름. false면 당일 거래대금만 사용(US와 동일, 한국 시그널 0 원인 완화용). */
+    @Value("${investment.factor.use-5d-avg-liquidity-kr:}")
+    private String use5DayAvgLiquidityKr = "";
 
     /** Sector RS: 상위 N개 업종만 유니버스에 포함 (미설정 시 5) */
     @Value("${investment.factor.sector-rs-top-n:5}")
@@ -82,6 +89,22 @@ public class UniverseFilterService {
     @Value("${investment.factor.volume-rank-limit:200}")
     private int volumeRankLimit = 200;
 
+    /** KR 고정 심볼 리스트(쉼표 구분). 비어 있지 않으면 유동성 필터 대신 이 목록과 TB_DAILY_STOCK 교집합으로 유니버스 구성 (개발/검증용). */
+    @Value("${investment.factor.kr-symbols-override:}")
+    private String krSymbolsOverride = "";
+
+    /** KR 유니버스: 거래량 스파이크 필터 적용 여부. true 시 당일 거래량 ≥ minRatio × (과거 N일 평균 거래량) 인 종목만 유지 */
+    @Value("${investment.factor.volume-spike-enabled:false}")
+    private boolean volumeSpikeEnabled = false;
+
+    /** 거래량 스파이크 최소 비율. 당일 거래량 / 과거 N일 평균 거래량 ≥ 이 값이면 통과 (기본 1.5) */
+    @Value("${investment.factor.volume-spike-min-ratio:1.5}")
+    private double volumeSpikeMinRatio = 1.5;
+
+    /** 거래량 스파이크 평균 계산용 과거 거래일 수 (PIT: basDt-1 기준 N일). 기본 5 */
+    @Value("${investment.factor.volume-spike-lookback-days:5}")
+    private int volumeSpikeLookbackDays = 5;
+
     /**
      * 기준일·시장에 대해 유니버스 필터 실행.
      * 유동성 필터 + (한국) Sector Relative Strength 필터 적용.
@@ -110,6 +133,10 @@ public class UniverseFilterService {
             List<String> sectorPassed = filterBySectorRelativeStrength(basDt, market, afterVolumeRank);
             // P/B 저평가 필터 (0.8~0.9): 데이터 소스 확정 후 적용. 현재 스텁(통과)
             finalSymbols = filterByPbValue(basDt, market, sectorPassed);
+            // 거래량 스파이크 필터: 당일 거래량 ≥ minRatio × (과거 N일 평균 거래량)
+            if (volumeSpikeEnabled && !finalSymbols.isEmpty()) {
+                finalSymbols = filterByVolumeSpike(basDt, market, finalSymbols);
+            }
         } else if ("US".equals(market)) {
             // 미국: Post-Earnings Drift 필터 (현재 스텁)
             finalSymbols = filterByPostEarningsDrift(basDt, market, liquidityPassed);
@@ -141,11 +168,34 @@ public class UniverseFilterService {
         return toSave.size();
     }
 
+    /** KR 시장에서 5일 평균 유동성 사용 여부. use-5d-avg-liquidity-kr 미설정 시 공통 use-5d-avg-liquidity 따름. */
+    private boolean isUse5DayAvgLiquidityForKr() {
+        if (use5DayAvgLiquidityKr == null || use5DayAvgLiquidityKr.isBlank()) {
+            return use5DayAvgLiquidity;
+        }
+        return Boolean.parseBoolean(use5DayAvgLiquidityKr.trim());
+    }
+
     /**
-     * 유동성 필터 적용. KR이고 use5DayAvgLiquidity=true면 basDt 포함 최근 5일 평균 거래대금 사용 (PIT).
+     * 유동성 필터 적용. KR이고 5일 평균 사용 시 basDt 포함 최근 5일 평균 거래대금 사용 (PIT).
+     * use-5d-avg-liquidity-kr=false면 KR도 당일만 사용(한국 시그널 0 원인 완화용).
+     * KR 고정 심볼(kr-symbols-override) 설정 시 해당 종목 중 basDt 일봉 있는 것만 반환.
      */
     private List<DailyStock> resolveLiquidityPassed(LocalDate basDt, String market) {
-        if ("KR".equals(market) && use5DayAvgLiquidity) {
+        if ("KR".equals(market) && StringUtils.hasText(krSymbolsOverride)) {
+            List<String> overrideList = Arrays.stream(krSymbolsOverride.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .distinct()
+                    .collect(Collectors.toList());
+            if (!overrideList.isEmpty()) {
+                List<DailyStock> forBasDt = dailyStockRepository.findByBasDtAndMarketAndSymbolIn(basDt, market, overrideList);
+                log.debug("유니버스 필터: KR 고정 심볼 모드, basDt={}, overrideCount={}, passed={}", basDt, overrideList.size(), forBasDt.size());
+                return forBasDt;
+            }
+        }
+        boolean use5dForKr = "KR".equals(market) && isUse5DayAvgLiquidityForKr();
+        if (use5dForKr) {
             LocalDate fromDt = basDt.minusDays(4);
             List<String> symbols = dailyStockRepository.findSymbolsByMarketAndBasDtBetweenWithAvgTrdValGreaterThanEqual(
                     market, fromDt, basDt, liquidityMinTrdVal);
@@ -285,6 +335,58 @@ public class UniverseFilterService {
         // P/B 데이터 소스 미연동 시 필터 없이 통과
         log.debug("P/B 필터: 데이터 소스 미연동(스텁), basDt={}, market={}, count={}", basDt, market, symbols.size());
         return symbols;
+    }
+
+    /**
+     * KR 거래량 스파이크 필터. 당일 거래량 ≥ minRatio × (과거 lookbackDays일 평균 거래량) 인 종목만 반환.
+     * PIT: basDt 및 그 이전 일자만 사용. 평균은 basDt-1 ~ basDt-lookbackDays (거래일).
+     */
+    private List<String> filterByVolumeSpike(LocalDate basDt, String market, List<String> symbols) {
+        if (symbols.isEmpty() || volumeSpikeLookbackDays <= 0) {
+            return symbols;
+        }
+        LocalDate fromDt = basDt.minusDays(volumeSpikeLookbackDays);
+        List<DailyStock> rows = dailyStockRepository.findByMarketAndSymbolInAndBasDtBetweenOrderByBasDtAsc(
+                market, symbols, fromDt, basDt);
+        if (rows.isEmpty()) {
+            log.debug("거래량 스파이크 필터: 일봉 없음, basDt={}, market=KR", basDt);
+            return List.of();
+        }
+        List<String> passed = new ArrayList<>();
+        for (String symbol : symbols) {
+            List<DailyStock> bySymbol = rows.stream()
+                    .filter(d -> symbol.equals(d.getSymbol()))
+                    .sorted((a, b) -> a.getBasDt().compareTo(b.getBasDt()))
+                    .collect(Collectors.toList());
+            DailyStock todayRow = bySymbol.stream()
+                    .filter(d -> d.getBasDt().equals(basDt))
+                    .findFirst()
+                    .orElse(null);
+            if (todayRow == null || todayRow.getVolume() == null || todayRow.getVolume() <= 0) {
+                continue;
+            }
+            List<DailyStock> pastRows = bySymbol.stream()
+                    .filter(d -> d.getBasDt().isBefore(basDt))
+                    .sorted((a, b) -> b.getBasDt().compareTo(a.getBasDt()))
+                    .limit(volumeSpikeLookbackDays)
+                    .collect(Collectors.toList());
+            if (pastRows.size() < volumeSpikeLookbackDays) {
+                continue;
+            }
+            long avgVolume = pastRows.stream()
+                    .mapToLong(d -> d.getVolume() != null ? d.getVolume() : 0L)
+                    .sum() / pastRows.size();
+            if (avgVolume <= 0) {
+                continue;
+            }
+            double ratio = (double) todayRow.getVolume() / avgVolume;
+            if (ratio >= volumeSpikeMinRatio) {
+                passed.add(symbol);
+            }
+        }
+        log.debug("거래량 스파이크 필터: basDt={}, market=KR, minRatio={}, lookback={}, in={}, out={}",
+                basDt, volumeSpikeMinRatio, volumeSpikeLookbackDays, symbols.size(), passed.size());
+        return passed;
     }
 
     /**

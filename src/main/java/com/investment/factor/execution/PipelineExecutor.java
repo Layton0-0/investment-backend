@@ -105,7 +105,7 @@ public class PipelineExecutor {
     @Transactional
     public PipelineRunResult run(LocalDate basDt, String market, String accountNo, BigDecimal totalCapital,
             boolean autoExecute) {
-        return run(basDt, market, accountNo, StrategyType.SHORT_TERM, totalCapital, autoExecute);
+        return run(basDt, market, accountNo, StrategyType.SHORT_TERM, totalCapital, autoExecute, null);
     }
 
     /**
@@ -122,7 +122,23 @@ public class PipelineExecutor {
     @Transactional
     public PipelineRunResult run(LocalDate basDt, String market, String accountNo, StrategyType strategyType,
             BigDecimal allocatedCapital, boolean autoExecute) {
-        log.debug("파이프라인 실행 시작: market={}, strategyType={}, accountNo={}", market, strategyType, LogMaskingUtil.maskAccountNo(accountNo));
+        return run(basDt, market, accountNo, strategyType, allocatedCapital, autoExecute, null);
+    }
+
+    /**
+     * 기준일·시장·기간별 권장 포지션 산출 후, 설정에 따라 주문 실행. correlationId가 있으면 구조화 로그에 포함.
+     *
+     * @param correlationId    실행 추적용 ID (null 가능)
+     */
+    @Transactional
+    public PipelineRunResult run(LocalDate basDt, String market, String accountNo, StrategyType strategyType,
+            BigDecimal allocatedCapital, boolean autoExecute, String correlationId) {
+        if (correlationId != null) {
+            log.info("pipelineRunStart basDt={} market={} strategyType={} accountNo={} correlationId={}",
+                    basDt, market, strategyType, LogMaskingUtil.maskAccountNo(accountNo), correlationId);
+        } else {
+            log.debug("파이프라인 실행 시작: market={}, strategyType={}, accountNo={}", market, strategyType, LogMaskingUtil.maskAccountNo(accountNo));
+        }
         boolean serverAllowRealExecution = systemSettingService.getBoolean("pipeline.allowRealExecution");
         List<PositionRecommendationDto> recommendations = positionSizingService.getRecommendations(
                 basDt, market, strategyType, allocatedCapital, accountNo);
@@ -252,13 +268,20 @@ public class PipelineExecutor {
                         rec.getEntryPrice()));
             }
         }
-        return PipelineRunResult.builder()
+        PipelineRunResult result = PipelineRunResult.builder()
                 .basDt(basDt)
                 .market(market)
                 .dryRun(!actuallyExecute)
                 .recommendationCount(recommendations.size())
                 .orderResults(orderResults)
                 .build();
+        if (correlationId != null) {
+            log.info("pipelineRunEnd correlationId={} market={} strategyType={} recommendationCount={} orderCount={}",
+                    correlationId, market, strategyType, result.getRecommendationCount(), result.getOrderResults().size());
+        } else {
+            log.debug("파이프라인 실행 완료: market={}, strategyType={}, accountNo={}", market, strategyType, LogMaskingUtil.maskAccountNo(accountNo));
+        }
+        return result;
     }
 
     /**

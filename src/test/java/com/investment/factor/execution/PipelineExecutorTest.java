@@ -120,6 +120,39 @@ class PipelineExecutorTest {
         }
 
         @Test
+        @DisplayName("run(7-arg) correlationId 전달 시 동일 동작 및 구조화 로그용 ID 전달")
+        void run_withCorrelationId_returnsSameResultAndAcceptsCorrelationId() {
+                LocalDate basDt = LocalDate.of(2026, 1, 30);
+                String market = "KR";
+                String accountNo = "1234567890";
+                BigDecimal totalCapital = new BigDecimal("100000000");
+                String correlationId = "test-pipeline-run-001";
+
+                PositionRecommendationDto recommendation = PositionRecommendationDto.builder()
+                                .basDt(basDt)
+                                .symbol("005930")
+                                .market(market)
+                                .recommendedAmt(new BigDecimal("10000000"))
+                                .recommendedQty(100)
+                                .entryPrice(new BigDecimal("100000"))
+                                .stopLoss(new BigDecimal("95000"))
+                                .method("ATR")
+                                .build();
+
+                when(positionSizingService.getRecommendations(eq(basDt), eq(market), eq(StrategyType.SHORT_TERM),
+                                eq(totalCapital), any()))
+                                .thenReturn(List.of(recommendation));
+
+                PipelineExecutor.PipelineRunResult result = pipelineExecutor.run(
+                                basDt, market, accountNo, StrategyType.SHORT_TERM, totalCapital, false, correlationId);
+
+                assertThat(result.isDryRun()).isTrue();
+                assertThat(result.getRecommendationCount()).isEqualTo(1);
+                assertThat(result.getOrderResults()).hasSize(1);
+                verify(orderService, never()).executeOrderForPipeline(any(), any());
+        }
+
+        @Test
         @DisplayName("변동성 구간이면 신규 매수 지연(주문 미실행)")
         void run_volatilePeriod_skipsBuy() {
                 when(tradingWindowService.isVolatilePeriod(eq("KR"), any())).thenReturn(true);

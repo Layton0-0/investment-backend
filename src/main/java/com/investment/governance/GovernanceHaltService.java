@@ -1,5 +1,6 @@
 package com.investment.governance;
 
+import com.investment.common.security.LogMaskingUtil;
 import com.investment.domain.entity.GovernanceCheckResult;
 import com.investment.domain.entity.GovernanceHalt;
 import com.investment.domain.repository.GovernanceCheckResultRepository;
@@ -77,9 +78,10 @@ public class GovernanceHaltService {
             log.debug("Governance halt already cleared: market={}, strategyType={}", market, strategyType);
             return;
         }
-        h.clear(clearedBy != null ? clearedBy : "admin");
+        String who = clearedBy != null ? clearedBy : "admin";
+        h.clear(who);
         governanceHaltRepository.save(h);
-        log.info("Governance halt cleared: market={}, strategyType={}, clearedBy={}", market, strategyType, h.getClearedBy());
+        log.info("Governance halt cleared: market={}, strategyType={}, clearedBy={}", market, strategyType, LogMaskingUtil.maskUserId(who));
     }
 
     /**
@@ -111,14 +113,17 @@ public class GovernanceHaltService {
     }
 
     private GovernanceCheckResultDto toResultDto(GovernanceCheckResult r) {
+        boolean degraded = "Y".equals(r.getDegraded());
         return GovernanceCheckResultDto.builder()
                 .id(r.getId())
                 .runAt(r.getRunAt() != null ? r.getRunAt().toString() : null)
                 .market(r.getMarket())
                 .strategyType(r.getStrategyType())
+                .passed(!degraded)
                 .mddPct(r.getMddPct())
                 .sharpeRatio(r.getSharpeRatio())
-                .degraded("Y".equals(r.getDegraded()))
+                .message(degraded ? "Degraded" : "Passed")
+                .degraded(degraded)
                 .startDate(r.getStartDate())
                 .endDate(r.getEndDate())
                 .createdAt(r.getCreatedAt() != null ? r.getCreatedAt().toString() : null)

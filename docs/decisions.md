@@ -36,6 +36,7 @@
 30. [초보자 온보딩 UX (퀴즈·원클릭 자동투자 시작)](#30-초보자-온보딩-ux-퀴즈원클릭-자동투자-시작)
 31. [시장 레짐 탐지 규칙엔진 (HMM 대신 VIX/이평선)](#31-시장-레짐-탐지-규칙엔진-hmm-대신-vix이평선)
 32. [트레이딩 윈도우 다중 구간 (한국 마감·미국 마감)](#32-트레이딩-윈도우-다중-구간-한국-마감미국-마감)
+33. [Admin Ops 거버넌스 API 계약](#33-admin-ops-거버넌스-api-계약)
 
 ---
 
@@ -942,6 +943,30 @@ API 설계 표준 수립 필요
 
 ---
 
+## 33. Admin Ops 거버넌스 API 계약
+
+**결정일**: 2026년 3월  
+**상태**: 확정  
+**결정**: 전략 거버넌스 검사 결과·활성 halt 조회·halt 해제는 `/api/v1/ops/governance` 하위 REST로 제공하며, 모든 엔드포인트는 `hasRole('ADMIN')`으로 제한한다. 응답은 DTO만 사용하고 엔티티를 노출하지 않는다. halt 해제(PUT …/clear)는 멱등(대상 없거나 이미 해제된 경우에도 204 No Content 유지)으로 동작한다.
+
+### 배경
+
+Ops 거버넌스 탭에서 "최근 N건 검사 결과 + 활성 halt 목록(market, strategyType)" 표시 및 "halt 원클릭 해제"를 위해 명시적 API 계약이 필요하다. 백엔드에는 이미 GovernanceCheckResult·GovernanceHalt 엔티티 및 GovernanceHaltService·OpsGovernanceController가 구현되어 있으므로, 본 ADR은 **계약 정리 및 문서화**를 목적으로 한다.
+
+### 결정 사항
+
+- **경로**: `GET /api/v1/ops/governance/status`(검사 활성 여부), `GET /api/v1/ops/governance/results?limit=N`(최근 N건 검사 결과), `GET /api/v1/ops/governance/halts`(활성 halt 목록), `PUT /api/v1/ops/governance/halts/{market}/{strategyType}/clear`(halt 해제).
+- **인가**: 전 엔드포인트 `@PreAuthorize("hasRole('ADMIN')")`. 401/403은 프로젝트 표준 처리.
+- **계약**: 요청/응답 스키마·상태 코드는 [02-api-endpoints.md §12.4](04-api/02-api-endpoints.md) 및 설계서 [plans/architecture/20260313-1400_admin-ops-governance-api-design.md](../../plans/architecture/20260313-1400_admin-ops-governance-api-design.md)에 정의. DTO: GovernanceStatusDto, GovernanceCheckResultDto, GovernanceHaltDto, GovernanceHaltClearRequestDto.
+- **멱등**: clear 호출 시 해당 (market, strategyType)에 활성 halt가 없거나 이미 cleared여도 204 반환(재호출 안전).
+
+### 영향
+
+- Ops 전략 거버넌스 탭(프론트)은 위 4개 엔드포인트로 결과 표시·halt 해제 구현. [11-api-frontend-mapping.md](04-api/11-api-frontend-mapping.md) 전략 거버넌스 행 참조.
+- [01-system-architecture.md](02-architecture/01-system-architecture.md) §10.2 Kill Switch와 동일한 Admin 전용 패턴 유지.
+
+---
+
 ## 참고 문서
 
 - [시스템 아키텍처](./02-architecture/01-system-architecture.md)
@@ -972,3 +997,4 @@ API 설계 표준 수립 필요
 | 1.15 | 2026-02-27 | System | ADR 28 시장 급락 시 동결 정책 (MarketCrashGateService, 벤치마크 전일 낙폭 임계값 시 당일 신규 매수 중단) |
 | 1.16 | 2026-03-04 | System | ADR 30 초보자 온보딩 UX (퀴즈·원클릭 quick-start), ADR 31 시장 레짐 탐지 규칙엔진 (HMM 대신 VIX/이평선) 추가 |
 | 1.17 | 2026-03-05 | System | ADR 32 트레이딩 윈도우 다중 구간 (한국 마감 14:30~15:30, 미국 마감 05:00~06:00 KST, 퀀트 시간대 전략) |
+| 1.18 | 2026-03-13 | System | ADR 33 Admin Ops 거버넌스 API 계약 (검사 결과·활성 halt 조회/해제, ADMIN 전용, 멱등 clear) |

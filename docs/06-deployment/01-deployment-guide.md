@@ -179,6 +179,32 @@ MAX_INVESTMENT_AMOUNT=1000000
 MIN_INVESTMENT_AMOUNT=10000
 ```
 
+### 6.3 로컬 Docker Compose — BACKEND_OPTS (선택)
+
+**로컬 풀 스택**(`investment-infra/docker-compose.local-full.yml`)에서 백엔드 컨테이너에 **JVM 옵션**을 넘기고 싶을 때 사용한다.
+
+| 항목 | 설명 |
+|------|------|
+| **변수명** | `BACKEND_OPTS` |
+| **용도** | 백엔드 컨테이너 기동 시 `java` 명령에 추가할 옵션 (예: 힙 크기, GC 설정). |
+| **필수 여부** | **선택**. 미설정 시 기본 JVM 옵션으로 기동한다. |
+| **설정 위치** | Compose를 실행하는 셸에서 `export BACKEND_OPTS=...` 하거나, `investment-infra` 디렉터리에 `.env` 파일을 두고 `BACKEND_OPTS=...` 로 설정. (실제 비밀/키는 저장소에 넣지 말 것. `.env`는 `.gitignore` 대상.) |
+
+**예시 (플레이스홀더)**  
+- 힙 상한: `BACKEND_OPTS=-Xmx512m`  
+- GC + 힙: `BACKEND_OPTS=-Xmx512m -XX:+UseG1GC`
+
+**동작 확인**  
+`BACKEND_OPTS`를 주고 백엔드만 띄운 뒤 헬스가 UP 인지 확인:
+
+```bash
+cd investment-infra
+BACKEND_OPTS=-Xmx512m docker compose -f docker-compose.local-full.yml up -d backend
+# DB/Redis 준비 후: curl -s http://localhost:8080/actuator/health
+```
+
+`"status":"UP"` 이면 JVM 옵션이 적용된 상태로 기동된 것이다.
+
 ## 7. 데이터베이스 설정
 
 ### 7.1 데이터베이스 생성
@@ -279,3 +305,4 @@ GET /actuator/metrics
 | 버전 | 일자 | 작성자 | 변경 내용 |
 |------|------|--------|----------|
 | 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 |
+| 1.1 | 2026-03-13 | — | §6.3 로컬 Docker Compose BACKEND_OPTS(선택) 및 검증 절차 추가 |

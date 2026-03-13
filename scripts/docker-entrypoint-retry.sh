@@ -30,10 +30,11 @@ if [ "$count" -ge "$MAX_ATTEMPTS" ] 2>/dev/null; then
 fi
 
 # exec 사용 안 함: 종료 코드 확인 후 카운터 처리
+# BACKEND_OPTS: 선택적 JVM 옵션 (예: -Xmx512m). 미설정 시 빈 값으로 기본 동작.
 if [ $# -gt 0 ]; then
   "$@"
 else
-  java -Duser.timezone=Asia/Seoul -jar /app/app.jar
+  java -Duser.timezone=Asia/Seoul ${BACKEND_OPTS} -jar /app/app.jar
 fi
 exitcode=$?
 

@@ -85,6 +85,10 @@ public class PositionSizingService {
     @Value("${investment.factor.us-gap-up-skip-pct:5}")
     private BigDecimal usGapUpSkipPct = new BigDecimal("5");
 
+    /** KR 단기: 볼륨 스파이크+돌파 조합 시 유니버스에 변동성 돌파(VOLATILITY_BREAKOUT) 시그널 있는 종목만 포함. true 시 Case A/B 결과와 교집합 */
+    @Value("${investment.factor.kr-short-term-breakout-required:false}")
+    private boolean krShortTermBreakoutRequired = false;
+
     /**
      * 전략별 Half-Kelly p·b (백테스트 winRate·profitFactor 연동용). 빈 문자열이면 기본
      * kelly-p/kelly-b 사용
@@ -374,6 +378,7 @@ public class PositionSizingService {
     /** 한국(KR) Hunter 시그널 팩터 타입 상수 (FactorCalculationService와 동일) */
     private static final String FACTOR_SMART_MONEY_INTENSITY = "SMART_MONEY_INTENSITY";
     private static final String FACTOR_CONTRARIAN_RSI = "CONTRARIAN_RSI";
+    private static final String FACTOR_VOLATILITY_BREAKOUT = "VOLATILITY_BREAKOUT";
 
     /**
      * 기간별 시그널 필터: 통과한 종목 심볼만 반환.
@@ -465,6 +470,15 @@ public class PositionSizingService {
 
         Set<String> union = new java.util.HashSet<>(momentumPass);
         union.addAll(caseBSymbols);
+
+        // 볼륨 스파이크+돌파 조합: 변동성 돌파 시그널이 있는 종목만 단기 유니버스에 포함 (교집합)
+        if (krShortTermBreakoutRequired) {
+            Set<String> breakoutSymbols = signals.stream()
+                    .filter(s -> FACTOR_VOLATILITY_BREAKOUT.equals(s.getFactorType()))
+                    .map(SignalScore::getSymbol)
+                    .collect(Collectors.toSet());
+            union = union.stream().filter(breakoutSymbols::contains).collect(Collectors.toSet());
+        }
         return union;
     }
 

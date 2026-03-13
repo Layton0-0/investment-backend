@@ -1413,16 +1413,16 @@ Admin 전용 메뉴 `/ops/health`에서 DB·Redis·예측 서비스 상태 요�
 
 ### 12.4 Ops 전략 거버넌스
 
-Admin 전용: 전략 거버넌스 검사 결과 이력·(market, strategyType)별 자동 매매 중단(halt) 조회 및 halt 해제. **인가**: `hasRole('ADMIN')`. 알림 이력은 기존 `GET /api/v1/ops/alerts`에서 `component=StrategyGovernance` 필터로 조회.
+Admin 전용: 전략 거버넌스 검사 결과 이력·(market, strategyType)별 자동 매매 중단(halt) 조회 및 halt 해제. **인가**: `@PreAuthorize("hasRole('ADMIN')")`. 알림 이력은 기존 `GET /api/v1/ops/alerts`에서 `component=StrategyGovernance` 필터로 조회. API 계약·모듈 경계·정렬은 [plans/architecture/20260313-1400_admin-ops-governance-api-design.md](../../../plans/architecture/20260313-1400_admin-ops-governance-api-design.md) 및 [decisions.md](../decisions.md) ADR 33 참조.
 
 **엔드포인트**:
 - `GET /api/v1/ops/governance/status` — 거버넌스 검사 활성 여부(시스템 설정 governance.enabled). 응답: `GovernanceStatusDto` (governanceEnabled). false면 검사 Job 실행 시 결과가 저장되지 않음.
-- `GET /api/v1/ops/governance/results?limit=20` — 최근 검사 결과(RUN_AT 내림차순). `limit`(1~500, 기본 20). 응답: `GovernanceCheckResultDto[]` (id, runAt, market, strategyType, mddPct, sharpeRatio, degraded, startDate, endDate, createdAt).
+- `GET /api/v1/ops/governance/results?limit=20` — 최근 검사 결과(RUN_AT 내림차순). `limit`(1~500, 기본 20). 응답: `GovernanceCheckResultDto[]`. 프론트 필드: runAt, market, strategyType, passed, mddPct, sharpeRatio, message. 기타: id, degraded, startDate, endDate, createdAt.
 - `GET /api/v1/ops/governance/halts` — 현재 활성 halt 목록(CLEARED_AT IS NULL). 응답: `GovernanceHaltDto[]` (market, strategyType, haltedAt, reason).
-- `PUT /api/v1/ops/governance/halts/{market}/{strategyType}/clear` — 해당 (market, strategyType) halt 해제. Body(선택): `{ "clearedBy": "userId" }`. 204 No Content.
+- `PUT /api/v1/ops/governance/halts/{market}/{strategyType}/clear` — 해당 (market, strategyType) halt 해제. **인가**: `@PreAuthorize("hasRole('ADMIN')")`. 경로: market, strategyType 필수(공백 시 400 INVALID_INPUT). Body(선택): `{ "clearedBy": "userId" }` (clearedBy 최대 64자, @Valid). 204 No Content.
 
 **자동매매 준비 상태** (09:10 실행 전 점검용):
-- `GET /api/v1/ops/auto-trading-readiness` — 자동투자 ON 계좌 수, 전일(basDt) TB_DAILY_STOCK·TB_SIGNAL_SCORE 건수, 활성 거버넌스 halt 수. 응답: `AutoTradingReadinessDto` (basDt, autoTradingOnAccountCount, dailyStockRowCount, signalScoreRowCount, activeGovernanceHaltCount). **인가**: `hasRole('ADMIN')`.
+- `GET /api/v1/ops/auto-trading-readiness` — 자동투자 ON 계좌 수, 전일(basDt) TB_DAILY_STOCK·TB_SIGNAL_SCORE 건수(전체·시장별), 활성 거버넌스 halt 수. 응답: `AutoTradingReadinessDto` (basDt, autoTradingOnAccountCount, dailyStockRowCount, dailyStockRowCountKr, dailyStockRowCountUs, signalScoreRowCount, signalScoreRowCountKr, signalScoreRowCountUs, activeGovernanceHaltCount). 시장별 건수로 한국 시그널 0 원인 규명용. **인가**: `hasRole('ADMIN')`.
 
 ---
 
@@ -1508,7 +1508,7 @@ curl -X POST "http://localhost:8080/api/v1/trigger/pipeline-execution" -H "Conte
 
 **요청 본문 (BacktestRunRequest)**: startDate, endDate, market (KR/US), strategyType (SHORT_TERM/MEDIUM_TERM/LONG_TERM), initialCapital
 
-**성공 응답 (200 OK, BacktestRunResult)**: startDate, endDate, market, strategyType, initialCapital, finalEquity, totalReturnPct, cagr, mddPct, sharpeRatio, sortinoRatio, calmarRatio, winRate, avgWin, avgLoss, profitFactor, tradeCount, winningTrades, losingTrades, equityCurve, trades (각 거래에 totalFrictionCost 포함)
+**성공 응답 (200 OK, BacktestRunResult)**: startDate, endDate, market, strategyType, initialCapital, finalEquity, totalReturnPct, cagr, mddPct, sharpeRatio, sortinoRatio, calmarRatio, winRate, avgWin, avgLoss, profitFactor, tradeCount, winningTrades, losingTrades, totalFrictionCost (전체 거래 마찰비용 합계), equityCurve, trades (각 거래에 totalFrictionCost 포함)
 
 ---
 

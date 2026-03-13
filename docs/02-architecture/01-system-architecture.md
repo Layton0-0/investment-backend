@@ -322,6 +322,15 @@ TradingPortfolioService
 - `risk.service`: TradingHaltService, PortfolioPeakService
 - **Kill Switch API**: GET/PUT `/api/v1/system/kill-switch` (KillSwitchController). ADMIN만 설정 가능.
 
+**확장·자동매매 전용 설계**: 스케일러블 자동매매 봇을 위한 컴포넌트 다이어그램, 데이터 플로우, 장애 처리, 모니터링, 레이턴시·리스크 요약은 **[15-scalable-automated-trading-system-architecture.md](./15-scalable-automated-trading-system-architecture.md)** 를 참조한다.
+
+### 10.3 퀀트·AI 전략 개발 (Agent 워크플로우)
+
+**quant-trading-system** 서브트리는 제거되었고, 운영 백엔드는 **Backend 단일**이다. 퀀트 전략·AI 전략 발견·Agent 워크플로우 관련 문서는 메인 프로젝트 docs로 이전되어 있다.
+
+- **Agent 워크플로우·반자동 개발·AI 전략 발견 파이프라인**: 프로젝트 루트 [docs/ai-quant-development/](../../../docs/ai-quant-development/00-index.md).
+- **한국 단타 전략 TOP 10**: [18-kr-short-term-strategies-top10.md](./18-kr-short-term-strategies-top10.md).
+
 ---
 
 ## 문서 변경 이력
@@ -331,3 +340,6 @@ TradingPortfolioService
 | 1.0 | 2026-01-28 | System | 문서 정리 및 구조화 |
 | 2.0 | 2026-02-06 | System | TimescaleDB 전환, 2.0 개편안(Quant Engine·패키지) 반영 |
 | 2.1 | 2026-02-06 | System | §3 기준 문서와의 대응 섹션 추가(논리 블록↔패키지 매핑), 섹션 번호 3~10 재정렬 |
+| 2.2 | 2026-03-13 | System | §10.2 확장·자동매매 설계 문서(15-scalable-automated-trading-system-architecture.md) 링크 추가 |
+| 2.3 | 2026-03-13 | System | §10.3 quant-trading-system·Cursor Agent 아키텍처 참조 추가 |
+| 2.4 | 2026-03-13 | System | §10.3 quant-trading-system 제거 반영, docs/ai-quant-development·18-kr-short-term-strategies-top10 참조로 변경 |

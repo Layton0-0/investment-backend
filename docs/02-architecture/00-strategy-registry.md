@@ -88,6 +88,9 @@
 - **Calmar**: CAGR / |MDD|.
 - **승률(p)**: 승리 거래 수 / 전체 거래 수. Half-Kelly 입력.
 - **손익비(b)**: 평균 이익 / |평균 손실|. Half-Kelly 입력.
+- **Profit factor**: 총 이익 / |총 손실|. 백테스트 보고·API 응답에 필수 포함.
+
+**백테스트 보고 필수 5종**: 모든 백테스트 결과(API·문서·스트레스 검증)에는 **CAGR, Sharpe ratio, max drawdown(MDD), win rate, profit factor**를 반드시 포함한다. 재현 가능 연구를 위해 시드·기간·초기자본·수수료/슬리피지 설정·전략 버전을 기록한다. 상세: [.cursor/rules/backtest-quant-research-standards.mdc](../../../.cursor/rules/backtest-quant-research-standards.mdc).
 
 ### 2.8.1 Monte Carlo VaR/CVaR (P0 헤지펀드급 리스크 분석)
 
@@ -114,7 +117,7 @@ Monte Carlo 시뮬레이션 기반 VaR/CVaR 계산으로 꼬리 위험(tail risk
 ### 2.9 리스크 게이트·일일 손실 한도 (전문 투자자 흐름 P0)
 
 - **리스크 게이트**: 파이프라인 실행 전 시장 레짐·VIX 확인. `investment.risk.regime-gate-enabled`, `vix-threshold`, `reduce-size-on-high-vol-pct`. 고변동성 시 신규 매수 비중 축소. `RiskGateService`, `MacroEconomicStrategyEngine` 연동. **VIX·거시 지표**: `MacroIndicatorProvider`(설정 URL GET JSON 예: `{"vix": 18.5}`)·`DefaultMacroIndicatorProvider`, `PipelineExecutionScheduler`에서 `getCurrentIndicators()` → `evaluateWithIndicators`/`evaluate(vix)`. `investment.risk.macro-indicator-url`(선택).
-- **일일 손실 한도**: 당일 시초 평가액 대비 손실이 `daily-loss-limit-pct` 초과 시 당일 신규 매수 중단. `DailyLossLimitService`, `PipelineExecutionScheduler` 실행 전 `isNewBuyAllowed` 검사.
+- **일일 손실 한도**: 당일 시초 평가액 대비 손실이 `daily-loss-limit-pct` 초과 시 당일 신규 매수 중단. `DailyLossLimitService`, `PipelineExecutionScheduler` 실행 전 `isNewBuyAllowed` 검사. 시초 평가액은 당일 **첫 파이프라인 실행 시점**의 평가액으로 기록됨(장 시초가 아님). 플로우·갭 분석: [daily-loss-limit-flow-and-gaps.md](../../../docs/09-planning/daily-loss-limit-flow-and-gaps.md).
 - **시장 급락 시 동결 (Market Crash Gate)**: 설계 원칙 "시장 급락 -5% 시 현금화"에 따른 최소 구현. 벤치마크 지수(예: SPY) 전일 대비 일일 수익률이 `market-crash-daily-drop-pct`(기본 5%) 이상 하락한 경우 당일 **신규 매수만 중단**(매도 허용). 데이터는 TB_DAILY_STOCK 기준 전일 종가 대비 전전일 종가로 산출. 데이터 부재 시 허용(fail-open). `MarketCrashGateService`, `PipelineExecutionScheduler`에서 리스크 게이트·일일 손실 한도와 함께 검사.
 - **설정**: `investment.risk.*` (application.yml). 시장 급락 게이트: `market-crash-gate-enabled`(기본 true), `market-crash-daily-drop-pct`(기본 5), `market-crash-benchmark-symbol`(기본 SPY), `market-crash-benchmark-market`(기본 US).
 
@@ -198,10 +201,17 @@ Monte Carlo 시뮬레이션 기반 VaR/CVaR 계산으로 꼬리 위험(tail risk
 |------|----------|-----------|-----------|
 | **한국(KR)** | 이격도 (Disparity) | Disparity = (현재가 / 이동평균) × 100. 공격형: 105 돌파 후 102 눌림 매수; 역발상: 85 이하 분할 매수 | `investment.factor.disparity-ma-days` (20), `FactorCalculationService.addDisparity` |
 | **한국(KR)** | 변동성 돌파 (k 동적) | Target = Open + (Range × k). 한국장 변동성에 따라 k 동적 조정 | `FactorCalculationService.addVolatilityBreakout`, `calculateDynamicK` |
+| **한국(KR)** | 거래량 스파이크 + 돌파 (단기) | 당일 거래량 ≥ volume-spike-min-ratio × (과거 N일 평균 거래량) **및** VOLATILITY_BREAKOUT 시그널 보유 시 단기 유니버스 포함. 유니버스 1단계에서 volume-spike 필터, 시그널 단계에서 kr-short-term-breakout-required 시 돌파 시그널 교집합 | `UniverseFilterService.filterByVolumeSpike`, `PositionSizingService.filterSymbolsKrShortTerm` (breakout 교집합) |
 | **한국(KR)** | 수급 강도·역발상 **분기(Branch)** | **Case A(모멘텀)**: 수급 강함(Smart Money 임계 초과) → RSI&gt;60 &amp; MACD 필터. **Case B(역발상)**: RSI(14)&lt;40(CONTRARIAN_RSI 점수 양수), P/B 데이터 있으면 0.8 이하. 최종 유니버스 = A ∪ B. | TB_ORDER_FLOW·TB_SIGNAL_SCORE. `PositionSizingService.filterSymbolsKrShortTerm`. 데이터 없으면 0. |
 | **미국(US)** | 듀얼 모멘텀 | 기간별 수익률 가중합, 종목 모멘텀 > 시장 모멘텀 | TB_DAILY_STOCK(US) 기반. `dual-momentum-period-days`, `dual-momentum-weights`. 시장=유니버스 평균. |
 | **미국(US)** | 퀄리티-성장 (PEG & Rule of 40) | PEG & Rule of 40 합산 점수 상위 10% | TB_FUNDAMENTALS 기반. PEG 점수 + Rule of 40(매출증가율+영업이익률). 데이터 없으면 0. |
 | **미국(US)** | VAA 변형 | SPY/EFA/EEM/BND 중 모멘텀 스코어 최고 1개 자산 100% 배분 | 문서 정의, 코드 미연동 |
+
+**한국 시그널 0개 가능 원인 (원인 규명·개선 시 참고)**  
+- **1단계**: KR 일봉 미수집 → TB_DAILY_STOCK(KR) 0건. KRX API/한투 폴백 설정·수집 로그 확인.  
+- **2단계**: 유니버스 0건 → KR은 5일 평균 거래대금 ≥ 임계값 필요. 5일치 일봉 없거나 TRD_VAL 부족 시 통과 0. 완화: `use-5d-avg-liquidity-kr: false`(당일만), `kr-symbols-override`(고정 심볼·개발/검증용).  
+- **3단계**: 유니버스가 비어 있으면 팩터 계산이 KR 종목을 처리하지 않아 TB_SIGNAL_SCORE(KR) 0건.  
+- **모니터링**: `GET /api/v1/ops/auto-trading-readiness`의 `dailyStockRowCountKr`, `signalScoreRowCountKr`로 시장별 건수 확인.
 
 ### 3.2.1 로보 어드바이저 동적 자산배분 (백테스트·실행 전 검증)
 
@@ -290,7 +300,11 @@ Monte Carlo 시뮬레이션 기반 VaR/CVaR 계산으로 꼬리 위험(tail risk
 | 듀얼 모멘텀 | 기간별 수익률 가중합, score=종목−시장(%) | dual-momentum-period-days: 21,63,126, dual-momentum-weights: 0.5,0.3,0.2 | FactorCalculationService.addDualMomentum |
 | Half-Kelly 전략별 p·b | 백테스트 winRate·profitFactor 연동 | kelly-p/kelly-b + kelly-p-short-term 등 (전략별) | PositionSizingService.getKellyP/getKellyB |
 | Sector RS | 상위 N개 업종 내 종목만 | sector-rs-top-n: 5 | UniverseFilterService.filterBySectorRelativeStrength |
+| KR 5일 평균 유동성 | KR만 당일 거래대금 사용(한국 시그널 0 완화) | use-5d-avg-liquidity-kr: false (미설정 시 use-5d-avg-liquidity 따름) | UniverseFilterService.isUse5DayAvgLiquidityForKr |
+| KR 고정 심볼 유니버스 | 유동성 대신 지정 종목·TB_DAILY_STOCK 교집합 (개발/검증용) | kr-symbols-override: 005930,000660,... (쉼표 구분, 비어 있으면 미사용) | UniverseFilterService.resolveLiquidityPassed |
 | Post-Earnings Drift | 최근 N일 실적 발표 상위 N% | earnings-surprise-lookback-days: 90, earnings-surprise-top-pct: 0.2 | UniverseFilterService.filterByPostEarningsDrift |
+| 거래량 스파이크 (KR) | 당일 거래량 ≥ minRatio × (과거 N일 평균 거래량) | volume-spike-enabled: false, volume-spike-min-ratio: 1.5, volume-spike-lookback-days: 5 | UniverseFilterService.filterByVolumeSpike |
+| KR 단기 돌파 필수 | 단기 유니버스에 변동성 돌파 시그널 있는 종목만 포함 (볼륨 스파이크+돌파 조합) | kr-short-term-breakout-required: false | PositionSizingService.filterSymbolsKrShortTerm |
 | 수급 강도 | 순매수/시총 비율(%) | smart-money-intensity-threshold-pct: 0.005 | FactorCalculationService.addSmartMoneyIntensity (TB_ORDER_FLOW) |
 | 퀄리티-성장 | PEG 점수 + Rule of 40 | TB_FUNDAMENTALS (PER, PEG, 매출증가율, 영업이익률) | FactorCalculationService.addQualityGrowth |
 | 로보 동적 자산배분 | 모멘텀 N개월·MA 필터·변동성 역가중·Top N | investment.backtest.robo.* (asset-symbols, momentum-months, ma-window-days, top-n, rebalance-frequency, comm-pct, slip-pct, pre-execution-*) | RoboAllocationEngine, RoboBacktestService, RoboRebalanceScheduler |
@@ -338,6 +352,8 @@ Monte Carlo 시뮬레이션 기반 VaR/CVaR 계산으로 꼬리 위험(tail risk
 | v1.19 | 2026-03-04 | KR, US | 백테스트 검증 | Phase 1~3 워크포워드 검증(P8-1). 최근 1년 Walk-Forward 백테스트 실행·목표(CAGR≥20%, MDD≥-15%, Sharpe≥1.0) 대비 결과 문서화. backtest-stress-results.md §6 Phase 1~3 섹션·실행 결과 표 추가. WalkForwardBacktestServiceTest 목표 충족 시 집계 검증·BacktestController walk-forward API 테스트 추가. | 미검증 | 데이터 확보 후 §6.3 결과 기입·development-status 완료 반영 |
 | v2.0 | 2026-03-04 | KR, US | Phase 1~8 통합 | 레짐탐지(RegimeDetectionService: SPY 50/200일선+VIX 규칙 BULL/BEAR/NEUTRAL, Redis 캐시). Factor Decay(FactorDecayMonitorService: 팩터별 Sharpe 열화 시 Discord 알림). 역변동성 포트폴리오(InverseVolatilityPortfolioService, StubPortfolioComponents 대체 옵션). 드로다운 회복(RiskGateService.isDrawdownRecoveryMode, MDD -10% 초과 시 신규 매수 50% 축소). VWAP(VwapExecutionAlgorithm: U자형 거래량 프로파일). 초보자 온보딩(P4-1 퀴즈→프로필·P4-2 원클릭 quick-start). E2E(Playwright onboarding.spec.ts 퀴즈→원클릭→대시보드). | 미검증 | 전략·리스크·UX·검증 통합 문서화(P8-3) |
 | v2.1 | 2026-03-05 | KR, US | 트레이딩 윈도우 | 퀀트 시간대 다중 구간: KR 2구간(09:00~10:00, 14:30~15:30), US 2구간(23:30~01:00, 05:00~06:00). PipelineTradingWindowProperties start2/end2·getKrSegments/getUsSegments, TradingWindowService 세그먼트 판단, PipelineExecutionScheduler runKrAfternoon(14:35)·runUsClose(05:05). 변동성 vs 왜곡 전략 원칙 문서화(14-trading-window-quant.md). | 미검증 | 알파 존재 시간대만 진입·한산 구간(11:30~14:00) 회피 |
+| v2.2 (제안) | 2026-03-13 | KR | 단기·변동성 돌파 | volatility-breakout k 동적 범위 [0.3, 0.7] → [0.35, 0.65] (k-min/k-max). 채택 시 application.yml·18-kr-short-term-strategies-top10 §1 반영. | (백테스트 후 기입) | 가짜 돌파 완화·진입 품질 개선 목적; plans/strategy/20260313_volatility-breakout-k-tightening-analysis.md 참조 |
+| v2.3 | 2026-03-13 | KR | 단기·유니버스·시그널 | volume spike filter + breakout: 유니버스에 거래량 스파이크 필터(volume-spike-enabled, volume-spike-min-ratio, volume-spike-lookback-days), KR 단기 시그널에 변동성 돌파 교집합(kr-short-term-breakout-required). | 미검증 | 단기 유니버스 = (Case A ∪ Case B) ∩ (VOLATILITY_BREAKOUT) ∩ (유니버스 1단계 거래량 스파이크 통과) |
 
 ---
 

@@ -8,6 +8,7 @@ import com.investment.factor.execution.PipelineExecutor;
 import com.investment.strategy.domain.StrategyStatus;
 import com.investment.factor.service.CapitalDrawdownConstraintService;
 import com.investment.factor.service.DailyLossLimitService;
+import com.investment.factor.service.DriftRebalancingService;
 import com.investment.factor.service.MarketCrashGateService;
 import com.investment.factor.service.RiskGateService;
 import com.investment.governance.GovernanceHaltService;
@@ -61,6 +62,8 @@ class PipelineExecutionSchedulerTest {
     private TradingWindowService tradingWindowService;
     @Mock
     private CapitalDrawdownConstraintService capitalDrawdownConstraintService;
+    @Mock
+    private DriftRebalancingService driftRebalancingService;
 
     @InjectMocks
     private PipelineExecutionScheduler pipelineExecutionScheduler;
@@ -79,7 +82,7 @@ class PipelineExecutionSchedulerTest {
 
         pipelineExecutionScheduler.runNow(null);
 
-        verify(pipelineExecutor, never()).run(any(), any(), any(), any(), any(), anyBoolean());
+        verify(pipelineExecutor, never()).run(any(), any(), any(), any(), any(), anyBoolean(), any());
     }
 
     @Test
@@ -102,7 +105,7 @@ class PipelineExecutionSchedulerTest {
 
         pipelineExecutionScheduler.runNow(null);
 
-        verify(pipelineExecutor, never()).run(any(), any(), any(), any(), any(), anyBoolean());
+        verify(pipelineExecutor, never()).run(any(), any(), any(), any(), any(), anyBoolean(), any());
     }
 
     @Test
@@ -125,7 +128,7 @@ class PipelineExecutionSchedulerTest {
 
         pipelineExecutionScheduler.runNow(null);
 
-        verify(pipelineExecutor, never()).run(any(), any(), any(), any(), any(), anyBoolean());
+        verify(pipelineExecutor, never()).run(any(), any(), any(), any(), any(), anyBoolean(), any());
     }
 
     @Test
@@ -160,7 +163,7 @@ class PipelineExecutionSchedulerTest {
         pipelineExecutionScheduler.runNow(null);
 
         verify(pipelineExecutor, times(6)).run(eq(LocalDate.now().minusDays(1)), anyString(), eq("1234567890"),
-                any(StrategyType.class), any(BigDecimal.class), eq(true));
+                any(StrategyType.class), any(BigDecimal.class), eq(true), any());
     }
 
     @Test
@@ -195,7 +198,7 @@ class PipelineExecutionSchedulerTest {
 
         pipelineExecutionScheduler.runNow(null);
 
-        verify(pipelineExecutor, times(5)).run(any(), anyString(), anyString(), any(StrategyType.class), any(BigDecimal.class), anyBoolean());
+        verify(pipelineExecutor, times(5)).run(any(), anyString(), anyString(), any(StrategyType.class), any(BigDecimal.class), anyBoolean(), any());
         verify(governanceHaltService, atLeast(1)).isHalted("KR", "SHORT_TERM");
     }
 
@@ -242,6 +245,6 @@ class PipelineExecutionSchedulerTest {
 
         pipelineExecutionScheduler.runNow(null);
 
-        verify(pipelineExecutor, times(5)).run(any(), anyString(), eq("1234567890"), any(StrategyType.class), any(BigDecimal.class), anyBoolean());
+        verify(pipelineExecutor, times(5)).run(any(), anyString(), eq("1234567890"), any(StrategyType.class), any(BigDecimal.class), anyBoolean(), any());
     }
 }

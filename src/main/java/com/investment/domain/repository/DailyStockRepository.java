@@ -50,6 +50,9 @@ public interface DailyStockRepository extends JpaRepository<DailyStock, DailySto
     /** 기준일 일봉 건수 (자동매매 준비 상태 API용). */
     long countByBasDt(LocalDate basDt);
 
+    /** 기준일·시장별 일봉 건수 (원인 규명·시장별 준비 상태용). */
+    long countByBasDtAndMarket(LocalDate basDt, String market);
+
     /** 시장별 종목 코드 목록 (종목 검색용). TB_DAILY_STOCK에 데이터가 있는 심볼만 반환. */
     @Query("SELECT DISTINCT d.symbol FROM DailyStock d WHERE d.market = :market ORDER BY d.symbol")
     List<String> findDistinctSymbolsByMarket(@Param("market") String market);

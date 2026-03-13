@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 /**
@@ -51,6 +52,11 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class OrderService implements OrderExecutor {
+
+    /** 주문 API block 대기 시간 (한투 주문 API 타임아웃 25초 + 여유) */
+    private static final Duration ORDER_API_BLOCK_TIMEOUT = Duration.ofSeconds(30);
+    /** 주문 API 실패 시 최대 재시도 횟수 (1회 재시도 포함 총 2회 시도) */
+    private static final int ORDER_API_MAX_ATTEMPTS = 2;
 
     private final OrderRepository orderRepository;
     private final TradingSettingRepository tradingSettingRepository;
@@ -137,8 +143,20 @@ public class OrderService implements OrderExecutor {
 
     /**
      * 주문 실행 내부 로직 (userId 지정).
+     * 파이프라인 호출 시 userId가 null이어도 계좌의 거래 설정에서 사용자 ID를 조회해 사용(로그인 여부 무관).
      */
     private OrderResponseDto executeOrderInternal(OrderRequestDto request, String userId) {
+        if (userId == null || userId.isBlank()) {
+            userId = tradingSettingRepository.findByAccountNo(request.getAccountNo())
+                    .map(TradingSetting::getUserId)
+                    .filter(id -> id != null && !id.isBlank())
+                    .orElse(null);
+            if (userId == null) {
+                throw new DomainException(ErrorCode.ORDER_FAILED,
+                        "주문 실행에 필요한 사용자 정보가 없습니다. 해당 계좌에 연결된 사용자(거래 설정)가 없거나, 로그인 후 다시 시도해 주세요.");
+            }
+            log.debug("파이프라인 주문: 계좌 기준 userId 자동 조회, accountNo={}", LogMaskingUtil.maskAccountNo(request.getAccountNo()));
+        }
         ComplianceResult compliance = complianceEngine.preTradeCheck(request, userId);
         if (!compliance.isApproved()) {
             throw new DomainException(ErrorCode.ORDER_REJECTED, compliance.getReason());
@@ -183,35 +201,67 @@ public class OrderService implements OrderExecutor {
                     && !request.getOrderDvsn().isBlank()) {
                 orderType = request.getOrderDvsn();
             }
-            KoreaInvestmentOrderClient.OrderResponse apiResponse;
+            KoreaInvestmentOrderClient.OrderResponse apiResponse = null;
             boolean isOverseas = "US".equalsIgnoreCase(request.getMarketOrKr());
-            if (isOverseas) {
-                if (request.getOrderType() == OrderRequestDto.OrderType.BUY) {
-                    apiResponse = orderClient.placeOverseasBuyOrder(
-                            userId, request.getAccountNo(), request.getSymbol(),
-                            request.getQuantity(), request.getPrice(), orderType).block(Duration.ofSeconds(10));
-                } else {
-                    apiResponse = orderClient.placeOverseasSellOrder(
-                            userId, request.getAccountNo(), request.getSymbol(),
-                            request.getQuantity(), request.getPrice(), orderType).block(Duration.ofSeconds(10));
+            for (int attempt = 1; attempt <= ORDER_API_MAX_ATTEMPTS; attempt++) {
+                try {
+                    if (isOverseas) {
+                        if (request.getOrderType() == OrderRequestDto.OrderType.BUY) {
+                            apiResponse = orderClient.placeOverseasBuyOrder(
+                                    userId, request.getAccountNo(), request.getSymbol(),
+                                    request.getQuantity(), request.getPrice(), orderType)
+                                    .block(ORDER_API_BLOCK_TIMEOUT);
+                        } else {
+                            apiResponse = orderClient.placeOverseasSellOrder(
+                                    userId, request.getAccountNo(), request.getSymbol(),
+                                    request.getQuantity(), request.getPrice(), orderType)
+                                    .block(ORDER_API_BLOCK_TIMEOUT);
+                        }
+                    } else {
+                        if (request.getOrderType() == OrderRequestDto.OrderType.BUY) {
+                            apiResponse = orderClient.placeBuyOrder(
+                                    userId, request.getAccountNo(), request.getSymbol(),
+                                    request.getQuantity(), request.getPrice(), orderType)
+                                    .block(ORDER_API_BLOCK_TIMEOUT);
+                        } else {
+                            apiResponse = orderClient.placeSellOrder(
+                                    userId, request.getAccountNo(), request.getSymbol(),
+                                    request.getQuantity(), request.getPrice(), orderType)
+                                    .block(ORDER_API_BLOCK_TIMEOUT);
+                        }
+                    }
+                } catch (Exception e) {
+                    Throwable cause = e;
+                    while (cause != null && !(cause instanceof TimeoutException)) {
+                        cause = cause.getCause();
+                    }
+                    boolean isTimeout = (cause != null);
+                    if (attempt < ORDER_API_MAX_ATTEMPTS && (apiResponse == null || isTimeout)) {
+                        log.warn("주문 API 시도 {} 실패, 재시도: accountNo={}, symbol={}, error={}",
+                                attempt, LogMaskingUtil.maskAccountNo(request.getAccountNo()),
+                                request.getSymbol(), e.getMessage());
+                        continue;
+                    }
+                    throw e;
                 }
-            } else {
-                if (request.getOrderType() == OrderRequestDto.OrderType.BUY) {
-                    apiResponse = orderClient.placeBuyOrder(
-                            userId, request.getAccountNo(), request.getSymbol(),
-                            request.getQuantity(), request.getPrice(), orderType).block(Duration.ofSeconds(10));
-                } else {
-                    apiResponse = orderClient.placeSellOrder(
-                            userId, request.getAccountNo(), request.getSymbol(),
-                            request.getQuantity(), request.getPrice(), orderType).block(Duration.ofSeconds(10));
+                if (apiResponse != null) {
+                    break;
+                }
+                if (attempt < ORDER_API_MAX_ATTEMPTS) {
+                    log.warn("주문 API 시도 {} 응답 없음, 재시도: accountNo={}, symbol={}",
+                            attempt, LogMaskingUtil.maskAccountNo(request.getAccountNo()), request.getSymbol());
                 }
             }
 
             if (apiResponse == null || !"SUCCESS".equals(apiResponse.getStatus())) {
                 order.fail("한국투자증권 API 호출 실패");
                 order = orderRepository.save(order);
+                String detail = apiResponse != null ? apiResponse.getStatus() : "API 응답 없음(타임아웃 또는 연결 실패. 토큰·네트워크·한투 API 상태 확인 후 재시도)";
+                if (ORDER_API_MAX_ATTEMPTS > 1) {
+                    detail += " (재시도 " + ORDER_API_MAX_ATTEMPTS + "회 수행)";
+                }
                 throw new DomainException(ErrorCode.ORDER_FAILED,
-                        "주문 실행에 실패했습니다: " + (apiResponse != null ? apiResponse.getStatus() : "API 응답 없음"));
+                        "주문 실행에 실패했습니다: " + detail);
             }
 
             order.execute(request.getQuantity(), request.getPrice(),
@@ -233,14 +283,18 @@ public class OrderService implements OrderExecutor {
     }
 
     /**
-     * 현재 사용자 ID 가져오기
+     * 현재 사용자 ID 가져오기. null/빈 값이면 한투 API 키 조회 불가이므로 예외.
      */
     private String getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || authentication.getName() == null) {
+        if (authentication == null) {
             throw new IllegalStateException("인증되지 않은 사용자입니다");
         }
-        return authentication.getName();
+        String name = authentication.getName();
+        if (name == null || name.isBlank()) {
+            throw new IllegalStateException("인증된 사용자 ID가 없습니다. 로그인 상태를 확인해 주세요.");
+        }
+        return name;
     }
 
     /**
@@ -281,6 +335,8 @@ public class OrderService implements OrderExecutor {
     public List<OrderResponseDto> getOrders(String accountNo) {
         List<Order> orders = orderRepository.findByAccountNo(accountNo);
         return orders.stream()
+                .sorted((a, b) -> (b.getOrderTime() == null ? java.time.LocalDateTime.MIN : b.getOrderTime())
+                        .compareTo(a.getOrderTime() == null ? java.time.LocalDateTime.MIN : a.getOrderTime()))
                 .map(this::convertToResponseDto)
                 .collect(Collectors.toList());
     }

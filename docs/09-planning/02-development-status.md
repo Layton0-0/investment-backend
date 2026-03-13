@@ -10,6 +10,23 @@
 
 ## 1. 완료 (Completed)
 
+### Admin Ops Governance API 보강 (2026-03-13)
+- **Governance REST API**: GET /api/v1/ops/governance/results?limit=20, GET /api/v1/ops/governance/halts, PUT …/halts/{market}/{strategyType}/clear. 기존 GovernanceCheckResult·GovernanceHalt 서비스/리포지토리 활용. DTO: results에 runAt, market, strategyType, passed, mddPct, sharpeRatio, message; halts에 market, strategyType, haltedAt, reason. @PreAuthorize("hasRole('ADMIN')"), 경로 검증(공백 시 400), @Valid(body), LogMaskingUtil(clearedBy). 02-api-endpoints §12.4 반영.
+
+### quant-trading-system 제거·docs 이전 (2026-03-13)
+- **quant-trading-system 서브트리 제거**: 중복 제거. 운영 백엔드는 Backend 단일.
+- **이전된 문서**: Agent 워크플로우·AI 전략 발견 파이프라인·반자동 개발 → 프로젝트 루트 [docs/ai-quant-development/](../../../docs/ai-quant-development/00-index.md). 한국 단타 전략 TOP 10 → [18-kr-short-term-strategies-top10.md](../02-architecture/18-kr-short-term-strategies-top10.md).
+- (이전 완료) quant-trading-system 내 누락 모듈·로깅·테스트·to_contract()·momentum 전략 구현은 해당 서브트리 제거로 더 이상 유지되지 않음.
+
+### 미국 vs 한국 시그널 비교·한국 시그널 개선 (2026-03-12)
+- [x] **Ops API 시장별 건수 노출**  
+  `GET /api/v1/ops/auto-trading-readiness` 응답에 `dailyStockRowCountKr`, `dailyStockRowCountUs`, `signalScoreRowCountKr`, `signalScoreRowCountUs` 추가. 한국 시그널 0 원인 규명 시 시장별 일봉·시그널 건수 확인용.
+- [x] **KR 유니버스 정책 옵션**  
+  `use-5d-avg-liquidity-kr: false` 시 KR도 당일 거래대금만 사용(5일 평균 미사용). `kr-symbols-override`(쉼표 구분) 설정 시 유동성 필터 대신 지정 종목·TB_DAILY_STOCK 교집합으로 유니버스 구성(개발/검증용).
+- [x] **문서 반영**  
+  00-strategy-registry.md §3.2에 "한국 시그널 0개 가능 원인" 및 모니터링 API 안내. 02-api-endpoints auto-trading-readiness 시장별 필드. 본 문서에 한국 시그널 생성 조건 명시.
+- **한국 자동투자 시그널 생성 점검 조건**: (1) KR 일봉 수집 성공 → TB_DAILY_STOCK(KR) > 0. (2) KR 유니버스 > 0 → 유니버스 필터(또는 kr-symbols-override) 통과. (3) factor-calculation KR 저장 > 0 → TB_SIGNAL_SCORE(KR) > 0. `GET /api/v1/ops/auto-trading-readiness`의 시장별 건수로 확인.
+
 ### 단기/중기/장기 파이프라인 로그 가시화 (2026-03-11)
 - [x] **runIfNotHalted 전략별 실행/완료 로그**  
   PipelineExecutionScheduler.runIfNotHalted에서 pipelineExecutor.run() 호출 직전·직후 log.debug로 market, strategyType, accountNo(마스킹) 출력. 단기/중기/장기 각각 실행·스킵 여부를 로그로 추적 가능.

@@ -24,6 +24,52 @@
 
 ---
 
+## 2.1 스트레스 구간 실행 방법
+
+아래 두 구간(2020-02~04 코로나, 2022-01~06 금리 인상기)을 실행한 뒤 **§3.1**·**§3.2** 표에 결과를 기입한다.
+
+### API로 단건 실행
+
+`POST /api/v1/backtest` (인증 필요). Body 예시:
+
+| 구간 | startDate | endDate | market | strategyType | initialCapital |
+|------|-----------|---------|--------|--------------|----------------|
+| **코로나 (2020-02~04)** | 2020-02-24 | 2020-04-30 | KR 또는 US | SHORT_TERM | 100000000 |
+| **금리 인상기 (2022-01~06)** | 2022-01-03 | 2022-06-30 | KR 또는 US | SHORT_TERM 또는 MEDIUM_TERM | 100000000 |
+
+예: 코로나 KR  
+`{ "startDate": "2020-02-24", "endDate": "2020-04-30", "market": "KR", "strategyType": "SHORT_TERM", "initialCapital": 100000000 }`
+
+### run-backtest.ps1 (프로젝트 루트)
+
+단일 백테스트만 실행할 때:
+
+```powershell
+# 코로나 구간
+.\scripts\run-backtest.ps1 -StartDate "2020-02-24" -EndDate "2020-04-30" -Market "KR" -StrategyType "SHORT_TERM" -BaseUrl "http://localhost:8080"
+
+# 금리 인상기 구간
+.\scripts\run-backtest.ps1 -StartDate "2022-01-03" -EndDate "2022-06-30" -Market "US" -StrategyType "SHORT_TERM" -BaseUrl "http://localhost:8080"
+```
+
+(인증이 필요한 API면 스크립트에 토큰 전달이 필요할 수 있음. 전체 파이프라인은 아래 run-stress-backtest.ps1 사용.)
+
+### run-stress-backtest.ps1 (백필 + 팩터 + 백테스트 4건)
+
+백엔드·DB·Redis 기동 후, 백필·팩터 계산·백테스트 4건을 한 번에 실행하고 JSON으로 저장:
+
+```powershell
+cd investment-backend
+.\scripts\run-stress-backtest.ps1 -BaseUrl "http://localhost:8080" -EnvPath ".\.env" -OutJsonPath ".\docs\02-architecture\stress-backtest-results.json"
+```
+
+- **결과 기입 위치**  
+  - **코로나 (2020-02-24 ~ 2020-04-30)** → **§3.1** 표 (MDD %, CAGR %, 청산 횟수, 거래 수, 이슈·비고).  
+  - **금리 인상기 (2022-01-03 ~ 2022-06-30)** → **§3.2** 표.  
+- JSON의 `backtestResults` 배열에서 시나리오별 `mddPct`, `cagr`, `tradeCount`, `trades` 등을 복사해 해당 표에 붙여넣는다.
+
+---
+
 ## 3. 실행 결과 (데이터 수집 후 기입)
 
 아래는 해당 구간 데이터로 백테스트를 실행한 뒤 메트릭·비고를 기입하는 영역이다. **실제 수치 기입 방법**: `investment-backend/scripts/run-stress-backtest.ps1` 실행 후 생성되는 `docs/02-architecture/stress-backtest-results.json`의 `backtestResults`를 참고하여 본 표를 채운다. (백엔드·DB·Redis 기동 및 KRX/US 데이터 수집 환경 필요.) 기입 완료 후 [roadmap.md Phase 5.2](../roadmap.md) "백테스트 스트레스 검증" 항목을 [x] 처리한다.
@@ -137,6 +183,7 @@
 
 ## 7. 참조
 
+- [.cursor/rules/backtest-quant-research-standards.mdc](../../../.cursor/rules/backtest-quant-research-standards.mdc) — 퀀트 백테스트 표준(통계 타당성, look-ahead/survivorship 방지, 슬리피지·거래비용, **필수 5종 메트릭**: CAGR·Sharpe·MDD·win rate·profit factor, 재현 가능 연구).
 - [00-strategy-registry.md §1.1](./00-strategy-registry.md) — 데이터·백테스트 원칙, §7 버전 스택
 - [02-development-status.md](../09-planning/02-development-status.md) — 완료·진행예정
 - [02-api-endpoints.md §백테스트](../04-api/02-api-endpoints.md) — POST /api/v1/backtest 스펙

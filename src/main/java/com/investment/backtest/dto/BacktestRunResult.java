@@ -37,6 +37,8 @@ public class BacktestRunResult {
     private int tradeCount;
     private int winningTrades;
     private int losingTrades;
+    /** 전체 거래에 대한 마찰 비용 합계 (수수료+세금+슬리피지+TAF 등). 거래 없으면 0. */
+    private BigDecimal totalFrictionCost;
     private List<DateEquityPoint> equityCurve;
     private List<BacktestTradeDto> trades;
 }

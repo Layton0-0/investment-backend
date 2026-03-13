@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -126,5 +127,43 @@ class GovernanceHaltServiceTest {
         assertThat(result.get(0).getMarket()).isEqualTo("KR");
         assertThat(result.get(0).getStrategyType()).isEqualTo("SHORT_TERM");
         assertThat(result.get(0).isDegraded()).isTrue();
+        assertThat(result.get(0).getPassed()).isFalse();
+        assertThat(result.get(0).getMessage()).isEqualTo("Degraded");
+    }
+
+    @Test
+    @DisplayName("getRecentResults limit 500 초과 시 500으로 캡")
+    void getRecentResults_limitOver500_capsTo500() {
+        when(governanceCheckResultRepository.findAllByOrderByRunAtDesc(PageRequest.of(0, 500)))
+                .thenReturn(List.of());
+
+        List<GovernanceCheckResultDto> result = governanceHaltService.getRecentResults(1000);
+
+        assertThat(result).isEmpty();
+        verify(governanceCheckResultRepository).findAllByOrderByRunAtDesc(PageRequest.of(0, 500));
+    }
+
+    @Test
+    @DisplayName("clearHalt halt 없으면 no-op")
+    void clearHalt_noHalt_doesNothing() {
+        when(governanceHaltRepository.findByMarketAndStrategyType("KR", "LONG_TERM")).thenReturn(Optional.empty());
+
+        governanceHaltService.clearHalt("KR", "LONG_TERM", "admin1");
+
+        verify(governanceHaltRepository).findByMarketAndStrategyType("KR", "LONG_TERM");
+        verify(governanceHaltRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("clearHalt 이미 cleared면 no-op")
+    void clearHalt_alreadyCleared_doesNothing() {
+        GovernanceHalt halt = GovernanceHalt.create("US", "MEDIUM_TERM", "reason");
+        halt.clear("admin0");
+        when(governanceHaltRepository.findByMarketAndStrategyType("US", "MEDIUM_TERM")).thenReturn(Optional.of(halt));
+
+        governanceHaltService.clearHalt("US", "MEDIUM_TERM", "admin1");
+
+        verify(governanceHaltRepository).findByMarketAndStrategyType("US", "MEDIUM_TERM");
+        verify(governanceHaltRepository, never()).save(any());
     }
 }

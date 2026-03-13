@@ -26,8 +26,20 @@ public class AutoTradingReadinessDto {
     @Schema(description = "기준일 TB_DAILY_STOCK 건수 (KR+US)")
     long dailyStockRowCount;
 
+    @Schema(description = "기준일 TB_DAILY_STOCK KR 건수 (한국 시그널 0원인 규명용)")
+    Long dailyStockRowCountKr;
+
+    @Schema(description = "기준일 TB_DAILY_STOCK US 건수")
+    Long dailyStockRowCountUs;
+
     @Schema(description = "기준일 TB_SIGNAL_SCORE 건수")
     long signalScoreRowCount;
+
+    @Schema(description = "기준일 TB_SIGNAL_SCORE KR 건수 (한국 시그널 0원인 규명용)")
+    Long signalScoreRowCountKr;
+
+    @Schema(description = "기준일 TB_SIGNAL_SCORE US 건수")
+    Long signalScoreRowCountUs;
 
     @Schema(description = "활성 거버넌스 halt 수 (해당 조합은 파이프라인 run 스킵)")
     int activeGovernanceHaltCount;

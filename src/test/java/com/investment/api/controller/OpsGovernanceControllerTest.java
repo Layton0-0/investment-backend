@@ -20,6 +20,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -71,8 +76,10 @@ class OpsGovernanceControllerTest {
                 .id(1L)
                 .market("KR")
                 .strategyType("SHORT_TERM")
+                .passed(false)
                 .mddPct(new BigDecimal("-18"))
                 .sharpeRatio(new BigDecimal("0.5"))
+                .message("Degraded")
                 .degraded(true)
                 .build();
         when(governanceHaltService.getRecentResults(20)).thenReturn(List.of(dto));
@@ -81,6 +88,8 @@ class OpsGovernanceControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$[0].market").value("KR"))
+                .andExpect(jsonPath("$[0].passed").value(false))
+                .andExpect(jsonPath("$[0].message").value("Degraded"))
                 .andExpect(jsonPath("$[0].degraded").value(true));
 
         verify(governanceHaltService).getRecentResults(20);
@@ -126,5 +135,59 @@ class OpsGovernanceControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(governanceHaltService).clearHalt("US", "MEDIUM_TERM", "admin");
+    }
+
+    /**
+     * 경로에 빈 세그먼트(//)가 있으면 Spring이 매핑하지 않아 404가 나올 수 있음.
+     * 컨트롤러는 매핑된 요청에 대해 market/strategyType blank 시 400 INVALID_INPUT 반환.
+     */
+    @Test
+    @DisplayName("PUT clear market 공백(빈 세그먼트)이면 400 또는 404")
+    @WithMockUser(username = "admin1", roles = "ADMIN")
+    void clearHalt_blankMarket_returns4xx() throws Exception {
+        int status = mockMvc.perform(put("/api/v1/ops/governance/halts//SHORT_TERM/clear"))
+                .andReturn().getResponse().getStatus();
+        assertThat(status).isIn(400, 404);
+        if (status == 400) {
+            verify(governanceHaltService, never()).clearHalt(any(), any(), any());
+        }
+    }
+
+    @Test
+    @DisplayName("PUT clear strategyType 공백(빈 세그먼트)이면 400 또는 404")
+    @WithMockUser(username = "admin1", roles = "ADMIN")
+    void clearHalt_blankStrategyType_returns4xx() throws Exception {
+        int status = mockMvc.perform(put("/api/v1/ops/governance/halts/KR//clear")
+                        .contentType("application/json")
+                        .content("{}"))
+                .andReturn().getResponse().getStatus();
+        assertThat(status).isIn(400, 404);
+        if (status == 400) {
+            verify(governanceHaltService, never()).clearHalt(any(), any(), any());
+        }
+    }
+
+    @Test
+    @DisplayName("GET results limit 초과 시 500으로 캡하여 서비스 호출")
+    @WithMockUser(username = "admin1", roles = "ADMIN")
+    void getResults_limitOver500_capsTo500() throws Exception {
+        when(governanceHaltService.getRecentResults(500)).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/ops/governance/results").param("limit", "1000"))
+                .andExpect(status().isOk());
+
+        verify(governanceHaltService).getRecentResults(500);
+    }
+
+    @Test
+    @DisplayName("GET results limit 미지정 시 default 20")
+    @WithMockUser(username = "admin1", roles = "ADMIN")
+    void getResults_noLimit_usesDefault20() throws Exception {
+        when(governanceHaltService.getRecentResults(20)).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/ops/governance/results"))
+                .andExpect(status().isOk());
+
+        verify(governanceHaltService).getRecentResults(20);
     }
 }

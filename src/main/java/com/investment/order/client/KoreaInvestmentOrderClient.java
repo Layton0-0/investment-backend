@@ -20,11 +20,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import reactor.util.retry.Retry;
 
 import java.math.BigDecimal;
@@ -67,6 +69,9 @@ public class KoreaInvestmentOrderClient {
     // Rate Limiter 인스턴스 이름
     private static final String RATE_LIMITER_API_VIRTUAL = "koreaInvestmentApi";
     private static final String RATE_LIMITER_API_REAL = "koreaInvestmentApiReal";
+
+    /** 주문 API HTTP 타임아웃 (모의/실전 한투 API 응답 지연 대비) */
+    private static final Duration ORDER_API_HTTP_TIMEOUT = Duration.ofSeconds(25);
 
     // 한국투자증권 API Base URL
     private static final String BASE_URL_REAL = "https://openapi.koreainvestment.com:9443"; // 실거래
@@ -258,31 +263,33 @@ public class KoreaInvestmentOrderClient {
                         .uri(uri)
                         .headers(h -> h.addAll(headers))
                         .bodyValue(requestBody)
-                        .exchangeToMono((ClientResponse response) -> {
-                            int status = response.statusCode().value();
-                            return response.bodyToMono(String.class)
-                                    .defaultIfEmpty("")
-                                    .doOnNext(body -> log.warn("[국내주식매수] 한투 API 원시응답 status={} bodyPreview={}", status,
-                                            (body != null && !body.isEmpty()) ? body.substring(0, Math.min(800, body.length())) : "(empty)"))
-                                    .flatMap(body -> {
-                                        if (status >= 400) {
-                                            log.warn("[국내주식매수] 한투 API 실패 status={} body={}", status, body != null ? body : "(null)");
-                                            return Mono.error(new RuntimeException("한투 주문 API " + status + ": " + (body != null ? body : "")));
-                                        }
-                                        if (body == null || body.trim().isEmpty()) {
-                                            return Mono.error(new RuntimeException("한투 주문 API 200 but empty body"));
-                                        }
-                                        try {
-                                            @SuppressWarnings("unchecked")
-                                            Map<String, Object> map = objectMapper.readValue(body, new TypeReference<Map<String, Object>>() {});
-                                            return Mono.just(map);
-                                        } catch (Exception e) {
-                                            log.warn("[국내주식매수] 한투 API 본문 파싱 실패 bodyPreview={}", body.length() > 200 ? body.substring(0, 200) : body, e);
-                                            return Mono.error(new RuntimeException("한투 주문 API 본문 파싱 실패: " + e.getMessage(), e));
-                                        }
-                                    });
+                        .retrieve()
+                        .onStatus(HttpStatusCode::isError, res -> res.toEntity(String.class)
+                                .flatMap(errEntity -> {
+                                    String errBody = errEntity.getBody();
+                                    log.warn("[국내주식매수] 한투 API HTTP 오류 status={} body={}", errEntity.getStatusCode().value(), errBody);
+                                    return Mono.error(new RuntimeException("한투 주문 API " + errEntity.getStatusCode().value() + ": " + (errBody != null ? errBody : "")));
+                                }))
+                        .toEntity(String.class)
+                        .subscribeOn(Schedulers.boundedElastic())
+                        .timeout(ORDER_API_HTTP_TIMEOUT)
+                        .doOnNext(entity -> log.info("[국내주식매수] 한투 API 응답 수신 status={} bodyNull={} bodyLength={}",
+                                entity.getStatusCode().value(), entity.getBody() == null, entity.getBody() != null ? entity.getBody().length() : 0))
+                        .flatMap(entity -> {
+                            String body = entity.getBody();
+                            if (body == null || body.trim().isEmpty()) {
+                                log.error("[국내주식매수] 한투 API 응답 body 없음 status={}", entity.getStatusCode().value());
+                                return Mono.error(new RuntimeException("한투 주문 API 응답 body 없음 (status=" + entity.getStatusCode().value() + ")"));
+                            }
+                            try {
+                                @SuppressWarnings("unchecked")
+                                Map<String, Object> map = objectMapper.readValue(body, new TypeReference<Map<String, Object>>() {});
+                                return Mono.just(map);
+                            } catch (Exception e) {
+                                log.warn("[국내주식매수] 한투 API 본문 파싱 실패 bodyPreview={}", body.length() > 200 ? body.substring(0, 200) : body, e);
+                                return Mono.error(new RuntimeException("한투 주문 API 본문 파싱 실패: " + e.getMessage(), e));
+                            }
                         })
-                        .timeout(Duration.ofSeconds(10))
                         .retryWhen(Retry.backoff(2, Duration.ofSeconds(1))
                                 .filter(throwable -> {
                                     if (throwable instanceof org.springframework.web.reactive.function.client.WebClientResponseException) {
@@ -410,8 +417,32 @@ public class KoreaInvestmentOrderClient {
                         .headers(h -> h.addAll(headers))
                         .bodyValue(requestBody)
                         .retrieve()
-                        .bodyToMono(Map.class)
-                        .timeout(Duration.ofSeconds(10))
+                        .onStatus(HttpStatusCode::isError, res -> res.toEntity(String.class)
+                                .flatMap(errEntity -> {
+                                    String errBody = errEntity.getBody();
+                                    log.warn("[국내주식매도] 한투 API HTTP 오류 status={} body={}", errEntity.getStatusCode().value(), errBody);
+                                    return Mono.error(new RuntimeException("한투 주문 API " + errEntity.getStatusCode().value() + ": " + (errBody != null ? errBody : "")));
+                                }))
+                        .toEntity(String.class)
+                        .subscribeOn(Schedulers.boundedElastic())
+                        .timeout(ORDER_API_HTTP_TIMEOUT)
+                        .doOnNext(entity -> log.info("[국내주식매도] 한투 API 응답 수신 status={} bodyNull={} bodyLength={}",
+                                entity.getStatusCode().value(), entity.getBody() == null, entity.getBody() != null ? entity.getBody().length() : 0))
+                        .flatMap(entity -> {
+                            String body = entity.getBody();
+                            if (body == null || body.trim().isEmpty()) {
+                                log.error("[국내주식매도] 한투 API 응답 body 없음 status={}", entity.getStatusCode().value());
+                                return Mono.error(new RuntimeException("한투 주문 API 응답 body 없음 (status=" + entity.getStatusCode().value() + ")"));
+                            }
+                            try {
+                                @SuppressWarnings("unchecked")
+                                Map<String, Object> map = objectMapper.readValue(body, new TypeReference<Map<String, Object>>() {});
+                                return Mono.just(map);
+                            } catch (Exception e) {
+                                log.warn("[국내주식매도] 한투 API 본문 파싱 실패 bodyPreview={}", body.length() > 200 ? body.substring(0, 200) : body, e);
+                                return Mono.error(new RuntimeException("한투 주문 API 본문 파싱 실패: " + e.getMessage(), e));
+                            }
+                        })
                         .retryWhen(Retry.backoff(2, Duration.ofSeconds(1))
                                 .filter(throwable -> {
                                     if (throwable instanceof org.springframework.web.reactive.function.client.WebClientResponseException) {
@@ -420,23 +451,23 @@ public class KoreaInvestmentOrderClient {
                                     }
                                     return false;
                                 }))
-                        .map(response -> {
+                        .map(responseMap -> {
                             @SuppressWarnings("unchecked")
-                            Map<String, Object> responseMap = (Map<String, Object>) response;
+                            Map<String, Object> responseMapTyped = (Map<String, Object>) responseMap;
 
-                            String rtCd = (String) responseMap.get("rt_cd");
-                            String msgCd = (String) responseMap.get("msg_cd");
-                            String msg1 = (String) responseMap.get("msg1");
+                            String rtCd = (String) responseMapTyped.get("rt_cd");
+                            String msgCd = (String) responseMapTyped.get("msg_cd");
+                            String msg1 = (String) responseMapTyped.get("msg1");
                             if (rtCd == null || !"0".equals(rtCd)) {
                                 KoreaInvestmentApiLogging.logResponseError("국내주식매도", 200, rtCd, msgCd, msg1, null);
                                 throw new RuntimeException(
                                         "한국투자증권 주문 API 오류: rt_cd=" + rtCd + ", msg_cd=" + msgCd + ", msg1=" + msg1);
                             }
 
-                            KoreaInvestmentApiLogging.logResponseSuccessFromMap("국내주식매도", 200, responseMap);
+                            KoreaInvestmentApiLogging.logResponseSuccessFromMap("국내주식매도", 200, responseMapTyped);
 
                             @SuppressWarnings("unchecked")
-                            Map<String, Object> output = (Map<String, Object>) responseMap.get("output");
+                            Map<String, Object> output = (Map<String, Object>) responseMapTyped.get("output");
                             if (output == null) {
                                 KoreaInvestmentApiLogging.logResponseError("국내주식매도", 200, rtCd, msgCd, "output 없음", null);
                                 throw new RuntimeException("한국투자증권 API 응답에 output이 없습니다");
@@ -538,7 +569,7 @@ public class KoreaInvestmentOrderClient {
                         .bodyValue(requestBody)
                         .retrieve()
                         .bodyToMono(Map.class)
-                        .timeout(Duration.ofSeconds(10))
+                        .timeout(ORDER_API_HTTP_TIMEOUT)
                         .retryWhen(Retry.backoff(2, Duration.ofSeconds(1))
                                 .filter(throwable -> {
                                     if (throwable instanceof org.springframework.web.reactive.function.client.WebClientResponseException) {
@@ -619,7 +650,7 @@ public class KoreaInvestmentOrderClient {
                         .bodyValue(requestBody)
                         .retrieve()
                         .bodyToMono(Map.class)
-                        .timeout(Duration.ofSeconds(10))
+                        .timeout(ORDER_API_HTTP_TIMEOUT)
                         .retryWhen(Retry.backoff(2, Duration.ofSeconds(1))
                                 .filter(throwable -> {
                                     if (throwable instanceof org.springframework.web.reactive.function.client.WebClientResponseException) {

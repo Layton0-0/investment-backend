@@ -29,6 +29,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * 4단계 파이프라인 실행 스케줄러.
@@ -148,8 +149,9 @@ public class PipelineExecutionScheduler {
                         PipelineSkipReason.DAILY_LOSS_LIMIT.getDescription());
                 continue;
             }
+            String pipelineRunId = UUID.randomUUID().toString();
             try {
-                runPipelineForAccount(basDt, accountNo, shortCapital, midCapital, longCapital, effectiveAutoExecute, marketFilter);
+                runPipelineForAccount(pipelineRunId, basDt, accountNo, shortCapital, midCapital, longCapital, effectiveAutoExecute, marketFilter);
             } catch (Exception e) {
                 log.warn("파이프라인 실행 스킵: code={}, accountNo={}, error={}",
                         PipelineSkipReason.RUN_FAILED.getCode(), LogMaskingUtil.maskAccountNo(accountNo), e.getMessage(), e);
@@ -164,7 +166,7 @@ public class PipelineExecutionScheduler {
         }
     }
 
-    private void runPipelineForAccount(LocalDate basDt, String accountNo,
+    private void runPipelineForAccount(String pipelineRunId, LocalDate basDt, String accountNo,
             BigDecimal shortCapital, BigDecimal midCapital, BigDecimal longCapital, boolean autoExecute, String marketFilter) {
         boolean runKr = (marketFilter == null || "KR".equals(marketFilter)) && tradingWindowService.isInKrWindow();
         boolean runUs = (marketFilter == null || "US".equals(marketFilter)) && tradingWindowService.isInUsWindow();
@@ -174,9 +176,9 @@ public class PipelineExecutionScheduler {
                     PipelineSkipReason.OUTSIDE_TRADING_WINDOW.getDescription());
         }
         if (runKr) {
-            runIfNotHalted(basDt, "KR", accountNo, StrategyType.SHORT_TERM, shortCapital, autoExecute);
-            runIfNotHalted(basDt, "KR", accountNo, StrategyType.MEDIUM_TERM, midCapital, autoExecute);
-            runIfNotHalted(basDt, "KR", accountNo, StrategyType.LONG_TERM, longCapital, autoExecute);
+            runIfNotHalted(pipelineRunId, basDt, "KR", accountNo, StrategyType.SHORT_TERM, shortCapital, autoExecute);
+            runIfNotHalted(pipelineRunId, basDt, "KR", accountNo, StrategyType.MEDIUM_TERM, midCapital, autoExecute);
+            runIfNotHalted(pipelineRunId, basDt, "KR", accountNo, StrategyType.LONG_TERM, longCapital, autoExecute);
         }
         if ((marketFilter == null || "US".equals(marketFilter)) && !runUs) {
             log.info("파이프라인 실행 스킵: code={}, market=US, accountNo={}, {}",
@@ -184,9 +186,9 @@ public class PipelineExecutionScheduler {
                     PipelineSkipReason.OUTSIDE_TRADING_WINDOW.getDescription());
         }
         if (runUs) {
-            runIfNotHalted(basDt, "US", accountNo, StrategyType.SHORT_TERM, shortCapital, autoExecute);
-            runIfNotHalted(basDt, "US", accountNo, StrategyType.MEDIUM_TERM, midCapital, autoExecute);
-            runIfNotHalted(basDt, "US", accountNo, StrategyType.LONG_TERM, longCapital, autoExecute);
+            runIfNotHalted(pipelineRunId, basDt, "US", accountNo, StrategyType.SHORT_TERM, shortCapital, autoExecute);
+            runIfNotHalted(pipelineRunId, basDt, "US", accountNo, StrategyType.MEDIUM_TERM, midCapital, autoExecute);
+            runIfNotHalted(pipelineRunId, basDt, "US", accountNo, StrategyType.LONG_TERM, longCapital, autoExecute);
         }
     }
 
@@ -202,7 +204,7 @@ public class PipelineExecutionScheduler {
         runNow("US");
     }
 
-    private void runIfNotHalted(LocalDate basDt, String market, String accountNo,
+    private void runIfNotHalted(String pipelineRunId, LocalDate basDt, String market, String accountNo,
             StrategyType strategyType, BigDecimal capital, boolean autoExecute) {
         if (governanceHaltService.isHalted(market, strategyType.name())) {
             log.info("파이프라인 실행 스킵: code={}, market={}, strategyType={}, accountNo={}, {}",
@@ -224,7 +226,7 @@ public class PipelineExecutionScheduler {
         BigDecimal multiplier = capitalDrawdownConstraintService.getCapitalMultiplier(market, strategyType.name());
         BigDecimal effectiveCapital = capital.multiply(multiplier != null ? multiplier : BigDecimal.ONE).setScale(0, RoundingMode.DOWN);
         log.debug("파이프라인 실행: market={}, strategyType={}, accountNo={}", market, strategyType, LogMaskingUtil.maskAccountNo(accountNo));
-        pipelineExecutor.run(basDt, market, accountNo, strategyType, effectiveCapital, autoExecute);
+        pipelineExecutor.run(basDt, market, accountNo, strategyType, effectiveCapital, autoExecute, pipelineRunId);
         log.debug("파이프라인 실행 완료: market={}, strategyType={}, accountNo={}", market, strategyType, LogMaskingUtil.maskAccountNo(accountNo));
     }
 }

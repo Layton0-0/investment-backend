@@ -19,6 +19,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.UUID;
 
 /**
  * 백테스트 엔진 — 과거 일봉·시그널로 4단계 파이프라인 재생, 메트릭 산출.
@@ -53,7 +54,10 @@ public class BacktestService {
         if (request.getInitialCapital() == null || request.getInitialCapital().compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("initialCapital must be > 0");
         }
+        String backtestRunId = UUID.randomUUID().toString();
         StrategyType strategyType = parseStrategyType(request.getStrategyType());
+        log.info("backtestRunStart backtestRunId={} market={} strategyType={} startDate={} endDate={}",
+                backtestRunId, request.getMarket(), strategyType, request.getStartDate(), request.getEndDate());
 
         BigDecimal cash = request.getInitialCapital();
         List<BacktestPosition> positions = new ArrayList<>();
@@ -247,6 +251,14 @@ public class BacktestService {
                 ? sumWins.divide(sumLosses.abs(), 4, RoundingMode.HALF_UP)
                 : (sumWins.compareTo(BigDecimal.ZERO) > 0 ? sumWins : null);
 
+        BigDecimal totalFrictionCost = trades.stream()
+                .map(BacktestTradeDto::getTotalFrictionCost)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        log.info("backtestRunEnd backtestRunId={} tradeCount={} cagr={} mddPct={} sharpeRatio={}",
+                backtestRunId, trades.size(), cagr, mddPct, sharpeRatio);
+
         return BacktestRunResult.builder()
                 .startDate(request.getStartDate())
                 .endDate(request.getEndDate())
@@ -267,6 +279,7 @@ public class BacktestService {
                 .tradeCount(trades.size())
                 .winningTrades(winningTrades)
                 .losingTrades(losingTrades)
+                .totalFrictionCost(totalFrictionCost)
                 .equityCurve(equityCurve)
                 .trades(trades)
                 .build();

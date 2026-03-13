@@ -6,8 +6,8 @@ import com.investment.marketdata.dto.CurrentPriceDto;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
@@ -44,30 +44,47 @@ public class RealtimeMarketDataService {
     }
 
     /**
-     * 단일 종목 실시간 현재가 조회 (동기, 캐시·Circuit Breaker 적용)
-     * WebSocket에서 최신가가 있으면 우선 반환하고, 없으면 캐시 미스 시 API 호출 후 5분 TTL 캐시.
+     * 단일 종목 실시간 현재가 조회 (동기, 수동 캐시·Circuit Breaker 적용)
+     * 순서: (1) WebSocket 라이브맵 (2) Spring 캐시 (3) REST API. 캐시를 메서드 내부에서만 사용하여
+     * WebSocket에 더 최신 데이터가 있어도 캐시 히트로 구식 가격이 반환되는 일이 없도록 함.
      *
      * @param symbol 종목 코드 (6자리 또는 종목명)
      * @return 현재가 정보 (API 실패·fallback 시 null)
      */
     @Transactional(readOnly = true)
-    @Cacheable(value = CacheConfig.CACHE_CURRENT_PRICE, key = "#symbol", unless = "#result == null")
     @CircuitBreaker(name = "marketDataService", fallbackMethod = "getCurrentPriceBlockingFallback")
     public CurrentPriceDto getCurrentPriceBlocking(String symbol) {
-        log.info("[현재가] getCurrentPriceBlocking 진입 symbol={}", symbol);
+        log.debug("[현재가] getCurrentPriceBlocking 진입 symbol={}", symbol);
+
+        // (1) WebSocket 라이브맵 우선 — 최신 호가/체결 반영
         CurrentPriceDto fromWs = webSocketLivePrices.get(symbol);
         if (fromWs != null) {
-            log.info("[현재가] WebSocket 캐시 반환 symbol={} price={}", symbol, fromWs.getCurrentPrice());
+            log.info("[현재가] WebSocket 라이브 반환 symbol={} price={}", symbol, fromWs.getCurrentPrice());
             return fromWs;
         }
+
+        // (2) 캐시 조회 (REST 결과 또는 이전 WebSocket 결과)
+        Cache cache = cacheManager != null ? cacheManager.getCache(CacheConfig.CACHE_CURRENT_PRICE) : null;
+        if (cache != null) {
+            CurrentPriceDto cached = cache.get(symbol, CurrentPriceDto.class);
+            if (cached != null) {
+                log.debug("[현재가] 캐시 히트 반환 symbol={} price={}", symbol, cached.getCurrentPrice());
+                return cached;
+            }
+        }
+
+        // (3) REST 폴백 — 한투 주식현재가 시세 API
         log.info("[현재가] 캐시 미스, 한투 클라이언트 호출 symbol={}", symbol);
-        CurrentPriceDto result = marketDataClient.getCurrentPrice(symbol).blockOptional().orElse(null);
-        if (result == null) {
+        CurrentPriceDto apiResult = marketDataClient.getCurrentPrice(symbol).blockOptional().orElse(null);
+        if (apiResult == null) {
             log.warn("[현재가] 한투 클라이언트 null 반환 symbol={} (토큰/API오류·폴백 가능)", symbol);
         } else {
-            log.info("[현재가] 한투 클라이언트 성공 symbol={} currentPrice={}", symbol, result.getCurrentPrice());
+            log.info("[현재가] 한투 클라이언트 성공 symbol={} currentPrice={}", symbol, apiResult.getCurrentPrice());
+            if (cache != null) {
+                cache.put(symbol, apiResult);
+            }
         }
-        return result;
+        return apiResult;
     }
 
     /**
@@ -96,7 +113,9 @@ public class RealtimeMarketDataService {
 
     @SuppressWarnings("unused")
     public CurrentPriceDto getCurrentPriceBlockingFallback(String symbol, Exception e) {
-        log.warn("[현재가] Circuit Breaker 폴백→404 symbol={} exception={} message={}", symbol, e.getClass().getSimpleName(), e.getMessage());
+        Throwable cause = e.getCause() != null ? e.getCause() : e;
+        String causeMsg = cause.getMessage() != null ? cause.getMessage() : cause.getClass().getSimpleName();
+        log.warn("[현재가] Circuit Breaker 폴백→null symbol={} reason={} (한투 토큰/API실패·타임아웃·rt_cd 비정상 등 점검)", symbol, causeMsg);
         if (log.isDebugEnabled()) {
             log.debug("[현재가] 폴백 예외 상세 symbol=" + symbol, e);
         }

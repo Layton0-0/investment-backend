@@ -9,6 +9,7 @@ import com.investment.backtest.dto.WalkForwardBacktestRequest;
 import com.investment.backtest.dto.WalkForwardBacktestResult;
 import com.investment.backtest.robo.RoboBacktestService;
 import com.investment.backtest.robo.RoboPreExecutionResultStore;
+import com.investment.common.exception.GlobalExceptionHandler;
 import com.investment.common.security.JwtAuthenticationFilter;
 import com.investment.common.security.RateLimitFilter;
 import com.investment.config.RoboBacktestProperties;
@@ -21,6 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -34,6 +36,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(BacktestController.class)
+@Import(GlobalExceptionHandler.class)
 @AutoConfigureMockMvc(addFilters = false)
 @DisplayName("BacktestController")
 class BacktestControllerTest {
@@ -105,22 +108,14 @@ class BacktestControllerTest {
         @Test
         @DisplayName("POST /api/v1/backtest/walk-forward 성공 시 200 및 foldCount·avgCagr·avgMddPct·minSharpeRatio 반환")
         void runWalkForward_returnsOkWithAggregatedMetrics() throws Exception {
-                WalkForwardBacktestRequest request = WalkForwardBacktestRequest.builder()
-                                .startDate(LocalDate.of(2024, 1, 1))
-                                .endDate(LocalDate.of(2024, 12, 31))
-                                .market("KR")
-                                .strategyType("SHORT_TERM")
-                                .initialCapital(new BigDecimal("100000000"))
-                                .trainDays(252)
-                                .testDays(63)
-                                .stepDays(63)
-                                .build();
+                // API 계약(camelCase)에 맞춘 명시적 JSON — 직렬화/역직렬화 불일치로 인한 400 방지
+                String requestBody = "{\"startDate\":\"2023-01-01\",\"endDate\":\"2024-06-30\",\"market\":\"KR\",\"strategyType\":\"SHORT_TERM\",\"initialCapital\":10000000,\"trainDays\":252,\"testDays\":63,\"stepDays\":63}";
 
                 WalkForwardBacktestResult result = WalkForwardBacktestResult.builder()
-                                .startDate(request.getStartDate())
-                                .endDate(request.getEndDate())
-                                .market(request.getMarket())
-                                .strategyType(request.getStrategyType())
+                                .startDate(LocalDate.of(2023, 1, 1))
+                                .endDate(LocalDate.of(2024, 6, 30))
+                                .market("KR")
+                                .strategyType("SHORT_TERM")
                                 .trainDays(252)
                                 .testDays(63)
                                 .stepDays(63)
@@ -135,7 +130,7 @@ class BacktestControllerTest {
 
                 mockMvc.perform(post("/api/v1/backtest/walk-forward")
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request)))
+                                .content(requestBody))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.foldCount").value(2))
                                 .andExpect(jsonPath("$.avgCagr").value(22.5))

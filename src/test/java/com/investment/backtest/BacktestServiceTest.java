@@ -62,6 +62,12 @@ class BacktestServiceTest {
         assertThat(result.getStartDate()).isEqualTo(request.getStartDate());
         assertThat(result.getEndDate()).isEqualTo(request.getEndDate());
         assertThat(result.getMarket()).isEqualTo("KR");
+        // Required metrics (BacktestRunResult must include these)
+        assertThat(result.getCagr()).isNotNull();
+        assertThat(result.getMddPct()).isNotNull();
+        assertThat(result.getSharpeRatio()).isNull(); // can be null with flat curve
+        assertThat(result.getWinRate()).isNull();
+        assertThat(result.getProfitFactor()).isNull();
     }
 
     @Test
@@ -144,5 +150,25 @@ class BacktestServiceTest {
         assertThat(result.getFinalEquity()).isEqualByComparingTo(new BigDecimal("100000000"));
         assertThat(result.getEquityCurve()).isNotEmpty();
         assertThat(result.getTradeCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("거래 없을 때 totalFrictionCost는 0으로 노출")
+    void run_noTrades_totalFrictionCostIsZero() {
+        when(positionSizingService.getRecommendations(any(LocalDate.class), eq("KR"), any(), any(BigDecimal.class)))
+                .thenReturn(Collections.emptyList());
+
+        BacktestRunRequest request = BacktestRunRequest.builder()
+                .startDate(LocalDate.of(2025, 1, 6))
+                .endDate(LocalDate.of(2025, 1, 10))
+                .market("KR")
+                .strategyType("SHORT_TERM")
+                .initialCapital(new BigDecimal("100000000"))
+                .build();
+
+        BacktestRunResult result = backtestService.run(request);
+
+        assertThat(result.getTradeCount()).isZero();
+        assertThat(result.getTotalFrictionCost()).isNotNull().isEqualByComparingTo(BigDecimal.ZERO);
     }
 }

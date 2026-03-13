@@ -1,5 +1,7 @@
 package com.investment.api.controller;
 
+import com.investment.common.exception.DomainException;
+import com.investment.common.exception.ErrorCode;
 import com.investment.governance.GovernanceHaltService;
 import com.investment.ops.dto.GovernanceCheckResultDto;
 import com.investment.ops.dto.GovernanceHaltClearRequestDto;
@@ -9,6 +11,7 @@ import com.investment.setting.service.SystemSettingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -70,7 +73,13 @@ public class OpsGovernanceController {
     public ResponseEntity<Void> clearHalt(
             @Parameter(description = "시장 (KR, US)") @PathVariable String market,
             @Parameter(description = "전략 유형 (SHORT_TERM, MEDIUM_TERM, LONG_TERM)") @PathVariable String strategyType,
-            @RequestBody(required = false) GovernanceHaltClearRequestDto body) {
+            @RequestBody(required = false) @Valid GovernanceHaltClearRequestDto body) {
+        if (market == null || market.isBlank()) {
+            throw new DomainException(ErrorCode.INVALID_INPUT, "market must not be blank");
+        }
+        if (strategyType == null || strategyType.isBlank()) {
+            throw new DomainException(ErrorCode.INVALID_INPUT, "strategyType must not be blank");
+        }
         String clearedBy = body != null && body.getClearedBy() != null ? body.getClearedBy() : "admin";
         governanceHaltService.clearHalt(market, strategyType, clearedBy);
         return ResponseEntity.noContent().build();
