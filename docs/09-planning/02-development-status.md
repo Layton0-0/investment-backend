@@ -10,6 +10,10 @@
 
 ## 1. 완료 (Completed)
 
+### Cursor 규칙 단일화 (2026-04-06)
+- **중복 제거**: 모노레포 루트 `.cursor/rules`만 유지. 이 저장소의 `.cursor/rules`·`.cursor/mcp.json.template` 제거, `.cursor/README.md`로 루트 규칙·MCP 템플릿 경로 안내.
+- **작업 방식**: 일상 개발은 상위 `auto-investment-project` 워크스페이스 또는 `auto-investment-project.code-workspace`로 여는 것을 권장한다.
+
 ### Admin Ops Governance API 보강 (2026-03-13)
 - **Governance REST API**: GET /api/v1/ops/governance/results?limit=20, GET /api/v1/ops/governance/halts, PUT …/halts/{market}/{strategyType}/clear. 기존 GovernanceCheckResult·GovernanceHalt 서비스/리포지토리 활용. DTO: results에 runAt, market, strategyType, passed, mddPct, sharpeRatio, message; halts에 market, strategyType, haltedAt, reason. @PreAuthorize("hasRole('ADMIN')"), 경로 검증(공백 시 400), @Valid(body), LogMaskingUtil(clearedBy). 02-api-endpoints §12.4 반영.
 
@@ -678,3 +682,4 @@
 | 1.66 | 2026-03-06 | 완료: Shrimp B-1~D-2 의존성 순 진행 — B-1 데이터_부재_점검_가이드, B-2 verify-data-pipeline.ps1, C-1/C-2 로컬_Docker_재배포_로그_검증_체크리스트, D-1/D-2 배포_Docker_동일_세팅_가이드. 자동투자_E2E_검증_체크리스트 §3·§5 링크 보강. |
 | 1.63 | 2026-03-06 | 완료: KRX Open API 명세서 문서화 — krx-api-docs 내 Spec.docx·Spec (1)~(4).docx 5건을 12-krx-api-spec.md·12-krx-api-spec/(01~05) 상세 md로 정리. 유가증권/ETF 일별매매, KOSDAQ/KRX/KOSPI 시리즈 일별시세 Request/Response·샘플 수록. 01-api-overview §9.2·04-krx-api-required·10-data-collection-api에 12-krx-api-spec 링크 반영. |
 | 1.67 | 2026-03-11 | 완료: 단기/중기/장기 파이프라인 로그 가시화 — PipelineExecutionScheduler.runIfNotHalted 전략별 실행/완료 log.debug 추가, runPipelineForAccount 계정 단일 완료 로그 제거, PipelineExecutor.run 진입 시 실행 시작 log.debug 추가. Shrimp 태스크 3건(dc090e1f·8f943dee·97ee01be) 반영. |
+| 1.68 | 2026-04-06 | 완료: Cursor 규칙 단일화 — 백엔드 `.cursor` 중복 규칙·MCP 템플릿 제거, README로 모노레포 루트 `.cursor` 안내. |
