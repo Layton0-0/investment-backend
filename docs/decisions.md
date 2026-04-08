@@ -1,4 +1,4 @@
-# 아키텍처 결정 사항 (Architecture Decision Records)
+﻿# 아키텍처 결정 사항 (Architecture Decision Records)
 
 이 문서는 Investment Choi 프로젝트의 주요 아키텍처 및 기술 결정 사항을 기록합니다. 각 결정의 배경, 대안, 그리고 선택한 이유를 명확히 문서화하여 향후 의사결정 시 참고할 수 있도록 합니다.
 
@@ -560,7 +560,7 @@ API 설계 표준 수립 필요
 - [KoreaInvestmentAccountClient](src/main/java/com/investment/account/client/KoreaInvestmentAccountClient.java): 7곳 GET+queryParam 적용.
 - [KoreaInvestmentMarketDataClient](src/main/java/com/investment/marketdata/client/impl/KoreaInvestmentMarketDataClient.java): 현재가·차트 조회 GET+query 적용.
 - [한국투자증권 API 가이드](./04-api/09-korea-investment-api-guide.md): 조회 API GET·query parameter 명시, 개발 시 MCP 사용 안내.
-- [.cursor/rules/MCP.mdc](../.cursor/rules/MCP.mdc): 한국투자증권 API 개발 시 MCP 무조건 사용 규칙.
+- [.cursor/rules/korea-investment-api.md](../.cursor/rules/korea-investment-api.md): 한국투자증권 API 개발 시 MCP 무조건 사용 규칙.
 
 ### 한국투자증권 API 변경 대응
 - **2026-02-11**: 주식잔고조회(v1_국내주식-006) INQR_DVSN 02(종목별) 제한 → 01(대출일별) 사용. 공지에 따라 `KoreaInvestmentAccountClient.inquireBalance`, `verifyAccountByCredentials` 및 API 가이드 예시를 01로 수정. 상세: [09-korea-investment-api-guide.md §주식잔고조회](./04-api/09-korea-investment-api-guide.md).
@@ -709,7 +709,7 @@ API 설계 표준 수립 필요
 **결정**: 전략이 더 이상 말이 안 되면 **즉시 거래 중단**한다. 전략 버전 스택에 결과·교훈을 채우고, 성과 열화 시 검토·거래 중단 여부를 결정한다.
 
 ### 배경
-퀀트 시스템 규칙([Quant-Trading-System.mdc](../.cursor/rules/Quant-Trading-System.mdc)): "If a strategy stops making sense, it stops trading—immediately." 버전 스택의 "결과·교훈"이 대부분 "미검증"인 상태에서는 운영 원칙이 문서화되어 있지 않았다.
+퀀트 시스템 규칙([quant-and-backtest.md](../.cursor/rules/quant-and-backtest.md)): "If a strategy stops making sense, it stops trading—immediately." 버전 스택의 "결과·교훈"이 대부분 "미검증"인 상태에서는 운영 원칙이 문서화되어 있지 않았다.
 
 ### 결정 사항
 - **전략 중단 원칙**: 전략이 말이 안 되면 즉시 거래 중단. 정기 백테스트 재실행·MDD/Sharpe 열화 시 검토 후 거래 중단 여부 결정.

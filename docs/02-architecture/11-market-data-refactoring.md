@@ -1,4 +1,4 @@
-# 시장 데이터 API 가이드
+﻿# 시장 데이터 API 가이드
 
 ## 개요
 
@@ -30,7 +30,7 @@ MarketDataClient (인터페이스)
    - `apiKey`: API 키
    - `baseUrl`: Base URL
    - `timeout`: 타임아웃
-   - (mock 데이터는 테스트에서만 사용. 프로덕션 코드에는 없음. 규칙: .cursor/rules/no-mock-data-outside-tests.mdc)
+   - (mock 데이터는 테스트에서만 사용. 프로덕션 코드에는 없음. 규칙: .cursor/rules/docs-and-quality.md)
    - `market`: 시장 선택 (us, hk, cn 등)
 
 ## 설정 방법

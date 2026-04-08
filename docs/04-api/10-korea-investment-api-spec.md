@@ -1,4 +1,4 @@
-# 한국투자증권 Open API 전체 명세서
+﻿# 한국투자증권 Open API 전체 명세서
 
 ## 1. 문서 목적 및 사용 원칙
 
@@ -134,6 +134,6 @@ API 파라미터(종목코드·거래소코드 등)는 아래 파일 또는 한�
 - **한국투자증권 API 로깅 체계**(요청/응답/에러 포맷, 공통 유틸): [10-korea-investment-api-spec/05-logging.md](10-korea-investment-api-spec/05-logging.md)
 - **원본 명세 폴더**: [investment-backend/docs/korea-investment-api/](../korea-investment-api/)
 - **구현 가이드**: [09-korea-investment-api-guide.md](09-korea-investment-api-guide.md)
-- **MCP 규칙**: [.cursor/rules/MCP.mdc](../../../.cursor/rules/MCP.mdc), [decisions.md §14](../decisions.md#14-한국투자증권-api-요청-방식-및-mcp-사용)
+- **MCP 규칙**: [.cursor/rules/korea-investment-api.md](../../../.cursor/rules/korea-investment-api.md), [decisions.md §14](../decisions.md#14-한국투자증권-api-요청-방식-및-mcp-사용)
 - **한국투자증권 API 포털**: [https://apiportal.koreainvestment.com/](https://apiportal.koreainvestment.com/)
 

@@ -1,4 +1,4 @@
-# 화면 테스트 및 MCP 구성 가이드
+﻿# 화면 테스트 및 MCP 구성 가이드
 
 Cursor가 시니어 QA처럼 화면을 검증할 수 있도록 MCP 구성과 화면·인프라 테스트 방법을 정리한다.
 
@@ -9,7 +9,7 @@ Cursor가 시니어 QA처럼 화면을 검증할 수 있도록 MCP 구성과 화
 | MCP | 권장 | 용도 |
 |-----|------|------|
 | **cursor-ide-browser** | **ON 필수** | 화면 테스트 핵심. Cursor 기본 제공. Agent가 URL 이동·스냅샷·클릭·입력·판단 가능. 비활성화하지 말 것. |
-| **한국투자증권 (KIS Code Assistant)** | **ON** | API 개발 시 필수 ([.cursor/rules/MCP.mdc](../../.cursor/rules/MCP.mdc)). |
+| **한국투자증권 (KIS Code Assistant)** | **ON** | API 개발 시 필수 ([.cursor/rules/korea-investment-api.md](../../.cursor/rules/korea-investment-api.md)). |
 | **filesystem** | **ON** | 코드·설정·테스트 결과 파일 접근. |
 | **github** | 선택 | 이슈/PR·코드 검색 시 유용. |
 | **ssh-mcp-oracle-osaka-yoon / ssh-mcp-oracle-korea-jihee** | 선택 | 로컬 Cursor에서 OCI 서버(Oracle Osaka / Oracle Korea) 원격 명령(배포·로그 등) 시 사용. [07-cursor-oci-ssh-mcp.md](07-cursor-oci-ssh-mcp.md) 참조. |

@@ -1,4 +1,4 @@
-# 개발 진행 현황
+﻿# 개발 진행 현황
 
 **목적**: 개발 완료·진행중·진행예정 항목을 한 문서에서 관리하고, [로드맵](../roadmap.md)·[화면·메뉴 기획서](./01-screen-menu-spec.md)·[PRD](../PRD.md)와 연동하여 참조·변동 시 갱신한다.
 
@@ -103,7 +103,7 @@
 
 ### 한국투자증권 전체 API 명세서 문서화 (2026-03-05)
 - [x] **한국투자증권 전체 API 명세서(10) 작성**  
-  [10-korea-investment-api-spec.md](../04-api/10-korea-investment-api-spec.md) 신규 작성. 원본 xlsx 목록(13개)·code 폴더(9개)·구현된 API 요약 표(path·TR_ID·HTTP)·신규 API 추가 절차·참조 링크. Excel Reader MCP로 xlsx 시트 확인. MCP 규칙(MCP.mdc)에 명세서 참조 문구 추가. 01-api-overview §9.2에 09 가이드·10 명세서 링크 반영.
+  [10-korea-investment-api-spec.md](../04-api/10-korea-investment-api-spec.md) 신규 작성. 원본 xlsx 목록(13개)·code 폴더(9개)·구현된 API 요약 표(path·TR_ID·HTTP)·신규 API 추가 절차·참조 링크. Excel Reader MCP로 xlsx 시트 확인. MCP 규칙(korea-investment-api.md)에 명세서 참조 문구 추가. 01-api-overview §9.2에 09 가이드·10 명세서 링크 반영.
 
 ### 기간별손익조회 404 근본 원인 조치 (2026-03-05)
 - [x] **기간별손익일별합산조회 요청 파라미터·모의 미지원 처리**
@@ -127,7 +127,7 @@
 
 ### QA 시나리오 점검·파이프라인 동기화 (2026-03-05)
 - [x] **Shrimp QA 태스크 의존성 정렬·전체 진행**  
-  전체 QA 파이프라인 점검(1ed426fe)에 6개 시나리오 점검 태스크 의존성 추가. QA-Backend/API/Python/PythonTests/E2E/Security 시나리오 점검 완료(03-test-execution 실패 시 안내, QA_시나리오_점검_요약 §3~§7 반영). 전체 QA 파이프라인 점검: qa-automation-flow.mdc에 Python 서비스 QA·Python 단위 테스트 단계 명시. QA-Security run(npm audit --audit-level=high)·QA-Report(리포트 경로·실패 루프) 완료. Pending 0.
+  전체 QA 파이프라인 점검(1ed426fe)에 6개 시나리오 점검 태스크 의존성 추가. QA-Backend/API/Python/PythonTests/E2E/Security 시나리오 점검 완료(03-test-execution 실패 시 안내, QA_시나리오_점검_요약 §3~§7 반영). 전체 QA 파이프라인 점검: ai-workflow-qa.md에 Python 서비스 QA·Python 단위 테스트 단계 명시. QA-Security run(npm audit --audit-level=high)·QA-Report(리포트 경로·실패 루프) 완료. Pending 0.
 - [x] **한국투자증권 토큰 1분 1회 제한 대응 (재사용/캐시)**  
   KoreaInvestmentTokenService.getAccessToken: 1분 쿨다운에 걸렸을 때 예외를 던지기 전에 DB에서 기존 유효 토큰을 조회해 반환하도록 수정(동시 발급 블록 내·복호화 실패 후 재발급 블록 내 두 곳). 기존 토큰이 유효하면 재사용, 없거나 복호화 실패 시에만 "접근토큰 발급은 1분당 1회만 가능합니다" 예외 발생. Shrimp task 16961bf7.
 - [x] **토큰 발급 1분 제한 재발 방지 (락 해제 전 커밋)**  
@@ -345,7 +345,7 @@
 - [x] **설정 페이지 smart-portfolio-pal 디자인 전면 반영 (investment-front)**  
   설정 화면을 개편 디자인에 맞춰 전면 적용. **탭**: "계좌·API 연결" | "자동투자 설정" (shadcn Tabs). **계좌 탭**: 모의계좌 카드·실계좌 카드 각각 표시(연결됨/미등록 배지, API Key/Secret/계좌번호/Current Password, 카드별 [저장]). **자동투자 탭**: 계좌 0개 시 빈 상태 + [계좌 설정으로 가기] CTA; 1~2개 시 세그먼트(모의계좌|실계좌) + 선택 타입별 폼(자동 매매·로보 토글, 최소/최대 투자금, 단·중·장기 비율, [저장]); 서버 설정 읽기 전용 카드(PIPELINE_AUTO_EXECUTE, PIPELINE_ALLOW_REAL_EXECUTION). **훅**: `useSettingsAccountsAll` 추가(virtual/real 동시 조회·타입별 저장). [10-design-ai-full-prompt.md §5.10](03-figma-wireframes/10-design-ai-full-prompt.md), [01-screen-menu-spec.md §3.8](01-screen-menu-spec.md) 반영.
 - [x] **화면 테스트 및 MCP 구성 (시니어 QA)**  
-  MCP 템플릿 정리: filesystem 경로를 `auto-investment-project` 루트로 통일, notion/local-maria/figma 제거(OFF 권장). Playwright E2E: `investment-frontend`에 `@playwright/test`, `e2e/landing.spec.ts`, `e2e/login.spec.ts`, `playwright.config.ts`, `npm run e2e` 스크립트 추가. 규칙: test-code-after-agent-by-plan.mdc에 프론트/화면 변경 시 cursor-ide-browser 또는 Playwright E2E 실행 권장 문구 추가. 문서: [05-screen-test-and-mcp-guide.md](../08-setup-guides/05-screen-test-and-mcp-guide.md) (MCP ON/OFF, cursor-ide-browser 사용, Playwright·스모크 안내). API 스모크: `scripts/smoke-api.ps1` (-Port 8083/8084, GET /actuator/health). 프론트 dialog.tsx 잘못된 임포트(@radix-ui/react-dialog@1.1.6 등) 수정.
+  MCP 템플릿 정리: filesystem 경로를 `auto-investment-project` 루트로 통일, notion/local-maria/figma 제거(OFF 권장). Playwright E2E: `investment-frontend`에 `@playwright/test`, `e2e/landing.spec.ts`, `e2e/login.spec.ts`, `playwright.config.ts`, `npm run e2e` 스크립트 추가. 규칙: docs-and-quality.md에 프론트/화면 변경 시 cursor-ide-browser 또는 Playwright E2E 실행 권장 문구 추가. 문서: [05-screen-test-and-mcp-guide.md](../08-setup-guides/05-screen-test-and-mcp-guide.md) (MCP ON/OFF, cursor-ide-browser 사용, Playwright·스모크 안내). API 스모크: `scripts/smoke-api.ps1` (-Port 8083/8084, GET /actuator/health). 프론트 dialog.tsx 잘못된 임포트(@radix-ui/react-dialog@1.1.6 등) 수정.
 
 ### 인프라·운영
 - [x] **Flyway 도입 및 기존 마이그레이션 SQL 정리**  
@@ -377,7 +377,7 @@
 - [x] **로그 마스킹 모듈화 (app key, secret, 계좌번호 INFO 마스킹)**  
   `LogMaskingUtil`에 `maskAccountNo`, `maskSecret` 추가. app key / secret / 계좌번호 / userId 등 암호화 저장 항목은 로그 출력 시 반드시 `LogMaskingUtil` 사용(INFO/WARN/ERROR에서 마스킹만, DEBUG에서 필요 시 실제 값 추가). KoreaInvestmentTokenClient, AuthService, KoreaInvestmentAccountClient, OrderService, KoreaInvestmentOrderClient, Strategy·Account·Setting·Dashboard 등 전역 적용. 상세 규칙: [보안 설정 참조](../07-security/02-security-configuration-reference.md#로깅-시-민감정보-마스킹-개발-규칙).
 - [x] **한국투자증권 API 조회 GET+query 수정**  
-  조회 API(주식잔고·매수가능·매도가능·주문체결·자산현황·기간별손익·현재가·차트)가 query parameter로 전달되어야 하는데 JSON body로 호출되던 오류 수정. `KoreaInvestmentAccountClient` 7곳·`KoreaInvestmentMarketDataClient` 2곳을 **GET + URI query parameter**로 변경. `buildUriWithQueryParams` 헬퍼 추가, `KoreaInvestmentRequestBuilder` 주석 보강(조회 API는 Map을 query로 사용). [한국투자증권 API 가이드](../04-api/09-korea-investment-api-guide.md)에 조회 API GET·query 명시, [ADR 14](../decisions.md#14-한국투자증권-api-요청-방식-및-mcp-사용) 및 [MCP 규칙](../.cursor/rules/MCP.mdc): 한국투자증권 API 개발 시 MCP 무조건 사용·작업 중 문서 업데이트 필수.
+  조회 API(주식잔고·매수가능·매도가능·주문체결·자산현황·기간별손익·현재가·차트)가 query parameter로 전달되어야 하는데 JSON body로 호출되던 오류 수정. `KoreaInvestmentAccountClient` 7곳·`KoreaInvestmentMarketDataClient` 2곳을 **GET + URI query parameter**로 변경. `buildUriWithQueryParams` 헬퍼 추가, `KoreaInvestmentRequestBuilder` 주석 보강(조회 API는 Map을 query로 사용). [한국투자증권 API 가이드](../04-api/09-korea-investment-api-guide.md)에 조회 API GET·query 명시, [ADR 14](../decisions.md#14-한국투자증권-api-요청-방식-및-mcp-사용) 및 [MCP 규칙](../.cursor/rules/korea-investment-api.md): 한국투자증권 API 개발 시 MCP 무조건 사용·작업 중 문서 업데이트 필수.
 - [x] **투자계좌자산현황조회 404 수정 및 모의계좌 폴백**  
   한국투자증권 공식 예제(inquire_account_balance) 기준으로 path·TR ID·파라미터·응답 파싱 수정. path: `inquire-assets` → `inquire-account-balance`, TR ID: `CTRP6548R`(실거래 전용). **모의계좌는 해당 API 미지원** → 모의(serverType=1)일 때 `inquireAssets()`에서 주식잔고조회(inquire-balance) 결과로 `AccountAssetDto` 구성해 반환(폴백). [09-korea-investment-api-guide.md](../04-api/09-korea-investment-api-guide.md) §5 갱신.
 - [x] **대시보드 거래 설정 optional 처리**  
@@ -403,7 +403,7 @@
 - [x] **US 일별 시세 수집 (yfinance)**  
   **Python**: scripts/us_daily_collector.py — yfinance로 기준일 US 종목 OHLCV·거래대금(volume×close) 수집, JSON 배열 stdout 출력. **Spring**: UsMarketCollectionService에서 yfinance-script-path 설정 시 스크립트 실행·stdout 파싱·TB_DAILY_STOCK(MARKET=US) 저장. DataCollectionProperties.Us(yfinanceScriptPath, symbols, pythonCommand), application.yml investment.data.us.yfinance-script-path, symbols, python-command. 미설정 시 기존처럼 0 반환(스텁).
 - [x] **전략·계산 방식 통합 문서 및 버전 스택**  
-  [00-strategy-registry.md](../02-architecture/00-strategy-registry.md) 신설 — 공통·나라별(KR/US)·기간별(단기/중기/장기)·파이프라인 단계·수식·파라미터 일람·버전 스택 반영. 12-auto-investment-strategy는 상세 수식·파라미터를 00-strategy-registry 참조로 정리. development-status.mdc에 전략/팩터 변경 시 통합 문서 갱신·버전 스택 추가 규칙 반영. 전략 통합 문서 반영 (버전 1.0).
+  [00-strategy-registry.md](../02-architecture/00-strategy-registry.md) 신설 — 공통·나라별(KR/US)·기간별(단기/중기/장기)·파이프라인 단계·수식·파라미터 일람·버전 스택 반영. 12-auto-investment-strategy는 상세 수식·파라미터를 00-strategy-registry 참조로 정리. docs-and-quality.md에 전략/팩터 변경 시 통합 문서 갱신·버전 스택 추가 규칙 반영. 전략 통합 문서 반영 (버전 1.0).
 - [x] **LSTM 예측 모델(초기)**  
   **데이터·전처리**: app/data(시계열 로드·SeriesDataset), app/preprocessing(정규화·시퀀스 생성), scripts/fetch_training_data.py(yfinance OHLCV CSV). **LSTM·학습**: app/models/lstm_model.py(LSTMPredictor), app/train.py(학습 진입점, state_dict 저장). **서빙**: POST /api/v1/predict에 optional series·currentPrice 추가, MODEL_PATH에서 LSTM lazy 로드, series·모델 있으면 LSTM 추론·없으면 Mock. **Spring 연동**: PredictionRequestDto에 optional series·currentPrice, DailyPricePoint DTO, AnalysisService에서 일별 시세(DailyStockRepository)·현재가(RealtimeMarketDataService) 조회 후 예측 요청에 설정. AI는 분석 정보 제공용, 매매는 규칙 엔진 유지.
 - [x] **자동투자 현황 파이프라인 실데이터 연동**  
@@ -626,7 +626,7 @@
 | 1.10 | 2026-01-30 | 완료: 4단계 파이프라인 (1차) — TB_UNIVERSE·UniverseFilterService·유니버스 선행 스케줄·PositionSizingService·TB_STRATEGY_POSITION·PipelineExecutor·ExitRuleService(Time-Cut)·pipeline.auto-execute |
 | 1.11 | 2026-01-30 | 완료: 4단계 파이프라인 확장 — ExitRuleService ATR Trailing Stop, FactorCalculationService 변동성 돌파 k 동적 적용·시그널 스텁(수급 강도·듀얼 모멘텀·퀄리티-성장), PositionSizingService Half-Kelly, PipelineExecutor 체결 확인 후 포지션 등록 옵션, UniverseFilterService 유니버스 필터 스텁(Sector RS·Post-Earnings Drift). application.yml 설정 추가. |
 | 1.12 | 2026-01-30 | 완료: 시장(Market KR/US) 차원 도입 — FactorCalculationScheduler KR/US 모두 처리(processMarket 메서드), UsMarketCollectionService 스텁 추가, DataCollectionScheduler US 수집 스케줄, API 일관성 확인. application.yml investment.data.us.schedule-cron 추가. |
-| 1.13 | 2026-01-31 | 완료: 전략·계산 방식 통합 문서 및 버전 스택 — 00-strategy-registry.md 신설(공통·나라별·기간별·파이프라인·수식 일람·버전 스택), 12-auto-investment-strategy 상세 참조 정리, development-status.mdc 전략/팩터 변경 시 통합 문서 갱신 규칙 추가. |
+| 1.13 | 2026-01-31 | 완료: 전략·계산 방식 통합 문서 및 버전 스택 — 00-strategy-registry.md 신설(공통·나라별·기간별·파이프라인·수식 일람·버전 스택), 12-auto-investment-strategy 상세 참조 정리, docs-and-quality.md 전략/팩터 변경 시 통합 문서 갱신 규칙 추가. |
 | 1.14 | 2026-01-31 | 완료: US 일별 시세 수집 (yfinance) — scripts/us_daily_collector.py(yfinance OHLCV·trdVal), UsMarketCollectionService 스크립트 호출·JSON 파싱·TB_DAILY_STOCK(MARKET=US) 저장. investment.data.us.yfinance-script-path, symbols, python-command. |
 | 1.15 | 2026-01-31 | 완료: LSTM 예측 모델(초기) — 데이터·전처리(app/data, app/preprocessing, fetch_training_data), LSTM·학습(lstm_model, train), 서빙(optional series·currentPrice, MODEL_PATH lazy 로드), Spring DTO·AnalysisService 연동(일별 시세·현재가 채움). 00-strategy-registry AI/LSTM 활용 방침, API 개요 예측 optional series 반영. |
 | 1.16 | 2026-01-31 | 완료: 자동투자 현황 파이프라인 실데이터 연동 — PipelineSummaryService·PipelineSummaryDto·OpenPositionItemDto, AutoInvestController 파이프라인 요약 모델, auto-invest 4단계 카드(유니버스·시그널 KR/US·보유 포지션 수)·시그널/보유 포지션 테이블. StrategyPositionRepository.countByAccountNoAndExitDtIsNull. |
@@ -674,7 +674,7 @@
 | 1.57 | 2026-03-04 | P5-2 Shrimp 검증 완료 — NewsSentimentScorer·NewsSignalService 센티멘트 연동 기존 구현 확인. NewsSentimentScorerTest 신규(긍정/부정/빈텍스트 0/클램핑/혼합 합산) 추가. |
 | 1.58 | 2026-03-04 | P6-2 성과 귀인 분석 구현 — PerformanceAttributionService·PerformanceAttributionDto 신규(TB_STRATEGY_POSITION 청산 포지션 기준 signalType·strategyType별 기여율 합 100%). GET /api/v1/risk/attribution(RiskReportController 기존). PerformanceAttributionServiceTest(청산 없음·기여 합 100%·계좌 없음). 프론트 riskApi PerformanceAttributionDto 정합·DashboardAttributionCard(recharts PieChart) 신규. |
 | 1.59 | 2026-03-04 | P6-4 Discord 알림 체계화 Shrimp 검증 완료 — DiscordEmergencyAlertService 기존 구현(trade/risk/system 웹훅·폴백·평문) 확인. DiscordEmergencyAlertServiceTest 신규: 채널별 URL(trade/risk/system)·미설정 시 기본 웹훅 폴백·매매 평문 형식(AlertLog 저장 검증)·웹훅 미설정 스킵 검증. lenient 스텁으로 미호출 시 UnnecessaryStubbing 방지. |
-| 1.60 | 2026-03-05 | 완료: 한국투자증권 전체 API 명세서(10) 작성 — 10-korea-investment-api-spec.md 신규(xlsx 13개·code 9개·구현 API 표·신규 API 절차). MCP.mdc 명세서 참조 문구. 01-api-overview §9.2 한투 09·10 링크. |
+| 1.60 | 2026-03-05 | 완료: 한국투자증권 전체 API 명세서(10) 작성 — 10-korea-investment-api-spec.md 신규(xlsx 13개·code 9개·구현 API 표·신규 API 절차). korea-investment-api.md 명세서 참조 문구. 01-api-overview §9.2 한투 09·10 링크. |
 | 1.61 | 2026-03-05 | 완료: 한국투자증권 API 명세 검증 — Constants·AccountClient·OrderClient·MarketDataClient·rank-api path·TR_ID 10-korea-investment-api-spec·09 가이드와 대조, 불일치 없음. 09-domestic-stock-order-account.md 기간 Path inquire-period-profit-loss 수정. Shrimp 한국투자증권 API 검증·WebSocket 연동 계획 Task 1·2 완료. |
 | 1.62 | 2026-03-05 | 완료: 계좌 실현손익·기간별매매손익 API·WebSocket 캐시 연동 — 주식잔고조회_실현손익/기간별매매손익현황조회 API·DTO·Controller·테스트. WebSocketPriceCacheListener·스케줄러 subscribeQuote 연동·current-price-cache-ttl 주석. 테스트 수정(AccountServiceTest·IntradayBreakoutSchedulerTest·TradingWindowServiceTest). §1 완료·§5 이력 추가. Shrimp 20117cf7·8f862189·a63b9466·bd72d1b7·0c97164c·2cd6766d. |
 | 1.64 | 2026-03-06 | 자동투자 실계좌 준비: plans/qa/자동투자_E2E_검증_체크리스트.md 신규(E2E 흐름·API 매핑·데이터 부재 점검). Shrimp Phase A-1 완료, A-2~D-2 pending. |

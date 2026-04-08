@@ -1,4 +1,4 @@
-# 백테스트 스트레스 검증
+﻿# 백테스트 스트레스 검증
 
 **목적**: 극단 구간에서 MDD·청산 규칙·리스크 게이트 동작을 검증하고 결과를 기록한다. [12-auto-investment-strategy.md §6](./12-auto-investment-strategy.md) 및 [02-development-status.md](../09-planning/02-development-status.md) 진행예정 반영.
 
@@ -183,7 +183,7 @@ cd investment-backend
 
 ## 7. 참조
 
-- [.cursor/rules/backtest-quant-research-standards.mdc](../../../.cursor/rules/backtest-quant-research-standards.mdc) — 퀀트 백테스트 표준(통계 타당성, look-ahead/survivorship 방지, 슬리피지·거래비용, **필수 5종 메트릭**: CAGR·Sharpe·MDD·win rate·profit factor, 재현 가능 연구).
+- [.cursor/rules/quant-and-backtest.md](../../../.cursor/rules/quant-and-backtest.md) — 퀀트 백테스트 표준(통계 타당성, look-ahead/survivorship 방지, 슬리피지·거래비용, **필수 5종 메트릭**: CAGR·Sharpe·MDD·win rate·profit factor, 재현 가능 연구).
 - [00-strategy-registry.md §1.1](./00-strategy-registry.md) — 데이터·백테스트 원칙, §7 버전 스택
 - [02-development-status.md](../09-planning/02-development-status.md) — 완료·진행예정
 - [02-api-endpoints.md §백테스트](../04-api/02-api-endpoints.md) — POST /api/v1/backtest 스펙

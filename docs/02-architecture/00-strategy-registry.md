@@ -1,4 +1,4 @@
-# 전략·계산 방식 통합 레지스트리 (Strategy Registry)
+﻿# 전략·계산 방식 통합 레지스트리 (Strategy Registry)
 
 **목적**: 프로젝트에서 개발·적용하는 모든 전문적인 투자 방식, 전략, 계산 방법을 한 문서에 정리하고, 전략 업데이트 시 갱신·버전 스택(실패/교훈 포함)으로 경험을 쌓으며, **나라별·분야별·기간별**로 구분해 정확도를 높인다.
 
@@ -90,7 +90,7 @@
 - **손익비(b)**: 평균 이익 / |평균 손실|. Half-Kelly 입력.
 - **Profit factor**: 총 이익 / |총 손실|. 백테스트 보고·API 응답에 필수 포함.
 
-**백테스트 보고 필수 5종**: 모든 백테스트 결과(API·문서·스트레스 검증)에는 **CAGR, Sharpe ratio, max drawdown(MDD), win rate, profit factor**를 반드시 포함한다. 재현 가능 연구를 위해 시드·기간·초기자본·수수료/슬리피지 설정·전략 버전을 기록한다. 상세: [.cursor/rules/backtest-quant-research-standards.mdc](../../../.cursor/rules/backtest-quant-research-standards.mdc).
+**백테스트 보고 필수 5종**: 모든 백테스트 결과(API·문서·스트레스 검증)에는 **CAGR, Sharpe ratio, max drawdown(MDD), win rate, profit factor**를 반드시 포함한다. 재현 가능 연구를 위해 시드·기간·초기자본·수수료/슬리피지 설정·전략 버전을 기록한다. 상세: [.cursor/rules/quant-and-backtest.md](../../../.cursor/rules/quant-and-backtest.md).
 
 ### 2.8.1 Monte Carlo VaR/CVaR (P0 헤지펀드급 리스크 분석)
 

@@ -1,4 +1,4 @@
-# 한국투자증권 API 가이드
+﻿# 한국투자증권 API 가이드
 
 ## 개요
 
@@ -12,7 +12,7 @@
 - **기존 API 수정**: MCP로 스펙을 확인한 뒤 요청 방식·파라미터가 스펙과 일치하는지 검증한다.
 - **금지**: MCP 확인 없이 공식 문서 추정만으로 요청 형식(POST+body vs GET+query)을 가정하여 구현하지 않는다.
 
-규칙 상세: [.cursor/rules/MCP.mdc](../../.cursor/rules/MCP.mdc). 결정 사항: [ADR 14 한국투자증권 API 요청 방식 및 MCP 사용](../decisions.md#14-한국투자증권-api-요청-방식-및-mcp-사용).
+규칙 상세: [.cursor/rules/korea-investment-api.md](../../.cursor/rules/korea-investment-api.md). 결정 사항: [ADR 14 한국투자증권 API 요청 방식 및 MCP 사용](../decisions.md#14-한국투자증권-api-요청-방식-및-mcp-사용).
 
 ## 아키텍처
 

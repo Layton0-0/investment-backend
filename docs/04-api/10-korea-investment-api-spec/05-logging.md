@@ -1,9 +1,9 @@
-# 한국투자증권 API 로깅 체계
+﻿# 한국투자증권 API 로깅 체계
 
 ## 1. 목적
 
 - 한국투자증권 Open API 호출·응답을 **동일한 포맷**으로 기록해 트러블슈팅·감사·성능 분석을 용이하게 한다.
-- **민감정보**(appkey, appsecret, 계좌번호, 토큰, userId 등)는 반드시 마스킹하여 로그에 남기지 않는다. (공개 저장소·[logging-masking.mdc](../../../.cursor/rules/logging-masking.mdc) 준수)
+- **민감정보**(appkey, appsecret, 계좌번호, 토큰, userId 등)는 반드시 마스킹하여 로그에 남기지 않는다. (공개 저장소·[security-baseline.md](../../../.cursor/rules/security-baseline.md) 준수)
 
 ## 2. 적용 범위
 
@@ -67,5 +67,5 @@
 
 - [10-korea-investment-api-spec.md](../10-korea-investment-api-spec.md) — 전체 API 요약
 - [09-korea-investment-api-guide.md](../09-korea-investment-api-guide.md) — 구현 가이드
-- [logging-masking.mdc](../../../.cursor/rules/logging-masking.mdc) — 민감정보 마스킹 규칙
+- [security-baseline.md](../../../.cursor/rules/security-baseline.md) — 민감정보 마스킹 규칙
 - [02-security-configuration-reference.md](../../07-security/02-security-configuration-reference.md) — 로깅·마스킹 메서드

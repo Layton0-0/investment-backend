@@ -1,4 +1,4 @@
-# DevOps 구축 시 필요한 토큰·키 정리
+﻿# DevOps 구축 시 필요한 토큰·키 정리
 
 ## 개요
 
@@ -69,7 +69,7 @@ CD를 처음 실행하기 전에 아래를 확인한다.
 - **트리거**: `push` to main (경로 무시: `**.md`, `docs/**`) 또는 `workflow_dispatch`.
 - **노드별 실행**: Variables에 `DEPLOY_HOST_*`가 설정된 노드만 해당 step 실행. Secrets에 `SSH_PRIVATE_KEY_*`, (private 이미지 사용 시) `GHCR_PULL_TOKEN` 필요.
 - **이미지**: REGISTRY는 `ghcr.io/<owner 소문자>`, CD에서 자동 설정. 스크립트 실행 비트는 reset 후 `chmod +x scripts/*.sh`로 보정.
-- **확인**: 로컬에서 `gh auth login` 후 `gh run watch --exit-status`로 성공/실패 확인 가능. 규칙: [.cursor/rules/cd-push-and-verify.mdc](../../.cursor/rules/cd-push-and-verify.mdc).
+- **확인**: 로컬에서 `gh auth login` 후 `gh run watch --exit-status`로 성공/실패 확인 가능. 규칙: [.cursor/rules/ai-workflow-qa.md](../../.cursor/rules/ai-workflow-qa.md).
 
 **CD에서 "manifest unknown" 나올 때**: 해당 이미지가 GHCR에 아직 없음. **investment-backend**, **investment-prediction-service**, **investment-data-collector**(, **investment-frontend**) 각 레포에서 **CI를 한 번씩 main에 푸시**해 `latest` 이미지를 GHCR에 올린 뒤 CD를 다시 돌린다.
 
@@ -91,7 +91,7 @@ Cursor MCP에 **GitHub Actions Trigger MCP**를 추가하면 Agent가 워크플�
 
 - 패키지: `@nextdrive/github-action-trigger-mcp` (npx로 실행 가능)
 - 설정: 사용자 MCP 설정 파일에 서버 추가, `GITHUB_PERSONAL_ACCESS_TOKEN`(또는 `GITHUB_TOKEN`) 설정. 토큰 권한에 `workflow` 포함.
-- 프로젝트 규칙: [.cursor/rules/cd-push-and-verify.mdc](../../.cursor/rules/cd-push-and-verify.mdc) 참고. **gh가 설치돼 있으면** 한 번 `gh auth login` 후 Agent가 푸시·`gh run watch`로 CD 결과까지 확인 가능.
+- 프로젝트 규칙: [.cursor/rules/ai-workflow-qa.md](../../.cursor/rules/ai-workflow-qa.md) 참고. **gh가 설치돼 있으면** 한 번 `gh auth login` 후 Agent가 푸시·`gh run watch`로 CD 결과까지 확인 가능.
 
 ---
 

@@ -1,4 +1,4 @@
-# 테스트 실행 가이드
+﻿# 테스트 실행 가이드
 
 ## 표준 명령 (권장)
 
@@ -50,7 +50,7 @@
 ## 실패 시 확인
 
 - 테스트 실패 시: 콘솔 출력과 `build/reports/tests/test/index.html` 리포트에서 실패 케이스·스택 확인.
-- Agent 실행 시 타임아웃: `.cursor/rules/script-run-timeouts.mdc` 참고 (run-tests.ps1 권장 300000ms 이상).
+- Agent 실행 시 타임아웃: `.cursor/rules/local-dev-hygiene.md` 참고 (run-tests.ps1 권장 300000ms 이상).
 
 ## 참고
 
